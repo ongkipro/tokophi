@@ -18,7 +18,7 @@
   - `TEST_DB_REQUIRED=1 vitest run apps/admin/app/api/public/order/route.test.ts` → **1 file and 4 tests passed**.
   - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
   - Focused ESLint on the route and integration test → **0 errors and 0 warnings**.
-- **Security Review:** Blocked states perform no shipping-provider call and leave checkout sessions, customers, orders, line items, financials, payments, inventory, discounts, usages, and tracking deliveries unchanged. The transactional `FOR UPDATE` re-check closes suspension between initial resolution and mutation.
+- **Security Review:** Stores already blocked at resolution perform no shipping-provider call; all blocked and suspension-race attempts leave checkout sessions, customers, orders, line items, financials, payments, inventory, discounts, usages, and tracking deliveries unchanged. The transactional `FOR UPDATE` re-check closes suspension between initial resolution and mutation.
 - **Completed Task:** Stage 4 Task 4.2.
 
 ### [2026-08-15 13:58 UTC] — Coolify Production Monorepo Deployment & Turbopack Root Fix
