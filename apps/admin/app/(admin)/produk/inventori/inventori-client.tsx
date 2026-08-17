@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@tokophi/lib/format";
 import { type Product } from "@/lib/mock/store";
+import { type InventoryReceiptFact } from "@/lib/data/inventory";
 import { exportCsv } from "@/lib/csv";
 import { cn } from "@tokophi/ui/lib/utils";
 
@@ -30,12 +31,6 @@ const LOW_STOCK = 20;
 
 type TabKey = "all" | "low" | "out";
 
-// Deterministic fabricated "incoming" units (stok masuk) — stable across SSR/client.
-// Low-stock items tend to have restock on the way; some items have nothing incoming.
-function incomingFor(p: Product, i: number): number {
-  const base = ((i * 13 + 5) % 8) * 6; // 0..42, varied, some zeros
-  return p.stock < LOW_STOCK ? base + 24 : base;
-}
 
 function StockStatusBadge({ qty }: { qty: number }) {
   if (qty <= 0) return <Badge variant="destructive">Habis</Badge>;
@@ -70,7 +65,13 @@ function StatCard({ icon, label, value, accent }: {
   );
 }
 
-export function InventoriClient({ products }: { products: Product[] }) {
+export function InventoriClient({
+  products,
+  receipts,
+}: {
+  products: Product[];
+  receipts: Record<string, InventoryReceiptFact>;
+}) {
   const [search, setSearch] = React.useState("");
   const [tab, setTab] = React.useState<TabKey>("all");
   const [page, setPage] = React.useState(1);
@@ -118,13 +119,13 @@ export function InventoriClient({ products }: { products: Product[] }) {
       value += q * p.price;
     }
     return { total: products.length, low, out, value };
-  }, [qty]);
+  }, [products, qty]);
 
   const counts = React.useMemo(() => ({
     all: products.length,
     low: products.filter((p) => (qty[p.id] ?? 0) < LOW_STOCK).length,
     out: products.filter((p) => (qty[p.id] ?? 0) <= 0).length,
-  }), [qty]);
+  }), [products, qty]);
 
   const filtered = React.useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -135,7 +136,7 @@ export function InventoriClient({ products }: { products: Product[] }) {
       if (s && !p.name.toLowerCase().includes(s) && !p.id.toLowerCase().includes(s)) return false;
       return true;
     });
-  }, [search, tab, qty]);
+  }, [products, search, tab, qty]);
 
   const TABS: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "Semua", count: counts.all },
@@ -162,7 +163,22 @@ export function InventoriClient({ products }: { products: Product[] }) {
       <PageHeader title="Inventori" desc="Pantau dan sesuaikan stok produk Anda.">
         <Button
           variant="outline"
-          onClick={() => exportCsv("inventori", products.map((p) => ({ Produk: p.name, Kategori: p.category, Stok: qty[p.id] ?? p.stock })))}
+          onClick={() =>
+            exportCsv(
+              "inventori",
+              products.map((p) => {
+                const receipt = receipts[p.id];
+                return {
+                  Produk: p.name,
+                  Kategori: p.category,
+                  Stok: qty[p.id] ?? p.stock,
+                  Dipesan: receipt?.ordered ?? "",
+                  Diterima: receipt?.received ?? "",
+                  Masuk: receipt?.incoming ?? "",
+                };
+              }),
+            )
+          }
         >
           <Download /> Ekspor
         </Button>
@@ -258,9 +274,8 @@ export function InventoriClient({ products }: { products: Product[] }) {
             </TableHeader>
             <TableBody>
               {pageProducts.map((p) => {
-                const i = products.indexOf(p);
                 const q = qty[p.id] ?? 0;
-                const incoming = incomingFor(p, i);
+                const receipt = receipts[p.id];
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="max-w-[32rem] py-3.5">
@@ -311,8 +326,17 @@ export function InventoriClient({ products }: { products: Product[] }) {
                         </Button>
                       </div>
                     </TableCell>
-                    <TableCell className="hidden py-3.5 text-right tabular-nums text-muted-foreground md:table-cell">
-                      {incoming > 0 ? `+${num(incoming)}` : "—"}
+                    <TableCell className="hidden py-3.5 text-right tabular-nums md:table-cell">
+                      {receipt ? (
+                        <div>
+                          <div>{receipt.incoming > 0 ? `+${num(receipt.incoming)}` : "—"}</div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">
+                            {num(receipt.received)}/{num(receipt.ordered)} diterima
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="py-3.5"><StockStatusBadge qty={q} /></TableCell>
                   </TableRow>
