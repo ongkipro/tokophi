@@ -666,6 +666,13 @@
       "when": 1786475026516,
       "tag": "0094_magical_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1786989252649,
+      "tag": "0095_payment_request_idempotency",
+      "breakpoints": true
     }
   ]
 }

@@ -115,6 +115,11 @@ export const paymentStatus = pgEnum("payment_status", [
   "berhasil",
   "gagal",
 ]);
+export const paymentRequestState = pgEnum("payment_request_state", [
+  "in_progress",
+  "accepted",
+  "failed",
+]);
 export const fulfillmentStatus = pgEnum("fulfillment_status", [
   "menunggu",
   "diproses",
@@ -1088,6 +1093,12 @@ export const payments = pgTable("payments", {
   qr: text(),
   url: text(),
   paymentCode: text(),
+  // Durable idempotency claim for payment-intent creation. Legacy/provider-created rows remain NULL:
+  // no caller-stable request identity can be reconstructed honestly after the fact.
+  requestKey: text(),
+  requestState: paymentRequestState(),
+  requestError: text(),
+  requestUpdatedAt: ts(),
 }, (t) => [
   index("payments_trx_idx")
     .on(t.trxId)
@@ -1096,6 +1107,9 @@ export const payments = pgTable("payments", {
     .on(t.reffId)
     .where(sql`${t.reffId} is not null`),
   index("payments_order_idx").on(t.orderId),
+  uniqueIndex("payments_store_request_key_unique")
+    .on(t.storeId, t.requestKey)
+    .where(sql`${t.requestKey} is not null`),
 ]);
 
 export const fulfillments = pgTable("fulfillments", {
