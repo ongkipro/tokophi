@@ -8,6 +8,19 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-18] — Task 4.2 Public Order Store Availability
+
+- **Scope:** Closed release blocker `F-T9` by applying the storefront's `suspended_at IS NULL` public-servability contract to public order creation.
+- **Files Modified:**
+  - `apps/admin/app/api/public/order/route.ts`: Returns the same CORS-bearing 404 for missing and blocked stores, then locks and re-checks the store before the first customer/order-side write.
+  - `apps/admin/app/api/public/order/route.test.ts`: Adds real-PostgreSQL active, pending/unapproved, suspended, and suspension-race coverage with before/after snapshots of every route mutation target.
+- **Verification Executed:**
+  - `TEST_DB_REQUIRED=1 vitest run apps/admin/app/api/public/order/route.test.ts` → **1 file and 4 tests passed**.
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
+  - Focused ESLint on the route and integration test → **0 errors and 0 warnings**.
+- **Security Review:** Blocked states perform no shipping-provider call and leave checkout sessions, customers, orders, line items, financials, payments, inventory, discounts, usages, and tracking deliveries unchanged. The transactional `FOR UPDATE` re-check closes suspension between initial resolution and mutation.
+- **Completed Task:** Stage 4 Task 4.2.
+
 ### [2026-08-15 13:58 UTC] — Coolify Production Monorepo Deployment & Turbopack Root Fix
 
 - **Scope:** Resolved Coolify Docker monorepo build failures for `@tokophi/admin` and `@tokophi/super-admin`, queued deployment 447, and verified 100% production container health & probe pass.
