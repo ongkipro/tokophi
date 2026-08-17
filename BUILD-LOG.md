@@ -37,6 +37,22 @@
 - **Security Review:** Stores already blocked at resolution perform no shipping-provider call; all blocked and suspension-race attempts leave checkout sessions, customers, orders, line items, financials, payments, inventory, discounts, usages, and tracking deliveries unchanged. The transactional `FOR UPDATE` re-check closes suspension between initial resolution and mutation.
 - **Completed Task:** Stage 4 Task 4.2.
 
+### [2026-08-18] — Task 4.4 Persisted Inventory Receipt Facts
+
+- **Scope:** Removed the fabricated fixed incoming percentage and derived product-level ordered, received, and outstanding quantities only from persisted open purchase-order lines.
+- **Files Created / Modified:**
+  - `apps/admin/lib/data/inventory.ts`: Aggregates `qty`, `received_qty`, and line-scoped outstanding quantities for `dipesan`/`sebagian` POs, bounded by PO, variant, and product ownership.
+  - `apps/admin/lib/data/inventory.test.ts`: Adds real-PostgreSQL coverage for waiting, partial, full, absent, over-received sibling lines, ignored closed/draft POs, and both cross-store ownership directions.
+  - `apps/admin/app/(admin)/produk/inventori/page.tsx`: Loads receipt facts beside the product list.
+  - `apps/admin/app/(admin)/produk/inventori/inventori-client.tsx`: Renders and exports stored ordered/received/incoming facts; no inferred quantity remains.
+- **Verification Executed:**
+  - `TEST_DB_REQUIRED=1 vitest run apps/admin/lib/data/inventory.test.ts` → **1 file and 1 test passed**.
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
+  - Focused ESLint on all four changed files → **0 errors and 0 warnings**.
+  - Browser smoke at 1365×768 and 390×844 → receipt facts rendered on desktop, the mobile table had no horizontal overflow, and reload produced **0 console, page, or HTTP errors**.
+- **Data Review:** Outstanding receipt quantity is clamped per line before summation, so an over-received line cannot hide an unreceived sibling. Cross-store PO, variant, and product associations are excluded.
+- **Completed Task:** Stage 4 Task 4.4.
+
 ### [2026-08-15 13:58 UTC] — Coolify Production Monorepo Deployment & Turbopack Root Fix
 
 - **Scope:** Resolved Coolify Docker monorepo build failures for `@tokophi/admin` and `@tokophi/super-admin`, queued deployment 447, and verified 100% production container health & probe pass.
