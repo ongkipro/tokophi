@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 import QRCode from "qrcode";
 import { calculateOrderFinance } from "@tokophi/lib/order-finance";
@@ -81,6 +81,9 @@ type Item = {
 const bad = (error: string, field?: string, status = 400) =>
   NextResponse.json({ ok: false, error, field }, { status, headers: CORS });
 
+const storeUnavailable = () =>
+  bad("Toko tidak ditemukan.", undefined, 404);
+
 /**
  * What a shopper is told when the payment gateway refuses to open a bill.
  *
@@ -124,6 +127,9 @@ const PAY_START_FAILED =
 // Identical on today's data: every store has exactly one location, so this row IS the whole sum.
 // Real cross-warehouse fulfilment (pick the location, split the shipment) is a later feature; until
 // then the rule is simply that what we check is what we write.
+
+/** Thrown inside the write transaction when the store was suspended after initial resolution. */
+class StoreUnavailable extends Error {}
 
 /** Thrown inside the write transaction when a variant sold out between the pre-check and the lock. */
 class OutOfStock extends Error {
@@ -279,9 +285,14 @@ async function handle(req: Request) {
   const [store] = await db
     .select({ id: schema.stores.id, city: schema.stores.city })
     .from(schema.stores)
-    .where(eq(schema.stores.slug, slug))
+    .where(
+      and(
+        eq(schema.stores.slug, slug),
+        isNull(schema.stores.suspendedAt),
+      ),
+    )
     .limit(1);
-  if (!store) return bad("Toko tidak ditemukan.");
+  if (!store) return storeUnavailable();
   const checkoutSessionId =
     typeof body.sessionId === "string" ? body.sessionId.slice(0, 64) : "";
   if (checkoutSessionId) {
@@ -783,6 +794,23 @@ async function handle(req: Request) {
   let order: { id: string; number: string };
   try {
     ({ customerId, order } = await db.transaction(async (tx) => {
+      // The public lookup above fails common blocked requests before catalog/external work. Lock and
+      // re-check the same servability fact before the first write as well: a suspension committed
+      // while checkout was being priced must roll this transaction back rather than create a customer
+      // or order for a store that is no longer public.
+      const [servableStore] = await tx
+        .select({ id: schema.stores.id })
+        .from(schema.stores)
+        .where(
+          and(
+            eq(schema.stores.id, store.id),
+            isNull(schema.stores.suspendedAt),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!servableStore) throw new StoreUnavailable();
+
       // Customer: keyed on the WhatsApp number (canonical `62…`).
       let cid: string;
       const [existing] = await tx
@@ -1053,6 +1081,9 @@ async function handle(req: Request) {
       return { customerId: cid, order: ord };
     }));
   } catch (err) {
+    if (err instanceof StoreUnavailable) {
+      return storeUnavailable();
+    }
     if (err instanceof OutOfStock) {
       // 409, not 500: nothing was written (the txn rolled back) and the shopper can act on it.
       return bad(
