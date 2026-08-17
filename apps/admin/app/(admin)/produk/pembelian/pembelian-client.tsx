@@ -171,21 +171,47 @@ function CreateOrderDialog({ products }: { products: POProduct[] }) {
   const [note, setNote] = React.useState("");
   const [lines, setLines] = React.useState<Line[]>([]);
   const [pending, startTransition] = React.useTransition();
+  const requestKey = React.useRef("");
 
   const addLine = () => setLines((l) => [...l, { variantId: "", qty: 1, cost: 0 }]);
   const setLine = (i: number, patch: Partial<Line>) => setLines((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const removeLine = (i: number) => setLines((l) => l.filter((_, j) => j !== i));
   const nameOf = (vid: string) => products.find((p) => p.variantId === vid)?.name ?? "Pilih produk";
   const total = lines.reduce((a, l) => a + l.qty * l.cost, 0);
-  const reset = () => { setSupplier(""); setEta(""); setNote(""); setLines([]); };
+  const reset = () => {
+    setSupplier("");
+    setEta("");
+    setNote("");
+    setLines([]);
+    requestKey.current = "";
+  };
 
   const create = () => {
-    if (!supplier.trim()) { toast.error("Pemasok wajib diisi"); return; }
-    const valid = lines.filter((l) => l.variantId && l.qty > 0);
-    if (!valid.length) { toast.error("Tambah minimal 1 item"); return; }
+    if (!supplier.trim()) {
+      toast.error("Pemasok wajib diisi");
+      return;
+    }
+    const valid = lines.filter(
+      (line) => line.variantId && line.qty > 0 && line.cost > 0,
+    );
+    if (!valid.length) {
+      toast.error("Tambah minimal 1 item dengan jumlah dan HPP yang valid");
+      return;
+    }
+    if (!requestKey.current) requestKey.current = crypto.randomUUID();
     startTransition(async () => {
       try {
-        await createPurchaseOrder({ supplier, etaDate: eta, note, lines: valid });
+        const result = await createPurchaseOrder({
+          requestKey: requestKey.current,
+          supplier,
+          etaDate: eta,
+          note,
+          lines: valid,
+        });
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
         toast.success("Pesanan pembelian dibuat");
         setOpen(false);
         reset();
@@ -278,18 +304,18 @@ export function PembelianClient({ orders, products }: { orders: PurchaseOrder[];
     const c: Record<TabKey, number> = { semua: orders.length, draft: 0, dipesan: 0, sebagian: 0, diterima: 0 };
     for (const po of orders) c[po.status] += 1;
     return c;
-  }, []);
+  }, [orders]);
 
   const stats = React.useMemo(() => {
     const aktif = orders.filter((p) => p.status !== "diterima").length;
     const nilaiDipesan = orders.filter((p) => p.status !== "diterima").reduce((s, p) => s + p.total, 0);
     const tibaMingguIni = orders.filter((p) => p.etaDays >= 0 && p.etaDays <= 7).length;
     return { aktif, nilaiDipesan, tibaMingguIni };
-  }, []);
+  }, [orders]);
 
   const filtered = React.useMemo(
     () => (tab === "semua" ? orders : orders.filter((p) => p.status === tab)),
-    [tab],
+    [orders, tab],
   );
 
   return (

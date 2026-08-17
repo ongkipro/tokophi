@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createProduct, updateProduct, deleteProduct, duplicateProduct, type ProductInput } from "@/lib/actions/products";
 import { uploadProductImage, deleteProductImage } from "@/lib/actions/media";
+import { createPurchaseOrder } from "@/lib/actions/purchases";
 import {
   ChevronLeft,
   Bold,
@@ -120,6 +121,16 @@ function cartesian(valueLists: string[][]): string[][] {
   return valueLists.reduce<string[][]>((acc, vals) => acc.flatMap((combo) => vals.map((v) => [...combo, v])), [[]]);
 }
 const comboKeyOf = (combo: string[]) => combo.join(" / ");
+type SavedVariant = NonNullable<Product["variants"]>[number];
+
+function purchaseVariantLabel(variant: SavedVariant): string {
+  return (
+    [variant.option1, variant.option2, variant.option3].filter(Boolean).join(" / ") ||
+    variant.sku ||
+    "Varian default"
+  );
+}
+
 
 export function ProductEditor({ product }: { product?: Product }) {
   const isEdit = Boolean(product);
@@ -128,6 +139,7 @@ export function ProductEditor({ product }: { product?: Product }) {
   const canWrite = useCan("products:write");
   const canDelete = useCan("products:delete");
   const canMedia = useCan("media:write");
+  const canPurchase = useCan("purchases:write");
   const storeName = useStoreName();
 
   // Cost seeds the Purchase Order dialog fallback — real saved cost, no longer fabricated.
@@ -206,9 +218,15 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [stockReason, setStockReason] = React.useState("");
   const [poOpen, setPoOpen] = React.useState(false);
   const [poSupplier, setPoSupplier] = React.useState("");
+  const [poVariantId, setPoVariantId] = React.useState(
+    product?.variants?.[0]?.id ?? "",
+  );
   const [poQty, setPoQty] = React.useState("");
   const [poCost, setPoCost] = React.useState("");
   const [poEta, setPoEta] = React.useState("");
+  const [poError, setPoError] = React.useState("");
+  const [poPending, startPoTransition] = React.useTransition();
+  const poRequestKey = React.useRef("");
 
   const curStock = Number(qty) || 0;
   const stockAmt = Number(stockAmount) || 0;
@@ -221,10 +239,78 @@ export function ProductEditor({ product }: { product?: Product }) {
     setStockReason("");
   };
   const poTotal = (Number(poQty) || 0) * (Number(poCost) || seedCost || 0);
+  const poVariant = product?.variants?.find(
+    (variant) => variant.id === poVariantId,
+  );
 
   // ---- persist to Postgres via server actions ----
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
+  const openPurchaseOrder = () => {
+    const firstVariantId = product?.variants?.[0]?.id;
+    if (!firstVariantId) {
+      toast.error("Produk ini belum memiliki varian tersimpan");
+      return;
+    }
+    setPoVariantId((current) => current || firstVariantId);
+    setPoError("");
+    setPoOpen(true);
+  };
+
+  const changePoOpen = (open: boolean) => {
+    if (poPending) return;
+    setPoOpen(open);
+    if (!open) setPoError("");
+  };
+
+  const submitPurchaseOrder = () => {
+    const quantity = Number(poQty);
+    const unitCost = Number(poCost || seedCost);
+    if (
+      !poSupplier.trim() ||
+      !poVariantId ||
+      !Number.isSafeInteger(quantity) ||
+      quantity <= 0 ||
+      !Number.isSafeInteger(unitCost) ||
+      unitCost <= 0
+    ) {
+      setPoError("Pemasok, varian, jumlah, dan biaya per unit wajib valid.");
+      return;
+    }
+    if (!poRequestKey.current) poRequestKey.current = crypto.randomUUID();
+
+    setPoError("");
+    startPoTransition(async () => {
+      try {
+        const result = await createPurchaseOrder({
+          requestKey: poRequestKey.current,
+          supplier: poSupplier,
+          etaDate: poEta || undefined,
+          lines: [{ variantId: poVariantId, qty: quantity, cost: unitCost }],
+        });
+        if (!result.ok) {
+          setPoError(result.error);
+          toast.error(result.error);
+          return;
+        }
+
+        toast.success(`Pesanan pembelian ${result.code} dibuat`);
+        setPoOpen(false);
+        setPoSupplier("");
+        setPoVariantId(product?.variants?.[0]?.id ?? "");
+        setPoQty("");
+        setPoCost("");
+        setPoEta("");
+        setPoError("");
+        poRequestKey.current = "";
+        router.refresh();
+      } catch {
+        const message = "Pesanan gagal disimpan. Periksa data lalu coba lagi.";
+        setPoError(message);
+        toast.error(message);
+      }
+    });
+  };
   const buildInput = (): ProductInput => {
     const useVar = hasVariants && parsedOptions.length > 0 && combos.length > 0;
     return {
@@ -494,9 +580,11 @@ export function ProductEditor({ product }: { product?: Product }) {
                 <DropdownMenuItem onClick={() => setStockOpen(true)}>
                   <Boxes /> Perbarui stok / inventori
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setPoOpen(true)}>
-                  <ShoppingCart /> Buat pesanan pembelian
-                </DropdownMenuItem>
+                {canPurchase && (
+                  <DropdownMenuItem onClick={openPurchaseOrder}>
+                    <ShoppingCart /> Buat pesanan pembelian
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem disabled={pending} onClick={handleDuplicate}>
                   <Copy /> Duplikat
@@ -1323,39 +1411,118 @@ export function ProductEditor({ product }: { product?: Product }) {
       </Dialog>
 
       {/* Buat pesanan pembelian (Purchase Order) */}
-      <Dialog open={poOpen} onOpenChange={setPoOpen}>
+      <Dialog open={poOpen} onOpenChange={changePoOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Buat pesanan pembelian</DialogTitle>
-            <DialogDescription>Pesan stok dari pemasok untuk produk ini.</DialogDescription>
+            <DialogDescription>
+              Pesan stok dari pemasok untuk produk ini.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="po-pemasok">Pemasok</Label>
-              <Input id="po-pemasok" value={poSupplier} onChange={(e) => setPoSupplier(e.target.value)} placeholder="mis. CV Sumber Rejeki" />
+              <Input
+                id="po-pemasok"
+                value={poSupplier}
+                onChange={(event) => setPoSupplier(event.target.value)}
+                placeholder="mis. CV Sumber Rejeki"
+                disabled={poPending}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Varian</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between font-normal"
+                      aria-label="Pilih varian untuk pesanan pembelian"
+                      disabled={poPending}
+                    />
+                  }
+                >
+                  <span className="truncate">
+                    {poVariant ? (
+                      purchaseVariantLabel(poVariant)
+                    ) : (
+                      <span className="text-muted-foreground">Pilih varian</span>
+                    )}
+                  </span>
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-(--anchor-width)">
+                  {product?.variants?.map((variant) => (
+                    <DropdownMenuItem
+                      key={variant.id}
+                      onClick={() => setPoVariantId(variant.id)}
+                    >
+                      {purchaseVariantLabel(variant)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="po-jumlah">Jumlah</Label>
-                <Input id="po-jumlah" inputMode="numeric" value={poQty} onChange={(e) => setPoQty(e.target.value)} placeholder="0" />
+                <Input
+                  id="po-jumlah"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={poQty}
+                  onChange={(event) => setPoQty(event.target.value)}
+                  placeholder="0"
+                  disabled={poPending}
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="po-biaya">Biaya / unit</Label>
-                <Input id="po-biaya" inputMode="numeric" value={poCost} onChange={(e) => setPoCost(e.target.value)} placeholder={seedCost ? `Rp ${num(seedCost)}` : "Rp 0"} />
+                <Input
+                  id="po-biaya"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={poCost}
+                  onChange={(event) => setPoCost(event.target.value)}
+                  placeholder={seedCost ? `Rp ${num(seedCost)}` : "Rp 0"}
+                  disabled={poPending}
+                />
               </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="po-eta">Estimasi tiba</Label>
-              <Input id="po-eta" type="date" value={poEta} onChange={(e) => setPoEta(e.target.value)} />
+              <Input
+                id="po-eta"
+                type="date"
+                value={poEta}
+                onChange={(event) => setPoEta(event.target.value)}
+                disabled={poPending}
+              />
             </div>
             <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Total pembelian</span>
               <span className="font-semibold tabular-nums">{IDR(poTotal)}</span>
             </div>
+            {poError && (
+              <p role="alert" className="text-sm text-destructive">
+                {poError}
+              </p>
+            )}
           </div>
           <DialogFooter>
-            <DialogClose render={<Button variant="outline">Batal</Button>} />
-            <DialogClose render={<Button>Buat PO</Button>} />
+            <DialogClose
+              render={
+                <Button variant="outline" disabled={poPending}>
+                  Batal
+                </Button>
+              }
+            />
+            <Button onClick={submitPurchaseOrder} disabled={poPending}>
+              {poPending ? "Membuat…" : "Buat PO"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

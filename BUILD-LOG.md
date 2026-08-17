@@ -8,6 +8,25 @@
 
 ## Log History & Execution Entries
 
+
+### [2026-08-18] — Stage 4 Task 4.6 Real Product-Editor Purchase Orders
+
+- **Scope:** Replaced the product editor's UI-only `Buat PO` success path with a tenant-scoped persisted purchase-order transaction for the selected saved product variant.
+- **Files Created / Modified:**
+  - `apps/admin/lib/actions/purchases.ts`: validates the Server Action payload at runtime, resolves one saved supplier and only store-owned variants, claims a stable per-attempt PO code, writes the PO header and every line in one transaction, replays accepted retries, and rejects request-key reuse with different intent.
+  - `apps/admin/lib/actions/purchases.test.ts`: proves concurrent/repeated idempotency, malformed and overflowing payload rejection, foreign supplier/variant rejection, intent conflict, and injected line-insert rollback against real PostgreSQL.
+  - `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`: submits the selected variant, supplier, quantity, unit cost, and optional ETA through the real action; pending/error state is stable and the dialog closes only after an accepted commit.
+  - `apps/admin/app/(admin)/produk/pembelian/pembelian-client.tsx`: migrates the existing purchase-page caller to the typed result and stable request-key contract, and corrects its memo dependencies.
+- **Verification Executed:**
+  - `TEST_DB_REQUIRED=1 vitest run` across the six integrated Stage 4 focused suites → **6 files and 14 tests passed** against isolated real PostgreSQL.
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
+  - Focused ESLint across all four Task 4.6 source/test files → **0 errors and 0 warnings**.
+  - Desktop browser flow selected `Dusty Pink / XL`, quantity `3`, and unit cost `75,000`; the store's PO count moved from **6 to 7**, and PostgreSQL contained one new `dipesan` header plus one selected-variant line totaling **225,000**.
+  - A nonexistent supplier left the dialog open with supplier, quantity, and cost preserved, surfaced a specific retriable error, left the submit button enabled, and left the PO count at **7**.
+  - Mobile browser proof at 390×844 rendered the 358 px dialog without horizontal overflow; the persisted error and all inputs remained readable.
+  - Independent reviewer re-read the final trust-boundary, transaction, idempotency, caller, and regression-test changes and reported no remaining defect.
+- **Completed Task:** Stage 4 Task 4.6.
+
 ### [2026-08-18] — Stage 4 Tasks 4.1–4.5 Integration Proof
 
 - **Scope:** Integrated the independently reviewed Task 4.1 credential hardening, Task 4.2 public-store availability guard, Task 4.3 durable payment-request idempotency, Task 4.4 persisted receipt facts, and Task 4.5 per-variant stock update contract on `integration/stage4-p0-wave1`.

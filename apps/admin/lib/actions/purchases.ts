@@ -14,45 +14,286 @@ function revalidate() {
 
 export type POLine = { variantId: string; qty: number; cost: number };
 
+export type CreatePurchaseOrderResult =
+  | {
+      ok: true;
+      purchaseOrderId: string;
+      code: string;
+      replayed: boolean;
+    }
+  | {
+      ok: false;
+      code:
+        | "invalid_request"
+        | "supplier_not_found"
+        | "supplier_ambiguous"
+        | "variant_not_found"
+        | "idempotency_conflict"
+        | "save_failed";
+      error: string;
+    };
+
+const REQUEST_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function createPurchaseOrder(input: {
+  requestKey: string;
   supplier: string;
   etaDate?: string;
   note?: string;
   lines: POLine[];
-}): Promise<string> {
-  const { storeId: sid } = await requireCapability("purchases:write");
-  const lines = input.lines.filter((l) => l.variantId && l.qty > 0);
-  if (!lines.length) throw new Error("no lines");
-  // ⚠️ NOT `Date.now().toString().slice(-6)`. Six digits of epoch-ms REPEAT every 10^6 ms ≈ 16.7
-  // minutes, so two POs at the same point in that cycle got the same code — and while the constraint
-  // was platform-wide, the second one FAILED TO SAVE for a merchant who had done nothing wrong.
-  // 0084 scoped the constraint per store, which removes the cross-tenant half; this removes the rest.
-  // Full millis + 4 random digits: monotonic, readable, and collision-free in practice.
-  const code = `PO-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 9000 + 1000)}`;
-  await withTenant(sid, async (db) => {
-    // match supplier by name (case-insensitive); nullable if not found
-    const sups = await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.storeId, sid));
-    const supplierId = sups.find((s) => s.name.toLowerCase() === input.supplier.trim().toLowerCase())?.id ?? null;
-    const total = lines.reduce((a, l) => a + l.qty * l.cost, 0);
-    const [po] = await db
-      .insert(schema.purchaseOrders)
-      .values({ storeId: sid, supplierId, code, status: "dipesan", totalIdr: total, etaDate: input.etaDate || null, note: input.note || null })
-      .returning();
-    // `l.variantId` is CLIENT INPUT and `purchase_order_items` has no store_id / no RLS, so nothing
-    // downstream re-checks it. Read the variants back under RLS (`product_variants` IS policed) and
-    // keep only ours: a foreign id here writes an FK to another store's variant, and "Terima barang"
-    // would then add stock to THEIR shelf. Unknown ids become null rather than failing the whole PO —
-    // a line can legitimately be free-text (no variant), which is why the column is nullable.
-    const wanted = [...new Set(lines.map((l) => l.variantId).filter(Boolean))] as string[];
-    const ours = wanted.length
-      ? new Set((await db.select({ id: schema.productVariants.id }).from(schema.productVariants).where(inArray(schema.productVariants.id, wanted))).map((v) => v.id))
-      : new Set<string>();
-    await db.insert(schema.purchaseOrderItems).values(
-      lines.map((l) => ({ purchaseOrderId: po.id, variantId: l.variantId && ours.has(l.variantId) ? l.variantId : null, qty: l.qty, costIdr: l.cost, receivedQty: 0 })),
-    );
-  });
-  revalidate();
-  return code;
+}): Promise<CreatePurchaseOrderResult> {
+  const { storeId } = await requireCapability("purchases:write");
+  const rawInput =
+    input !== null && typeof input === "object" && !Array.isArray(input)
+      ? (input as unknown as Record<string, unknown>)
+      : null;
+  const rawLines = rawInput?.lines;
+  if (
+    !rawInput ||
+    typeof rawInput.requestKey !== "string" ||
+    typeof rawInput.supplier !== "string" ||
+    (rawInput.etaDate != null && typeof rawInput.etaDate !== "string") ||
+    (rawInput.note != null && typeof rawInput.note !== "string") ||
+    !Array.isArray(rawLines) ||
+    rawLines.length === 0
+  ) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      error: "Pemasok, varian, jumlah, dan biaya per unit wajib valid.",
+    };
+  }
+
+  const requestKey = rawInput.requestKey.trim().toLowerCase();
+  const supplierName = rawInput.supplier.trim();
+  const etaDate = rawInput.etaDate?.trim() || null;
+  const note = rawInput.note?.trim() || null;
+  const lines: POLine[] = [];
+  let total = 0;
+
+  for (const rawLine of rawLines) {
+    if (
+      rawLine === null ||
+      typeof rawLine !== "object" ||
+      Array.isArray(rawLine)
+    ) {
+      return {
+        ok: false,
+        code: "invalid_request",
+        error: "Pemasok, varian, jumlah, dan biaya per unit wajib valid.",
+      };
+    }
+
+    const line = rawLine as Record<string, unknown>;
+    const variantId =
+      typeof line.variantId === "string" ? line.variantId.trim() : "";
+    const qty = line.qty;
+    const cost = line.cost;
+    const lineTotal =
+      typeof qty === "number" && typeof cost === "number" ? qty * cost : NaN;
+    if (
+      !REQUEST_KEY.test(variantId) ||
+      !Number.isSafeInteger(qty) ||
+      (qty as number) <= 0 ||
+      !Number.isSafeInteger(cost) ||
+      (cost as number) <= 0 ||
+      !Number.isSafeInteger(lineTotal) ||
+      !Number.isSafeInteger(total + lineTotal)
+    ) {
+      return {
+        ok: false,
+        code: "invalid_request",
+        error: "Pemasok, varian, jumlah, dan biaya per unit wajib valid.",
+      };
+    }
+
+    lines.push({
+      variantId,
+      qty: qty as number,
+      cost: cost as number,
+    });
+    total += lineTotal;
+  }
+
+  if (
+    !REQUEST_KEY.test(requestKey) ||
+    !supplierName ||
+    (etaDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(etaDate))
+  ) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      error: "Pemasok, varian, jumlah, dan biaya per unit wajib valid.",
+    };
+  }
+
+  const variantIds = lines.map((line) => line.variantId);
+  if (new Set(variantIds).size !== variantIds.length) {
+    return {
+      ok: false,
+      code: "invalid_request",
+      error: "Satu varian hanya boleh muncul sekali dalam pesanan.",
+    };
+  }
+
+  // The caller keeps this UUID stable until it observes an accepted result. The existing
+  // per-store unique PO code is therefore also the durable request claim; no second identity
+  // column or migration is needed.
+  const code = `PO-${requestKey.replaceAll("-", "").toUpperCase()}`;
+
+  let result: CreatePurchaseOrderResult;
+  try {
+    result = await withTenant(storeId, async (db) => {
+      const suppliers = await db
+        .select({ id: schema.suppliers.id })
+        .from(schema.suppliers)
+        .where(
+          and(
+            eq(schema.suppliers.storeId, storeId),
+            sql`lower(${schema.suppliers.name}) = ${supplierName.toLowerCase()}`,
+          ),
+        )
+        .limit(2);
+      if (suppliers.length === 0) {
+        return {
+          ok: false,
+          code: "supplier_not_found",
+          error: "Pemasok tidak ditemukan. Pilih pemasok yang sudah tersimpan.",
+        } satisfies CreatePurchaseOrderResult;
+      }
+      if (suppliers.length > 1) {
+        return {
+          ok: false,
+          code: "supplier_ambiguous",
+          error: "Nama pemasok tidak unik. Rapikan data pemasok sebelum membuat PO.",
+        } satisfies CreatePurchaseOrderResult;
+      }
+
+      const ownedVariants = await db
+        .select({ id: schema.productVariants.id })
+        .from(schema.productVariants)
+        .where(
+          and(
+            eq(schema.productVariants.storeId, storeId),
+            inArray(schema.productVariants.id, variantIds),
+          ),
+        );
+      if (ownedVariants.length !== variantIds.length) {
+        return {
+          ok: false,
+          code: "variant_not_found",
+          error: "Salah satu varian tidak ditemukan atau bukan milik toko ini.",
+        } satisfies CreatePurchaseOrderResult;
+      }
+
+      const [inserted] = await db
+        .insert(schema.purchaseOrders)
+        .values({
+          storeId,
+          supplierId: suppliers[0].id,
+          code,
+          status: "dipesan",
+          totalIdr: total,
+          etaDate,
+          note,
+        })
+        .onConflictDoNothing({
+          target: [schema.purchaseOrders.storeId, schema.purchaseOrders.code],
+        })
+        .returning({
+          id: schema.purchaseOrders.id,
+          code: schema.purchaseOrders.code,
+        });
+
+      if (!inserted) {
+        const [existing] = await db
+          .select({
+            id: schema.purchaseOrders.id,
+            supplierId: schema.purchaseOrders.supplierId,
+            code: schema.purchaseOrders.code,
+            totalIdr: schema.purchaseOrders.totalIdr,
+            etaDate: schema.purchaseOrders.etaDate,
+            note: schema.purchaseOrders.note,
+          })
+          .from(schema.purchaseOrders)
+          .where(
+            and(
+              eq(schema.purchaseOrders.storeId, storeId),
+              eq(schema.purchaseOrders.code, code),
+            ),
+          )
+          .limit(1);
+        if (!existing) throw new Error("purchase-order claim disappeared");
+
+        const storedLines = await db
+          .select({
+            variantId: schema.purchaseOrderItems.variantId,
+            qty: schema.purchaseOrderItems.qty,
+            cost: schema.purchaseOrderItems.costIdr,
+          })
+          .from(schema.purchaseOrderItems)
+          .where(eq(schema.purchaseOrderItems.purchaseOrderId, existing.id));
+        const requestedLines = new Map(
+          lines.map((line) => [line.variantId, line]),
+        );
+        const sameLines =
+          storedLines.length === lines.length &&
+          storedLines.every((line) => {
+            const requested = line.variantId
+              ? requestedLines.get(line.variantId)
+              : undefined;
+            return (
+              requested?.qty === line.qty && requested.cost === line.cost
+            );
+          });
+        if (
+          existing.supplierId !== suppliers[0].id ||
+          Number(existing.totalIdr) !== total ||
+          existing.etaDate !== etaDate ||
+          existing.note !== note ||
+          !sameLines
+        ) {
+          return {
+            ok: false,
+            code: "idempotency_conflict",
+            error: "Permintaan ini sudah dipakai untuk pesanan yang berbeda.",
+          } satisfies CreatePurchaseOrderResult;
+        }
+
+        return {
+          ok: true,
+          purchaseOrderId: existing.id,
+          code: existing.code,
+          replayed: true,
+        } satisfies CreatePurchaseOrderResult;
+      }
+
+      await db.insert(schema.purchaseOrderItems).values(
+        lines.map((line) => ({
+          purchaseOrderId: inserted.id,
+          variantId: line.variantId,
+          qty: line.qty,
+          costIdr: line.cost,
+          receivedQty: 0,
+        })),
+      );
+      return {
+        ok: true,
+        purchaseOrderId: inserted.id,
+        code: inserted.code,
+        replayed: false,
+      } satisfies CreatePurchaseOrderResult;
+    });
+  } catch {
+    return {
+      ok: false,
+      code: "save_failed",
+      error: "Pesanan gagal disimpan. Periksa data lalu coba lagi.",
+    };
+  }
+
+  if (result.ok) revalidate();
+  return result;
 }
 
 // Receive the goods: bump inventory by the outstanding qty of each line, mark received.
