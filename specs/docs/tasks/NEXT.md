@@ -1,34 +1,32 @@
-# NEXT — what to pick up, in order
+# NEXT — historical work ledger
 
-> ## 👉 Starting fresh, or on another machine? Read **[`OPEN.md`](./OPEN.md)** first.
-> It is the short, re-verified list of what is *actually* open, plus the machine setup. **This file
-> goes stale**: a sweep on 2026-08-05 found **eleven** entries still marked open or `NEW` that were
-> already shipped or refuted — one of them filed the same day by the agent that filed it. They are
-> corrected below, but assume drift again by the time you read this. **If a task here disagrees with
-> the code, the code wins — then fix whichever is wrong.**
+> **Historical evidence only.** Repository-root [`TASKS.md`](../../../TASKS.md) is the sole active queue
+> and release gate. Use [`OPEN.md`](./OPEN.md) as the short navigation handoff. Do not implement or
+> reopen an entry from this file until it is traced to a current requirement and root task.
 >
-> ⚠️ **Task numbers N36–N43 each appear TWICE** — the shipping sweep (#146) and audit wave 7 (#148)
-> both numbered from N36, and nothing has been renumbered. **Always quote the title, never the bare
-> number.** Disambiguation table in `OPEN.md`.
+> This ledger intentionally preserves old state, duplicated identifiers, closed items, measurements,
+> and reasoning. It is not maintained as a reliable open/closed board. When it disagrees with current
+> code or canonical documentation, verify the behavior and update the current owner document instead
+> of treating this historical checkbox as authority.
+>
+> ⚠️ **Task numbers N36–N43 each appear twice.** The shipping sweep (#146) and audit wave 7 (#148)
+> both numbered from N36. Always quote the title, never the bare number.
 
-> Standing follow-up list. **Newest state as of 2026-08-01**, after `#117`–`#125` (merged and deployed)
-> and **audit wave 2** (this branch, seven change sets — handoff
-> [`2026-08-01-audit-wave-2.md`](./2026-08-01-audit-wave-2.md), consolidated record
-> `../audit-2026-08-01/FINDINGS-SOURCE.md`, which is the **authority on every number below**).
->
-> Pairs with `BACKLOG.md` (priorities), `WORKLOG.md` (session log) and the dated handoffs in this
-> folder. **Legend:** size **S** (<1h) / **M** (half a day) / **L** (a day+). AC = acceptance criteria.
+> Standing follow-up history beginning 2026-08-01, after `#117`–`#125` and audit wave 2. Dated
+> handoffs and `../audit-2026-08-01/FINDINGS-SOURCE.md` preserve the evidence behind entries below.
+> Sizes are historical estimates: **S** (<1h), **M** (half a day), **L** (a day+). AC means acceptance
+> criteria.
 >
 > 🔴 **THIS FILE WAS STALE ON FOUR ENTRIES, AND STALE IN THE EXPENSIVE DIRECTION** (found 2026-08-03).
 > **N19 · N20 · N21 · N23 were all done in `52ef1de` (audit wave 3, `#133`) and all four were still
 > marked open**, three of them tagged `NEW`. A session that trusts the queue creates a worktree and
 > starts rewriting finished work — that nearly happened on N19. All four are closed below **with the
-> evidence of having been RUN**, not merely read. ⚠️ **Close the entry in the same commit as the
-> code.** The queue is what four different docs point sessions at; stale here costs a whole session.
+> evidence of having been RUN**, not merely read. This incident is why this file was demoted to a
+> historical ledger and root `TASKS.md` now owns the active queue.
 >
 > 🔵 **Closed by audit wave 2: N5 (in part) · N9 · N11 · N12 · N14 · N6 · N4 · N3.** 🔴 **N8 was
-> REWRITTEN — its premise was disproved.** N7 stays reversed. **Eleven items were ADDED** from the audit;
-> they are new, not carried over, and nothing else in the repo tracks them.
+> REWRITTEN — its premise was disproved.** N7 stayed reversed. Eleven items were added from the audit;
+> this was their only tracking location at that time.
 >
 > ⚠️ **Three entries in this file have now been found to rest on claims that were false** — N13's, N6's
 > and N8's. Read an entry before trusting its sizing. That is the pattern, not the exception.

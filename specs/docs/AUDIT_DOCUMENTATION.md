@@ -1,5 +1,10 @@
 # TokoΦ Documentation & Architecture Audit
 
+> **Historical audit snapshot — superseded as an ownership contract.** Its findings were reconciled on
+> 2026-08-16. Current ownership is defined by [`DEVELOPMENT_READINESS.md`](./DEVELOPMENT_READINESS.md);
+> repository-root [`TASKS.md`](../../TASKS.md) owns active work, while
+> [`tasks/OPEN.md`](./tasks/OPEN.md) is only the short handoff.
+
 **Audit batch:** 6 — Documentation & Architecture  
 **Audit date:** 2026-08-15  
 **Repository:** `/home/ongki/Projects/tokophi`  
@@ -477,7 +482,7 @@ Adopt this smallest authoritative pack:
 | `specs/docs/IAM_SECURITY.md` | Identities, sessions, RBAC, RLS, secrets, threat boundaries, provider trust | General incident chronology |
 | `specs/docs/OPERATIONS.md` + runbooks | Deployment, rollback, backup/restore, cron, monitoring, on-call evidence | Superseded host/scheduler instructions |
 | `specs/docs/REQUIREMENTS.md` | Stable testable requirements and traceability | Unowned prose wishes |
-| `specs/docs/tasks/OPEN.md` | Only current work queue and external blockers | Completed session history |
+| Repository-root `TASKS.md` + `specs/docs/tasks/OPEN.md` | Active implementation queue and short navigation handoff, respectively | Completed session history |
 | `specs/archive/` | Immutable historical evidence | Normative current instructions |
 
 Existing documents can be consolidated into this spine without deleting valuable history. Add short tombstone headers to superseded files rather than leaving active-looking prose.

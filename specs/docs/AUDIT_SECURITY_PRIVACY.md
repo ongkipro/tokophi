@@ -53,7 +53,7 @@ TokoΦ is a multi-tenant commerce SaaS platform supporting merchant admin consol
 | Risk Area | Code Path | Existing Guard | Vulnerability / Improvement Directive |
 | :--- | :--- | :--- | :--- |
 | **RLS Bypass in Direct Queries** | `packages/db/src/client.ts` | Direct connection uses superuser in dev | **Directive:** Production connection pool must run as `tokophi_app` unprivileged role to enforce RLS strictly. |
-| **CRON Route Authorization** | `apps/admin/app/api/cron/*` | Header check `x-cron-secret` | **Directive:** Ensure fail-closed check (`!secret || provided !== secret`) across all cron routes without exception. |
+| **CRON Route Authorization** | `apps/admin/app/api/cron/*` | Header check `x-cron-secret` | **Directive:** Ensure every cron route rejects when the configured secret is absent or the supplied value differs. |
 | **PII IP Retention** | `apps/storefront/src/components/MarketingPixels.astro` | IP hashing in analytics | **Directive:** Hash buyer IP addresses with daily rotating salt (`sha256(ip + date_salt)`) to prevent persistent tracking logs. |
 | **Webhook Callback Verification** | `apps/admin/app/api/public/pay/callback` | Timing-safe secret comparison | **Directive:** Keep `crypto.timingSafeEqual` for all payment callback signature checks to avoid timing leaks. |
 

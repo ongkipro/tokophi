@@ -1,6 +1,9 @@
-# 0004 — Payments, COD & shipping are platform-managed (merchant "terima matang")
+# ADR-0004 — Payments, COD, and shipping are platform-managed
 
 **Status:** accepted · 2026-07-02
+
+## ADR-0004 — Platform-managed provider ownership
+- Owner: Product owner
 
 ## Decision
 Payment gateways (Midtrans / Xendit / Duitku / …), **COD (bayar di tempat)**, and courier integrations (JNE / J&T / SiCepat / …) are configured and **owned by the platform (super-admin)** — once, centrally. Merchants do **not** register their own PSP/courier accounts or enter API credentials.

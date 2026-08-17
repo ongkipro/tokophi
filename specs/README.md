@@ -14,31 +14,32 @@ makes us a custodian, and makes the ledger the most consequential thing in the c
 
 ## Read these first
 
-Start with the current queue, then verify every claim against code and the target database. The older
-status/schema documents are useful historical evidence, but their frozen counts are not a current
-runtime contract.
+Start from the authority map below. Verify dated claims against code and the target environment.
 
-| Doc | What it answers |
+| Concern | Canonical owner |
 |---|---|
-| **[docs/tasks/OPEN.md](docs/tasks/OPEN.md)** | **Current session entrypoint:** owner decisions, ready work, external blockers, and runnable gates. If it disagrees with another task document, verify the code and fix the stale document |
-| **[PRD.md](PRD.md)** | What the product is, the money model, the COD policy, the four surfaces. Aspirational items are labelled aspirational |
-| **[docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)** | What must be **true** — functional + non-functional requirements as **verifiable statements**, each with the query or grep that checks it. Includes the security invariants learned the hard way |
-| **[docs/STATUS.md](docs/STATUS.md)** | 🟢 REAL / 🟡 SEEDED-BUT-COMPUTED / 🔴 FAKE. Historical evidence; re-check dated claims before using them |
-| **[docs/SYSTEM_MAP.md](docs/SYSTEM_MAP.md)** | Every route → its data layer → its tables, per surface. Where the RLS boundary actually sits |
-| **[docs/FLOWS.md](docs/FLOWS.md)** | The six critical flows as sequence diagrams: checkout + COD gate, payment callback, order lifecycle, money, shipping, auth/RLS |
-| **[docs/UML.md](docs/UML.md)** | ER/class diagram, order + ledger state machines, component and deployment diagrams. **Every diagram is validated with mermaid-cli** |
-| **[docs/SCHEMA.md](docs/SCHEMA.md)** | Annotated schema snapshot generated from `information_schema` / `pg_class`; its 2026-07-14 counts are historical, so query the target catalog before relying on them |
-| **[docs/BACKLOG.md](docs/BACKLOG.md)** | Long-form priority history. Use `docs/tasks/OPEN.md`, not its old “next up” section, to choose current work |
+| Product scope and non-goals | Repository-root [`PRD.md`](../PRD.md) |
+| Implemented architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Accepted architectural decisions | [`decisions/`](decisions/) |
+| Verifiable behavior and requirement status | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) |
+| Current audit evidence and release blockers | [`docs/AUDIT-SUMMARY.md`](docs/AUDIT-SUMMARY.md) |
+| Active remediation queue and release gate | Repository-root [`TASKS.md`](../TASKS.md) |
+| Runtime, seeded-data, and environment status | [`docs/STATUS.md`](docs/STATUS.md) |
+| Deployment procedure | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| Security posture | [`docs/SECURITY.md`](docs/SECURITY.md) |
+| Documentation applicability and validation boundary | [`docs/DEVELOPMENT_READINESS.md`](docs/DEVELOPMENT_READINESS.md) |
 
-**Supporting:** [ARCHITECTURE](docs/ARCHITECTURE.md) · [CONCEPT](docs/CONCEPT.md) ·
-[CHAT_SPEC](docs/CHAT_SPEC.md) · [DEPLOY](docs/DEPLOY.md) · [CODE_MAP](docs/CODE_MAP.md) ·
-[UI_INVENTORY](docs/UI_INVENTORY.md) · [WORKLOG](docs/WORKLOG.md) · [PROD_PLAN](docs/PROD_PLAN.md) ·
-[DATA_MODEL](docs/DATA_MODEL.md) · [TASKS](docs/TASKS.md) · **wireframes/**
+Supporting domain references:
 
-> ⚠️ **DATA_MODEL.md, TASKS.md, GUIDE.md, SYSTEM_GUIDE.md and CONCEPT.md predate the backend** and
-> describe a mock-first product. `STATUS.md`, `SCHEMA.md`, `BACKLOG.md`, and `tasks/NEXT.md` also retain
-> dated findings intentionally. **Code and the target database win; `tasks/OPEN.md` is the maintained
-> handoff.**
+- [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) maps routes, data layers, and tables.
+- [`docs/FLOWS.md`](docs/FLOWS.md) and [`docs/UML.md`](docs/UML.md) describe critical flows and state machines.
+- [`docs/SCHEMA.md`](docs/SCHEMA.md) is a dated schema snapshot; query the target database before relying on counts.
+- [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) records engineering applicability, open policy owners, and legal-review gates.
+- [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) records current signals, blind spots, proposed SLIs, and runbooks.
+- [`openapi/storefront-api.yaml`](openapi/storefront-api.yaml) and [`openapi/admin-api.yaml`](openapi/admin-api.yaml) describe observed HTTP boundaries.
+- [`docs/HEADLESS_STOREFRONT_SPEC.md`](docs/HEADLESS_STOREFRONT_SPEC.md), [`openapi/headless.yaml`](openapi/headless.yaml), [`docs/TOKOPHI_ACCOUNT_SPEC.md`](docs/TOKOPHI_ACCOUNT_SPEC.md), and [`openapi/account.yaml`](openapi/account.yaml) are proposed contracts; they are not deployed behavior.
+
+Historical audits, `docs/BACKLOG.md`, `docs/WORKLOG.md`, `docs/TASKS.md`, and `docs/tasks/NEXT.md` remain evidence only. [`docs/tasks/OPEN.md`](docs/tasks/OPEN.md) is a concise navigation handoff; it does not own work beside root `TASKS.md`.
 
 ---
 
@@ -134,14 +135,17 @@ when the task depends on the provider's current roster.
 | [0013](decisions/0013-stable-catalog-product-ids.md) | Stable catalog product IDs |
 | [0014](decisions/0014-platform-absorbs-cod-shipping.md) | **Superseded by ADR 0015** — former platform-absorbed COD shipping rule |
 | [0015](decisions/0015-net-seller-proceeds-and-shipping-reconciliation.md) | **Accepted** — Net Seller proceeds and shipping reconciliation (supersedes ADR 0014) |
+| [0016](decisions/0016-global-buyer-account.md) | **Accepted direction** — Global buyer identity with isolated per-store customer projections; runtime not deployed |
 
 ---
 
-## Current baseline (verified 2026-08-05)
+## Current baseline (verified 2026-08-16)
 
-`origin/main` is the collaboration baseline. The production catalog reports **77 public tables**, **51
-with RLS**, and **90 applied migrations**; the repository journal also contains 90 entries and ends at
-`0089_platform_password_revokes_sessions`. The repository contains **55 test files**. These are
-observations, not constants: re-run the catalog query and `npm test` when a change depends on them.
+`origin/main` is the collaboration baseline. The latest executable repository verification reported
+**90/90 Vitest files and 722/722 tests passing**, successful storefront and landing Astro checks, and
+successful admin/super-admin TypeScript checks. The migration journal contains **95 entries** through
+`0094_magical_salo`; the latest measured database/RLS snapshot reports **78 public tables** and RLS on
+**51 of 52** store-scoped tables. These observations are dated evidence, not constants: re-run the
+relevant check and query the target catalog whenever a change depends on them.
 
-The unresolved work and its evidence are maintained in **[docs/tasks/OPEN.md](docs/tasks/OPEN.md)**.
+Current remediation work and its release gate are maintained only in repository-root [`TASKS.md`](../TASKS.md); supporting evidence belongs in [`docs/AUDIT-SUMMARY.md`](docs/AUDIT-SUMMARY.md).

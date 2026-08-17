@@ -1,13 +1,13 @@
-# TokoΦ — Backlog & task board
+# TokoΦ — historical backlog and priority record
 
-> ▶ **What to pick up next, in order: [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with acceptance criteria. This file is priorities; that one is the queue.
-
-> **Reconciled against the code and the database 2026-07-14.** Items that shipped are marked and
-> collapsed; items that are still open are stated **honestly**, including the ones we would rather not
-> look at. Legend: `[ ]` todo · `[~]` partial · `[x]` done.
+> **Historical evidence only.** Repository-root [`TASKS.md`](../../TASKS.md) is the sole active
+> implementation queue and release gate. Use [`tasks/OPEN.md`](./tasks/OPEN.md) for the short current
+> handoff. Do not implement an unchecked item below until it is traced to a current requirement and
+> root task.
 >
-> Companions: [`STATUS.md`](./STATUS.md) (real vs fake) · [`REQUIREMENTS.md`](./REQUIREMENTS.md)
-> (verifiable statements) · [`PRD.md`](../PRD.md).
+> This file preserves priorities, measurements, and closed work beginning 2026-07-14. Its checkboxes
+> are not a reliable current-status board. Current behavior belongs in [`REQUIREMENTS.md`](./REQUIREMENTS.md)
+> and current evidence belongs in [`AUDIT-SUMMARY.md`](./AUDIT-SUMMARY.md).
 
 ---
 
@@ -1126,8 +1126,8 @@ confirmed by reading the code, running SQL, or driving a real browser — none i
   Fix: `Content-Security-Policy: sandbox; default-src 'none'` + `X-Content-Type-Options: nosniff` on
   the SVG branch.
 - [x] **`saveTemplate` writes unvalidated client JSON into jsonb** — closed: shape check at the boundary, plus renderer fallbacks (`MODE_FN[mode] ?? bestsellers`, `Array.isArray(slides)`) so a bad row degrades instead of 500-ing. (`lib/actions/theme.ts:165`). The
-  repo already documented the consequence in `seed-templates.ts`: a typo'd `mode` makes
-  `MODE_FN[mode](pool)` throw and **500s the whole storefront** — but the guard was added to the seed,
+  repo already documented the consequence in `seed-templates.ts`: a typo'd `mode` causes the
+  selected `MODE_FN` entry to throw and **500s the whole storefront** — but the guard was added to the seed,
   not to the write path. Fix: validate `data.content[]` against `SectionConfigMap` before the update,
   plus a `?? bestsellers` fallback in `ProductGrid.astro:26`.
 

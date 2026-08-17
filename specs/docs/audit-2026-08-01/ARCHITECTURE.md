@@ -369,7 +369,7 @@ stateDiagram-v2
 | **COD eligibility** | `apps/admin/lib/cod.ts` → `buildCodPolicy` (5 conditions) **and** `rate.cod` from the live quote | `order/route.ts:504-524` — **two** gates, see §5 |
 | **Voucher quota** | the conditional `UPDATE … WHERE used_count < usage_limit` inside the txn; 0 rows → `VoucherExhausted` → whole order rolls back, 409 | `order/route.ts:700-713` |
 | **Order status** | `applyOrderStatusChange` — the single writer | `apps/admin/lib/order-status.ts:14-113` |
-| **"Is this order COD?"** | `payments.method = 'cod'` on the order row, derived at booking; `input.cod` is a claim that is checked, not obeyed | `actions/shipping.ts` — `cod: o.isCod ? (o.total || o.subtotal || 0) : 0` |
+| **"Is this order COD?"** | `payments.method = 'cod'` on the order row, derived at booking; `input.cod` is a claim that is checked, not obeyed | `actions/shipping.ts` — COD amount selects the first available value from `o.total`, `o.subtotal`, and `0` |
 | **Money in the ledger** | `settleOrderLedger` / `creditSaleForPayment`, guarded by three partial unique indexes; balance is **derived**, never stored | `order-status.ts:112`, `lib/ledger-credit.ts` |
 
 `applyOrderStatusChange` holds three guards, all load-bearing: same-status no-op, `batal`/`retur`
