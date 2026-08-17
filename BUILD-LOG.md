@@ -8,6 +8,22 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-17 16:41 UTC] — Task 4.1 Responsive-Audit Credential Removal
+
+- **Scope:** Completed Stage 4 Task 4.1 from `docs/canonical-planning-contracts`: the Seller responsive audit no longer embeds a reusable account and exits before browser launch when either required credential is absent.
+- **Files Modified:**
+  - `apps/admin/scripts/audit-responsive.mjs`: reads `AUDIT_EMAIL` and `AUDIT_PASSWORD` without fallback values and fails closed when either is missing.
+  - `apps/admin/scripts/audit-responsive.test.ts`: covers each missing variable and the explicit-credential login flow.
+  - `apps/admin/scripts/test-stubs/audit-responsive-playwright.mjs`: deterministic Playwright boundary for the CLI regression test; it verifies the supplied environment values reach the email/password fields.
+- **Verification Executed:**
+  - `node_modules/.bin/vitest run apps/admin/scripts/audit-responsive.test.ts` → **1 file passed; 3 tests passed**.
+  - `npm run lint -w @tokophi/admin -- scripts/audit-responsive.mjs scripts/audit-responsive.test.ts scripts/test-stubs/audit-responsive-playwright.mjs` → **passed with 0 errors and 0 warnings**.
+  - `node_modules/.bin/tsc --noEmit -p apps/admin/tsconfig.json` → **passed**.
+  - `env -u AUDIT_EMAIL -u AUDIT_PASSWORD node apps/admin/scripts/audit-responsive.mjs http://127.0.0.1:9` → **exit 1 with the required-variable error before Playwright launch**.
+  - Focused source search of `apps/admin/scripts/audit-responsive.mjs` → **no former email/password literals remain**.
+  - Real local smoke with an isolated migrated/seeded PostgreSQL database and generated credentials → **login succeeded, the script resolved `/store/batiknusantara`, and all 264 route×width checks executed**. The command then reported **24 pre-existing 320 px topbar overflows** tracked separately by Task 5.5; Task 4.1 does not alter layout.
+- **Task State:** Implementation and focused local verification complete on `fix/task-4.1-audit-credentials`. The canonical Stage 4 queue exists on the separate `docs/canonical-planning-contracts` branch, so this feature branch does not duplicate or rewrite that unmerged `TASKS.md`.
+
 ### [2026-08-15 13:58 UTC] — Coolify Production Monorepo Deployment & Turbopack Root Fix
 
 - **Scope:** Resolved Coolify Docker monorepo build failures for `@tokophi/admin` and `@tokophi/super-admin`, queued deployment 447, and verified 100% production container health & probe pass.
