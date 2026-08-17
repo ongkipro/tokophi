@@ -19,8 +19,12 @@ const require = createRequire(new URL("../../../", import.meta.url));
 const { chromium } = require("playwright");
 
 const BASE = (process.argv[2] ?? "https://app.tokophi.com").replace(/\/$/, "");
-const EMAIL = process.env.AUDIT_EMAIL ?? "ongki@batiknusantara.id";
-const PASSWORD = process.env.AUDIT_PASSWORD ?? "tokophi123";
+const EMAIL = process.env.AUDIT_EMAIL;
+const PASSWORD = process.env.AUDIT_PASSWORD;
+if (!EMAIL || !PASSWORD) {
+  console.error("AUDIT_EMAIL and AUDIT_PASSWORD must be set");
+  process.exit(1);
+}
 
 // Real devices, not the breakpoints we happened to pick:
 // 320 = smallest phone still in use · 360 = the most common Android · 390/414 = modern iPhone
