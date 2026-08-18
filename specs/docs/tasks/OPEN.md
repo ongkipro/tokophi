@@ -1,6 +1,6 @@
 # OPEN — current development handoff
 
-**Refreshed 2026-08-16 after the consolidated pre-release audit.**
+**Refreshed 2026-08-18 after Stage 4 Task 4.7 integration.**
 
 This file is a navigation handoff. It is not a second task board.
 
@@ -11,6 +11,13 @@ This file is a navigation handoff. It is not a second task board.
 - The queue contains 13 P0 release blockers, 20 P1 high-priority items, and 9 P2 hardening items.
 - TokoΦ Account is accepted as a product direction, not as deployed behavior. Its release scope remains an explicit task.
 - Production mutation, deployment, credential rotation, and infrastructure changes remain owner-gated.
+
+## Resume point
+
+- **Last completed:** Stage 4 Task 4.7, persisted navigation menu creation. Executable evidence and the exact changed-file record are in root [`BUILD-LOG.md`](../../../BUILD-LOG.md).
+- **Integrated baseline:** `integration/stage4-p0-wave1` at merge commit `fb6f04e`.
+- **Next task:** Stage 4 Task 4.8, transactionally idempotent checkout order creation. The canonical requirement, targets, change, and acceptance check remain in root [`TASKS.md`](../../../TASKS.md).
+- Do not skip to Task 4.9: Task 4.8 must first prove concurrent requests produce one order, one inventory decrement, and one stable replay identity.
 
 ## Start here
 

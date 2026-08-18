@@ -132,12 +132,14 @@
 - **Target Files:** `apps/admin/app/(admin)/navigasi/navigasi-client.tsx`, `apps/admin/lib/actions/menus.ts`, focused navigation tests.
 - **Change:** Make create-menu insert the menu and initial items in one tenant transaction. Return a typed accepted/error result and show success only after the transaction commits.
 - **Done when:** Create, reload, edit, and delete work against persisted rows; injected item-insert failure rolls back the menu; no success toast appears on rejection.
+- **Status:** `DONE` on 2026-08-18. Verified create/reload/edit/delete persistence, transaction rollback on child failure, concurrent same-title handle allocation, browser rejection state, and migration upgrade/fresh-install behavior. Integrated on `integration/stage4-p0-wave1` in `fb6f04e`.
 
 ### Task 4.8: Make Checkout Order Creation Transactionally Idempotent
 - **Requirement:** `F-O8`
 - **Target Files:** `apps/admin/app/api/public/order/route.ts`, `packages/db/src/schema.ts`, one assigned migration, concurrent public-order tests.
 - **Change:** Claim `(store_id, checkout_session_id)` inside the order transaction with a database uniqueness contract. Replay the accepted order for the same session; never rely on the current preflight read.
 - **Done when:** Two concurrent valid submissions produce one order, one inventory decrement, and one stable response identity; retry after process restart is deterministic.
+- **Status:** `NEXT`. Resume from `integration/stage4-p0-wave1`; preserve the database uniqueness and stable replay-identity contract before changing the public order route.
 
 ### Task 4.9: Serialize Purchase-Order Receipt
 - **Requirement:** `F-C11`
