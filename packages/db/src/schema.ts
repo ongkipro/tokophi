@@ -1341,14 +1341,18 @@ export const articles = pgTable(
   (t) => [unique().on(t.storeId, t.handle)],
 );
 
-export const menus = pgTable("menus", {
-  id: pk(),
-  storeId: uuid()
-    .notNull()
-    .references(() => stores.id),
-  name: text().notNull(),
-  handle: text().notNull(),
-});
+export const menus = pgTable(
+  "menus",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    name: text().notNull(),
+    handle: text().notNull(),
+  },
+  (t) => [unique().on(t.storeId, t.handle)],
+);
 
 export const menuItems = pgTable("menu_items", {
   id: pk(),
