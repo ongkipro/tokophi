@@ -1,0 +1,1 @@
+ALTER TABLE "menus" ADD CONSTRAINT "menus_storeId_handle_unique" UNIQUE("store_id","handle");

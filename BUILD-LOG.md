@@ -9,6 +9,26 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-18] - Stage 4 Task 4.7 Persisted Navigation Menu Creation
+
+- **Scope:** Replaced the navigation page's client-only create path with tenant-scoped PostgreSQL persistence for the menu and its complete initial item tree.
+- **Files Created / Modified:**
+  - `apps/admin/lib/actions/menus.ts`: added validated typed create/save results; RBAC and tenant-scoped transactions; recursive item normalization/insertion; create, rename, replacement, and delete-to-empty persistence; post-commit revalidation; collision-safe bounded handles; and whole-transaction retry for the named menu-handle uniqueness conflict.
+  - `apps/admin/app/(admin)/navigasi/navigasi-client.tsx`: routes create and save through the Server Actions, keeps dialog/editor state on rejection, exposes retriable errors, blocks duplicate pending submissions, and refreshes only after accepted commits.
+  - `apps/admin/lib/actions/menus.test.ts`: proves nested create, reload-equivalent reads, rename, item replacement, delete-to-empty, rollback after an injected child insert failure, and forced concurrent same-title creation against real PostgreSQL.
+  - `packages/db/src/schema.ts`, `packages/db/drizzle/0096_cool_maggott.sql`, and Drizzle metadata: enforce unique menu handles per store at the database boundary.
+- **Verification Executed:**
+  - Pre-migration duplicate scan on the populated Task 4.7 database -> **0 duplicate `(store_id, handle)` groups**; migration 0096 then applied successfully and `pg_constraint` reported `menus_storeId_handle_unique`.
+  - Full migration chain applied successfully to a fresh PostgreSQL database.
+  - `TEST_DB_REQUIRED=1 vitest run apps/admin/lib/actions/menus.test.ts apps/admin/lib/actions/purchases.test.ts apps/admin/lib/actions/inventory.test.ts` -> **3 files and 8 tests passed**.
+  - `tsc --noEmit -p apps/admin/tsconfig.json` -> **0 errors**.
+  - Focused ESLint for the navigation client, menu action, and menu regression test -> **0 errors and 0 warnings**.
+  - Desktop browser flow created `Menu Browser 47`, reloaded it from PostgreSQL, persisted an item edit to `Promo Browser Edited`, then deleted the item and reloaded the durable zero-item state.
+  - An injected database failure kept the create dialog open with `Menu Browser Failure` preserved, showed `Gagal membuat menu. Coba lagi.`, kept retry enabled, emitted no success toast, and wrote no menu row.
+  - After the uniqueness migration, a final browser smoke created the same `Menu Browser 47` title again; the dialog closed after commit, the page rendered `menu-browser-47-2`, PostgreSQL contained both handles, and the server emitted no error log.
+  - Independent final review found the initial check-then-insert handle race, then confirmed the database constraint, bounded retry, and forced-concurrency regression closed it with no remaining finding.
+- **Completed Task:** Stage 4 Task 4.7.
+
 ### [2026-08-18] — Stage 4 Task 4.6 Real Product-Editor Purchase Orders
 
 - **Scope:** Replaced the product editor's UI-only `Buat PO` success path with a tenant-scoped persisted purchase-order transaction for the selected saved product variant.
