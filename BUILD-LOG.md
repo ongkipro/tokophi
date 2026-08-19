@@ -9,6 +9,15 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Super Admin Lint Gate Restored (0 Errors)
+
+- **Scope:** `npm run lint -w @tokophi/super-admin` was **RED on clean `origin/main`** — 2 `@typescript-eslint/no-explicit-any` errors, both in `app/(platform)/update-log/update-log-client.tsx` from commit `9d85023` (another stream). Found while gating the screening sweep; attribution was verified by reproducing it on the main checkout before fixing anything. **A lint gate that is red is a gate that is off** — this repo has already paid for that with `verify-rls`, which sat red for weeks while two cross-tenant leaks shipped past it.
+- **Files Created / Modified:**
+  - `apps/super-admin/lib/data/dev-logs.ts`: the surface union is now a named, exported `DevLogSurface` and `DevLogEntry.surfaces` uses it. It was inline here and `as any` on the screen, which is exactly the shape that stops a misspelled surface name from failing.
+  - `apps/super-admin/app/(platform)/update-log/update-log-client.tsx`: `icon: any` → `ComponentType<{ className?: string }>`; `selectedSurface as any` → `as DevLogSurface`. The unused `DevLogEntry` import went with it.
+- **Verification Executed:** `npm run lint -w @tokophi/super-admin` → **0 errors** (from 2), 3 warnings. `tsc --noEmit -p apps/super-admin/tsconfig.json` → **0**. `TEST_DB_REQUIRED=1 npm test` → **100 files and 778 tests passed**.
+- **Completed Task:** none numbered — restores a gate, does not close a Stage task.
+
 ### [2026-08-20] — Screening Findings C/D/E/F: Four Controls That Did Nothing (One of Them Destructively)
 
 - **Scope:** The other half of the same screening sweep: controls a merchant can operate that have no sink. Three were cosmetic-but-misleading; **one wrote the wrong data**.
