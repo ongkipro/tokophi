@@ -54,10 +54,16 @@ export function ThemeTokensDialog({
   const openedWith = React.useRef<{ font: FontPairingId; tone: NeutralTone }>({ font: resolved.font.id, tone: resolved.tone });
   const savedRef = React.useRef(false);
 
-  React.useEffect(() => {
+  // Adjust during render, bukan effect (Task 5.11). `resolved` diturunkan tiap render dari prop, jadi
+  // perbandingannya pada nilainya. ⚠️ Effect DI BAWAH ini sengaja TETAP sebuah effect: ia memanggil
+  // `onPreviewChange` — memberi tahu sistem di luar React tentang state terbaru, yaitu persis untuk
+  // apa effect ada. Yang dilarang aturan ini adalah setState sinkron di dalam effect, bukan efek.
+  const [prevResolved, setPrevResolved] = React.useState({ font: resolved.font.id, tone: resolved.tone });
+  if (prevResolved.font !== resolved.font.id || prevResolved.tone !== resolved.tone) {
+    setPrevResolved({ font: resolved.font.id, tone: resolved.tone });
     setFont(resolved.font.id);
     setTone(resolved.tone);
-  }, [resolved.font.id, resolved.tone]);
+  }
 
   React.useEffect(() => {
     onPreviewChange?.({ font, tone });

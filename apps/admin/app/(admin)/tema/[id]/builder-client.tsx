@@ -54,14 +54,27 @@ export function BuilderClient({
   // object, which would drop the merchant's in-progress edits on every render.
   const config = React.useMemo(() => puckConfigFor(templateType), [templateType]);
 
-  React.useEffect(() => {
+  // ADJUST DURING RENDER, tidak di dalam effect (Task 5.11 — `react-hooks/set-state-in-effect`).
+  // Keduanya adalah "state lokal yang mengikuti prop": effect penyalin prop→state menjalankan render
+  // KEDUA dengan nilai basi di antaranya, yang pada kanvas ini berarti satu frame memakai warna/tema
+  // lama. Pola resmi React untuk kasus ini adalah menyesuaikan saat render dengan penanda nilai
+  // sebelumnya; React membuang hasil render itu dan mengulang seketika, tanpa DOM yang sempat
+  // terlihat. Perbandingannya pada NILAI (`font`/`tone`), bukan identitas objek, supaya parent yang
+  // membuat objek baru tiap render tidak memaksa penyesuaian tanpa perubahan apa pun.
+  const [prevBrandColor, setPrevBrandColor] = React.useState(initialBrandColor);
+  if (prevBrandColor !== initialBrandColor) {
+    setPrevBrandColor(initialBrandColor);
     setPreviewBrandColor(initialBrandColor);
-  }, [initialBrandColor]);
+  }
 
-  React.useEffect(() => {
-    const theme = (initialStoreTheme ?? {}) as { font?: FontPairingId; tone?: NeutralTone };
-    setPreviewTheme({ font: theme.font ?? "bawaan", tone: theme.tone ?? "hangat" });
-  }, [initialStoreTheme]);
+  const incomingTheme = (initialStoreTheme ?? {}) as { font?: FontPairingId; tone?: NeutralTone };
+  const incomingFont = incomingTheme.font ?? "bawaan";
+  const incomingTone = incomingTheme.tone ?? "hangat";
+  const [prevTheme, setPrevTheme] = React.useState({ font: incomingFont, tone: incomingTone });
+  if (prevTheme.font !== incomingFont || prevTheme.tone !== incomingTone) {
+    setPrevTheme({ font: incomingFont, tone: incomingTone });
+    setPreviewTheme({ font: incomingFont, tone: incomingTone });
+  }
 
   const previewCss = React.useMemo(
     () => `:root { ${generateTenantThemeVariables(previewBrandColor, previewTheme)} }`,
