@@ -1,3 +1,13 @@
+// Named and exported because the SCREEN has to narrow a filter string to it. It was an inline
+// union here and an `as any` there, which is the shape that stops a wrong surface name failing.
+export type DevLogSurface =
+  | "Seller Admin"
+  | "Super Admin"
+  | "Storefront"
+  | "Database & RLS"
+  | "Logistics"
+  | "Payments";
+
 export type DevLogCategory = "major" | "minor" | "feature" | "bugfix" | "security" | "logistics_payment";
 
 export type DevLogEntry = {
@@ -6,7 +16,7 @@ export type DevLogEntry = {
   date: string;
   title: string;
   category: DevLogCategory;
-  surfaces: ("Seller Admin" | "Super Admin" | "Storefront" | "Database & RLS" | "Logistics" | "Payments")[];
+  surfaces: DevLogSurface[];
   summary: string;
   problem: string;
   solution: string;

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ComponentType } from "react";
 import { Search, GitCommit, CheckCircle2, ShieldCheck, Bug, Sparkles, Truck, CreditCard, Filter, ArrowUpRight } from "lucide-react";
 import { Input } from "@tokophi/ui/input";
 import { Badge } from "@tokophi/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
-import { DEV_LOGS, type DevLogCategory, type DevLogEntry } from "@/lib/data/dev-logs";
+import { DEV_LOGS, type DevLogCategory, type DevLogSurface } from "@/lib/data/dev-logs";
 
-const CATEGORY_MAP: Record<DevLogCategory, { label: string; badgeVariant: "default" | "secondary" | "outline" | "destructive"; icon: any }> = {
+const CATEGORY_MAP: Record<DevLogCategory, { label: string; badgeVariant: "default" | "secondary" | "outline" | "destructive"; icon: ComponentType<{ className?: string }> }> = {
   major: { label: "Major Release", badgeVariant: "default", icon: Sparkles },
   minor: { label: "Minor Update", badgeVariant: "secondary", icon: GitCommit },
   feature: { label: "Fitur Baru", badgeVariant: "outline", icon: Sparkles },
@@ -32,7 +32,7 @@ export function UpdateLogClient() {
         log.solution.toLowerCase().includes(search.toLowerCase());
 
       const matchCategory = selectedCategory === "all" || log.category === selectedCategory;
-      const matchSurface = selectedSurface === "all" || log.surfaces.includes(selectedSurface as any);
+      const matchSurface = selectedSurface === "all" || log.surfaces.includes(selectedSurface as DevLogSurface);
 
       return matchSearch && matchCategory && matchSurface;
     });
