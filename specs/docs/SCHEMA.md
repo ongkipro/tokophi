@@ -27,7 +27,7 @@
 | Di antaranya ber-RLS | **52** | keluaran verifikator yang sama |
 | `store_id` tanpa RLS | **1** — `platform_activity` | disengaja: log audit platform, lintas tenant |
 | Tabel anak tanpa `store_id` & tanpa RLS | **12**, semuanya sudah ditinjau | verifikator mencetak daftarnya; `AGENTS.md` memuat aturannya |
-| Migrasi | **96** (`0000` … `0095`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0094_magical_salo` menambah snapshot order finance, booking history, dan ledger reconciliation; `0095_payment_request_idempotency` mengunci permintaan tagihan agar idempoten |
+| Migrasi | **97** (`0000` … `0096`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0094_magical_salo` menambah snapshot order finance, booking history, dan ledger reconciliation; `0095_payment_request_idempotency` mengunci permintaan tagihan agar idempoten; `0096_order_line_items_order_idx` memasang index yang selama ini hilang di setiap database |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
 | Enums | **45** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |

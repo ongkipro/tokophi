@@ -1,0 +1,11 @@
+-- `order_line_items.order_id` carried NO index anywhere — measured 2026-08-19 on the shared dev DB
+-- AND on production: `pg_indexes` returned only `order_line_items_pkey`. The column is what every
+-- order screen joins on (order detail, label printing, the bulk resi queue).
+--
+-- It was invisible because `schema-indexes.test.ts` pinned the DRIZZLE declaration and nothing
+-- compared that against the migrations — a guard that reads as parity while no database has the
+-- index. The index census added beside it now asserts both directions.
+--
+-- Idempotent per this repo's standing rule: the whole pending batch runs in ONE transaction, and a
+-- single "already exists" would roll back every migration behind it.
+CREATE INDEX IF NOT EXISTS "order_line_items_order_idx" ON "order_line_items" ("order_id");
