@@ -481,3 +481,33 @@ proves the window, and it must be timed rather than assumed — DEPLOY.md says s
 
 **Not attempted here:** the remaining ~6 minutes is Coolify tearing down the old containers before
 the new image exists. That is orchestration, not this file.
+
+---
+
+## 2026-08-19 (kelima) — The deploy window, MEASURED: 15 minutes → 81 seconds (Main Session)
+
+**Scope:** `DEPLOY-SPLIT` verification — the number #281 deliberately refused to claim.
+
+**Method:** HTTP probe of `app.tokophi.com/login` every 20 s from the second of merge, recording the
+first 503 and the return to 200. Not log-reading; not a single snapshot.
+
+| deploy | 503 window | `migrate` chain |
+|---|---|---|
+| `#279` (index + test) | **~15 min** | migrations **+ 8 seed scripts**, all three apps waiting |
+| `#281` (the split) | **81 s** — 503 began at +506 s, recovered at +587 s | migrations only; `seed` runs behind the apps |
+
+Corroborated on the box at that moment: `migrate` `Exited (0)` 28 s earlier while `seed` had been
+**up 27 s** — the demo-data chain is now genuinely behind the serving path. `landing` stayed 200
+throughout both deploys. Final state: sha `4bbfd7e`, all three surfaces 200.
+
+**🔴 I corrected my own note from a few hours earlier.** Its phase table claimed "build ~6 min with
+the OLD containers already torn down". That half is **false**: during `#281`'s build all three hosts
+answered **200**, and 503 only began at second 506 — at the swap. Build contributes no downtime at
+all; the seed chain holding `service_completed_successfully` contributed nearly all of it. The
+mistake came from one snapshot taken mid-deploy (no app containers + a just-finished build) turned
+into cause-and-effect without testing it. Measuring from second zero to recovery is the whole
+difference, and DEPLOY.md now says so in those words.
+
+**What is left:** 81 s is the swap itself (stop, start, first healthcheck). Shrinking that means an
+overlapping swap — new container healthy before the old one stops — which is Coolify orchestration,
+not the compose file. Named there, not attempted, and the next person is told to measure first.

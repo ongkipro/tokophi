@@ -76,41 +76,48 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
     - **Module-scope `process.env` reads get baked at build time** (when the var is unset) for app-local server code → `ADMIN_URL` was frozen to `localhost:3000`. Read env **inside the function** at request time (workspace-package reads like the KiriminAja key are runtime, hence unaffected).
     - **Node-runtime `req.url` behind Traefik = the internal `http://localhost:3000`.** `NextResponse.redirect(new URL("/x", req.url))` leaks that host. Use a **relative `Location`** header (`new NextResponse(null, {status:307, headers:{Location:"/x"}})`) so the browser resolves against the real origin. (Middleware/edge already returns relative.)
 
-## ⏱ Jendela 503 saat deploy — DIUKUR 2026-08-19, bukan diperkirakan
+## ⏱ Jendela 503 saat deploy — DIUKUR 2026-08-19: **15 menit → 81 detik**
 
-Satu merge yang isinya hanya sebuah index + test membuat **`app.`, `toko.` dan `rich.` menjawab 503
-selama ±15 menit**. Landing (`tokophi.com`) tetap 200 sepanjang waktu itu, jadi dari luar tampak
-"sebagian hidup".
+Dua pengukuran pada hari yang sama, keduanya dengan probe HTTP tiap 20 detik terhadap
+`app.tokophi.com/login` sejak detik merge, bukan dengan membaca log:
 
-Rinciannya, dari `docker ps`/`docker images` di kotaknya sendiri:
-
-| fase | lama | keadaan |
+| deploy | jendela 503 | isi rantai `migrate` |
 |---|---|---|
-| build image (admin, super-admin, storefront) | ~6 menit | container LAMA sudah dibongkar; belum ada pengganti |
-| `migrate` (migrasi + rantai seed) | ~7 menit | hanya postgres/backup/landing yang hidup |
-| container aplikasi naik & healthy | <1 menit | 503 berhenti di sini |
+| `#279` (index + test) | **±15 menit** | migrasi **+ 8 skrip seed**, ketiganya menunggu seluruhnya |
+| `#281` (pemisahan ini) | **81 detik** (503 mulai +506 s, pulih +587 s) | migrasi saja; `seed` jalan setelah aplikasi melayani |
 
-⚠️ **Baris di §"Storefront (Astro) is SSR" di atas benar tapi mudah disalahbaca**: yang "start dalam
-hitungan detik" adalah PROSES node-nya. Jendela yang dirasakan merchant adalah SELURUH deploy, karena
-Coolify membongkar container lama sebelum image barunya jadi. Keduanya fakta; hanya yang kedua yang
-terasa oleh pengguna.
+Bukti pada deploy kedua, diambil saat itu juga: `migrate` `Exited (0)` 28 detik lalu sementara
+`seed` **baru hidup 27 detik** — rantai demo-data memang sudah berada di belakang, bukan di depan.
+`landing` 200 sepanjang kedua deploy (ia tanpa database dan tanpa `depends_on: postgres`).
 
-✅ **Separuhnya sudah ditekan (2026-08-19, deploy berikutnya yang membuktikan).** Service `migrate`
-dulu menjalankan migrasi **dan** delapan skrip seed, sementara ketiga aplikasi menunggu seluruh
-rantai itu (`service_completed_successfully`). Skema memang prasyarat untuk melayani; DEMO DATA
-tidak. Sekarang `migrate` hanya `drizzle-kit migrate` (hitungan detik kalau tak ada migrasi baru) dan
-rantai seed pindah ke service `seed` yang **tidak ditunggu siapa pun**. Perkiraan jendela baru: waktu
-build saja, ±6 menit — angka nyatanya harus diukur ulang pada deploy pertama setelah perubahan ini,
-bukan diasumsikan.
+🔴 **KOREKSI TERHADAP VERSI PERTAMA CATATAN INI, yang saya tulis sendiri beberapa jam sebelumnya.**
+Ia membagi 15 menit itu menjadi "build ~6 menit dengan container lama SUDAH dibongkar" + "migrate ~7
+menit". Bagian pertamanya **salah**. Diukur pada deploy `#281`: selama build berlangsung, ketiga host
+tetap menjawab **200** — container lama terus melayani, dan 503 baru dimulai pada detik ke-506, yaitu
+saat swap. Jadi build TIDAK pernah menyumbang downtime; yang menyumbang hampir seluruhnya adalah
+rantai seed yang menahan `service_completed_successfully`.
+
+Kenapa kekeliruan itu terjadi, karena pantas diingat: pengamatan pertama dilakukan SEKALI, di tengah
+deploy, dan saat itu container aplikasi memang tidak ada sementara sebuah build baru saja selesai —
+dua fakta yang benar, dirangkai menjadi sebab-akibat yang tidak diuji. Yang membedakannya hanyalah
+mengukur dari detik nol sampai pulih, bukan memotret satu momen.
+
+**Bentuknya sekarang:** `migrate` menjalankan `drizzle-kit migrate` saja (hitungan detik bila tidak
+ada migrasi baru); service `seed` membawa delapan skrip demo/reference, bergantung pada `migrate`,
+dan **tidak ditunggu siapa pun**. `depends_on` aplikasi tidak berubah — skema tetap prasyarat.
 
 ⚠️ Satu perubahan perilaku, dikatakan terang: pada deploy PERTAMA terhadap database kosong,
 storefront bisa naik sebelum baris toko demo ada, jadi healthcheck-nya (`GET /` lewat fallback
 `STORE_SLUG`) mungkin melaporkan unhealthy sampai seed selesai — healthcheck mengulang, jadi ia pulih
 sendiri satu interval setelah seed rampung. Pada deploy berikutnya barisnya sudah ada.
 
-Sisa ±6 menit itu **milik Coolify, bukan kita**: ia membongkar container lama sebelum image barunya
-jadi. Menekannya berarti membangun dulu lalu menukar container — perubahan pada orkestrasi Coolify,
-bukan pada berkas ini, dan belum dikerjakan.
+⚠️ **Baris di §"Storefront (Astro) is SSR" di atas benar dan sekarang terbukti**: proses node memang
+naik dalam hitungan detik, dan setelah pemisahan ini jendela yang dirasakan merchant memang mendekati
+biaya swap itu sendiri (81 detik: stop, start, healthcheck pertama).
+
+Sisa 81 detik itu bukan lagi milik rantai seed. Menekannya lebih jauh berarti swap yang tumpang-tindih
+(container baru sehat dulu, baru yang lama dimatikan) — itu orkestrasi Coolify, bukan berkas compose
+ini, dan belum dikerjakan. Sebelum ada yang mencobanya: **ukur dulu**, dengan cara di tabel atas.
 
 ## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
 
