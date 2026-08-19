@@ -1,3 +1,4 @@
+import { isMillisecondStamp } from "./migration-stamp";
 /**
  * VERIFY THE MIGRATION JOURNAL — the three ways it has actually broken, checked mechanically.
  *
@@ -100,6 +101,32 @@ for (let i = 1; i < entries.length; i += 1) {
     note(
       `when TIDAK NAIK: ${cur.tag} (${cur.when}) <= ${prev.tag} (${prev.when}).\n` +
         `    drizzle akan MELEWATI '${cur.tag}' sambil melapor sukses.`,
+    );
+  }
+}
+
+// 1b. `when` must be a MILLISECOND stamp, not merely "bigger than the last one".
+//
+// Measured 2026-08-19, on this very script's watch: `0096` was first written with a stamp of
+// **1787135109197478972** — `date +%s%3N` handed back NANOseconds. Check 1 above passed it happily,
+// because 1.79e18 does increase. What that stamp would have cost is the hazard AGENTS.md already
+// names: drizzle applies only entries whose `when` exceeds the newest stamp recorded in the target
+// database, so once a nanosecond stamp lands, EVERY later migration written with an ordinary
+// millisecond stamp is silently skipped — with "migrations applied successfully" printed over it.
+// The wrong scale is invisible to a monotonicity check by construction; it needs its own claim.
+//
+// The window is deliberately generous rather than clever: any 13-digit ms value from 2001-09-09
+// (1e12) up to the year 5138 (1e14) passes, so nobody has to touch this when the clock moves. A
+// stamp in SECONDS (10 digits) or NANOseconds (19) is what this is here to refuse.
+// Predikatnya hidup di `migration-stamp.ts` — modul murni, supaya bisa diuji tanpa menjalankan
+// skrip ini beserta seluruh I/O-nya. Test-nya membuktikan merah terhadap stempel nanodetik yang
+// benar-benar pernah ditulis di sini.
+for (const e of entries) {
+  if (!isMillisecondStamp(e.when)) {
+    note(
+      `stempel BUKAN milidetik: ${e.tag} = ${e.when} (${String(e.when).length} digit).\n` +
+        `    Sebuah stempel yang terlalu besar membuat SETIAP migrasi berikutnya dilewati diam-diam.\n` +
+        `    Perbaiki menjadi milidetik 13-digit (mis. Date.now()), jangan detik dan jangan nanodetik.`,
     );
   }
 }

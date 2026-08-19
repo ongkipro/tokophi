@@ -76,6 +76,31 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
     - **Module-scope `process.env` reads get baked at build time** (when the var is unset) for app-local server code → `ADMIN_URL` was frozen to `localhost:3000`. Read env **inside the function** at request time (workspace-package reads like the KiriminAja key are runtime, hence unaffected).
     - **Node-runtime `req.url` behind Traefik = the internal `http://localhost:3000`.** `NextResponse.redirect(new URL("/x", req.url))` leaks that host. Use a **relative `Location`** header (`new NextResponse(null, {status:307, headers:{Location:"/x"}})`) so the browser resolves against the real origin. (Middleware/edge already returns relative.)
 
+## ⏱ Jendela 503 saat deploy — DIUKUR 2026-08-19, bukan diperkirakan
+
+Satu merge yang isinya hanya sebuah index + test membuat **`app.`, `toko.` dan `rich.` menjawab 503
+selama ±15 menit**. Landing (`tokophi.com`) tetap 200 sepanjang waktu itu, jadi dari luar tampak
+"sebagian hidup".
+
+Rinciannya, dari `docker ps`/`docker images` di kotaknya sendiri:
+
+| fase | lama | keadaan |
+|---|---|---|
+| build image (admin, super-admin, storefront) | ~6 menit | container LAMA sudah dibongkar; belum ada pengganti |
+| `migrate` (migrasi + rantai seed) | ~7 menit | hanya postgres/backup/landing yang hidup |
+| container aplikasi naik & healthy | <1 menit | 503 berhenti di sini |
+
+⚠️ **Baris di §"Storefront (Astro) is SSR" di atas benar tapi mudah disalahbaca**: yang "start dalam
+hitungan detik" adalah PROSES node-nya. Jendela yang dirasakan merchant adalah SELURUH deploy, karena
+Coolify membongkar container lama sebelum image barunya jadi. Keduanya fakta; hanya yang kedua yang
+terasa oleh pengguna.
+
+Konsekuensi praktis, sampai ada yang mengubahnya: **setiap merge ke `main` yang menyentuh kode =
+sekitar seperempat jam tanpa Seller dan tanpa storefront.** Merge docs-only tidak (Watch Paths
+`!**/*.md`). Kalau downtime itu perlu ditekan, arahnya adalah membangun image LEBIH DULU lalu menukar
+container (dan menjalankan `migrate` sebagai langkah terpisah yang tidak menahan swap) — pekerjaan
+tersendiri, belum dikerjakan, dan bukan efek samping dari perubahan lain.
+
 ## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
 
 On 2026-07-14 production 503'd because Coolify built the app containers, left them `created`, and moved

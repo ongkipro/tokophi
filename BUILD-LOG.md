@@ -419,3 +419,37 @@ commit. Worth a future guard: assert every `when` is a 13-digit ms value.
 `npm test` with `TEST_DB_REQUIRED=1` → **96 files / 748 tests, exit 0** · both guards green
 (26 tests across the two files) · docs re-synced to 97 migrations / head `0096` and re-verified by
 the new anchored assertions.
+
+---
+
+## 2026-08-19 (ketiga) — Migration stamp SCALE guard, and the deploy 503 window measured (Main Session)
+
+**Scope:** `GUARD-STAMP` — the follow-up filed by the previous pass, plus one measurement taken
+while validating that pass in production.
+
+**1. `verify-migrations` could not see a wrong SCALE.** It asserts stamps INCREASE, which a
+nanosecond stamp does — so `0096`'s first `when` (`1787135109197478972`, from `date +%s%3N`) sailed
+through. Once such a stamp is recorded in a database, every later migration written with ordinary
+milliseconds is **silently skipped** while "migrations applied successfully" prints. Human eyes
+caught it last time; that is not a guard.
+- The predicate now lives in `packages/db/src/migration-stamp.ts` — a PURE module, the
+  `platform-rank.ts` / `store-servable.ts` split, so it can be tested without executing the script's
+  I/O. Window is deliberately loose (13-digit ms, 2001 → ~5138): it refuses the wrong SCALE, not a
+  date somebody dislikes.
+- `verify-migrations` consumes it; **`migration-stamp.test.ts` (7 tests)** pins it, including the
+  exact nanosecond value that really was written here, the opposite error (10-digit seconds), both
+  window boundaries, and non-integers.
+- Proved red by mutating the journal, both directions, before the test existed:
+  nanosecond → exit 1 naming the tag and digit count; seconds → exit 1. Journal restored byte-identical.
+
+**2. The deploy 503 window, measured.** While verifying that `0096` reached production, all three
+app surfaces answered **503 for ~15 minutes** (landing stayed 200 throughout). Breakdown from the
+box: image build ~6 min, `migrate` + seed chain ~7 min, container start <1 min. Recorded in
+`DEPLOY.md` beside the existing SSR note — which is true about the node process starting in seconds
+and easy to misread as "deploys are seamless". They are not: a code merge costs about a quarter of
+an hour of Seller + storefront downtime today. Reducing it (build first, swap after; `migrate` as a
+step that does not hold the swap) is named there as its own future work, deliberately not attempted
+as a side effect.
+
+**Verification:** fresh-DB `npm test` with `TEST_DB_REQUIRED=1` → **97 files / 755 tests, exit 0** ·
+`verify-migrations` green on the real journal · mutation proofs above.
