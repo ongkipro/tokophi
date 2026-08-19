@@ -44,9 +44,46 @@ services:
     # platform. Without this line a deploy would serve batiknusantara the NEUTRAL fallback — correct
     # for a store that has built nothing, wrong for the one that has. Both are idempotent, so ordering
     # after `seed.ts` just means the store exists before we look for its template.
+    # ⏱ MIGRATIONS ONLY — the seed chain moved to the `seed` service below.
+    #
+    # Measured 2026-08-19 (DEPLOY.md §"Jendela 503 saat deploy"): the three app surfaces answered 503
+    # for ~15 minutes during one deploy, and ~7 of those were this container still running SEED
+    # scripts while `admin`/`super-admin`/`storefront` sat waiting on `service_completed_successfully`.
+    # Schema is a real precondition for serving; DEMO DATA is not. Applying migrations alone takes
+    # seconds when there is nothing new, so the apps now wait for seconds instead of minutes.
+    command: >
+      sh -c "cd packages/db && npx drizzle-kit migrate"
+
+  # The demo/reference data. Runs AFTER migrations, and NOTHING waits for it — that is the whole
+  # point of the split. Every script here is idempotent (insert-if-absent), so on an established
+  # deployment it is a no-op that happens to take minutes; on a brand-new database it fills the demo
+  # store while the apps are already up.
+  #
+  # ⚠️ ONE BEHAVIOUR CHANGE, STATED PLAINLY: on the FIRST deploy against an empty database the
+  # storefront can start before the demo store row exists, so its healthcheck (`GET /`, which
+  # resolves through the STORE_SLUG fallback) may report unhealthy until this finishes. Container
+  # healthchecks retry, so it heals itself within one interval of the seed completing. On every
+  # subsequent deploy the rows are already there and the question never arises.
+  #
+  # ⚠️ It keeps the uploads volume for the same reason the comment above gives: `seed-journal.ts`
+  # writes real WebP files next to the `media` rows that point at them.
+  seed:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - tokophi-uploads:/app/apps/admin/public/uploads
+    environment:
+      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      DATABASE_RUNTIME_ROLE: owner
     command: >
       sh -c "cd packages/db &&
-      npx drizzle-kit migrate &&
       npx tsx src/seed.ts &&
       (npx tsx src/rename-batik-slug.ts || echo 'slug rename skipped') &&
       (npx tsx src/seed-templates.ts || echo 'templates seed skipped') &&

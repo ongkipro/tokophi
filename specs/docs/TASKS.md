@@ -9,6 +9,7 @@
 ---
 
 ## Epic 0 — Monorepo hygiene (foundation)
+- [~] **Perkecil jendela 503 saat deploy** · **M** · seed chain (~7 dari ~15 menit) diangkat dari jalur kritis: `migrate` kini migrasi saja, service `seed` baru tidak ditunggu siapa pun. Sisa ±6 menit = Coolify membongkar container sebelum image baru jadi (orkestrasi, bukan compose). **Angka barunya wajib DIUKUR pada deploy kode berikutnya.** See BUILD-LOG 2026-08-19 (keempat).
 - [x] **Migration stamp scale guard** · **S** · `verify-migrations` only asserted stamps increase, so a nanosecond stamp passed (it really happened, on `0096`). Predicate extracted to the pure `migration-stamp.ts` + 7 pinning tests; mutation-proved both directions. Deploy's ~15-minute 503 window also measured and recorded in `DEPLOY.md`. See BUILD-LOG 2026-08-19 (ketiga).
 - [x] **Index census + the missing `order_line_items` index** · **S** · `schema-indexes.test.ts` now classifies every migration-created index (drizzle / sql-only+reason); found `order_line_items.order_id` unindexed in every database and fixed it with idempotent migration `0096`. See BUILD-LOG 2026-08-19 (kedua).
 - [x] **CI: seed store templates before the storefront verify suite** · **S** · `seed.ts` writes no `page_templates`, so `check-hero-srcset` was red by construction in CI (`hero imgs: []`) — the deploy chain's `seed-templates.ts` is what creates the hero homepage. Measured: seed-only 1/6 red → +`seed:templates` all 6 green. See BUILD-LOG 2026-08-19.
