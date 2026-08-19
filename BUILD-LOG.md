@@ -9,6 +9,22 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Screening Finding A: setOrderStatus Reports What It Wrote
+
+- **Scope:** Found by a repo-wide screening pass for dead UI and false promises (the sweep that also produced findings B–J, recorded in the session report). `applyOrderStatusChange` has always returned `{applied, reason}` and both BACKGROUND callers — the KiriminAja tracking poller (`ka-tracking.ts:182`) and the order-expiry cron (`api/cron/order-expiry/route.ts:74`) — have always read it. The MERCHANT's path threw it away: `setOrderStatus` was `Promise<void>`, and its three screens toasted success unconditionally.
+- **Why it is not cosmetic:** the state machine refuses silently — 0 rows, no throw. An order can reach a terminal state from the background between the page render and the click, which is exactly when `terminal-order` fires. The expensive one is the return dialog, which names a physical fact: *"Pesanan ditandai retur — stok dikembalikan."* over an UPDATE that moved no stock and failed no pending payment. The merchant reconciles the warehouse from that sentence. Same class as `markLabelsPrinted` returning `numbers.length`.
+- **Files Created / Modified:**
+  - `apps/admin/lib/order-status-refusal.ts` (new): the refusal union and the Indonesian sentence each one owes the merchant, as a `Record<OrderStatusRefusal, string>` so a new refusal fails `tsc` until somebody writes its message. PURE — no `@tokophi/db` import — because `order-status.ts` pulls the schema at module scope and all three callers are `"use client"`. Same split as `platform-rank.ts` from `platform-auth.ts`.
+  - `apps/admin/lib/order-status.ts`: `OrderStatusChangeResult` is a discriminated union instead of `{ applied: boolean; reason?: string }`. A free-string reason cannot be exhausted or turned into a message, which is part of why the merchant-facing caller ignored it.
+  - `apps/admin/lib/actions/orders.ts`: returns the result. `if (!order) return;` — indistinguishable from success at every call site, and RLS makes it the cross-tenant answer too — is now `{ applied: false, reason: "order-not-found" }`.
+  - `apps/admin/app/(admin)/pesanan/pesanan-client.tsx`, `apps/admin/app/(admin)/pesanan/[id]/order-detail.tsx`: all three call sites branch on `applied`. The return dialog **stays open** on a refusal (closing it reads as "done") and refreshes either way — on a refusal the refresh is what corrects the stale row.
+  - `apps/admin/lib/actions/orders.test.ts` (new): the four refusals and one applied transition driven through the real action against real PostgreSQL, plus a source guard over the two screens and a message-distinctness test.
+- **Verification Executed:**
+  - **Mutation proof:** with `order-not-found` reported as `{applied: true}` (the shipped shape), the not-found test fails. The caller guard counts bound calls against total calls — deliberately, since the detail screen has TWO call sites and only one was the expensive one, so "at least one is bound" would have passed on the bug — and it is proved red against a copy with `const res = await` reverted to `await`.
+  - `TEST_DB_REQUIRED=1 npm test` → **99 files and 775 tests passed**. `tsc --noEmit -p apps/admin/tsconfig.json` → **0**. `npm run lint -w @tokophi/admin` → **0 errors** (21 pre-existing warnings).
+  - ⚠️ **Not clicked in a browser.** The transitions are exercised through the real server action against real Postgres, and the screen change is a branch on the returned value covered by `tsc` plus the source guard — but this file's own rule is that money paths are EXERCISED, so the gap is named rather than implied.
+- **Completed Task:** Screening finding A (not a numbered Stage task).
+
 ### [2026-08-20] — Stage 4 Task 4.10 Paid Subscription Callbacks Made Monotonic
 
 - **Scope:** The invoice branch of `/api/public/pay/callback` accepted a late EXPIRED over a paid subscription invoice, and the ordinary out-of-order sequence paid → expired → paid extended the store's subscription a SECOND time. The extension itself was a read-modify-write outside any transaction.

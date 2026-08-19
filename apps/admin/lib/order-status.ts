@@ -2,10 +2,17 @@ import { schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { settleOrderLedger, type Db } from "./ledger-credit";
 import { defaultInventoryLevelId } from "./inventory-location";
+import type { OrderStatusRefusal } from "./order-status-refusal";
 
 export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
 
-export type OrderStatusChangeResult = { applied: boolean; reason?: string };
+// A DISCRIMINATED union, not `{ applied: boolean; reason?: string }`. `reason` used to be a free
+// string, so a caller could neither exhaust it nor turn it into a message — which is part of why the
+// merchant-facing caller ignored the whole result. The refusals and their wording live in the pure
+// `order-status-refusal.ts` (no db import) so client components can read them too.
+export type OrderStatusChangeResult =
+  | { applied: true; reason?: undefined }
+  | { applied: false; reason: OrderStatusRefusal };
 export type OrderStatusChangeArgs = {
   storeId: string;
   order: { id: string; status: OrderStatus };
