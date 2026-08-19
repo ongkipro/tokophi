@@ -453,3 +453,31 @@ as a side effect.
 
 **Verification:** fresh-DB `npm test` with `TEST_DB_REQUIRED=1` → **97 files / 755 tests, exit 0** ·
 `verify-migrations` green on the real journal · mutation proofs above.
+
+---
+
+## 2026-08-19 (keempat) — Deploy: seed chain taken off the critical path (Main Session)
+
+**Scope:** `DEPLOY-SPLIT` — half of the measured 503 window removed at its source.
+
+**What was wrong:** the `migrate` service ran `drizzle-kit migrate` **and** eight seed scripts, and
+`admin`/`super-admin`/`storefront` all waited on it with `service_completed_successfully`. So every
+deploy held all three surfaces down for the whole demo-data chain (~7 of the ~15 measured minutes) —
+data that has nothing to do with serving traffic and is a no-op on an established database.
+
+**Change (`docker-compose.coolify.yml`):** `migrate` now runs migrations only; a new `seed` service
+carries the chain, depends on `migrate`, and **nothing depends on it**. App `depends_on` is
+unchanged — they still wait for the schema, which is a real precondition.
+
+**The one behaviour change, stated rather than buried:** on a FIRST deploy against an empty database
+the storefront can start before the demo store row exists, so its healthcheck may report unhealthy
+until the seed finishes; healthchecks retry, so it heals one interval later. On every subsequent
+deploy the rows already exist.
+
+**Verification:** `docker compose -f docker-compose.coolify.yml config` exits 0 with the env vars
+supplied; the parsed graph confirms `admin`/`super-admin`/`storefront` → `migrate` only, and
+`seed` → `migrate`. **The number that matters is not yet measured**: the next code deploy is what
+proves the window, and it must be timed rather than assumed — DEPLOY.md says so in those words.
+
+**Not attempted here:** the remaining ~6 minutes is Coolify tearing down the old containers before
+the new image exists. That is orchestration, not this file.

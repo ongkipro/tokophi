@@ -95,11 +95,22 @@ hitungan detik" adalah PROSES node-nya. Jendela yang dirasakan merchant adalah S
 Coolify membongkar container lama sebelum image barunya jadi. Keduanya fakta; hanya yang kedua yang
 terasa oleh pengguna.
 
-Konsekuensi praktis, sampai ada yang mengubahnya: **setiap merge ke `main` yang menyentuh kode =
-sekitar seperempat jam tanpa Seller dan tanpa storefront.** Merge docs-only tidak (Watch Paths
-`!**/*.md`). Kalau downtime itu perlu ditekan, arahnya adalah membangun image LEBIH DULU lalu menukar
-container (dan menjalankan `migrate` sebagai langkah terpisah yang tidak menahan swap) — pekerjaan
-tersendiri, belum dikerjakan, dan bukan efek samping dari perubahan lain.
+✅ **Separuhnya sudah ditekan (2026-08-19, deploy berikutnya yang membuktikan).** Service `migrate`
+dulu menjalankan migrasi **dan** delapan skrip seed, sementara ketiga aplikasi menunggu seluruh
+rantai itu (`service_completed_successfully`). Skema memang prasyarat untuk melayani; DEMO DATA
+tidak. Sekarang `migrate` hanya `drizzle-kit migrate` (hitungan detik kalau tak ada migrasi baru) dan
+rantai seed pindah ke service `seed` yang **tidak ditunggu siapa pun**. Perkiraan jendela baru: waktu
+build saja, ±6 menit — angka nyatanya harus diukur ulang pada deploy pertama setelah perubahan ini,
+bukan diasumsikan.
+
+⚠️ Satu perubahan perilaku, dikatakan terang: pada deploy PERTAMA terhadap database kosong,
+storefront bisa naik sebelum baris toko demo ada, jadi healthcheck-nya (`GET /` lewat fallback
+`STORE_SLUG`) mungkin melaporkan unhealthy sampai seed selesai — healthcheck mengulang, jadi ia pulih
+sendiri satu interval setelah seed rampung. Pada deploy berikutnya barisnya sudah ada.
+
+Sisa ±6 menit itu **milik Coolify, bukan kita**: ia membongkar container lama sebelum image barunya
+jadi. Menekannya berarti membangun dulu lalu menukar container — perubahan pada orkestrasi Coolify,
+bukan pada berkas ini, dan belum dikerjakan.
 
 ## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
 
