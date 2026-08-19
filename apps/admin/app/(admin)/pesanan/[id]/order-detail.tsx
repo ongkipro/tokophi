@@ -24,6 +24,7 @@ import {
 
 import { toast } from "sonner";
 import { setOrderStatus } from "@/lib/actions/orders";
+import { orderStatusRefusalMessage } from "@/lib/order-status-refusal";
 import type { OrderReturn } from "./return-info";
 import {
   getShippingRates,
@@ -231,8 +232,9 @@ export function OrderDetail({
     if (!action) return;
     startTransition(async () => {
       try {
-        await setOrderStatus(order.id, action.next);
-        toast.success(action.toast);
+        const res = await setOrderStatus(order.id, action.next);
+        if (res.applied) toast.success(action.toast);
+        else toast.error(orderStatusRefusalMessage(res.reason));
         router.refresh();
       } catch {
         toast.error("Gagal memperbarui status pesanan");
@@ -251,11 +253,20 @@ export function OrderDetail({
   const markReturned = () => {
     startTransition(async () => {
       try {
-        await setOrderStatus(
+        const res = await setOrderStatus(
           order.id,
           "retur",
           returnReason.trim() || DEFAULT_RETURN_REASON,
         );
+        // 🔴 THE MOST EXPENSIVE TOAST ON THIS SCREEN. It names a physical fact — the goods are back
+        // on the shelf — so it may only be said when the state machine says it applied. On a refusal
+        // the dialog STAYS OPEN: closing it would read as "done", and the merchant needs to see the
+        // message next to the button they pressed.
+        if (!res.applied) {
+          toast.error(orderStatusRefusalMessage(res.reason));
+          router.refresh();
+          return;
+        }
         setReturnOpen(false);
         toast.success("Pesanan ditandai retur — stok dikembalikan.");
         router.refresh();

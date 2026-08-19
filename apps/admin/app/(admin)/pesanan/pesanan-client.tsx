@@ -13,6 +13,7 @@ import { ReturnSummary, type CourierReturnRow } from "@/components/admin/pesanan
 import { OrderFilters, type OrderFiltersValue } from "@/components/admin/pesanan/order-filters";
 import { OrderProductCell } from "@/components/admin/pesanan/order-product-cell";
 import { setOrderStatus } from "@/lib/actions/orders";
+import { orderStatusRefusalMessage } from "@/lib/order-status-refusal";
 import { IDR, num, timeAgo } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { exportCsv } from "@/lib/csv";
@@ -78,11 +79,15 @@ export function PesananClient({
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
   }
 
+  // Report what the state machine DID. This row was rendered from a snapshot; the tracking poller or
+  // the expiry cron can move the order to a terminal state in between, and the refusal is silent by
+  // design (0 rows, no throw). A success toast over it is how a merchant learns the wrong thing.
   function advance(o: OrderListRow, to: "diproses" | "dikirim" | "selesai" | "batal", label: string) {
     startTransition(async () => {
-      await setOrderStatus(o.id, to);
-      toast.success(`${o.id} — ${label}`);
-      router.refresh();
+      const res = await setOrderStatus(o.id, to);
+      if (res.applied) toast.success(`${o.id} — ${label}`);
+      else toast.error(`${o.id} — ${orderStatusRefusalMessage(res.reason)}`);
+      router.refresh(); // refresh either way: on a refusal this is what corrects the stale row
     });
   }
 
