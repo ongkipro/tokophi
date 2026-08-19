@@ -9,6 +9,20 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Screening Findings G/H/I: Five Writes That Reported Success Blind
+
+- **Scope:** One class, five sites, found by the same screening sweep as finding A: an action writes without checking what it matched, returns `{ ok: true }` (or the count it was ASKED for), and the screen toasts success. RLS clamps a foreign or stale id to **zero rows with no error**, which is precisely what makes this invisible.
+- **Files Created / Modified:**
+  - `apps/admin/lib/actions/media.ts` + `apps/admin/app/(admin)/files/files-client.tsx`: `deleteMedia` already returned `{ ok: false }` for a row that is not there or not ours — **the caller dropped it**, six lines below an `uploadMedia` call that reads its result correctly. It now carries an `error` string (a `false` with nothing to say forces the caller to invent the sentence) and the caller reads it.
+  - `apps/admin/lib/actions/products.ts` + real-Postgres test: `bulkSetProductStatus` / `bulkDeleteProducts` returned `count: ids.length` — the number the CLIENT asked for. The comment directly above them already said RLS clamps a forged id; it does, silently, and the count reported it as swept anyway. `.returning()` now supplies the number the Produk selection bar prints.
+  - `apps/admin/lib/actions/support.ts` + `apps/admin/app/(admin)/bantuan/[id]/thread-client.tsx`: `closeTicket` wrote blind and always said `ok`, while `replyTicket` **in the same file** has always proved the ticket exists and returned "Tiket tidak ditemukan.". Half a file correct is how the other half survives.
+  - `apps/super-admin/lib/actions.ts`: `setTicketStatus` and `setStoreUserRole` likewise. The second is the worst of the five — it logged *"Peran … diubah → role oleh platform"* to `platform_activity` **unconditionally**, so a membership already removed in another tab left a permanent record of a promotion that never happened, in the one log an operator consults to answer "who granted this?". Both callers already read `refused()`; they were only ever handed a success.
+- **Verification Executed:**
+  - **Mutation proof:** `apps/admin/lib/actions/products-bulk.test.ts` builds two products in our store and one in a stranger's, sweeps all three, and requires `count: 2`. With `ids.length` put back, **2 of 3** tests fail.
+  - `TEST_DB_REQUIRED=1 npm test` → **100 files and 778 tests passed**. `tsc --noEmit` → **0** on admin AND super-admin. `npm run lint -w @tokophi/admin` → **0 errors**.
+  - 🔴 **`npm run lint -w @tokophi/super-admin` is RED, and it is NOT this change.** 2 errors (`@typescript-eslint/no-explicit-any`), both in `apps/super-admin/app/(platform)/update-log/update-log-client.tsx`, from commit `9d85023` (another stream). Reproduced on a clean `origin/main` checkout before attributing it. Left for its owner rather than repaired sideways — but a lint gate that is red is a gate that is off, and this repo has already paid for that with `verify-rls`.
+- **Completed Task:** Screening findings G, H, I (not numbered Stage tasks).
+
 ### [2026-08-20] — Screening Finding A: setOrderStatus Reports What It Wrote
 
 - **Scope:** Found by a repo-wide screening pass for dead UI and false promises (the sweep that also produced findings B–J, recorded in the session report). `applyOrderStatusChange` has always returned `{applied, reason}` and both BACKGROUND callers — the KiriminAja tracking poller (`ka-tracking.ts:182`) and the order-expiry cron (`api/cron/order-expiry/route.ts:74`) — have always read it. The MERCHANT's path threw it away: `setOrderStatus` was `Promise<void>`, and its three screens toasted success unconditionally.

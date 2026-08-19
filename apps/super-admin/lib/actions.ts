@@ -737,7 +737,15 @@ export async function replyTicketAdmin(ticketId: string, body: string): Promise<
 export async function setTicketStatus(ticketId: string, status: "open" | "answered" | "closed"): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  await db.update(schema.supportTickets).set({ status }).where(eq(schema.supportTickets.id, ticketId));
+  // Report what the UPDATE matched. A ticket id that no longer exists wrote nothing and still
+  // answered `ok`, which the screen renders as "Tiket ditutup." The caller already reads `refused()`;
+  // it was only ever handed a success.
+  const rows = await db
+    .update(schema.supportTickets)
+    .set({ status })
+    .where(eq(schema.supportTickets.id, ticketId))
+    .returning({ id: schema.supportTickets.id });
+  if (!rows.length) return { ok: false, error: "Tiket tidak ditemukan." };
   revalidatePath("/tiket"); revalidatePath(`/tiket/${ticketId}`);
   return { ok: true };
 }
@@ -874,7 +882,16 @@ export async function resetStoreUserPassword(storeId: string, userId: string): P
 export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  await db.update(schema.storeUsers).set({ role }).where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)));
+  // ⚠️ AN AUDIT LINE FOR A PRIVILEGE CHANGE THAT MAY NOT HAVE HAPPENED IS WORSE THAN NO AUDIT LINE.
+  // This wrote blind and then logged "Peran … diubah → role oleh platform" unconditionally, so a
+  // membership already removed in another tab left a permanent record of a promotion that never
+  // occurred — in the one log an operator would consult to answer "who granted this?".
+  const rows = await db
+    .update(schema.storeUsers)
+    .set({ role })
+    .where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)))
+    .returning({ id: schema.storeUsers.id });
+  if (!rows.length) return { ok: false, error: "Pengguna toko tidak ditemukan." };
   // A role change is a privilege change — promoting a user to `owner` grants them owner-only powers.
   // Log it (with the user's email) exactly like add/remove/reset already do.
   const [su] = await db

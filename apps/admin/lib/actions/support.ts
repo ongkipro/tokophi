@@ -44,11 +44,21 @@ export async function replyTicket(ticketId: string, body: string): Promise<{ ok:
   return { ok: true };
 }
 
-export async function closeTicket(ticketId: string): Promise<{ ok: boolean }> {
+// `replyTicket` directly above has always proved the ticket exists and returned "Tiket tidak
+// ditemukan."; this one wrote blind and always said `ok`. RLS scopes the UPDATE to the session's
+// store, so a foreign or deleted id matches zero rows with no error — and the screen toasted
+// "Tiket ditutup." over it. `.returning()` rather than a separate SELECT: one statement, and it
+// reports what was actually written.
+export async function closeTicket(ticketId: string): Promise<{ ok: boolean; error?: string }> {
   const { storeId } = await requireCapability("support:write", SUPPORT);
-  await withTenant(storeId, (db) =>
-    db.update(schema.supportTickets).set({ status: "closed" }).where(eq(schema.supportTickets.id, ticketId)),
+  const rows = await withTenant(storeId, (db) =>
+    db
+      .update(schema.supportTickets)
+      .set({ status: "closed" })
+      .where(eq(schema.supportTickets.id, ticketId))
+      .returning({ id: schema.supportTickets.id }),
   );
+  if (!rows.length) return { ok: false, error: "Tiket tidak ditemukan." };
   revalidatePath("/bantuan"); revalidatePath(`/bantuan/${ticketId}`);
   return { ok: true };
 }
