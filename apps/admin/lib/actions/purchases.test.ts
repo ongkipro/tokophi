@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
 import postgres, { type Sql } from "postgres";
-import { createPurchaseOrder } from "./purchases";
+import { createPurchaseOrder, receivePurchaseOrder } from "./purchases";
 
 const h = vi.hoisted(() => ({
   storeId: "",
@@ -281,6 +281,97 @@ suite("createPurchaseOrder (real PostgreSQL)", () => {
       await client.unsafe(`drop function if exists "${functionName}"()`);
       await cleanupFixture(fixture);
       await cleanupFixture(foreign);
+    }
+  });
+});
+
+// ── Task 4.9: satu penerimaan, satu penambahan stok — walau dua permintaan bersamaan ──────────────
+//
+// Bentuk lamanya: `select status` → `if (status === 'diterima') return` → tambah `qty - receivedQty`.
+// Itu idempoten untuk RETRY (percobaan kedua melihat receivedQty = qty, add = 0) dan TIDAK untuk
+// RACE: dua transaksi yang tumpang-tindih sama-sama membaca `receivedQty = 0` sebelum salah satunya
+// menulis, jadi keduanya menghitung `add = qty`. UPDATE inventarisnya relatif (`available + add`),
+// jadi yang kedua tidak hilang — ia DITERAPKAN, dan rak bertambah dua kali untuk satu pengiriman.
+//
+// Komentar di `unreceivePurchaseOrder` dulu menyatakan jalur receive "harmless" persis karena
+// kekeliruan itu; test ini yang menyelesaikan perdebatannya, bukan bacaan kode.
+suite("receivePurchaseOrder (real PostgreSQL)", () => {
+  it("dua permintaan bersamaan: satu transisi, satu penambahan stok", async () => {
+    const fixture = await makeFixture("receive-race");
+    h.storeId = fixture.storeId;
+    try {
+      const [location] = (await db.execute(sql`
+        insert into locations (store_id, name) values (${fixture.storeId}, 'Gudang') returning id
+      `)) as unknown as { id: string }[];
+      await db.execute(sql`
+        insert into inventory_levels (variant_id, location_id, available)
+        values (${fixture.variantId}, ${location.id}, 0)
+      `);
+      const [po] = (await db.execute(sql`
+        insert into purchase_orders (store_id, supplier_id, code, status)
+        values (${fixture.storeId}, ${fixture.supplierId}, ${`PO-${randomUUID().slice(0, 8)}`}, 'dipesan')
+        returning id, code
+      `)) as unknown as { id: string; code: string }[];
+      await db.execute(sql`
+        insert into purchase_order_items (purchase_order_id, variant_id, qty, received_qty, cost_idr)
+        values (${po.id}, ${fixture.variantId}, 10, 0, 1000)
+      `);
+
+      // Keduanya berangkat sebelum salah satunya commit — itulah yang membedakan race dari retry.
+      await Promise.all([receivePurchaseOrder(po.code), receivePurchaseOrder(po.code)]);
+
+      const [stock] = (await db.execute(sql`
+        select available from inventory_levels where variant_id = ${fixture.variantId}
+      `)) as unknown as { available: number }[];
+      const [row] = (await db.execute(sql`
+        select po.status, poi.received_qty
+        from purchase_orders po join purchase_order_items poi on poi.purchase_order_id = po.id
+        where po.id = ${po.id}
+      `)) as unknown as { status: string; received_qty: number }[];
+
+      expect(Number(stock.available), "stok bertambah SEKALI untuk satu pengiriman").toBe(10);
+      expect(row.status).toBe("diterima");
+      expect(Number(row.received_qty)).toBe(10);
+    } finally {
+      await db.execute(sql`delete from inventory_levels where variant_id = ${fixture.variantId}`);
+      await db.execute(sql`delete from locations where store_id = ${fixture.storeId}`);
+      await cleanupFixture(fixture);
+    }
+  });
+
+  it("replay setelah commit mengembalikan keadaan terminal tanpa mutasi", async () => {
+    const fixture = await makeFixture("receive-replay");
+    h.storeId = fixture.storeId;
+    try {
+      const [location] = (await db.execute(sql`
+        insert into locations (store_id, name) values (${fixture.storeId}, 'Gudang') returning id
+      `)) as unknown as { id: string }[];
+      await db.execute(sql`
+        insert into inventory_levels (variant_id, location_id, available)
+        values (${fixture.variantId}, ${location.id}, 5)
+      `);
+      const [po] = (await db.execute(sql`
+        insert into purchase_orders (store_id, supplier_id, code, status)
+        values (${fixture.storeId}, ${fixture.supplierId}, ${`PO-${randomUUID().slice(0, 8)}`}, 'dipesan')
+        returning id, code
+      `)) as unknown as { id: string; code: string }[];
+      await db.execute(sql`
+        insert into purchase_order_items (purchase_order_id, variant_id, qty, received_qty, cost_idr)
+        values (${po.id}, ${fixture.variantId}, 3, 0, 1000)
+      `);
+
+      await receivePurchaseOrder(po.code);
+      await receivePurchaseOrder(po.code); // replay berurutan, bukan bersamaan
+      await receivePurchaseOrder(po.code);
+
+      const [stock] = (await db.execute(sql`
+        select available from inventory_levels where variant_id = ${fixture.variantId}
+      `)) as unknown as { available: number }[];
+      expect(Number(stock.available), "5 awal + 3 sekali saja").toBe(8);
+    } finally {
+      await db.execute(sql`delete from inventory_levels where variant_id = ${fixture.variantId}`);
+      await db.execute(sql`delete from locations where store_id = ${fixture.storeId}`);
+      await cleanupFixture(fixture);
     }
   });
 });
