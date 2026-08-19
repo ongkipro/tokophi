@@ -85,10 +85,19 @@ Dua pengukuran pada hari yang sama, keduanya dengan probe HTTP tiap 20 detik ter
 |---|---|---|
 | `#279` (index + test) | **±15 menit** | migrasi **+ 8 skrip seed**, ketiganya menunggu seluruhnya |
 | `#281` (pemisahan ini) | **81 detik** (503 mulai +506 s, pulih +587 s) | migrasi saja; `seed` jalan setelah aplikasi melayani |
+| `#283` (Task 4.9) | **nol teramati** — 15 menit probe, tak satu pun sampel 503; container tiba di sha barunya | idem |
 
 Bukti pada deploy kedua, diambil saat itu juga: `migrate` `Exited (0)` 28 detik lalu sementara
 `seed` **baru hidup 27 detik** — rantai demo-data memang sudah berada di belakang, bukan di depan.
-`landing` 200 sepanjang kedua deploy (ia tanpa database dan tanpa `depends_on: postgres`).
+`landing` 200 sepanjang ketiga deploy (ia tanpa database dan tanpa `depends_on: postgres`).
+
+⚠️ **Baca baris ketiga sebagai "tak teramati", bukan "nol".** Probe-nya mencuplik tiap **15 detik**,
+jadi jendela yang lebih pendek dari itu memang tidak akan tertangkap. Yang bisa diklaim: pada
+resolusi 15 detik, deploy itu tidak pernah menjawab 503. Variasi 81 detik vs tak-teramati sendiri
+masuk akal — ia bergantung pada apakah healthcheck container baru sempat lolos sebelum yang lama
+dilepas, dan itu bukan sesuatu yang dijamin oleh susunan sekarang. **Jangan menjanjikan "deploy tanpa
+downtime" atas dasar satu sampel bersih**; yang sudah terbukti adalah tiga titik menurun tajam
+(15 menit → 81 detik → tak teramati), bukan sebuah jaminan.
 
 🔴 **KOREKSI TERHADAP VERSI PERTAMA CATATAN INI, yang saya tulis sendiri beberapa jam sebelumnya.**
 Ia membagi 15 menit itu menjadi "build ~6 menit dengan container lama SUDAH dibongkar" + "migrate ~7

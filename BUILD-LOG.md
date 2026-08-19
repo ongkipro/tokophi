@@ -527,3 +527,17 @@ difference, and DEPLOY.md now says so in those words.
 **What is left:** 81 s is the swap itself (stop, start, first healthcheck). Shrinking that means an
 overlapping swap — new container healthy before the old one stops — which is Coolify orchestration,
 not the compose file. Named there, not attempted, and the next person is told to measure first.
+
+---
+
+## 2026-08-20 — Deploy window, third sample (Main Session)
+
+`#283` (Task 4.9) deployed with **no 503 observed at all**: 15 minutes of probing every 15 s, not one
+sample non-200, and the containers arrived on `b6f7b1c`. Third point on the same measurement:
+**~15 min (#279) → 81 s (#281) → none observed (#283)**.
+
+Recorded in `DEPLOY.md` with the caveat that matters: the probe samples at 15 s, so a shorter window
+would not be caught — the honest claim is "no 503 at 15-second resolution", not "zero downtime". The
+variation between 81 s and none is itself expected: it depends on whether the new container's
+healthcheck passes before the old one is released, which nothing in the current arrangement
+guarantees. The doc now says in those words not to promise seamless deploys off one clean sample.
