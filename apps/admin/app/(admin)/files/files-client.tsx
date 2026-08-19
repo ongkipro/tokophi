@@ -34,7 +34,13 @@ export function FilesClient({ media }: { media: MediaItem[] }) {
       });
     }
   };
-  const del = (m: MediaItem) => start(async () => { await deleteMedia(m.id); toast.success("File dihapus."); router.refresh(); });
+  const del = (m: MediaItem) =>
+    start(async () => {
+      const r = await deleteMedia(m.id);
+      if (r.ok) toast.success("File dihapus.");
+      else toast.error(r.error ?? "Gagal menghapus file.");
+      router.refresh(); // either way: on a refusal this is what clears the row that is already gone
+    });
   const copy = (url: string) => { navigator.clipboard?.writeText(url); toast.success("URL disalin."); };
 
   return (

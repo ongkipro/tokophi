@@ -90,10 +90,15 @@ export async function uploadMedia(formData: FormData): Promise<{ ok: boolean; ur
   return { ok: true, url: saved.url };
 }
 
-export async function deleteMedia(id: string): Promise<{ ok: boolean }> {
+// ⚠️ THE `{ ok: false }` HERE IS LOAD-BEARING AND USED TO BE DROPPED ON THE FLOOR. `uploadMedia`
+// six lines above has always been read by the same caller; this one was not, so a double-click, a
+// second tab, or a file another session already deleted produced "File dihapus." over a delete that
+// matched nothing. It carries an `error` string now, because a `false` with nothing to say forces
+// the caller to invent the sentence.
+export async function deleteMedia(id: string): Promise<{ ok: boolean; error?: string }> {
   const { storeId: sid } = await requireCapability("media:write");
   const [row] = await db.select({ url: schema.media.url }).from(schema.media).where(and(eq(schema.media.id, id), eq(schema.media.storeId, sid))).limit(1);
-  if (!row) return { ok: false };
+  if (!row) return { ok: false, error: "File tidak ditemukan — mungkin sudah dihapus." };
   await db.delete(schema.media).where(and(eq(schema.media.id, id), eq(schema.media.storeId, sid)));
   await deleteImageFile(row.url);
   revalidatePath("/files");

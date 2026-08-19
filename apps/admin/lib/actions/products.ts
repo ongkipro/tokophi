@@ -286,20 +286,32 @@ export async function duplicateProduct(id: string): Promise<{ ok: boolean; id?: 
 export async function bulkSetProductStatus(ids: string[], status: "active" | "draft"): Promise<{ ok: boolean; count: number }> {
   const { storeId: sid } = await requireCapability("products:write");
   if (!ids.length) return { ok: true, count: 0 };
-  await withTenant(sid, (db) =>
-    db.update(schema.products).set({ status, updatedAt: new Date() }).where(inArray(schema.products.id, ids)),
+  // COUNT WHAT THE UPDATE MATCHED, not what the client asked for. The comment above says RLS clamps
+  // a forged id from another store — it does, silently, to zero rows, and `ids.length` reported it as
+  // swept anyway. A product another session already archived counts twice for the same reason.
+  // `.returning()` is the only honest source; same rule as `markLabelsPrinted`.
+  const rows = await withTenant(sid, (db) =>
+    db
+      .update(schema.products)
+      .set({ status, updatedAt: new Date() })
+      .where(inArray(schema.products.id, ids))
+      .returning({ id: schema.products.id }),
   );
   revalidatePath("/produk");
-  return { ok: true, count: ids.length };
+  return { ok: true, count: rows.length };
 }
 
 export async function bulkDeleteProducts(ids: string[]): Promise<{ ok: boolean; count: number }> {
   const { storeId: sid } = await requireCapability("products:delete");
   if (!ids.length) return { ok: true, count: 0 };
   // Delete = archive (products are referenced by order_line_items), same as the single delete.
-  await withTenant(sid, (db) =>
-    db.update(schema.products).set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() }).where(inArray(schema.products.id, ids)),
+  const rows = await withTenant(sid, (db) =>
+    db
+      .update(schema.products)
+      .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
+      .where(inArray(schema.products.id, ids))
+      .returning({ id: schema.products.id }),
   );
   revalidatePath("/produk");
-  return { ok: true, count: ids.length };
+  return { ok: true, count: rows.length };
 }

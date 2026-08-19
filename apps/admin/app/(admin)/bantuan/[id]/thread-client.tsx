@@ -30,7 +30,12 @@ export function ThreadClient({ ticket }: { ticket: TicketDetail }) {
       const r = await replyTicket(ticket.id, body);
       if (r.ok) { setBody(""); router.refresh(); } else toast.error(r.error ?? "Gagal mengirim.");
     });
-  const close = () => start(async () => { await closeTicket(ticket.id); toast.success("Tiket ditutup."); router.refresh(); });
+  const close = () =>
+    start(async () => {
+      const r = await closeTicket(ticket.id);
+      if (r.ok) { toast.success("Tiket ditutup."); router.refresh(); }
+      else toast.error(r.error ?? "Gagal menutup tiket.");
+    });
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
