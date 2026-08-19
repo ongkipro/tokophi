@@ -322,3 +322,59 @@
 - **Also this pass:** shared dev DB (`localhost:5433/tokophi`) was one migration behind merged main
   (`0094_magical_salo` unapplied — `order_financials` missing for every local session). Applied via
   `npm run migrate`; stamp now `1786475026516`, table present.
+
+---
+
+## 2026-08-19 — CI run LOCALLY for the ungated stage-4 wave; two real defects found (Main Session)
+
+**Why:** GitHub Actions has been dead since 2026-08-15 (billing — every run aborts in 4 s, "recent
+account payments have failed"). Twelve commits landed on `main` and **deployed to production**
+(`d77d7a6`, containers confirmed on that sha) with **zero tests run**, including money paths
+(`fix(payments): persist idempotent bill requests`, `fix(order): block checkout for unavailable
+stores`, `fix(purchases)`, `feat(admin): edit stock per variant`) and migration
+`0095_payment_request_idempotency`. This pass reproduced the whole CI job locally so the wave is not
+merely assumed healthy.
+
+**Scope:** `CI-LOCAL-0819` — full gate against `d77d7a6` on a throwaway DB (`tokophi_gate19`,
+derived `_test`), every exit code read directly, never through a pipe.
+
+| gate step | result |
+|---|---|
+| `verify-migrations` | **0** — journal healthy, 96 entries through `0095` |
+| `migrate` (fresh DB) | **0** |
+| `npm test` (`TEST_DB_REQUIRED=1`) | **1 → then 0** — 735/736 passed; the one red was `doc-counts` (below) |
+| `seed` | **0** |
+| `verify-rls` | **0** — RLS verified ✅ |
+| `verify-rls-app` | **0** — app-path (`withTenant`) verified ✅ |
+| `verify -w @tokophi/storefront` | **1 → then 0** — `check-hero-srcset` red (below) |
+| `build:admin` · `build:super` | **0** · **0** |
+
+**Defect 1 — stale published counts (the guard did its job).** `CODE_MAP.md` (×2 sites),
+`STATUS.md`, `SCHEMA.md` and `AGENTS.md` still published 95 migrations / head `0094` after `0095`
+landed. Fixed here; `doc-counts.test.ts` green 11/11 afterwards. Note for whoever tightens that
+guard: it only requires the true number to appear *somewhere* in each file, so `AGENTS.md` and
+`SCHEMA.md` passed while still carrying a stale sentence — only `CODE_MAP.md` went red.
+
+**Defect 2 — MY OWN #277 wired a check that could never pass in CI.** `check-hero-srcset` failed
+with `hero imgs: []`. Root cause is not the storefront: **`seed.ts` writes no `page_templates`** —
+the deploy chain runs `seed-templates.ts` immediately after it (`docker-compose.coolify.yml`), and
+that second script is what creates the default homepage carrying the batik hero. #277 added the
+verify suite to CI after the seed step **without** it, so the check was red by construction on every
+run, forever — the exact "red on clean data" failure this repo has already paid for twice. It was
+invisible because billing killed Actions before any run reached it. Fixed by adding a
+`seed:templates` step (same `tokophi_test` DATABASE_URL) before the suite.
+
+**Proof of the fix, measured in that order:** seed-only → `1 of 6 checks FAILED: check-hero-srcset`;
+after `npm run seed:templates` on the same database → **all 6 checks green** (`check-pixel-defer`
+SKIP as designed — one tracking channel on the seeded store).
+
+**Verdict on the wave itself: healthy.** Every product-code gate passed. The two reds were a stale
+document and a CI-wiring bug of mine, neither of them in shipped behaviour.
+
+**Also this pass:** the shared dev DB (`localhost:5433/tokophi`) was a migration behind again —
+`0095` applied, stamp now `1786989252649`, `payments.request_key/request_state/request_error`
+present.
+
+⚠️ **Standing risk until billing is restored:** Coolify deploys on merge and does not consult
+Actions, so every merge continues to reach production ungated. Until then, treat a local gate run
+like this one as mandatory before merging code.

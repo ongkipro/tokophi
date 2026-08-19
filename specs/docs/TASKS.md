@@ -9,6 +9,7 @@
 ---
 
 ## Epic 0 — Monorepo hygiene (foundation)
+- [x] **CI: seed store templates before the storefront verify suite** · **S** · `seed.ts` writes no `page_templates`, so `check-hero-srcset` was red by construction in CI (`hero imgs: []`) — the deploy chain's `seed-templates.ts` is what creates the hero homepage. Measured: seed-only 1/6 red → +`seed:templates` all 6 green. See BUILD-LOG 2026-08-19.
 - [x] **CI: storefront verify step needs a migrated+seeded DB and a browser** · **S** · moved after `seed tokophi_test`, env pinned to `_test`, chromium installed. Was red on main 2026-08-15/16 (`store_domains does not exist` — empty base DB). AC: sha-bound CI run green. See BUILD-LOG 2026-08-16.
 - [x] Monorepo (npm workspaces): `apps/admin`, `apps/super-admin`, `packages/ui`, `packages/lib`. Both build.
 - [ ] **De-dup admin → shared packages** · **M** · migrate `apps/admin` to import `@tokophi/ui` + `@tokophi/lib`; delete its local `components/ui` + `lib/format`/`utils`. AC: admin builds using the packages, zero duplicate UI, console clean.

@@ -142,6 +142,17 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
         run: npm run seed -w @tokophi/db
 
+      # ⚠️ `seed.ts` writes NO `page_templates` — the deploy chain runs `seed-templates.ts` right
+      # after it (docker-compose.coolify.yml), and the storefront verify suite below needs what that
+      # second script creates: a default homepage carrying the batik HERO. Without it
+      # `check-hero-srcset` finds `hero imgs: []` and fails **by construction**, on every run,
+      # forever — the "red on clean data" shape this repo has already paid for twice. Measured
+      # 2026-08-19: seed-only → 1 of 6 red; + this step → all 6 green.
+      - name: seed store templates (the hero the srcset checks measure)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
+        run: npm run seed:templates -w @tokophi/db
+
       # Browser-driven storefront performance/responsive-image gates: builds, starts ONE storefront,
       # runs all six registered checks. Two requirements this step's FIRST placement ignored (it ran
       # right after `npm test`, against the job-level DATABASE_URL — the empty, never-migrated base
