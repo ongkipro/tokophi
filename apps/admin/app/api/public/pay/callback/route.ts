@@ -186,22 +186,49 @@ export async function POST(req: Request) {
         : await db
           .update(schema.invoices)
           .set({ status: invStatus, paidAt: mapped === "berhasil" ? new Date() : null })
+          // ⚠️ `dibayar` IS TERMINAL FOR A CALLBACK — the same rule the payments branch above already
+          // enforces with `ne(status, "berhasil")`, and for the same reason: money that has been
+          // received is not un-received by a webhook. Without this line `ne(status, invStatus)` was
+          // the ONLY guard, so a late EXPIRED walked a paid invoice to `gagal` AND nulled its
+          // `paid_at` — and the paid → expired → paid sequence then extended the store's
+          // subscription a SECOND time, because the second PAID found a non-`dibayar` row to claim.
+          // A VA lives 24 h, so out-of-order pairs are ordinary here, not exotic (Task 4.10).
           .where(and(
             inArray(schema.invoices.id, invoiceMatches.map((invoice) => invoice.id)),
             ne(schema.invoices.status, invStatus),
+            ne(schema.invoices.status, "dibayar"),
           ))
           .returning({ storeId: schema.invoices.storeId, periodMonths: schema.invoices.periodMonths });
       if (mapped === "berhasil") {
         for (const r of invRows) {
           if (!r.storeId) continue;
-          // extend from the later of "now" or the remaining period, by the invoice's months
-          const [s] = await db.select({ cpe: schema.stores.currentPeriodEnd }).from(schema.stores).where(eq(schema.stores.id, r.storeId)).limit(1);
-          const now = new Date();
-          const base = s?.cpe && s.cpe > now ? s.cpe : now;
-          await db
-            .update(schema.stores)
-            .set({ currentPeriodEnd: addMonths(base, r.periodMonths ?? 1), firstInvoicePaid: true, status: "active" })
-            .where(eq(schema.stores.id, r.storeId));
+          // extend from the later of "now" or the remaining period, by the invoice's months.
+          //
+          // ⚠️ READ AND WRITE UNDER ONE ROW LOCK. This arithmetic is a read-modify-write, and the
+          // claim above only serialises callbacks for the SAME invoice. Two DIFFERENT invoices of one
+          // store paid at the same moment both read the same `current_period_end`, both add their
+          // months to it, and the second write erases the first — the merchant pays twice and is
+          // credited once. `for update` inside a transaction makes the second reader wait for the
+          // first to commit and then read the extended value.
+          //
+          // The month arithmetic deliberately stays in `addMonths` rather than moving into SQL:
+          // Postgres' `+ interval '1 month'` CLAMPS (31 Jan + 1 = 28 Feb) where JS `setMonth`
+          // OVERFLOWS (→ 3 Mar). Both are defensible; silently swapping one for the other inside a
+          // race fix is not.
+          await db.transaction(async (tx) => {
+            const [s] = await tx
+              .select({ cpe: schema.stores.currentPeriodEnd })
+              .from(schema.stores)
+              .where(eq(schema.stores.id, r.storeId!))
+              .for("update")
+              .limit(1);
+            const now = new Date();
+            const base = s?.cpe && s.cpe > now ? s.cpe : now;
+            await tx
+              .update(schema.stores)
+              .set({ currentPeriodEnd: addMonths(base, r.periodMonths ?? 1), firstInvoicePaid: true, status: "active" })
+              .where(eq(schema.stores.id, r.storeId!));
+          });
         }
       }
     }

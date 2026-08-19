@@ -9,6 +9,21 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Stage 4 Task 4.10 Paid Subscription Callbacks Made Monotonic
+
+- **Scope:** The invoice branch of `/api/public/pay/callback` accepted a late EXPIRED over a paid subscription invoice, and the ordinary out-of-order sequence paid → expired → paid extended the store's subscription a SECOND time. The extension itself was a read-modify-write outside any transaction.
+- **The defect, and why the sibling branch was already right:** the PAYMENTS branch six lines above has enforced `ne(status, "berhasil")` since an earlier incident, with a comment recording it — money that has been received is not un-received by a webhook. The INVOICE branch's only guard was `ne(status, invStatus)`, which blocks a same-state replay and nothing else. So EXPIRED walked a `dibayar` invoice to `gagal` and nulled its `paid_at`; the next PAID then found a claimable row and ran the extension loop again. A VA lives 24 h, so out-of-order pairs are ordinary here, not exotic. One implementation of a rule and one copy of it: the copy was the weaker half again.
+- **Files Created / Modified:**
+  - `apps/admin/app/api/public/pay/callback/route.ts`: `ne(schema.invoices.status, "dibayar")` added to the invoice UPDATE's WHERE — `dibayar` is now terminal for a callback, mirroring the payments branch. The store extension moved inside `db.transaction` with `.for("update")` on the store row: two DIFFERENT invoices of one store paid at the same moment both read the same `current_period_end`, both add their months, and the second write erases the first — the merchant pays twice and is credited once.
+  - ⚠️ The month arithmetic deliberately stays in `addMonths` rather than moving into SQL. Postgres' `+ interval '1 month'` CLAMPS (31 Jan + 1 = 28 Feb) where JS `setMonth` OVERFLOWS (→ 3 Mar). Both are defensible; silently swapping one for the other inside a race fix is not.
+  - `apps/admin/app/api/public/pay/callback/route.test.ts` (new): the three Done-when transitions driven through the real handler against real PostgreSQL, plus a two-invoice outcome test and a source guard for the row lock.
+- **Verification Executed:**
+  - **Mutation proof, guard:** with `ne(status, "dibayar")` removed, **2 of 3** transition tests fail — paid → expired flips to `gagal` and paid → expired → paid extends twice. Restored, 3/3 green.
+  - ⚠️ **The concurrency test does NOT prove the row lock, and that was measured rather than assumed.** Run three times against a copy with the un-transacted read-modify-write put back, it passed **3/3**: `Promise.all` does not reliably interleave two handlers at the one statement that matters. It is kept as an OUTCOME test (two invoices must buy two months) and says so in the file. The lock's actual guard is a `codeOnly()` source assertion with the repo's standard self-proof — asserted red against a copy with the transaction and `.for("update")` stripped, exactly as `public-guard.test.ts` does.
+  - `TEST_DB_REQUIRED=1 npm test` → **98 files and 763 tests passed**; `astro check` clean on storefront (119 files) and landing (29 files).
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**. `npm run lint -w @tokophi/admin` → **0 errors** (21 pre-existing warnings, unchanged).
+- **Completed Task:** Stage 4 Task 4.10.
+
 ### [2026-08-20] — Stage 5 Task 5.11 Green Admin Lint Baseline Restored
 
 - **Scope:** `npm run lint -w @tokophi/admin` had regressed to **4 errors / 21 warnings**; all four errors were `react-hooks/set-state-in-effect`, none of them in the files Task 4.9 touched (measured while gating that task, recorded there rather than repaired sideways). The baseline was 0 errors on 2026-08-11 (DEL-2); the theme work landed after it.
