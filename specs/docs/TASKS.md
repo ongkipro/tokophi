@@ -2,13 +2,14 @@
 
 > **Refreshed 2026-08-15 12:58 UTC** — **90/90 Test Files Passed; 722/722 Tests Passed** with DB-required suites enabled.
 > **Tracked audit remediation:** **100% resolved and re-verified.** RLS passed, the 95-entry migration journal is healthy through `0094_magical_salo`, documented OpenAPI operations have zero implementation drift, and all six audited migration-defined indexes have full Drizzle parity.
-> **Coverage follow-ups remain explicit:** six Storefront same-origin API routes are absent from the OpenAPI corpus, and the six restored index declarations are not yet pinned in `schema-indexes.test.ts`.
+> **Coverage follow-ups:** six Storefront same-origin API routes are absent from the OpenAPI corpus. ~~the six restored index declarations are not yet pinned~~ — **closed 2026-08-19** by an index CENSUS in `schema-indexes.test.ts` (measured nine, not six; it found `order_line_items_order_idx` declared in Drizzle but created by no migration and absent from dev AND production — fixed by `0096`). Nine indexes remain deliberately `sql-only` and are now named there, not invisible.
 > **Legend:** `[ ]` todo · `[~]` partial · `[x]` done · size **S**/**M**/**L** · AC = acceptance criteria.
 > **How to work:** pull the top unchecked task in the current epic → ship → check it → add a CHANGELOG line → update `UI_INVENTORY.md` if a screen changed.
 
 ---
 
 ## Epic 0 — Monorepo hygiene (foundation)
+- [x] **Index census + the missing `order_line_items` index** · **S** · `schema-indexes.test.ts` now classifies every migration-created index (drizzle / sql-only+reason); found `order_line_items.order_id` unindexed in every database and fixed it with idempotent migration `0096`. See BUILD-LOG 2026-08-19 (kedua).
 - [x] **CI: seed store templates before the storefront verify suite** · **S** · `seed.ts` writes no `page_templates`, so `check-hero-srcset` was red by construction in CI (`hero imgs: []`) — the deploy chain's `seed-templates.ts` is what creates the hero homepage. Measured: seed-only 1/6 red → +`seed:templates` all 6 green. See BUILD-LOG 2026-08-19.
 - [x] **CI: storefront verify step needs a migrated+seeded DB and a browser** · **S** · moved after `seed tokophi_test`, env pinned to `_test`, chromium installed. Was red on main 2026-08-15/16 (`store_domains does not exist` — empty base DB). AC: sha-bound CI run green. See BUILD-LOG 2026-08-16.
 - [x] Monorepo (npm workspaces): `apps/admin`, `apps/super-admin`, `packages/ui`, `packages/lib`. Both build.

@@ -40,6 +40,77 @@ const PUBLISHED: Array<{ file: string; must: Array<[label: string, value: number
   { file: "specs/docs/SCHEMA.md", must: [["jumlah tabel", TABLES], ["jumlah migrasi", MIGRATIONS], ["jumlah enum", ENUMS]] },
 ];
 
+// ⚠️ "ANGKANYA MUNCUL DI SUATU TEMPAT" TIDAK CUKUP — DIUKUR 2026-08-19.
+// Ketika `0095` mendarat, EMPAT dokumen masih menerbitkan "95 migrasi / head 0094". Yang merah hanya
+// `CODE_MAP.md`; `AGENTS.md` dan `SCHEMA.md` LOLOS karena kebetulan memuat angka 96 di kalimat lain
+// (tabel riwayat, catatan lama), sementara kalimat headline-nya tetap berbohong. Penjaga yang hijau
+// di atas kalimat basi persis kelas kegagalan yang berkas ini ada untuk menutupnya.
+//
+// Maka klaimnya diikat ke KALIMATNYA, bukan ke keberadaan angka: setiap entri di bawah menamai
+// kalimat headline yang dokumen itu pakai untuk menerbitkan hitungan. Kalau kalimatnya ditulis
+// ulang, pola ini berhenti cocok dan penjaganya merah — itu DISENGAJA: yang perlu diperbarui adalah
+// jangkarnya, di sini, sadar, bukan angkanya diam-diam menua di sana.
+const ANCHORS: Array<{ file: string; what: string; pattern: (n: { tables: number; migrations: number; head: string }) => RegExp }> = [
+  {
+    file: "AGENTS.md",
+    what: "kalimat headline SCHEMA di paragraf Database",
+    pattern: (n) => new RegExp(`\\*\\*${n.tables} tables · ${n.migrations} migrations \`0000\`–\`${n.head}\`\\*\\*`),
+  },
+  {
+    file: "specs/docs/SCHEMA.md",
+    what: "baris Migrasi di tabel Headline numbers",
+    pattern: (n) => new RegExp(`\\| Migrasi \\| \\*\\*${n.migrations}\\*\\* \\(\`0000\` … \`${n.head}\`\\)`),
+  },
+  {
+    file: "specs/docs/CODE_MAP.md",
+    what: "sel paket `db` + baris head migrasi",
+    pattern: (n) => new RegExp(`migrations/\` \\(\\*\\*0000–${n.head}\\*\\*, ${n.migrations} files\\)`),
+  },
+  {
+    file: "specs/docs/CODE_MAP.md",
+    what: "baris head migrasi",
+    pattern: (n) => new RegExp(`current head \\*\\*${n.head}\\*\\*`),
+  },
+  {
+    file: "specs/docs/STATUS.md",
+    what: "kalimat Data/security status",
+    pattern: (n) => new RegExp(`${n.migrations}-entry migration journal`),
+  },
+];
+
+/** Tag migrasi terakhir → "0095". Diturunkan, tidak pernah ditulis tangan. */
+const HEAD = (JSON.parse(read("packages/db/drizzle/meta/_journal.json")) as { entries: Array<{ tag: string }> })
+  .entries.at(-1)!.tag.slice(0, 4);
+
+describe("kalimat headline-nya sendiri yang membawa angka itu", () => {
+  const numbers = { tables: TABLES, migrations: MIGRATIONS, head: HEAD };
+
+  it("menurunkan head migrasi dari jurnal", () => {
+    expect(HEAD).toMatch(/^\d{4}$/);
+    expect(Number(HEAD)).toBe(MIGRATIONS - 1); // 0-indexed: 96 entri ⇒ head 0095
+  });
+
+  for (const { file, what, pattern } of ANCHORS) {
+    it(`${file} — ${what}`, () => {
+      expect(
+        pattern(numbers).test(read(file)),
+        `${file}: ${what} tidak menerbitkan angka yang benar (${MIGRATIONS} migrasi, head ${HEAD}). ` +
+          `Perbaiki kalimatnya — atau, kalau kalimatnya memang berubah bentuk, perbarui jangkarnya di ANCHORS. ` +
+          `Jangan melonggarkan polanya supaya hijau.`,
+      ).toBe(true);
+    });
+  }
+
+  it("merah bila HANYA kalimat headline yang basi meski angka benarnya ada di tempat lain", () => {
+    // Mutasi yang dulu LOLOS: kalimat headline mundur satu versi sementara angka yang benar tetap
+    // ada di paragraf lain pada berkas yang sama. Pemeriksaan lama hijau; yang ini harus merah.
+    const stale = read("AGENTS.md")
+      .replace(`${TABLES} tables · ${MIGRATIONS} migrations`, `${TABLES} tables · ${MIGRATIONS - 1} migrations`)
+      .concat(`\n\nCatatan lain yang kebetulan menyebut ${MIGRATIONS}.\n`);
+    expect(ANCHORS[0].pattern(numbers).test(stale)).toBe(false);
+  });
+});
+
 describe("angka yang diterbitkan dokumen cocok dengan kode", () => {
   it("berhasil menurunkan angkanya dari kode", () => {
     // Tanpa ini, sebuah regex yang meleset membuat SELURUH suite lolos dengan membandingkan 0 dengan 0.

@@ -378,3 +378,44 @@ present.
 ⚠️ **Standing risk until billing is restored:** Coolify deploys on merge and does not consult
 Actions, so every merge continues to reach production ungated. Until then, treat a local gate run
 like this one as mandatory before merging code.
+
+---
+
+## 2026-08-19 (kedua) — Guard hardening: two guards that were green over untrue claims (Main Session)
+
+**Scope:** `GUARD-0819` — following the local gate run above, both guards that touch "does the
+document/schema match reality" were tightened. Each tightening was driven by a defect it found.
+
+**1. `doc-counts.test.ts` — the claim is now anchored to its SENTENCE.** The old assertion was
+"the true number appears somewhere in the file", so when `0095` landed, `AGENTS.md` and `SCHEMA.md`
+**passed while their headline sentence still said 95 / head `0094`** — the correct number happened
+to appear elsewhere (history table, older note). Only `CODE_MAP.md` went red. Added `ANCHORS`: one
+regex per document naming the exact headline sentence that publishes the count, plus a derived
+`HEAD` (`0096`) and a mutation self-check that pins the precise old hole — headline rolled back one
+version while the right number still sits elsewhere in the file → must be RED. 18 tests green.
+
+**2. `schema-indexes.test.ts` — hand-listed pins replaced by a CENSUS (the `rbac-census` shape).**
+Four indexes were pinned by name, so index #30 could never make it red. `TASKS.md` carried a
+follow-up saying "six restored index declarations are not yet pinned"; **measured from the SQL and
+Drizzle it was nine, not six** — which is itself the argument for a runnable check over a sentence.
+Every index any migration has ever created must now be classified `drizzle` or `sql-only: <reason>`;
+a new one fails until someone classifies it, a ghost entry fails, a lie in either direction fails.
+
+**🔴 What the census found: `order_line_items.order_id` had NO INDEX IN ANY DATABASE.** Declared in
+`schema.ts`, pinned by the old test — and created by no migration. Measured on the shared dev DB and
+**on production**: `pg_indexes` returned `order_line_items_pkey` and nothing else. That column is
+what every order screen, the label printer and the bulk resi queue join on. The old guard read as
+parity while no database had the index. Fixed by migration **`0096_order_line_items_order_idx`**
+(idempotent `CREATE INDEX IF NOT EXISTS`), applied to the shared dev DB; production picks it up on
+the next deploy's migrate service.
+
+**⚠️ A trap I walked into and caught before committing:** the first stamp for `0096` came out
+**19 digits** (`date +%s%3N` returned nanoseconds). That is exactly the "stamp too high silently
+skips someone else's migration" hazard in AGENTS.md — and **`verify-migrations` did NOT catch it**,
+because it only asserts that stamps increase. Corrected to milliseconds (`1787135123807`) before any
+commit. Worth a future guard: assert every `when` is a 13-digit ms value.
+
+**Verification (exit codes read directly, never piped):** `verify-migrations` green · fresh-DB
+`npm test` with `TEST_DB_REQUIRED=1` → **96 files / 748 tests, exit 0** · both guards green
+(26 tests across the two files) · docs re-synced to 97 migrations / head `0096` and re-verified by
+the new anchored assertions.
