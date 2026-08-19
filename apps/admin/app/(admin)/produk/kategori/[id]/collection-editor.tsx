@@ -132,7 +132,6 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
 
   // Publikasikan
   const [published, setPublished] = React.useState(collection?.published ?? false);
-  const [chOnline, setChOnline] = React.useState(true);
 
   // Template tema
   const [template, setTemplate] = React.useState<string>(TEMPLATES[0]);
@@ -783,20 +782,13 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
                   onCheckedChange={setPublished}
                 />
               </div>
-              <Separator />
-              <div className="flex flex-col gap-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Saluran penjualan
-                </p>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="c-ch-online">Toko Online</Label>
-                  <Switch
-                    id="c-ch-online"
-                    checked={chOnline}
-                    onCheckedChange={setChOnline}
-                  />
-                </div>
-              </div>
+              {/* REMOVED: a "Saluran penjualan → Toko Online" Switch. `buildInput()` never carried
+                  it, `collections` has no channel column, and nothing in any app read the value —
+                  so switching it off, pressing Simpan and reading "Perubahan koleksi disimpan"
+                  left it back ON after a reload. There is no sales-channel concept to persist it
+                  into; the honest fix for a control with no sink is to remove it, not to store a
+                  value nothing consults. (Task 5.2 names the sibling file `product-editor.tsx`
+                  only — this editor is the caller that list would have missed.) */}
             </CardContent>
           </Card>
 

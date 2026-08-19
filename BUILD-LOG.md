@@ -9,6 +9,20 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Screening Findings C/D/E/F: Four Controls That Did Nothing (One of Them Destructively)
+
+- **Scope:** The other half of the same screening sweep: controls a merchant can operate that have no sink. Three were cosmetic-but-misleading; **one wrote the wrong data**.
+- **Files Created / Modified:**
+  - 🔴 **`apps/admin/app/(admin)/produk/[id]/product-editor.tsx` — "Ubah kategori" (finding E) is the real defect.** Both footer buttons were bare `DialogClose`, while picking from the dropdown had ALREADY called `setCategory(c)`. So "Batal" was a second "Simpan": a merchant who chose the wrong category, pressed Batal, then pressed the page's Simpan **persisted the wrong category** — and `category` genuinely goes through `buildInput()`, so this reached the database. The dialog now remembers the value it was opened with and restores it on any dismissal (Batal, Escape, outside click); the confirm button is relabelled **"Pakai"**, because it commits the pick locally the way every other field in this editor does and is not a second write. ⚠️ The keep-marker ref is deliberate rather than incidental: `components/theme/brand-color-dialog.tsx` uses exactly this idiom (`savedRef`) for exactly this shape, and matching working code beats reasoning about when Base UI fires `onOpenChange`.
+  - `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` — the "Alasan (opsional)" input on Perbarui stok (finding F) is **removed**. Its value was read by nothing: not `buildInput()`, not `updateStock` (which takes `{variantId, available, expected}`), and there is no reason column on the inventory path. A field that invites a merchant to explain a stock correction and then drops what they typed reads as an audit trail that does not exist.
+  - `apps/admin/app/(admin)/produk/produk-client.tsx` — the "Impor" button (finding C) had no `onClick`, no `href` and no `disabled`; there is no import route, action or CSV parser anywhere in the repo. Now honestly disabled with a title, which is this repo's own existing convention for a feature that does not exist yet (`pembelian-client.tsx`, `segmen-client.tsx` both do it and say why).
+  - `apps/admin/app/(admin)/produk/kategori/[id]/collection-editor.tsx` — the "Saluran penjualan → Toko Online" Switch (finding D) is **removed**. `buildInput()` never carried it, `collections` has no channel column, and nothing anywhere read the value, so switching it off and pressing Simpan reported success and came back ON. ⚠️ Task 5.2 names only the SIBLING file (`product-editor.tsx`, which has its own copy of this switch and stays 5.2's); this editor is the caller that a file-named task list would have missed.
+- **Verification Executed:**
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0**. `npm run lint -w @tokophi/admin` → **0 errors, 21 warnings** — the same 21 as the baseline, so nothing was left dangling by the two removals.
+  - `TEST_DB_REQUIRED=1 npm test` → **100 files and 778 tests passed**.
+  - ⚠️ **NOT clicked in a browser, and this one is a browser-visible change** — the gap is named rather than implied. `tsc` caught two unterminated JSX comments during this pass, which is precisely the class of mistake a render would also have caught; what it cannot confirm is the dialog's dismissal path at runtime. The idiom is copied verbatim from a shipped, working dialog in the same app.
+- **Completed Task:** Screening findings C, D, E, F (not numbered Stage tasks).
+
 ### [2026-08-20] — Screening Findings G/H/I: Five Writes That Reported Success Blind
 
 - **Scope:** One class, five sites, found by the same screening sweep as finding A: an action writes without checking what it matched, returns `{ ok: true }` (or the count it was ASKED for), and the screen toasts success. RLS clamps a foreign or stale id to **zero rows with no error**, which is precisely what makes this invisible.

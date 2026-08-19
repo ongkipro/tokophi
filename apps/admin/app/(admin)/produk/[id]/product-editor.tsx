@@ -215,7 +215,9 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [stockOpen, setStockOpen] = React.useState(false);
   const [stockMode, setStockMode] = React.useState<"set" | "add" | "sub">("add");
   const [stockAmount, setStockAmount] = React.useState("");
-  const [stockReason, setStockReason] = React.useState("");
+  // "Ubah kategori": the value the dialog was opened with, and whether the merchant kept the pick.
+  const catOpenedWith = React.useRef("");
+  const catKept = React.useRef(false);
   const [poOpen, setPoOpen] = React.useState(false);
   const [poSupplier, setPoSupplier] = React.useState("");
   const [poVariantId, setPoVariantId] = React.useState(
@@ -236,7 +238,6 @@ export function ProductEditor({ product }: { product?: Product }) {
     setQty(String(newStock));
     setStockOpen(false);
     setStockAmount("");
-    setStockReason("");
   };
   const poTotal = (Number(poQty) || 0) * (Number(poCost) || seedCost || 0);
   const poVariant = product?.variants?.find(
@@ -1341,8 +1342,22 @@ export function ProductEditor({ product }: { product?: Product }) {
         </div>
       </div>
 
-      {/* Ubah kategori */}
-      <Dialog open={catOpen} onOpenChange={setCatOpen}>
+      {/* Ubah kategori.
+          ⚠️ "Batal" USED TO BE A SECOND "Simpan". Both footer buttons were bare `DialogClose`, while
+          picking from the dropdown had ALREADY called `setCategory(c)` — so a merchant who chose the
+          wrong category, pressed Batal, then pressed the page's Simpan persisted the wrong one.
+          `category` IS written by `buildInput()`, so the damage was real, not cosmetic. The value on
+          open is remembered and restored on cancel — the same ref idiom `brand-color-dialog.tsx`
+          uses for exactly this shape. */}
+      <Dialog
+        open={catOpen}
+        onOpenChange={(next) => {
+          if (next) catOpenedWith.current = category;
+          else if (!catKept.current) setCategory(catOpenedWith.current);
+          catKept.current = false;
+          setCatOpen(next);
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Ubah kategori</DialogTitle>
@@ -1364,7 +1379,9 @@ export function ProductEditor({ product }: { product?: Product }) {
           </div>
           <DialogFooter>
             <DialogClose render={<Button variant="outline">Batal</Button>} />
-            <DialogClose render={<Button>Simpan</Button>} />
+            {/* Keeps the pick and closes. It still needs the page's own Simpan to persist, the same
+                as every other field in this editor — it is not a second write. */}
+            <Button onClick={() => { catKept.current = true; setCatOpen(false); }}>Pakai</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1395,10 +1412,11 @@ export function ProductEditor({ product }: { product?: Product }) {
               <Label htmlFor="stok-jumlah">Jumlah</Label>
               <Input id="stok-jumlah" inputMode="numeric" value={stockAmount} onChange={(e) => setStockAmount(e.target.value)} placeholder="0" />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="stok-alasan">Alasan (opsional)</Label>
-              <Input id="stok-alasan" value={stockReason} onChange={(e) => setStockReason(e.target.value)} placeholder="mis. Stok masuk, koreksi, retur…" />
-            </div>
+            {/* REMOVED: an "Alasan (opsional)" input. Its value was never read — not by
+                `buildInput()`, not by `updateStock` (which takes `{variantId, available, expected}`
+                and nothing else), and there is no reason column anywhere on the inventory path. A
+                field that invites a merchant to explain a stock correction and then drops what they
+                typed is worse than no field: it reads as an audit trail that does not exist. */}
             {stockAmount !== "" && (
               <p className="text-sm text-muted-foreground">Stok menjadi <span className="font-semibold text-foreground tabular-nums">{num(newStock)}</span></p>
             )}

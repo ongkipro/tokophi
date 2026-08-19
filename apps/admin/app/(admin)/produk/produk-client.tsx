@@ -264,7 +264,14 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
   return (
     <div>
       <PageHeader title="Produk" desc="Kelola katalog, stok, dan status produk.">
-        <Button variant="outline"><Upload /> Impor</Button>
+        {/* There is no import route, no import action and no CSV parser anywhere in the repo — this
+            button had no onClick, no href and no `disabled`, so clicking it did nothing at all and
+            said nothing about why. Two siblings already carry this repo's honest convention for a
+            feature that does not exist yet (`pembelian-client.tsx`, `segmen-client.tsx`): disable
+            it and SAY SO, rather than ship a control that silently refuses. */}
+        <Button variant="outline" disabled title="Impor produk belum tersedia">
+          <Upload /> Impor
+        </Button>
         {canWrite && <Button nativeButton={false} render={<Link href="/produk/baru" />}><Plus /> Tambah Produk</Button>}
       </PageHeader>
 
