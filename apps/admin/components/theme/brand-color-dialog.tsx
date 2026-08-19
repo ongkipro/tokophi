@@ -35,9 +35,14 @@ export function BrandColorDialog({
   const openedWith = React.useRef(initialColor || DEFAULT_BRAND_COLOR);
   const savedRef = React.useRef(false);
 
-  React.useEffect(() => {
-    setHex(initialColor || DEFAULT_BRAND_COLOR);
-  }, [initialColor]);
+  // Adjust during render, bukan effect (Task 5.11). `hex` mengikuti `initialColor` sampai merchant
+  // mengetik; menyalinnya lewat effect membuat dialog sempat menampilkan warna lama satu render.
+  const incomingColor = initialColor || DEFAULT_BRAND_COLOR;
+  const [prevColor, setPrevColor] = React.useState(incomingColor);
+  if (prevColor !== incomingColor) {
+    setPrevColor(incomingColor);
+    setHex(incomingColor);
+  }
 
   const valid = HEX_RE.test(hex);
   const shades = valid ? generateBrandShades(hex) : null;

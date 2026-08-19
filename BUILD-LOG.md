@@ -9,6 +9,22 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Stage 5 Task 5.11 Green Admin Lint Baseline Restored
+
+- **Scope:** `npm run lint -w @tokophi/admin` had regressed to **4 errors / 21 warnings**; all four errors were `react-hooks/set-state-in-effect`, none of them in the files Task 4.9 touched (measured while gating that task, recorded there rather than repaired sideways). The baseline was 0 errors on 2026-08-11 (DEL-2); the theme work landed after it.
+- **The defect class, and why it is not cosmetic:** each site copied a prop into local state from inside an effect. React renders once with the stale value, runs the effect, then renders again — on the theme canvas that is one visible frame painted in the previous store's colour or font pairing. The official pattern for prop-following state is to adjust it DURING render behind a previous-value marker; React discards that render and repeats it before anything reaches the DOM.
+- **Files Created / Modified:**
+  - `apps/admin/app/(admin)/tema/[id]/builder-client.tsx`: both prop→state effects (brand colour, theme tokens) converted. The theme comparison is by VALUE (`font`/`tone`), not object identity, so a parent that rebuilds the object each render no longer forces a pointless adjustment.
+  - `apps/admin/components/theme/brand-color-dialog.tsx`: the `initialColor` sync converted.
+  - `apps/admin/components/theme/theme-tokens-dialog.tsx`: the `resolved` sync converted. ⚠️ The `onPreviewChange` effect beside it is deliberately LEFT an effect — it tells a system outside React about the latest state, which is exactly what effects are for; the rule forbids synchronous setState inside an effect, not effects.
+- **Verification Executed:**
+  - `npm run lint -w @tokophi/admin` → **0 errors** (21 pre-existing warnings unchanged; they are not part of this gate).
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
+  - `TEST_DB_REQUIRED=1 npm test` on a fresh throwaway database → **97 files and 757 tests passed**.
+  - **Browser, production build** (`next start`, not dev — dev does not hydrate here): logged in, opened `/store/batiknusantara/tema`, opened the brand-colour dialog (`#a85572`), closed it, reopened it and read the same value back — prop-following state still follows — then opened the Tampilan dialog. **0 console errors, 0 page errors.**
+  - ⚠️ The shared dev DB's demo store was billing-suspended (`current_period_end` = `2026-08-04`), which 500s every admin page. It was extended for the run and **restored to exactly `2026-08-04 03:59:23.814+00`**, confirmed by the UPDATE's own `returning`.
+- **Completed Task:** Stage 5 Task 5.11.
+
 ### [2026-08-19] — Stage 4 Task 4.9 Serialized Purchase-Order Receipt
 
 - **Scope:** Replaced the receipt path's read-then-check with a compare-and-swap claim so two overlapping "Terima barang" requests can no longer book the same delivery onto the shelf twice.
