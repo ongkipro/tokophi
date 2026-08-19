@@ -9,6 +9,22 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-19] — Stage 4 Task 4.9 Serialized Purchase-Order Receipt
+
+- **Scope:** Replaced the receipt path's read-then-check with a compare-and-swap claim so two overlapping "Terima barang" requests can no longer book the same delivery onto the shelf twice.
+- **The defect, demonstrated rather than argued:** `receivePurchaseOrder` read `status`, returned early if `diterima`, then added `qty - receivedQty` per line. Two overlapping transactions both read `receivedQty = 0` before either wrote, so both computed the full `add`; the inventory UPDATE is relative (`available + add`), so the second was not lost — it was APPLIED. Measured on real PostgreSQL with the pre-fix code: a 10-unit delivery received concurrently left `available = 20`.
+- **Files Created / Modified:**
+  - `apps/admin/lib/actions/purchases.ts`: `receivePurchaseOrder` now claims the row with `UPDATE … WHERE status <> 'diterima' RETURNING id` as its first statement — the loser blocks, re-evaluates the predicate after the winner commits, matches zero rows and writes nothing. The claim doubles as the RLS-verified parent read the CHILD-TABLE RULE requires before touching `purchase_order_items` / `inventory_levels` (neither carries `store_id`). The trailing status write is gone: the claim already performed it inside the same transaction.
+  - `apps/admin/lib/actions/purchases.ts` (comment correction): `unreceivePurchaseOrder`'s note asserted the receive path needed no claim "because receive is naturally idempotent". That is true of a RETRY and false of a RACE, and the old belief is named rather than deleted.
+  - `apps/admin/lib/actions/purchases.test.ts`: two suites against real PostgreSQL — concurrent double receipt (one transition, one increment) and sequential replay (5 + 3 stays 8).
+- **Verification Executed:**
+  - **Mutation proof first:** with the pre-fix action restored, the concurrency test fails `expected 20 to be 10`; the replay test passes on both versions, which is exactly the retry-vs-race distinction the old comment conflated.
+  - `TEST_DB_REQUIRED=1 npm test` on a freshly migrated throwaway database → **97 files and 757 tests passed**.
+  - `tsc --noEmit -p apps/admin/tsconfig.json` → **0 errors**.
+  - `npm run lint -w @tokophi/admin` → **0 findings in the files this task touches**. ⚠️ The workspace itself is **not** green: 4 pre-existing errors, all `react-hooks/set-state-in-effect` in `apps/admin/app/(admin)/tema/[id]/builder-client.tsx`, plus 21 warnings. That baseline was 0 errors on 2026-08-11 (DEL-2) and has regressed since — it is Task 5.11's subject, recorded here as measured evidence rather than repaired sideways.
+- **Not done here:** no browser pass. The change is a transaction boundary with no UI surface; the runnable proof is the concurrency test, and a browser cannot produce the overlap it exercises.
+- **Completed Task:** Stage 4 Task 4.9.
+
 ### [2026-08-18] — Stage 4 Task 4.6 Real Product-Editor Purchase Orders
 
 - **Scope:** Replaced the product editor's UI-only `Buat PO` success path with a tenant-scoped persisted purchase-order transaction for the selected saved product variant.

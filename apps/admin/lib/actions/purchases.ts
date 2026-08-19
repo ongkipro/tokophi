@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -300,8 +300,31 @@ export async function createPurchaseOrder(input: {
 export async function receivePurchaseOrder(code: string): Promise<void> {
   const { storeId: sid } = await requireCapability("purchases:write");
   await withTenant(sid, async (db) => {
-    const [po] = await db.select({ id: schema.purchaseOrders.id, status: schema.purchaseOrders.status }).from(schema.purchaseOrders).where(eq(schema.purchaseOrders.code, code)).limit(1);
-    if (!po || po.status === "diterima") return;
+    // ⚠️ COMPARE-AND-SWAP FIRST, exactly like `unreceivePurchaseOrder` below — and the comment there
+    // used to say this path did not need one, "because receive is naturally idempotent:
+    // `add = qty - receivedQty` is 0 the second time". That is true of a RETRY and false of a RACE,
+    // which is the whole distinction (Task 4.9). Two calls that overlap both SELECT `receivedQty = 0`
+    // before either writes, so both compute `add = qty`; the inventory UPDATE is relative
+    // (`available + add`), so the second one is not lost — it is APPLIED, and the shelf gains the
+    // goods twice for one delivery. The relative UPDATE protects against a lost update; nothing was
+    // protecting against a double application.
+    //
+    // This UPDATE …WHERE status <> 'diterima' claims the row under Postgres' own row lock: the
+    // loser blocks, re-evaluates the predicate after the winner commits, matches zero rows, and
+    // returns having written nothing. It is also the RLS-verified read of the parent id that the
+    // CHILD-TABLE RULE requires before touching `purchase_order_items` / `inventory_levels` —
+    // neither carries a `store_id`, while `purchase_orders` is policed, so a foreign code claims
+    // nothing and we bail.
+    //
+    // Returning early on the loser is the ACCEPTED terminal result, not a swallowed error: the PO is
+    // received, which is what the caller asked for. `revalidate()` still runs, so both tabs refresh.
+    const claimed = await db
+      .update(schema.purchaseOrders)
+      .set({ status: "diterima" })
+      .where(and(eq(schema.purchaseOrders.code, code), ne(schema.purchaseOrders.status, "diterima")))
+      .returning({ id: schema.purchaseOrders.id });
+    if (!claimed.length) return;
+    const po = claimed[0];
     const items = await db.select().from(schema.purchaseOrderItems).where(eq(schema.purchaseOrderItems.purchaseOrderId, po.id));
     for (const it of items) {
       const add = it.qty - it.receivedQty;
@@ -327,7 +350,7 @@ export async function receivePurchaseOrder(code: string): Promise<void> {
       }
       await db.update(schema.purchaseOrderItems).set({ receivedQty: it.qty }).where(eq(schema.purchaseOrderItems.id, it.id));
     }
-    await db.update(schema.purchaseOrders).set({ status: "diterima" }).where(eq(schema.purchaseOrders.id, po.id));
+    // No status write here: the claim above already made it `diterima`, inside this same transaction.
   });
   revalidate();
 }
@@ -357,10 +380,11 @@ export async function unreceivePurchaseOrder(
   const { storeId: sid } = await requireCapability("purchases:write");
   const res = await withTenant(sid, async (db) => {
     // ⚠️ THE GUARD, and it is the FIRST statement on purpose: a compare-and-swap, not a read-then-
-    // check. `receivePurchaseOrder`'s `if (po.status === "diterima") return` is a read followed by a
-    // write, so two concurrent calls can both read the old status and both act — harmless there
-    // (receive is naturally idempotent: `add = qty - receivedQty` is 0 the second time), but here a
-    // double-undo would subtract the stock TWICE. This UPDATE …WHERE status='diterima' claims the row
+    // check. ⚠️ This comment used to add that the same read-then-check in `receivePurchaseOrder` was
+    // "harmless there, because receive is naturally idempotent". It was not: idempotent describes a
+    // RETRY, and two receives that OVERLAP both read `receivedQty = 0` and both add the full qty to
+    // a relative UPDATE — the shelf gained the delivery twice. `receivePurchaseOrder` now claims the
+    // row the same way this does (Task 4.9). A double-undo here would subtract the stock twice. This UPDATE …WHERE status='diterima' claims the row
     // under Postgres' own row lock: exactly one caller gets a row back, the loser gets zero and has
     // written nothing. It is also the RLS-verified read of the parent id that the CHILD-TABLE RULE
     // requires before touching `purchase_order_items` / `inventory_levels` (neither has a store_id) —
