@@ -427,12 +427,22 @@ export async function savePaymentChannels(updates: { key: string; on: boolean }[
   return { ok: true };
 }
 
+// ⚠️ ONLY THE `cod` BRANCH OF THIS IS ENFORCED. `platform_cod.enabled` is read by `lib/cod.ts`,
+// `cod-policy.ts` and the storefront catalog; `platform_payment_gateways.enabled` is read by NOTHING
+// on any payment path — checkout gates on `autolarisConfigured()` (env key) ∧
+// `platform_payment_channels.enabled`. The column is kept rather than dropped (destructive
+// migration) but it is a record, not a switch (owner ruling, 2026-08-20). Its one reader was an
+// "Aktif" badge on the settings screen, now removed: a status light wired to nothing is worse than
+// no light, because it can read green over a PSP that cannot take a rupiah.
 export async function saveGateways(updates: { key: string; on: boolean }[]): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
   for (const u of updates) {
     if (u.key === "cod") await db.update(schema.platformCod).set({ enabled: u.on });
-    else await db.update(schema.platformPaymentGateways).set({ enabled: u.on }).where(eq(schema.platformPaymentGateways.provider, u.key as "midtrans" | "xendit" | "duitku"));
+    // The provider union was hand-copied and had gone stale: it listed midtrans/xendit/duitku and
+    // omitted `autolaris`, the ONLY provider this screen actually renders — so the cast was silencing
+    // the type checker over the one value that reaches it. Derived from the enum now.
+    else await db.update(schema.platformPaymentGateways).set({ enabled: u.on }).where(eq(schema.platformPaymentGateways.provider, u.key as (typeof schema.gatewayProvider.enumValues)[number]));
   }
   if (updates.length) await logPlatform(`Gateway pembayaran diubah: ${updates.map((u) => `${u.key}=${u.on ? "aktif" : "nonaktif"}`).join(", ")}`);
   revalidatePath("/pengaturan");

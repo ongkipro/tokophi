@@ -9,6 +9,22 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — Screening Finding J: The AutoLaris "Aktif" Badge Removed (Owner Ruling)
+
+- **Scope:** `platform_payment_gateways.enabled` is written by `saveGateways` and read by **nothing on any payment path** — `/api/public/order` and `lib/actions/payments.ts` gate on `autolarisConfigured()` (the env key) ∧ `platform_payment_channels.enabled`. Its one consumer was an "Aktif" badge on the super-admin settings screen, driven by `autoGateway?.on`. **Owner ruling, 2026-08-20: remove the badge.** The column stays — dropping one is a destructive migration, the same standing as `store_settings.payment_channels`.
+- **Why the badge was worse than nothing:** it could read **green over a PSP that cannot take a single rupiah** (env key missing, every channel disabled) and could go dark while payments kept flowing. And there is no `Switch` for `autolaris` anywhere on that screen — the flag can only ever be whatever the seed wrote — so it was a status light wired to nothing, sitting in a control plane whose whole job is to tell an operator what is really on.
+- **Files Created / Modified:**
+  - `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx`: badge gone. The **channel counter beside it is the enforced fact and stays** — removing a false signal must not quietly remove the true one next to it. A comment records what a real kill-switch would require.
+  - `apps/super-admin/lib/data.ts`, `apps/super-admin/lib/actions.ts`: both sides of the column now say it is unenforced, so the next reader does not rebuild a light on it. `saveGateways`' `cod` branch is called out as the one that IS enforced, since the two sit in the same loop.
+  - `apps/super-admin/lib/actions.ts` (adjacent defect, fixed while there): the provider cast was a hand-copied union `"midtrans" | "xendit" | "duitku"` that **omitted `autolaris`** — the only provider this screen renders — so the cast was silencing `tsc` over the one value that actually reaches it. Derived from `schema.gatewayProvider.enumValues` now.
+  - `AGENTS.md`: the ruling recorded beside the payment-channel rules, with the condition a future kill-switch would have to meet.
+  - `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` (new): a source guard, because the claim is about the ABSENCE of markup — nothing to import and call, and no type checker has an opinion about a badge that is gone. Read as **CODE**, so the long comment the screen now carries (which names `autoGateway?.on` in prose) cannot keep it green.
+- **Verification Executed:**
+  - **Mutation proof:** putting the badge back fails *"the settings screen renders nothing off autoGateway.on"*. Restored → 3/3 green.
+  - `TEST_DB_REQUIRED=1 npm test` → **102 files and 788 tests passed**. `tsc --noEmit -p apps/super-admin/tsconfig.json` → **0**. `npm run lint -w @tokophi/super-admin` → **0 errors**.
+  - ⚠️ **Not clicked in a browser** — the change removes markup and the guard reads the file; named rather than implied.
+- **Completed Task:** Screening finding J (owner-decided). **The screening sweep is now closed: all ten findings (A–J) are resolved.**
+
 ### [2026-08-20] — Screening Finding B: The Manual Invoice Flip Is Bookkeeping (Owner Ruling)
 
 - **Scope:** `setInvoiceStatus` marks an invoice `dibayar` / `menunggu` / `gagal` and writes nothing else — it is not one of the three writers of `stores.current_period_end` (`api/public/pay/callback`, `compStore`, `extendTrial`). **Owner ruling, 2026-08-20: that is the intended scope.** A manual flip is a ledger correction; entitlement moves on payment events only. The alternative — running the callback's code path — was considered and rejected.
