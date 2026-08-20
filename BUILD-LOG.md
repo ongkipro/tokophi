@@ -9,6 +9,20 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — 🔴 Two Unaliased `exists()` Expressions Were One Column — Prepaid Orders Refused a Waybill
+
+- **How it was found:** not by a review. While building N40's authorised v6.2 verification booking, `createShipment` refused a fixture whose payment had genuinely succeeded: *"Pembayaran belum berhasil. Pengiriman tidak jadi direservasi."* The fixture was correct, so the guard was not.
+- **The defect:** Postgres names an unaliased `exists (…)` expression **`exists`**. Two of them in one target list therefore come back as **one** column, and the second value is lost. `apps/admin/lib/actions/shipping.ts` had exactly that shape **twice** — `isCod` (first) and `hasSuccessfulPayment` (second) — and **two guards key off the second one** (the pre-flight at the data read, and the one inside the surcharge reservation). Measured on real Postgres, one prepaid order (`payments.method='transfer'`, `status='berhasil'`): the reservation's own query read `hasSuccessfulPayment: false`, while an **aliased** raw-SQL query over the identical row in the identical tenant transaction read `true`. Isolated further: `select exists(…), exists(…)` returns a single key, `["exists"]`. `isCod` read correctly throughout, which is exactly what made this survivable and invisible — the loss lands entirely on the SECOND expression. Introduced by `535eba9` (2026-08-12).
+- **Files Created / Modified:**
+  - `apps/admin/lib/actions/shipping.ts`: `.as("is_cod")` / `.as("has_successful_payment")` on both pairs. The third site, `cancellationPending`, is **alone in its target list and therefore correct today** — aliased anyway, because "correct until somebody adds a second one" is precisely what the two broken pairs were. Patch the class, not the instance.
+  - `apps/admin/lib/actions/shipment-payment-guard.test.ts` (new): the Postgres premise measured rather than remembered (`select exists(…), exists(…)` → one key), plus a source guard requiring every `sql<…>\`exists (…)\`` field in that file to carry `.as(`, plus its self-proof.
+- **Verification Executed:**
+  - ⚠️ **THE FIRST TEST WAS GREEN FOR THE WRONG REASON, AND THAT IS WHY THE GUARD HAS THE SHAPE IT HAS.** The obvious end-to-end test — book a paid order, assert it is not refused for non-payment — passed **with both aliases deleted**. The refusing guard sits *after* a live KiriminAja rate call and an exact re-price, so a fixture short of a pickup address, a destination district, weighed line items and a rate matching to the rupiah is rejected earlier and never reaches it. The assertion matched nothing and reported success. Caught by mutating before trusting; the durable claim is the source guard, which **is** proved red.
+  - **The source guard immediately found a THIRD unaliased site** the manual reading had passed over — which is the argument for deriving the rule instead of listing the sites.
+  - `TEST_DB_REQUIRED=1 npm test` → **103 files and 791 tests passed**. `tsc --noEmit -p apps/admin/tsconfig.json` → **0**. `npm run lint -w @tokophi/admin` → **0 errors**.
+  - ⚠️ **The end-to-end reproduction was done by hand, once, and is not committed** — it needs a live rate call, which would make the suite depend on a vendor sandbox. What is committed is the premise and the shape.
+- **Completed Task:** none numbered — a production defect found in passing, fixed ahead of N40 because it blocked the verification.
+
 ### [2026-08-20] — Screening Finding J: The AutoLaris "Aktif" Badge Removed (Owner Ruling)
 
 - **Scope:** `platform_payment_gateways.enabled` is written by `saveGateways` and read by **nothing on any payment path** — `/api/public/order` and `lib/actions/payments.ts` gate on `autolarisConfigured()` (the env key) ∧ `platform_payment_channels.enabled`. Its one consumer was an "Aktif" badge on the super-admin settings screen, driven by `autoGateway?.on`. **Owner ruling, 2026-08-20: remove the badge.** The column stays — dropping one is a destructive migration, the same standing as `store_settings.payment_channels`.
