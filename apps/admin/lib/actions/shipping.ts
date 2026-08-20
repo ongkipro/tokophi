@@ -630,10 +630,18 @@ export async function createShipment(input: { orderNumber: string; service: stri
         // survivable and invisible — the failure lands entirely on the SECOND expression.
         // Two guards below key off exactly that value, so a genuinely paid order was refused a
         // waybill. Never put two unaliased SQL expressions in one `.select({…})`.
-        isCod: sql<boolean>`exists (select 1 from payments p where p.order_id = ${schema.orders.id} and p.method = 'cod')`.as("is_cod"),
+        // 🔴 THE TABLE NAME IN THESE SUBQUERIES IS LOAD-BEARING. Do NOT go back to `${schema.orders.id}`.
+        // Drizzle renders an interpolated column inside a `sql` template **UNQUALIFIED** — the SQL it
+        // emits is `p.order_id = "id"`, not `p.order_id = "orders"."id"` (measured with `.toSQL()`).
+        // Inside a correlated subquery the INNER scope wins, and `payments` has its own `id`, so the
+        // condition silently became `p.order_id = p.id` — true for no row that has ever existed. Both
+        // flags therefore read FALSE for every order, and the two guards keyed off them refused the
+        // booking: a genuinely paid order was told "Pembayaran belum berhasil." Measured on real
+        // Postgres — unqualified `false`, `"orders"."id"` `true`, same row, same transaction.
+        isCod: sql<boolean>`exists (select 1 from payments p where p.order_id = "orders"."id" and p.method = 'cod')`.as("is_cod"),
         hasSuccessfulPayment: sql<boolean>`exists (
           select 1 from payments p
-           where p.order_id = ${schema.orders.id} and p.status = 'berhasil'
+           where p.order_id = "orders"."id" and p.status = 'berhasil'
         )`.as("has_successful_payment"),
       })
       .from(schema.orders)
@@ -797,11 +805,11 @@ export async function createShipment(input: { orderNumber: string; service: stri
         // the copy that actually refused the booking in the measured reproduction.
         isCod: sql<boolean>`exists (
           select 1 from payments p
-           where p.order_id = ${schema.orders.id} and p.method = 'cod'
+           where p.order_id = "orders"."id" and p.method = 'cod'
         )`.as("is_cod"),
         hasSuccessfulPayment: sql<boolean>`exists (
           select 1 from payments p
-           where p.order_id = ${schema.orders.id} and p.status = 'berhasil'
+           where p.order_id = "orders"."id" and p.status = 'berhasil'
         )`.as("has_successful_payment"),
       })
       .from(schema.orders)
@@ -1139,7 +1147,7 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
         // silent in both directions. The rule is the class, not the instance.
         cancellationPending: sql<boolean>`exists (
           select 1 from shipment_bookings b
-           where b.order_id = ${schema.orders.id}
+           where b.order_id = "orders"."id"
              and b.status = 'cancellation_requested'
         )`.as("cancellation_pending"),
       })
