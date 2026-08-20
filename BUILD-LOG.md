@@ -9,6 +9,22 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — N40 Phase 2: Booking Migrated to KiriminAja v6.2, Verified With ONE Authorised Sandbox Booking
+
+- **Scope:** `kaCreateOrder` books on `/api/mitra/v6.2/request_pickup` now. The contract investigation (`specs/docs/tasks/2026-08-12-n40-v62-contract.md`) had mapped the REQUEST field by field against the sandbox's own Go struct and concluded "safe to migrate — one line", but deliberately left the SUCCESS response unproven, because proving it means creating a booking. **Owner authorised exactly one, 2026-08-20.**
+- **The booking, and what it returned:** `ok: true`, `kj_order_id 5758-N2975e1537124`, `pickup_number EPR-1550265486`. Booked through `createShipment` — the real seller path, not the library in isolation — so the order row was written and the poller/cancel paths remain drivable.
+- 🔴 **THE ONE BOOKING PAID FOR ITSELF: v6.2 answers `awb: ""`, where v6.1 answered `awb: null`.** `awb: d?.awb ?? undefined` passes an empty string straight through, so the migration would have started writing `""` into a column that had always been NULL. Nothing crashes — every reader tests truthiness — but the row would claim a waybill it does not have, `(awb is not null)` sorts it to the **back** of the tracking poller's queue (it orders un-waybilled parcels first), and any future `is not null` check would read it as issued. Normalised away. **This is exactly the class of difference no amount of doc-reading finds.**
+- **Files Created / Modified:**
+  - `packages/lib/src/kiriminaja.ts`: the path; `drop: false` sent explicitly (it binds as `bool` in the v6.2 struct and its default is **still** undocumented — every booking this product makes is a pickup and the "Resi terbit" flow assumes it); the empty-string `awb` normalised. `package_type_id` **stays 7** — the doc offers 9 for "regular packages" and its example sends it, but the semantics are undocumented and cannot be probed without another booking.
+  - `packages/lib/src/kiriminaja-v62.test.ts` (new): the measured success body as a permanent fixture, driven through `kaCreateOrder` with `fetch` stubbed — so nobody has to book again to keep this honest. Covers the path, `drop`, the absence of `add_cost`, `package_type_id: 7`, the empty-string `awb`, a real waybill still coming through, and a v6.2-shaped HTTP-400 refusal.
+  - `specs/docs/KIRIMINAJA.md`: the endpoint row flipped; the open question *"does v6.2 want `destination_province_id` or `destination_provinsi_id`"* **answered — neither, v6.1's names ARE the v6.2 names**; `package_type_id: 9` added as a new open question; both measured v6.2 behaviour differences recorded (HTTP 400 on errors — **do not add a status check** — and the empty-string `awb`).
+- **Verification Executed:**
+  - **Three mutations, three distinct failures:** reverting the path to v6.1, deleting `drop: false`, and restoring `?? undefined` each break their own test. Restored → 6/6.
+  - `TEST_DB_REQUIRED=1 npm test` → **105 files and 800 tests passed**. `tsc --noEmit -p apps/admin/tsconfig.json` → **0**. `npm run lint -w @tokophi/admin` → **0 errors**.
+  - ⚠️ **The verification harness is NOT committed.** It books for real; a file that does that must not sit in the suite where a `npm test` would fire it. The measured response is committed as a fixture instead.
+  - ⚠️ **The first two attempts at this booking never reached KiriminAja** — they were refused by `createShipment`'s own payment guard. That was not the fixture: it was a production defect (drizzle rendering an interpolated column unqualified), recorded in its own entry above and fixed first.
+- **Completed Task:** N40 phase 2.
+
 ### [2026-08-20] — 🔴🔴 THE REAL CAUSE: Drizzle Interpolates a Column UNQUALIFIED, So Eight Correlated Subqueries Compared a Table to Itself
 
 - ⚠️ **THIS ENTRY CORRECTS THE ONE BELOW IT.** The previous pass attributed the refused booking to two unaliased `exists()` expressions sharing the column name `exists`. That collision is real and the aliases are still right — **but it was not the cause, and the fix did not fix it.** The booking was still refused afterwards. The mistake was declaring a cause without measuring the FIXED state: aliasing was proved to differ from raw SQL, and "therefore aliasing is the cause" was inferred rather than tested. A single **aliased** expression through drizzle still read `false`.

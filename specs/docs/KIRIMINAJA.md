@@ -28,7 +28,7 @@ Source: the captured docs at `~/Documents/kiriminaja/documents/` — 34 pages, 1
 |---|---|---|
 | Resolve an area by name | `/api/mitra/v2/get_address_by_name` | current |
 | Quote a parcel | `/api/mitra/v6.1/shipping_price` | current |
-| **Book + request pickup** | `/api/mitra/v6.1/request_pickup` | **⚠️ DEPRECATED — v6.2 is current** |
+| **Book + request pickup** | `/api/mitra/v6.2/request_pickup` | **current — migrated 2026-08-20 (N40)** |
 | Cancel a shipment | `/api/mitra/v3/cancel_shipment` | current |
 | Track | `/api/mitra/tracking` | current |
 | Province list | `/api/mitra/province` | current |
@@ -40,6 +40,10 @@ request: the response's `method` is `request_pickup` and its text is `"Request p
 Pickup vs drop-off is a per-package boolean:
 
 > `drop` — `true` = drop-off / cashless, `false` = pickup. Nullable; **default NOT STATED IN DOCS.**
+
+⚠️ Because that default is undocumented, `kaCreateOrder` now sends **`drop: false` explicitly**. Every
+booking this product makes is a pickup and the whole "Resi terbit" flow assumes it; pinning the value
+we already depend on costs one field and removes a silent behaviour change from the vendor's side.
 
 We never send `drop`, and our sandbox bookings come back as pickups, so the effective default is
 pickup. Only **JNE, SiCepat and ID Express** support drop-off at all; all 15 express 3PLs support
@@ -202,6 +206,33 @@ set today and would be wrong the day J&T Cargo is offered.
 
 Registration path for webhooks · paths for the schedule, payment, KA-Credit and utility endpoints ·
 the named timezone behind "local time" · behaviour after the 16:00 cut-off · behaviour when booking a
-`libur: true` date · the default value of `drop` · how to cancel before an AWB exists (cancellation
-takes the **AWB and only the AWB**, which does not exist at booking) · whether v6.2 wants
-`destination_province_id` or `destination_provinsi_id` (**the docs contradict themselves**).
+`libur: true` date · the default value of `drop` (still undocumented — we now send it explicitly
+rather than rely on it) · how to cancel before an AWB exists (cancellation takes the **AWB and only
+the AWB**, which does not exist at booking) · what `package_type_id: 9` changes (the v6.2 doc offers
+it for "regular packages" and its example sends it; the semantics are undocumented and cannot be
+probed without booking, so we keep **7**).
+
+### ✅ ANSWERED 2026-08-20 — the v6.2 destination fields
+
+**Neither.** The question was `destination_province_id` vs `destination_provinsi_id`; the sandbox's
+answer is that **v6.1's names ARE the v6.2 names** — `destination_kecamatan_id` and
+`destination_kelurahan_id`, both `int`. v6.2 is a Go service, so sending a candidate field with the
+wrong JSON type makes the unmarshal name the real struct field and stay silent for one that does not
+exist; only those two bind (`RequestPickupV62RequestPackage`). Every name unique to the v6.2 doc —
+including the table's `destination_subdistrict_id`/`destination_village_id` — is silently ignored,
+and the doc omits the village field it actually has. Field-by-field evidence:
+`specs/docs/tasks/2026-08-12-n40-v62-contract.md`.
+
+### ⚠️ Two v6.2 behaviours that differ from v6.1, both measured
+
+1. **Errors come back as HTTP 400**, often with no `method` field, where v6.1 used HTTP 200 with
+   `{status:false}`. `ka()` parses the body regardless of status and callers read only
+   `status`/`text`, which is why the migration was one line — **do not add an HTTP-status check.**
+2. **A fresh booking answers `awb: ""`, not `awb: null`** (measured on the one authorised booking,
+   2026-08-20: `kj_order_id 5758-…`, `pickup_number EPR-…`). `kaCreateOrder` normalises the empty
+   string away, so `orders.awb` stays NULL until a courier really issues a waybill. An empty string
+   is not a waybill: nothing crashes on it, but the row would claim one it does not have and
+   `(awb is not null)` sorts it to the back of the tracking poller's queue.
+   Also measured: a nonexistent destination id gets v6.2's **generic** create error instead of
+   v6.1's specific *"Tujuan pengiriman … doesn't exists"* — the seller-facing message for a bad
+   destination is less useful now, and that is the vendor's, not ours.
