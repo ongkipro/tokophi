@@ -620,11 +620,21 @@ export async function createShipment(input: { orderNumber: string; service: stri
         custName: schema.customers.name,
         custPhone: schema.customers.phone,
         // ⚠️ Whether this parcel is COD is a FACT ABOUT THE ORDER, not a checkbox. See the booking below.
-        isCod: sql<boolean>`exists (select 1 from payments p where p.order_id = ${schema.orders.id} and p.method = 'cod')`,
+        //
+        // 🔴 THE `.as(…)` ALIASES ARE LOAD-BEARING — WITHOUT THEM THESE TWO ARE ONE COLUMN.
+        // Postgres names an unaliased `exists (…)` expression **`exists`**, so two of them in one
+        // target list come back as a single `exists` column and the second value is lost. Measured
+        // on real Postgres, one prepaid order (`payments.method='transfer'`, `status='berhasil'`):
+        // the same query read `hasSuccessfulPayment: false` while an aliased raw-SQL query over the
+        // identical row read `true`. `isCod` (the first) was correct, which is what made it
+        // survivable and invisible — the failure lands entirely on the SECOND expression.
+        // Two guards below key off exactly that value, so a genuinely paid order was refused a
+        // waybill. Never put two unaliased SQL expressions in one `.select({…})`.
+        isCod: sql<boolean>`exists (select 1 from payments p where p.order_id = ${schema.orders.id} and p.method = 'cod')`.as("is_cod"),
         hasSuccessfulPayment: sql<boolean>`exists (
           select 1 from payments p
            where p.order_id = ${schema.orders.id} and p.status = 'berhasil'
-        )`,
+        )`.as("has_successful_payment"),
       })
       .from(schema.orders)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
@@ -782,14 +792,17 @@ export async function createShipment(input: { orderNumber: string; service: stri
         id: schema.orders.id,
         status: schema.orders.status,
         kaOrderId: schema.orders.kaOrderId,
+        // Aliased for the reason spelled out at the first read of these two columns: two unaliased
+        // `exists (…)` expressions collapse into ONE `exists` column and the second is lost. This is
+        // the copy that actually refused the booking in the measured reproduction.
         isCod: sql<boolean>`exists (
           select 1 from payments p
            where p.order_id = ${schema.orders.id} and p.method = 'cod'
-        )`,
+        )`.as("is_cod"),
         hasSuccessfulPayment: sql<boolean>`exists (
           select 1 from payments p
            where p.order_id = ${schema.orders.id} and p.status = 'berhasil'
-        )`,
+        )`.as("has_successful_payment"),
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, input.orderNumber))
@@ -1121,11 +1134,14 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
         awb: schema.orders.awb,
         kaOrderId: schema.orders.kaOrderId,
         status: schema.orders.status,
+        // Alone in this target list today, so it is correct today — aliased anyway, because "correct
+        // until somebody adds a second one" is what the two guards above were, and the failure is
+        // silent in both directions. The rule is the class, not the instance.
         cancellationPending: sql<boolean>`exists (
           select 1 from shipment_bookings b
            where b.order_id = ${schema.orders.id}
              and b.status = 'cancellation_requested'
-        )`,
+        )`.as("cancellation_pending"),
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, orderNumber))
