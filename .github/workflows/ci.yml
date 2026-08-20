@@ -137,9 +137,30 @@ jobs:
       # ⚠️ `_test`, not `tokophi`: the job-level `DATABASE_URL` names the database db-setup DERIVES the
       # test one from, and that base database is created empty by the service container and never
       # migrated. Pointing these at it would fail on `relation "stores" does not exist`.
+      # 🔴 `SEED_FORCE` IS WHAT MAKES THIS STEP DO ANYTHING AT ALL, AND WITHOUT IT THE WORKFLOW WAS
+      # RED BY CONSTRUCTION — measured 2026-08-20 by executing this file step for step against a
+      # fresh postgres, because GitHub Actions itself has not run since the account's billing failed.
+      #
+      # `npm test` above does not only migrate `tokophi_test`; several suites INSERT accounts, stores
+      # and orders through the owner connection and never roll them back (they are throwaway rows in
+      # a throwaway database). So by the time this step runs the database is NOT empty — and the seed
+      # answers "DB already has data — skipping seed" and **EXITS 0**. Silently. Nothing is seeded,
+      # `store_domains` stays empty, and four steps later the storefront suite dies with *"never
+      # served a 200 for Host toko-demo.test … If that host resolves to no store, no check below
+      # could have meant anything."* The step that was added to make `check-hero-srcset` green was
+      # itself a no-op.
+      #
+      # ⚠️ `SEED_DESTROY_CONFIG` IS THE SECOND KEY ON PURPOSE and it belongs ONLY here. It exists to
+      # stop somebody truncating config-bearing rows (encrypted CAPI tokens, gateway credentials,
+      # operator logins) out of a SHARED database — see AGENTS.md. On this runner the database is an
+      # ephemeral service container that dies with the job, so forcing is not a risk, it is the only
+      # way to get a deterministic fixture. **Never copy this pair into a script that can reach the
+      # shared dev database or production.**
       - name: seed tokophi_test (the RLS verifiers assert over rows, not just the catalog)
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
+          SEED_FORCE: "1"
+          SEED_DESTROY_CONFIG: "1"
         run: npm run seed -w @tokophi/db
 
       # ⚠️ `seed.ts` writes NO `page_templates` — the deploy chain runs `seed-templates.ts` right
@@ -148,6 +169,8 @@ jobs:
       # `check-hero-srcset` finds `hero imgs: []` and fails **by construction**, on every run,
       # forever — the "red on clean data" shape this repo has already paid for twice. Measured
       # 2026-08-19: seed-only → 1 of 6 red; + this step → all 6 green.
+      # Needs the store the step above creates, so it inherits that step's determinism. It has no
+      # skip-guard of its own: pointed at a database with no demo store it simply writes nothing.
       - name: seed store templates (the hero the srcset checks measure)
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/tokophi_test
