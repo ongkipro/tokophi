@@ -31,12 +31,26 @@ export function PaketClient({ sub, allInvoices, conv, fin }: { sub: SubStats; al
   const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<"semua" | Invoice["status"]>("semua");
 
+  // 🔵 A LEDGER CORRECTION, NOT AN ENTITLEMENT CHANGE (owner ruling, 2026-08-20).
+  //
+  // `setInvoiceStatus` writes `invoices.status` and nothing else — it is not one of the three
+  // writers of `stores.current_period_end`. The toast used to read "Invoice INV-4821 → dibayar.",
+  // which an operator fixing a failed webhook reasonably reads as "the merchant is unlocked". They
+  // are not: their panel stays read-only, and the operator's next move is "Gratiskan 1 bulan",
+  // which files a GIVEAWAY for a month that was actually paid for. Say the limit in the sentence
+  // that reports the success, not in a doc nobody opens mid-task.
   function mark(inv: Invoice, status: Invoice["status"]) {
     if (status === inv.status) return;
     startTransition(async () => {
       const no = refused(await setInvoiceStatus(inv.id, status));
       if (no) return void toast.error(no);
-      toast.success(`Invoice ${inv.id} → ${status}.`);
+      toast.success(`Faktur ${inv.id} → ${status}.`, {
+        description:
+          status === "dibayar"
+            ? "Pembukuan saja — masa aktif toko TIDAK diperpanjang. Pakai \u201cGratiskan 1 bulan\u201d di halaman toko kalau memang perlu ditambah."
+            : "Pembukuan saja — masa aktif toko yang sudah berjalan tidak ditarik kembali.",
+        duration: 8000,
+      });
       router.refresh();
     });
   }
@@ -158,6 +172,12 @@ export function PaketClient({ sub, allInvoices, conv, fin }: { sub: SubStats; al
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Ubah status</DropdownMenuLabel>
+                        {/* The limit belongs HERE, before the click — a toast explains what already
+                            happened, this explains what is about to. Same reason the suspension flow
+                            collects its reason on the detail page instead of after the fact. */}
+                        <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+                          Pembukuan saja — tidak mengubah masa aktif toko.
+                        </p>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem disabled={inv.status === "dibayar"} onClick={() => mark(inv, "dibayar")}><CircleCheck className="size-4 text-emerald-600" /> Tandai dibayar</DropdownMenuItem>
                         <DropdownMenuItem disabled={inv.status === "menunggu"} onClick={() => mark(inv, "menunggu")}><Clock className="size-4 text-amber-600" /> Tandai menunggu</DropdownMenuItem>
