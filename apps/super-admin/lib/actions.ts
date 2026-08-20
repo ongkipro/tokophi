@@ -346,15 +346,41 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
 }
 
 // ---- billing: mark an invoice paid / failed / pending ----
+//
+// 🔵 THIS IS BOOKKEEPING ONLY. IT DOES NOT MOVE THE STORE'S SUBSCRIPTION, AND THAT IS THE DECISION,
+// NOT AN OVERSIGHT (owner ruling, 2026-08-20).
+//
+// The comment that used to sit here said the opposite — "an operator flipping an invoice to
+// `dibayar` by hand EXTENDS a store's paid period without a payment" — and it was simply false.
+// There are exactly THREE writers of `stores.current_period_end` in the whole repo
+// (`api/public/pay/callback`, `compStore`, `extendTrial`) and this is none of them. So the belief
+// was in the code, in the audit trail and on the operator's screen, while the merchant's panel
+// stayed read-only. The operator would then press "Gratiskan 1 bulan" to unlock them, which records
+// a COMP — a giveaway — for a month the merchant had actually paid for.
+//
+// The asymmetry is deliberate and follows from the same ruling: walking a paid invoice back to
+// `gagal` does NOT claw back a period the callback already granted. Entitlement moves on PAYMENT
+// EVENTS, never on a ledger correction — so the screen and the audit line must both say so, rather
+// than leaving the next reader to infer that money changed hands and a subscription moved with it.
+// Granting time is what "Gratiskan 1 bulan" is for; taking it is what a suspension is for.
 export async function setInvoiceStatus(number: string, status: "dibayar" | "menunggu" | "gagal"): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  const [inv] = await db.select({ storeId: schema.invoices.storeId }).from(schema.invoices).where(eq(schema.invoices.number, number)).limit(1);
-  await db.update(schema.invoices).set({ status }).where(eq(schema.invoices.number, number));
-  // Money: an operator flipping an invoice to "dibayar" by hand extends a store's paid period without
-  // a payment. That MUST leave a trace — an unlogged money mutation is indistinguishable from an attack.
-  if (inv?.storeId) await logStore(inv.storeId, `Status faktur ${number} diubah → ${status} (manual, platform)`);
-  else await logPlatform(`Status faktur ${number} diubah → ${status} (manual, platform)`);
+  // Report what the UPDATE matched, not what was asked for — same rule as `markLabelsPrinted`. This
+  // wrote blind and always answered `ok`, so a number that matches nothing rendered as a successful
+  // correction AND wrote an audit line for it.
+  const [inv] = await db
+    .update(schema.invoices)
+    .set({ status })
+    .where(eq(schema.invoices.number, number))
+    .returning({ storeId: schema.invoices.storeId });
+  if (!inv) return { ok: false, error: "Faktur tidak ditemukan." };
+  // An unlogged money-adjacent mutation is indistinguishable from an attack, so it must leave a
+  // trace — and the trace has to be as honest as the screen: it names this as a bookkeeping change
+  // so nobody later reads it as evidence that the store's subscription moved.
+  const line = `Status faktur ${number} diubah → ${status} (manual, platform — pembukuan saja, masa aktif toko tidak berubah)`;
+  if (inv.storeId) await logStore(inv.storeId, line);
+  else await logPlatform(line);
   revalidatePath("/paket");
   revalidatePath("/");
   return { ok: true };
