@@ -9,6 +9,23 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — 🔴🔴 THE REAL CAUSE: Drizzle Interpolates a Column UNQUALIFIED, So Eight Correlated Subqueries Compared a Table to Itself
+
+- ⚠️ **THIS ENTRY CORRECTS THE ONE BELOW IT.** The previous pass attributed the refused booking to two unaliased `exists()` expressions sharing the column name `exists`. That collision is real and the aliases are still right — **but it was not the cause, and the fix did not fix it.** The booking was still refused afterwards. The mistake was declaring a cause without measuring the FIXED state: aliasing was proved to differ from raw SQL, and "therefore aliasing is the cause" was inferred rather than tested. A single **aliased** expression through drizzle still read `false`.
+- **The actual defect, from `.toSQL()`:** drizzle renders an interpolated column inside a `sql` template **UNQUALIFIED**. `sql\`… where p.order_id = ${schema.orders.id}\`` emits `p.order_id = "id"`, not `p.order_id = "orders"."id"`. In a plain WHERE that is harmless — the outer table is the only scope. Inside a **correlated subquery it is not**, because the INNER scope wins and the inner table usually has a column of that name. So `p.order_id = p.id`: true for no row that has ever existed. Measured on real Postgres, same row and same transaction: unqualified `false`, `"orders"."id"` `true`.
+- **Eight sites, three files, four distinct shipped consequences** — the guard below found the last one, in a file nobody had looked at:
+  - `apps/admin/lib/actions/shipping.ts` (5): `isCod` and `hasSuccessfulPayment` read FALSE for every order, so `createShipment` refused a genuinely paid order with *"Pembayaran belum berhasil"*; `cancellationPending` likewise never fired.
+  - `apps/admin/lib/data/order-detail.ts` (2): the line-item image subquery bound `m.product_id = m.id`, so **every line item on the order detail rendered with no image** (measured: a product that genuinely has media returned `null`); and the service-name lookup bound `pc.courier = pc.courier`, returning the **first courier's** service name instead of the order's.
+  - `apps/admin/lib/data/checkout.ts` (1): `not exists (… f.phone = "phone" …)` compared `followups` to itself, so the "abandoned, not yet contacted" count collapsed to zero for the whole store the moment ANY 'keranjang' follow-up had ever been sent.
+- **Files Created / Modified:** the eight sites qualified by name (`"orders"."id"`, `"products"."id"`, `"orders"."courier"`, `"checkout_sessions"."phone"`), plus `packages/db/src/correlated-subquery-scoping.test.ts` (new) — a repo-wide guard for the CLASS: **a `sql` template that carries its own FROM must not interpolate a schema column.** Blunt and derived rather than a list of eight; a template with no FROM of its own (`now() >= ${schema.flashSales.startsAt}`) is unaffected and stays legal, which the guard also asserts so it cannot be "satisfied" by deleting working code.
+- ⚠️ **A backtick inside an SQL comment closes the template literal.** Two of these comments were written with `\\`id\\`` in them and broke the parse — the same family as the `*/`-inside-a-block-comment trap this repo already records. `tsc` caught it; nothing else would have.
+- **Verification Executed:**
+  - **The guard found the 8th site**, in `checkout.ts`, which no manual reading had reached — which is the argument for deriving the rule instead of enumerating the sites.
+  - Self-proved in both directions: red on the shipped shape, green on the legitimate one.
+  - **End-to-end, the decisive one:** with these fixes the N40 verification booking got past both guards and **reached KiriminAja**, which answered a real v6.2 validation error (`order_id maksimal 20 karakter`). Before them it never left the process.
+  - `TEST_DB_REQUIRED=1 npm test` → **104 files and 794 tests passed**. `tsc --noEmit -p apps/admin/tsconfig.json` → **0**. `npm run lint -w @tokophi/admin` → **0 errors**.
+- **Completed Task:** none numbered — a production outage of "Atur pengiriman" found while verifying N40.
+
 ### [2026-08-20] — 🔴 Two Unaliased `exists()` Expressions Were One Column — Prepaid Orders Refused a Waybill
 
 - **How it was found:** not by a review. While building N40's authorised v6.2 verification booking, `createShipment` refused a fixture whose payment had genuinely succeeded: *"Pembayaran belum berhasil. Pengiriman tidak jadi direservasi."* The fixture was correct, so the guard was not.

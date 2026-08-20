@@ -218,7 +218,12 @@ export async function getOrderDetail(
     const serviceName = sql<string | null>`(
       select s->>'name' from platform_couriers pc
       cross join lateral jsonb_array_elements(pc.services) s
-      where pc.courier = ${schema.orders.courier} and s->>'type' = ${schema.orders.serviceType}
+      -- QUALIFIED ON PURPOSE. Drizzle emits an interpolated column UNQUALIFIED, and
+      -- platform_couriers has its OWN courier column, so the condition became pc.courier =
+      -- pc.courier: true for every row, returning the first courier's service name instead of this
+      -- order's. service_type was safe only because platform_couriers has no such column -- luck,
+      -- not design. Do not put a backtick in a comment inside a template literal; it closes it.
+      where pc.courier = "orders"."courier" and s->>'type' = "orders"."service_type"
       limit 1
     )`;
     const [o] = await db
@@ -258,7 +263,11 @@ export async function getOrderDetail(
     // Lowest-position image for the line's product (correlated so a product with no media → NULL).
     const image = sql<string | null>`(
       select m.url from ${schema.productMedia} m
-      where m.product_id = ${schema.products.id}
+      -- QUALIFIED ON PURPOSE -- same trap. product_media has its own id column, so the emitted
+      -- m.product_id = "id" bound to m.id and matched nothing. MEASURED on real Postgres: a product
+      -- that genuinely has media returned null, so EVERY line item on the order detail rendered
+      -- with no image at all.
+      where m.product_id = "products"."id"
       order by m.position asc limit 1
     )`;
 

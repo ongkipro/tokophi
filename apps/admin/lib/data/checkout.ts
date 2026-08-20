@@ -103,10 +103,15 @@ export async function getCheckoutMetrics(): Promise<CheckoutMetrics> {
           eq(schema.checkoutSessions.status, "ditinggal"),
           gte(schema.checkoutSessions.createdAt, windowStart()),
           isNotNull(schema.checkoutSessions.phone),
+          // QUALIFIED ON PURPOSE. Drizzle emits an interpolated column UNQUALIFIED, and followups
+          // has its OWN phone column, so this compared f.phone to f.phone -- true for every row with
+          // a phone. The NOT EXISTS then went FALSE the moment ANY 'keranjang' follow-up had ever
+          // been sent to anybody, so this count collapsed to zero for the whole store rather than
+          // excluding the sessions already contacted. See the class guard in packages/db.
           sql`not exists (
             select 1 from followups f
              where f.type = 'keranjang' and f.sent_at is not null
-               and regexp_replace(f.phone, '\D', '', 'g') = regexp_replace(${schema.checkoutSessions.phone}, '\D', '', 'g')
+               and regexp_replace(f.phone, '\D', '', 'g') = regexp_replace("checkout_sessions"."phone", '\D', '', 'g')
           )`,
         ),
       );
