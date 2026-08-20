@@ -9,6 +9,32 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-20] — CI Executed By Hand For The First Time: The Workflow Was Red By Construction, And The Seed Step Was A No-Op
+
+- **Why by hand:** GitHub Actions has not run a single job since the account's billing failed. Every run since then completes in 3–4 s with the annotation *"The job was not started because recent account payments have failed or your spending limit needs to be increased."* Verified again 2026-08-20 on run `32330156109`. **That half is an owner action — Settings → Billing & plans — and nothing in this repository can substitute for it.** What CAN be done is the other half of the task: `#277` wired seven steps into this workflow that have **never once executed**.
+- **So the workflow was executed step for step**, against a purpose-built throwaway database (`tokophi_ci28`, so `tokophi_ci28_test` is derived and created fresh exactly as the runner's service container would be), on the repo's own Node 24. Both databases dropped afterwards; the shared dev database was never touched.
+- 🔴 **THE SEED STEP DOES NOTHING, AND EXITS 0 WHILE DOING IT.** `npm test` (the step above it) does not only migrate `tokophi_test` — several suites INSERT accounts, stores and orders through the owner connection and never roll them back. So by the time the seed runs the database is not empty, and `seed.ts` answers *"DB already has data — skipping seed"* and **exits 0**. Nothing is seeded, `store_domains` stays empty, and four steps later the storefront suite dies with *"The storefront never served a 200 for Host toko-demo.test … If that host resolves to no store, no check below could have meant anything."* **The step added in #277 to make `check-hero-srcset` green was itself a no-op — CI could not have gone green on any commit, ever.** Measured, not inferred: `select host from store_domains` returned zero rows after the step reported success.
+- **Files Created / Modified:** `.github/workflows/ci.yml` — `SEED_FORCE: "1"` + `SEED_DESTROY_CONFIG: "1"` on the seed step, with the reasoning inline. ⚠️ The second variable belongs **only** here: it exists to stop somebody truncating config-bearing rows out of a SHARED database (AGENTS.md), and on a runner the database is an ephemeral service container that dies with the job. **Never copy that pair into anything that can reach the shared dev database or production.**
+- **Verification Executed — the fixed order, run end to end:**
+
+  | # | step | result |
+  |---|---|---|
+  | 1 | `npm ci` | 0 |
+  | 2 | `verify-migrations` | 0 |
+  | 3 | `npm test` | 0 — **105 files, 800 tests** |
+  | 4 | seed (**forced**) | 0 — `store_domains` now carries `toko-demo.test` |
+  | 5 | `seed:templates` | 0 |
+  | 6 | `playwright install chromium` | 0 |
+  | 7 | storefront verify | **0 — 5 PASS + 1 documented SKIP** (was: fatal) |
+  | 8 | `verify-rls` | 0 — 52/53, one known exception |
+  | 9 | `verify-rls-app` | 0 |
+  | 10 | `tsc apps/admin` | 0 |
+  | 11 | `tsc apps/super-admin` | 0 |
+
+  ⚠️ **One deliberate deviation:** `playwright install` was run **without** `--with-deps` (that half needs `sudo`, which this machine's approval gate reserves). The four browser checks all passed regardless, so chromium's shared libraries are present here; on a bare runner image `--with-deps` remains correct and is left in the workflow.
+  ⚠️ **This proof is local.** It says the workflow's STEPS are correct and green on this commit; it cannot say the runner image behaves identically. The first real run after billing is restored is still the one that settles that.
+- **Completed Task:** the provable half of #28. **The billing itself remains open and is the owner's.**
+
 ### [2026-08-20] — N40 Phase 2: Booking Migrated to KiriminAja v6.2, Verified With ONE Authorised Sandbox Booking
 
 - **Scope:** `kaCreateOrder` books on `/api/mitra/v6.2/request_pickup` now. The contract investigation (`specs/docs/tasks/2026-08-12-n40-v62-contract.md`) had mapped the REQUEST field by field against the sandbox's own Go struct and concluded "safe to migrate — one line", but deliberately left the SUCCESS response unproven, because proving it means creating a booking. **Owner authorised exactly one, 2026-08-20.**
