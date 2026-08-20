@@ -718,6 +718,13 @@ const GATEWAY_META: Record<string, { name: string; desc: string; order: number }
   autolaris: { name: "AutoLaris", desc: "PSP platform — VA (6 bank), QRIS, DANA", order: 0 },
 };
 
+// ⚠️ `platform_payment_gateways.enabled` IS NOT A GATE — it is a legacy column, kept but unenforced
+// (owner ruling, 2026-08-20). Nothing on any payment path reads it: `/api/public/order` and
+// `lib/actions/payments.ts` gate on `autolarisConfigured()` (the env key) ∧
+// `platform_payment_channels.enabled`. The `on` flag below is carried for COD — which IS enforced,
+// via `platform_cod.enabled` — and for the shape of the row; do not build a status light on the
+// AutoLaris one. Same standing as `store_settings.payment_channels`: kept because dropping a column
+// is a destructive migration, not because anything consults it.
 export async function getPaymentGateways(): Promise<Toggle[]> {
   const gws = await db.select().from(schema.platformPaymentGateways);
   const cod = (await db.select().from(schema.platformCod))[0];

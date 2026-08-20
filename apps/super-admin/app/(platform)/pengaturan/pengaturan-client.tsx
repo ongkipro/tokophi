@@ -293,10 +293,17 @@ export function PengaturanClient({
                       <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
                       <span>Agregator pembayaran: <span className="font-medium">{autoGateway?.name ?? "AutoLaris"}</span> · <span className="font-medium">{activeChannels}</span>/{channels.length} channel aktif</span>
                     </div>
+                    {/* ⚠️ NO "Aktif" BADGE HERE, DELIBERATELY (owner ruling, 2026-08-20). It used to
+                        render from `autoGateway?.on`, i.e. `platform_payment_gateways.enabled` — a
+                        column NO payment path consults. Checkout gates on `autolarisConfigured()`
+                        (the env key) plus `platform_payment_channels.enabled`, so the badge could
+                        read "Aktif" over a PSP that cannot take a single rupiah, and could vanish
+                        while payments kept flowing. There is no Switch for it either, so it was a
+                        status light wired to nothing. The channel counter beside it IS the enforced
+                        fact and stays. If a platform-wide PSP kill-switch is ever wanted, it has to
+                        be ENFORCED at `api/public/order` and `actions/payments.ts` first — the way
+                        `platform_cod.enabled` is — and only then surfaced. */}
                     <div className="flex shrink-0 items-center gap-2">
-                      {autoGateway?.on && (
-                        <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                      )}
                       <Button variant="outline" size="sm" className="gap-1.5" disabled={chanSyncing} onClick={syncChannels}>
                         <Plug className="size-3.5" /> {chanSyncing ? "Menyinkron…" : "Sync"}
                       </Button>
