@@ -168,7 +168,29 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     status: boolean; text?: string; pickup_number?: string;
     payment_status?: string; qr_url?: string | null;
     details?: { order_id: string; kj_order_id: string; awb: string | null; service: string; service_type: string }[];
-  }>("/api/mitra/v6.1/request_pickup", {
+    // ⚠️ v6.2 — MIGRATED 2026-08-20 (N40), and the contract is BYTE-FOR-BYTE the v6.1 one plus two
+    // optional KA-Credit fields we do not send. That was not taken from the docs, which contradict
+    // themselves three ways on the destination fields: the v6.2 table names
+    // `destination_subdistrict_id`/`destination_village_id`, its own example names
+    // `destination_kecamatan_id`/`destination_kabupaten_id`, and it omits the village field
+    // altogether. The sandbox settled it — v6.2 is a Go service, so a candidate field sent with the
+    // WRONG JSON TYPE makes the unmarshal name the real struct field and stay silent for one that
+    // does not exist. Measured: only `destination_kecamatan_id` and `destination_kelurahan_id` bind
+    // (`RequestPickupV62RequestPackage`); every name unique to the v6.2 doc is silently ignored.
+    // **v6.1's names ARE the v6.2 names.** Full field-by-field evidence:
+    // `specs/docs/tasks/2026-08-12-n40-v62-contract.md`.
+    //
+    // ⚠️ DO NOT ADD AN HTTP-STATUS CHECK WHILE TOUCHING THIS. v6.1 answered business failures as
+    // HTTP 200 `{status:false}`; v6.2 answers **HTTP 400**, often with no `method` field. `ka()`
+    // parses the JSON body regardless of status and we read only `status`/`text`, which is the only
+    // reason this migration is one line — a status check would turn every ordinary refusal
+    // ("Jadwal penjemputan tidak lagi tersedia") into a thrown error.
+    //
+    // ⚠️ `package_type_id` STAYS 7. The v6.2 doc says "default 7, or 9 for regular packages" and its
+    // example sends 9, but what 9 changes is undocumented and cannot be probed without booking.
+    // Conservative until the vendor answers. `add_cost` is in the doc's table and NOT in the struct
+    // — we never sent it; do not start.
+  }>("/api/mitra/v6.2/request_pickup", {
     name: sender.name, phone: sender.phone, address: sender.address,
     kecamatan_id: sender.kecamatanId,
     ...(sender.kelurahanId ? { kelurahan_id: sender.kelurahanId } : {}),
@@ -183,6 +205,13 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       qty: pkg.qty ?? 1, item_value: pkg.itemValue, item_name: pkg.itemName,
       service: pkg.service, service_type: pkg.serviceType, shipping_cost: pkg.shippingCost,
       cod: pkg.cod ?? 0, package_type_id: pkg.packageTypeId ?? 7,
+      // Sent EXPLICITLY rather than left to the vendor's default, which is not stated anywhere in
+      // the docs. `drop: true` means the seller delivers the parcel to a drop point themselves;
+      // every booking this product has ever made is a PICKUP, and the whole "Resi terbit" flow
+      // (cron-tracking waiting for a courier to accept a pickup) assumes it. Pinning the value we
+      // already depend on costs one field and removes a silent behaviour change from the vendor's
+      // side. It binds as `bool` in the v6.2 struct.
+      drop: false,
       ...(pkg.insuranceAmount ? { insurance_amount: pkg.insuranceAmount } : {}),
       ...(pkg.destZipcode ? { destination_zipcode: pkg.destZipcode } : {}),
     }],
@@ -190,7 +219,14 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   const d = r.details?.[0];
   return {
     ok: !!r.status,
-    awb: d?.awb ?? undefined,
+    // ⚠️ v6.2 RETURNS `awb: ""`, NOT `awb: null` — measured on the one authorised sandbox booking
+    // (2026-08-20, kj_order_id `5758-…`, pickup `EPR-…`). v6.1 returned null, and `?? undefined`
+    // passes an empty string straight through, so the migration would have started writing `""`
+    // into `orders.awb` where the column had always been NULL. Nothing crashes — every reader tests
+    // truthiness — but the row would then claim a waybill it does not have, `(awb is not null)`
+    // sorts it to the BACK of the tracking poller's queue (it orders un-waybilled parcels first),
+    // and any future `is not null` check would read it as issued. An empty string is not a waybill.
+    awb: d?.awb ? d.awb : undefined,
     kaOrderId: d?.kj_order_id,
     pickupNumber: r.pickup_number,
     paymentStatus: r.payment_status,
