@@ -8,6 +8,62 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-21 08:20 UTC] — Stage 4 Task 4.11 · SEC-10 · Impersonation Is A One-Time Exchange Now, Not A JWT In A URL
+
+- **Executor:** Claude (Opus 5), worktree `t411`, branch `feat/task-4.11-impersonation-exchange`.
+- **Scope:** Replaced the reusable URL credential behind "Buka Dashboard Seller" with an opaque, single-use, server-side exchange; bounded the session it mints; carried the operator's identity into it; and made every gated merchant write name both parties. Explicit exit added.
+- 🔴 **The defect, stated as what it actually was.** `signImpersonation` minted a **session-shaped JWT** and `impersonateStore` put it in the query string (`/impersonate?token=<jwt>&slug=<slug>`). Signed, audience-pinned, two minutes to live — and **reusable for every one of those 120 seconds by anyone holding the string**, because a JWT is *verified*, never *spent*. There was nowhere to record that the link had been used, so replay was not a bug in the route; it was the shape of the credential. A URL is the worst carrier there is for one: browser history, the next request's `Referer`, a reverse-proxy access log, a screen share, a pasted support ticket. The session it exchanged for then lasted **7 days** and carried **no mark that an operator was inside**, so every write the operator made was indistinguishable from the merchant's own — in `platform_activity`, on the merchant's screens, and in any later reconstruction of "who changed this?".
+- **The fix is a row that can be SPENT, and the whole security model is one statement:**
+  ```sql
+  update impersonation_grants set consumed_at = now()
+   where token_hash = $1 and consumed_at is null and expires_at > now() returning …
+  ```
+  One row ⇒ the exchange happened, exactly once. Zero rows ⇒ unknown handle, already spent, or expired — three causes, one fail-closed answer, and Postgres's row lock decides the concurrent case (the loser blocks, re-evaluates the predicate after the winner commits, matches nothing). The URL now carries **256 opaque bits** and nothing else; only `sha256(handle)` is stored, so a dump of the table redeems nothing.
+- **The grant is a permission to exchange, never a cached fact.** Membership, the merchant's role, the operator's row, the operator's rank and the operator's `password_changed_at` are all re-read at consume time — the control plane's standing rule ("rank from `platform_admins`, on every request") extended across the gap between minting a link and clicking it. ⚠️ The operator check is `role === grant.operator_role`, deliberately **not** a rank comparison: `platform-rank.ts` must stay one copy and `apps/admin` may not import it. Equality is also strictly stricter (a promotion invalidates too, at the cost of one more click).
+- **Files Created / Modified:**
+  - `packages/lib/src/impersonation.ts` (new): the mint, the digest, both TTLs. ONE module because two apps must agree byte for byte — a second `sha256` would make every exchange fail closed with no error anywhere. `IMPERSONATION_SESSION_EXPIRY` is DERIVED from `IMPERSONATION_SESSION_MAX_AGE` so the cookie and the token cannot drift.
+  - `packages/db/src/schema.ts` + `packages/db/drizzle/0098_impersonation_grants.sql` (new): the table. **RLS enabled with NO policy, deliberately** — control-plane rows, written by super-admin and read by the admin's *pre-session* auth path, both on the owner connection. A policy keyed on `app.store_id` would be strictly WEAKER while reading like protection.
+  - `apps/super-admin/lib/actions.ts`: `impersonateStore` inserts a grant and returns `?grant=<handle>`. The `slug` no longer rides in the URL — the row knows the store, and a destination taken from a query string is a redirect the caller chooses. Its audit line now says a LINK was created, because that is what it wrote.
+  - `apps/super-admin/lib/session.ts`: `signImpersonation` / `IMPERSONATION_AUD` **deleted**, with the reasoning left in their place so nobody reintroduces them.
+  - `apps/admin/lib/impersonation.ts` (new): the claim, the two re-reads, the failure classification (logged, never returned — every refusal is the same redirect, so nothing becomes an oracle for guessing handles), and `logImpersonation`.
+  - `apps/admin/app/impersonate/route.ts`: verifies nothing; spends a row and mints a **30-minute** session.
+  - `apps/admin/app/impersonate/exit/route.ts` (new): explicit end, audited. ⚠️ `middleware.ts` exempts `/impersonate` by **exact match** and must keep doing so — a prefix would exempt the exit, which needs the session it is about to end in order to name the operator.
+  - `apps/admin/lib/auth.ts`: `Session.imp` (operator id + email + grant id) inside the SIGNED payload — the cookie holder can neither forge nor strip it; `signSession` takes an `expiresIn` (default `7d`).
+  - `apps/admin/lib/rbac.ts`: **the dual-identity record**, at the one choke point every mutating action passes. It records an AUTHORISATION, not an outcome ("memakai izin"), and **fails closed** — an operator write nobody can attribute must not happen.
+  - `apps/admin/app/(admin)/layout.tsx` + `components/admin/admin-chrome.tsx`: the impersonation strip and its exit link. The `billingBanner` prop is now `banners` — the strip is not a bill, and a prop whose name lies is how the next one gets tucked into it too.
+  - Docs: `AGENTS.md` (the rule, in the Super Admin section), `SECURITY.md` (**N1 closed**), `REQUIREMENTS.md` (SEC-10 → MET), `SCHEMA.md`, `CODE_MAP.md`, `STATUS.md` (derived counts: 81 tables · 99 migrations · head `0098` · RLS 53/54).
+- **Verification Executed — mutation FIRST, in every case:**
+
+  | # | mutation | test that went red |
+  |---|---|---|
+  | 1 | drop `consumed_at is null` from the claim | REPLAY **and** REPLAY under CONCURRENCY (2 tests) |
+  | 2 | drop `expires_at > now()` | EXPIRY |
+  | 3 | drop the operator role equality | operator DEMOTED |
+  | 4 | drop the operator password revocation | operator's PASSWORD ROTATED |
+  | 5 | role from the grant instead of `store_users` | merchant's ROLE is read from the row |
+  | 6 | drop `imp` from the minted session | SUCCESS (dual identity) |
+  | 7 | `signSession` ignores `expiresIn` | the 30-minute bound |
+  | 8 | membership re-read stops bailing | MEMBERSHIP removed |
+  | 9 | no audit at the gate | 3 of the 4 dual-identity tests |
+  | 10 | operator named, merchant dropped | records both identities |
+  | 11 | swallow the audit failure (fail OPEN) | FAILS CLOSED |
+  | 12 | audit every session, impersonated or not | a merchant's OWN session writes nothing |
+
+  Restored ⇒ green in every case. The two source claims (`jwtVerify` gone from the route, `signImpersonation` gone from super-admin) carry their own **mutation self-check** inside the test file, so they can never be green for want of matching anything.
+- **Gates (exit codes read directly, never through a pipe):**
+  - `TEST_DB_REQUIRED=1 npm test` → **0 — 109 files, 834 tests passed** (`astro check`: storefront 0 errors / 0 warnings / 14 hints, landing 0/0/0).
+  - `npx tsc -p apps/admin --noEmit` → **0** · `npx tsc -p apps/super-admin --noEmit` → **0** · `npx tsc -p packages/db --noEmit` → **0**.
+  - `npm run lint -w @tokophi/super-admin` → **0 errors** (3 warnings) · `npm run lint -w @tokophi/admin` → **0 errors** (23 warnings). ⚠️ The admin baseline is **23, not the 21 recorded earlier**: `apps/admin/lib/actions/shipment-payment-guard.test.ts` on clean `origin/main` imports `afterAll`/`beforeAll` and uses neither. Verified against `git show origin/main:` — none of the 23 is in a file this task touches.
+  - `npm run verify-migrations -w @tokophi/db` → **0** — 99 entries, head `0098_impersonation_grants`, stamps increasing, idx unique **and sequential**.
+  - `npm run verify-rls` (equivalent, run against the throwaway DB) → **0 — 53/54**, `platform_activity` still the only exception, so the new table is genuinely policed rather than exempted.
+- **Measured, not asserted:**
+  - **RLS with no policy is the strict setting:** with one grant row present, the owner connection sees **1** and `tokophi_app` **with the correct `app.store_id` GUC** sees **0**.
+  - **The migration is idempotent:** every statement in `0098` re-executed against a database that already had it — no error.
+  - **The whole chain applies in order from scratch:** the throwaway database was **dropped and recreated** after the rebase, so main's `0097` (stamp 1787297930663) and this `0098` (stamp **1787298476422**, 13 digits, above it) both ran in sequence. That drop was not hygiene — before it, the older database already held `0098` at a higher stamp, which is precisely the state in which drizzle **skips** `0097` while printing "migrations applied successfully".
+- 🔴 **A NUMBERING DECISION THAT DEPARTS FROM THE BRIEF, WITH THE MEASUREMENT BEHIND IT.** This migration was assigned **0099**, leaving **0098** reserved for Task 4.7. Task 4.7 has since merged (**#298**) using `pg_advisory_xact_lock` and **no migration at all**, and `0097` (#297) is on `main`. Measured before renumbering: no `0098` exists in `origin/main`, in **any** remote branch (every branch's journal scanned), or in any worktree on this machine. A reserved-but-never-filled gap is not free — `doc-counts.test.ts` asserts `Number(head) === entries - 1`, so a hole at 98 leaves that guard **permanently red on `main`**, and closing it later would mean renumbering an already-applied migration. Numbered **0098**; the gap is gone and every gate is green. If 0098 turns out to be genuinely held elsewhere, moving this one back up is a rename plus one journal entry plus four doc sentences, and `verify-migrations` catches the duplicate at merge either way.
+- **Not done here:** no browser pass. The screens involved are a server-rendered strip and two redirects, and the claims that matter — spend-once, replay, tamper, expiry, revocation, dual identity — are transaction boundaries a browser cannot exercise. Driving the full operator flow end to end needs both apps up and a real operator login, and is the natural first thing to do on the deploy.
+- **Completed Task:** Stage 4 Task 4.11.
+
 
 ### [2026-08-21] — Stage 4 Task 4.8: One Checkout Session Buys At Most Once, And The Database Says So
 
