@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 
 // 🔴 TWO UNALIASED `exists (…)` EXPRESSIONS IN ONE SELECT ARE ONE COLUMN.

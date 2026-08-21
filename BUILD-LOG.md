@@ -65,6 +65,15 @@
 - **Completed Task:** Stage 4 Task 4.11.
 
 
+### [2026-08-21] — Correction: The Two New Admin Lint Warnings Were Mine, Not Another Stream's
+
+- ⚠️ **THIS CORRECTS THE TASK 4.8 ENTRY BELOW AND ITS COMMIT MESSAGE.** Both recorded that the admin lint baseline had moved 21 → 23 warnings because of `apps/admin/app/api/cron/order-expiry/route.test.ts`, "another stream's file, already on main". That attribution was wrong. The two warnings are unused `afterAll` / `beforeAll` imports in **`apps/admin/lib/actions/shipment-payment-guard.test.ts` — a file I wrote in #293** and then rewrote into a source guard, leaving the imports behind. Removing them takes the baseline back to **21**, which is the measurement that settles it.
+- **How the mistake was made, since it is a repeatable one:** the lint output was searched for the *shape* of a new warning and the first file matching it was named, without checking whether that file was in my own diff. `git diff --name-only origin/main` would have answered in one command. Naming the wrong owner is worse than naming none: it hands somebody else a defect they did not create and closes the question for the next reader.
+- **It was found by a parallel agent** gating Task 4.11, which reported the baseline as 23 and named the real file. Two independent measurements disagreeing is exactly what the second one is for.
+- **Files Created / Modified:** `apps/admin/lib/actions/shipment-payment-guard.test.ts` — two unused imports removed.
+- **Verification Executed:** `npm run lint -w @tokophi/admin` → **0 errors, 21 warnings** (from 23). The guard's own suite → **3 passed**, so nothing it asserts depended on those imports.
+- **Completed Task:** none — a correction.
+
 ### [2026-08-21] — Stage 4 Task 4.8: One Checkout Session Buys At Most Once, And The Database Says So
 
 - **Scope:** `/api/public/order` already refused a resubmitted checkout — with a **preflight read** (`checkout_sessions.recovered_order_id` joined to `orders`) taken *before* the write transaction opens. Two submissions racing both read "no order yet", both pass, and both write. A read is advisory; only a constraint is a rule.
