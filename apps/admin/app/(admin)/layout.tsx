@@ -53,6 +53,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // handed us their details thirty seconds earlier. Amber, not red; an apology with a timeframe,
   // not an accusation; and no "hubungi kami", because there is nothing for them to do yet.
   const pendingApproval = !!bill?.pendingApproval;
+  // ⚠️ AN IMPERSONATED PANEL MUST LOOK LIKE ONE (Task 4.11 / SEC-10). Everything below the topbar is
+  // the merchant's own shop, rendered exactly as they see it — which is the point of impersonation
+  // and also how an operator forgets which tab they are in and edits a live store believing it is a
+  // demo. It names the merchant AND the operator (the same pair every gated write now records), and
+  // it carries the ONLY way out that is not "wait 30 minutes": `/impersonate/exit`, which deletes
+  // the cookie. Slate, not amber or red — nothing is wrong; this is a state, not a warning.
+  const impersonationBanner = session.imp && (
+    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-slate-800 px-4 py-2 text-center text-sm font-medium text-white">
+      <span>
+        Mode Super Admin — kamu membuka Dashboard Seller <strong>{storeName ?? session.email}</strong> sebagai{" "}
+        {session.email}. Operator: {session.imp.operatorEmail}.
+      </span>
+      <a href="/impersonate/exit" className="underline underline-offset-2 hover:no-underline">
+        Keluar dari mode ini
+      </a>
+    </div>
+  );
   const billingBanner = bill && (operatorSuspended || bill.status === "past_due" || bill.status === "suspended") && (
     <Link
       href={operatorSuspended ? "/bantuan" : "/akun/langganan"}
@@ -93,7 +110,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               navCounts={navCounts}
             />
           }
-          billingBanner={billingBanner}
+          banners={
+            <>
+              {impersonationBanner}
+              {billingBanner}
+            </>
+          }
         >
           {children}
         </AdminChrome>

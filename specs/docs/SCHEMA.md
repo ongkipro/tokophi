@@ -22,14 +22,14 @@
 
 | Fact | Value | How it was checked |
 |---|---|---|
-| Tables (`pgTable(` in `schema.ts`) | **80** | `grep -c 'pgTable(' packages/db/src/schema.ts` — dihitung dari KODE, bukan dari container |
-| Tabel ber-`store_id` | **53** | keluaran `npm run verify-rls -w @tokophi/db` |
-| Di antaranya ber-RLS | **52** | keluaran verifikator yang sama |
+| Tables (`pgTable(` in `schema.ts`) | **81** | `grep -c 'pgTable(' packages/db/src/schema.ts` — dihitung dari KODE, bukan dari container |
+| Tabel ber-`store_id` | **54** | keluaran `npm run verify-rls -w @tokophi/db` |
+| Di antaranya ber-RLS | **53** | keluaran verifikator yang sama |
 | `store_id` tanpa RLS | **1** — `platform_activity` | disengaja: log audit platform, lintas tenant |
 | Tabel anak tanpa `store_id` & tanpa RLS | **12**, semuanya sudah ditinjau | verifikator mencetak daftarnya; `AGENTS.md` memuat aturannya |
-| Migrasi | **98** (`0000` … `0097`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0094_magical_salo` menambah snapshot order finance, booking history, dan ledger reconciliation; `0095_payment_request_idempotency` mengunci permintaan tagihan agar idempoten; `0096_order_line_items_order_idx` memasang index yang selama ini hilang di setiap database; `0097_orders_checkout_session` menjadikan "satu sesi checkout = paling banyak satu pesanan" aturan database, bukan hasil pembacaan |
+| Migrasi | **99** (`0000` … `0098`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0095_payment_request_idempotency` mengunci permintaan tagihan agar idempoten; `0096_order_line_items_order_idx` memasang index yang selama ini hilang di setiap database; `0097_orders_checkout_session` membuat satu checkout hanya bisa membeli sekali; `0098_impersonation_grants` menambah pertukaran sekali-pakai untuk impersonasi (RLS aktif TANPA policy — baris control-plane, hanya jalur owner) |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
-| Enums | **45** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
+| Enums | **46** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |
 | Naming | snake_case; PKs are `uuid default gen_random_uuid()` | catalog |
 
@@ -453,6 +453,7 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 |---|---:|---:|:--:|:--:|
 | `platform_admins` | 6 | 1 | — | — |
 | `platform_activity` | 5 | 4 | **yes** | **— (deliberate)** |
+| `impersonation_grants` (0098) | 10 | 0 | **yes** | **yes — dan TANPA policy, disengaja** |
 | `platform_cod` | 5 | 1 | — | — |
 | `platform_couriers` | 4 | 12 | — | — |
 | `platform_payment_channels` | 6 | 15 | — | — |
@@ -465,6 +466,7 @@ Two different things, deliberately two different table sets (CHAT_SPEC Decision 
 
 | Table | What it holds |
 |---|---|
+| `impersonation_grants` | Pertukaran **sekali pakai** untuk "Buka Dashboard Seller" (0098). Menyimpan `sha256(handle)` — bukan handle-nya. Dihabiskan oleh SATU `update … set consumed_at = now() where token_hash = $1 and consumed_at is null and expires_at > now()`: replay, tamper, dan kedaluwarsa sama-sama mencocokkan **nol baris**. RLS **aktif tanpa policy** — ini baris control-plane, ditulis super-admin dan dibaca jalur auth admin *sebelum* ada sesi, keduanya lewat koneksi owner; `tokophi_app` melihat 0 baris (diukur). Policy ber-`app.store_id` justru lebih LEMAH dan tampak seperti perlindungan |
 | `platform_cod` | `enabled`, `max_amount_idr` (seeded Rp2.000.000), `allowed_provinces` (jsonb, seeded 6), `fee_pct` 🔴 **unread** |
 | `platform_couriers` | `courier`, `services` (jsonb), `enabled`. 12 rows: `anteraja jne jnt lion ninja sap sicepat spx` enabled · `idx jtcargo pos tiki` disabled |
 | `platform_payout` | single row: `release_on` (`'selesai'`), `min_payout_idr` (50.000), `auto_approve` 🔴 **unread** |

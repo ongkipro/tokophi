@@ -268,7 +268,7 @@ as N29); `apps/super-admin/lib/no-fixed-password.test.ts` keeps the stricter loc
 there must be exactly `pw`, and `pw` must come from the mint.
 
 ## Database (local Postgres — `@tokophi/db`)
-Local backend fully wired behind the data layer (all 4 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **80 tables · 98 migrations `0000`–`0097`**, counted from `packages/db/src/schema.ts` and `drizzle/meta/_journal.json` on 2026-08-21, snake_case, money = bigint IDR). **MULTI-tenant** — the dev DB carries 7 stores and the whole `platformGate` control plane reaches every one of them. (ADR 0008 called it a single-tenant MVP; that stopped being true long ago and this line said otherwise for months.) Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **52 of the 53 store-scoped tables** (measured 2026-08-12 by the verifier itself) AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **52/53 as of 2026-08-12, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036. ⚠️ **THIS PARAGRAPH HAS NOW BEEN WRONG TWICE, AND ONCE IT MOCKED ITS OWN STALE FIGURE WHILE THE STALE FIGURE SAT TEN LINES BELOW IT** (it said 45/46 while `SECURITY.md` already said 51/52, and the sentence saying "this doc claimed 36/39" shared a file with a live `36/39`). The count is DERIVED and moves with every migration: **run `npm run verify-rls -w @tokophi/db` and believe its output, not this sentence.** ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
+Local backend fully wired behind the data layer (all 4 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **81 tables · 99 migrations `0000`–`0098`**, counted from `packages/db/src/schema.ts` and `drizzle/meta/_journal.json` on 2026-08-21, snake_case, money = bigint IDR). **MULTI-tenant** — the dev DB carries 7 stores and the whole `platformGate` control plane reaches every one of them. (ADR 0008 called it a single-tenant MVP; that stopped being true long ago and this line said otherwise for months.) Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **53 of the 54 store-scoped tables** (measured 2026-08-21 by the verifier itself) AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **53/54 as of 2026-08-21, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036. ⚠️ **THIS PARAGRAPH HAS NOW BEEN WRONG TWICE, AND ONCE IT MOCKED ITS OWN STALE FIGURE WHILE THE STALE FIGURE SAT TEN LINES BELOW IT** (it said 45/46 while `SECURITY.md` already said 51/52, and the sentence saying "this doc claimed 36/39" shared a file with a live `36/39`). The count is DERIVED and moves with every migration: **run `npm run verify-rls -w @tokophi/db` and believe its output, not this sentence.** ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @tokophi/db     # apply versioned migrations (canonical)
@@ -339,6 +339,42 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
 >   re-mints this tab's cookie with `iat` one second past the stamp.
 >   **Resetting SOMEBODY ELSE's operator password still does not exist** — `NEXT.md` N47.
 
+- 🔴 **IMPERSONATION IS A ONE-TIME EXCHANGE NOW, NOT A TOKEN — AND NOTHING REUSABLE MAY EVER GO BACK
+  IN THAT URL** (Task 4.11 / SEC-10, 2026-08-21; closes `SECURITY.md` N1). "Buka Dashboard Seller"
+  used to mint a session-shaped JWT and put it in the query string. It was signed, audience-pinned
+  and expired in 2 minutes — and **reusable for every one of those 120 seconds**, because a JWT is
+  *verified*, never *spent*. A URL is the worst carrier there is for a bearer credential: browser
+  history, the next request's `Referer`, a reverse-proxy access log, a screen share, a pasted support
+  ticket. There was nowhere to record that the link had been used, so replay was the design, not a bug.
+  - **The handle is opaque**: 256 bits of `randomBytes`, no claims at all. The facts live in
+    `impersonation_grants` (migration **0098**), which stores only `sha256(handle)` — a dump of that
+    table redeems nothing.
+  - **One statement is the whole security model**: `update impersonation_grants set consumed_at =
+    now() where token_hash = $1 and consumed_at is null and expires_at > now() returning …`. One row
+    ⇒ the exchange happened, exactly once. Zero rows ⇒ unknown, spent, or expired — and Postgres's
+    row lock means two concurrent redemptions cannot both win. **Do not "simplify" that into a read
+    followed by a write**; that is the same race `receivePurchaseOrder` already paid for.
+  - **The grant is a permission to exchange, never a cached fact.** Membership, the merchant's role,
+    the operator's row, the operator's rank and the operator's `password_changed_at` are ALL re-read
+    at consume time — the control plane's standing rule, extended across the gap between minting a
+    link and clicking it. ⚠️ The operator check is `role === grant.operator_role`, deliberately NOT a
+    rank comparison: `platform-rank.ts` must stay ONE copy and `apps/admin` may not import it.
+  - **The merchant session it mints is BOUNDED — 30 minutes, not 7 days** — and carries a signed
+    `imp` (operator id + email + grant id). ⚠️ The cookie `maxAge` and the JWT `exp` are derived from
+    the SAME constant (`@tokophi/lib/impersonation`); splitting them lets one outlive the other.
+  - **Every gated write under impersonation names BOTH parties.** `requireCapability` — the one
+    choke point every mutating admin action passes — writes a `platform_activity` row against the
+    merchant's store naming the operator and the capability, and **fails closed** if it cannot. An
+    operator write nobody can attribute must not happen. It records an *authorisation*, not an
+    outcome, and the wording says so ("memakai izin").
+  - **Exit is explicit**: `/impersonate/exit` deletes the cookie and logs the end. ⚠️ `middleware.ts`
+    exempts `/impersonate` by **exact match** — a `startsWith` would exempt the exit too, and the
+    exit reads the session it is about to end in order to name the operator.
+  - Guards: `apps/admin/lib/impersonation.test.ts` (real Postgres: success · replay · concurrent
+    replay · tamper · expiry · demotion · deletion · password rotation · membership removal · the
+    30-minute bound; plus `codeOnly` claims that `jwtVerify` and `signImpersonation` stay gone) and
+    `apps/admin/lib/rbac-impersonation.test.ts` (dual identity, fail-closed, no noise for a merchant's
+    own session). Twelve mutations, twelve reds, recorded in `BUILD-LOG.md`.
 - **`platformGate(min)` is the first statement of every mutating action** (33 call sites over 32 exported
   actions), and the rank is
   `support` 1 < `admin` 2 < `owner` 3. The ladder lives in `platform-rank.ts` — a PURE module, no DB

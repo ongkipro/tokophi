@@ -2,6 +2,7 @@ import "server-only";
 import { getSession, type Session } from "@/lib/auth";
 import { can, type Capability } from "@/lib/rbac-policy";
 import { getBilling } from "@/lib/data/billing";
+import { logImpersonation } from "@/lib/impersonation";
 
 // Server-side RBAC guard. The role→capability matrix lives in the client-safe
 // lib/rbac-policy.ts (shared with the UI). This module adds the enforcement that
@@ -45,6 +46,32 @@ export async function requireCapability(cap: Capability, opts?: { allowSuspended
   if (!opts?.allowSuspended) {
     const bill = await getBilling();
     if (bill?.readOnly) throw new SuspendedError(bill.operatorSuspended ? bill.suspendedReason : undefined);
+  }
+  // 🔴 A WRITE MADE UNDER IMPERSONATION NAMES BOTH PARTIES (Task 4.11 / SEC-10). Before this, an
+  // operator who entered a merchant's panel became indistinguishable from the merchant: the audit
+  // trail ended at "Impersonate toko oleh …" and every subsequent change looked exactly like the
+  // owner's own work — on our screens and on theirs. `platform_activity` carries `store_id` (the
+  // merchant) and the line carries the operator, so a store's history can answer "who changed this,
+  // and were they us?".
+  //
+  // ⚠️ THIS IS THE ONLY CHOKE POINT THERE IS, so it is the right one: every mutating server action
+  // in `apps/admin` opens with `requireCapability` (AGENTS.md — "this is the security boundary"),
+  // and there is nowhere else that sees ALL of them. Patch the class, not the instance.
+  //
+  // ⚠️ IT RECORDS AN AUTHORISATION, NOT AN OUTCOME, and the wording says so ("memakai izin"). The
+  // write it precedes may still fail a validation or roll back; claiming here that data changed
+  // would be the `markLabelsPrinted` mistake (report what you WROTE) pointed at the audit log.
+  //
+  // ⚠️ IT FAILS CLOSED. If the audit insert throws, the action throws with it and no write happens.
+  // An unattributable operator write is precisely the state this requirement exists to forbid, and
+  // the cost of the strict direction is one failed click during a database outage in which
+  // everything else is failing anyway. Only impersonated sessions pay any of this: for a merchant's
+  // own login the branch is one `if` on a field that is not there.
+  if (session.imp) {
+    await logImpersonation(
+      session.storeId,
+      `Operator ${session.imp.operatorEmail} memakai izin "${cap}" di panel Seller sebagai ${session.email} (impersonate)`,
+    );
   }
   return session;
 }

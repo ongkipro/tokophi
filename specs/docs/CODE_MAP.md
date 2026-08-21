@@ -50,7 +50,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**80 tables**), `migrations/` (**0000–0097**, 98 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**81 tables**), `migrations/` (**0000–0098**, 99 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
@@ -195,6 +195,6 @@ silent outage) · `apps/storefront/src/lib/product-feed.ts` + `src/pages/feed/{g
 
 - **Live:** Vultr Singapore (`45.76.146.40`) + **Coolify v4** (Docker Compose build pack). Domains `admin.`/`super.`/`toko.45.76.146.40.sslip.io`. Deploy = push `main` → Coolify (or API `POST /api/v1/deploy?uuid=…`).
 - **Compose** (`docker-compose.coolify.yml`): `postgres` (volume `tokophi-pgdata`) + one-off `migrate` (drizzle migrate + **idempotent seed**, `SEED_FORCE=1` to force) + `admin` (volume `tokophi-uploads`) + `super-admin` + `storefront` (builds at start) + `cron` (daily billing) + `backup` (daily `pg_dump -Fc` → `tokophi-backups` volume, keeps last 7).
-- **Migrations:** `packages/db/drizzle/` — current head **0097**. `npm run generate` after schema edits; migrate runs on deploy. ⚠️ **Write every migration idempotent** (`add column if not exists`, `create index if not exists`, `do $$ … exception when duplicate_object then null; end $$` for enums): drizzle applies the whole pending batch in ONE transaction, so a single "already exists" rolls back every migration behind it — on 2026-07-30 that left 16 unapplied on the shared dev DB and printed nothing anyone noticed.
+- **Migrations:** `packages/db/drizzle/` — current head **0098**. `npm run generate` after schema edits; migrate runs on deploy. ⚠️ **Write every migration idempotent** (`add column if not exists`, `create index if not exists`, `do $$ … exception when duplicate_object then null; end $$` for enums): drizzle applies the whole pending batch in ONE transaction, so a single "already exists" rolls back every migration behind it — on 2026-07-30 that left 16 unapplied on the shared dev DB and printed nothing anyone noticed.
 - **Env** (Coolify): `DATABASE_URL`, `AUTH_SECRET`, `KIRIMINAJA_*`, `AUTOLARIS_*`, `CRON_SECRET`, `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`.
 - **Deferred → prod:** uploads → MinIO/S3 (currently container volume, admin-served — storefront can't yet show *uploaded* product images, only seeded `/products/*.webp`) · email/WA comms (tickets/reminders audit-only now) · HTTPS + custom domain (tokophi.com in Cloudflare, DNS not pointed) · Hetzner migration (host-agnostic).

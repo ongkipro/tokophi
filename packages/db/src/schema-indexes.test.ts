@@ -85,6 +85,8 @@ const INDEX_CENSUS: Record<string, Census> = {
   // no way to express a partial unique index, so declaring it there would produce a DIFFERENT,
   // total index that would reject every second session-less order.
   orders_one_per_checkout_session: "sql-only: partial unique index, not expressible in schema.ts",
+  impersonation_grants_token_hash_key: "drizzle",
+  impersonation_grants_store_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:
