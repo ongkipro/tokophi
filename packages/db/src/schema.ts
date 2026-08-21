@@ -929,6 +929,12 @@ export const orders = pgTable("orders", {
   // The KiriminAja district the ongkir was quoted against and the parcel is booked to. The
   // authoritative destination — a typed city name is a claim, a district id is what the courier acts on.
   shipDistrictId: integer(),
+  // Task 4.8 — the storefront checkout session this order came from, and the DATABASE's guarantee
+  // that a session buys at most once: `orders_one_per_checkout_session`, a PARTIAL unique index on
+  // (store_id, checkout_session_id) (migration 0097). NULL for an order that did not come from a
+  // session, and NULLs do not collide. TEXT, not uuid: this is `checkout_sessions.session_id`, the
+  // string the storefront generates and the API receives — not that row's primary key.
+  checkoutSessionId: text(),
 
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),

@@ -158,6 +158,23 @@ class VoucherExhausted extends Error {
 // saw a connection error, pressed Bayar again, and bought the same cart twice with stock decremented
 // twice. `/api/public/ongkir` has wrapped its handler for exactly this reason since it shipped; this
 // one — the one that writes — did not.
+/**
+ * A Postgres unique violation (SQLSTATE 23505) raised by ONE named index.
+ *
+ * postgres.js surfaces the driver error as a plain object with `code` and `constraint_name`; drizzle
+ * re-throws it unwrapped, and a transaction failure can arrive wrapped in a `cause` chain. Both
+ * shapes are checked, and the NAME is required — matching on 23505 alone would swallow every other
+ * uniqueness rule in this transaction (`orders.number`, the ledger's partial indexes) and report a
+ * genuine bug as a duplicate checkout.
+ */
+function isUniqueViolation(err: unknown, constraint: string): boolean {
+  for (let e: unknown = err, hops = 0; e && hops < 4; e = (e as { cause?: unknown }).cause, hops++) {
+    const candidate = e as { code?: unknown; constraint_name?: unknown };
+    if (candidate.code === "23505" && candidate.constraint_name === constraint) return true;
+  }
+  return false;
+}
+
 export async function POST(req: Request) {
   try {
     return await handle(req);
@@ -973,6 +990,19 @@ async function handle(req: Request) {
           shipAddress: alamat,
           shipPostcode: kodepos,
           shipDistrictId: destId,
+
+          // 🔴 THE IDEMPOTENCY CLAIM (Task 4.8). This column carries a PARTIAL UNIQUE INDEX on
+          // (store_id, checkout_session_id) — `orders_one_per_checkout_session`, migration 0097 —
+          // so a second submission of the SAME checkout cannot insert, whatever the preflight read
+          // above happened to see. That read is taken before this transaction opens, so two racing
+          // submissions (a double tap, a retried request, a connection the browser retries for the
+          // shopper) both saw "no order yet" and both wrote: the buyer billed twice, the stock
+          // decremented twice. The read is advisory; this is the rule.
+          //
+          // `|| null` and not `?? null`: an empty string means the request carried no session at
+          // all, and every such order must be free to coexist. The index is partial for exactly
+          // that reason — NULLs do not collide, empty strings would.
+          checkoutSessionId: checkoutSessionId || null,
         })
         .returning({ id: schema.orders.id, number: schema.orders.number });
 
@@ -1099,6 +1129,47 @@ async function handle(req: Request) {
         `Kuota voucher "${err.code}" baru saja habis. Hapus kodenya untuk melanjutkan.`,
         "discount",
         409,
+      );
+    }
+    // 🔴 THE CONSTRAINT SPOKE: this checkout already bought (Task 4.8). The whole transaction rolled
+    // back — no order, no line items, no inventory decrement, no voucher redemption — so the loser
+    // of the race writes NOTHING and we hand back the WINNER's order number. That is what makes the
+    // response identity stable: whichever of two racing submissions the database picks, both callers
+    // read the same order back, and a retry after a process restart resolves to that same order
+    // instead of creating a second one.
+    //
+    // Narrow on purpose — this index name and no other. A different unique violation is a real bug
+    // and must keep reaching the 500 below rather than being dressed up as a duplicate checkout.
+    if (
+      checkoutSessionId &&
+      isUniqueViolation(err, "orders_one_per_checkout_session")
+    ) {
+      const [winner] = await db
+        .select({ number: schema.orders.number })
+        .from(schema.orders)
+        .where(
+          and(
+            eq(schema.orders.storeId, store.id),
+            eq(schema.orders.checkoutSessionId, checkoutSessionId),
+          ),
+        )
+        .limit(1);
+      if (winner) {
+        return NextResponse.json(
+          {
+            ok: false,
+            orderCreated: true,
+            orderNumber: winner.number,
+            error: `Pesanan ${winner.number} sudah tercatat. Jangan kirim ulang checkout ini.`,
+            code: "order_already_created",
+          },
+          { status: 409, headers: CORS },
+        );
+      }
+      // The row that won the race is not readable here. That should be impossible — the constraint
+      // only fires on a COMMITTED row — so say so rather than inventing a number.
+      console.error(
+        "[public/order] unique violation on orders_one_per_checkout_session but no order found for the session",
       );
     }
     throw err; // → the wrapper above, which answers WITH CORS instead of a bare Next 500

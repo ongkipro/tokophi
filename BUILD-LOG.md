@@ -9,6 +9,26 @@
 ## Log History & Execution Entries
 
 
+### [2026-08-21] — Stage 4 Task 4.8: One Checkout Session Buys At Most Once, And The Database Says So
+
+- **Scope:** `/api/public/order` already refused a resubmitted checkout — with a **preflight read** (`checkout_sessions.recovered_order_id` joined to `orders`) taken *before* the write transaction opens. Two submissions racing both read "no order yet", both pass, and both write. A read is advisory; only a constraint is a rule.
+- **The defect, demonstrated rather than argued:** with the claim removed, two concurrent `POST`s through the real handler produced **two orders** — `PHI-298131807P8V` and `PHI-298131828UVF` — for one checkout. The shopper is billed twice and the stock is decremented twice. That is not a theoretical race: a double tap, a retried request, or a connection the browser retries on the shopper's behalf all produce it.
+- **Files Created / Modified:**
+  - `packages/db/drizzle/0097_orders_checkout_session.sql` (new) + journal entry: `orders.checkout_session_id` (TEXT — the storefront's `checkout_sessions.session_id` string, not that row's uuid) and **`orders_one_per_checkout_session`**, a PARTIAL unique index on `(store_id, checkout_session_id)`. Partial on purpose: the column is NULL for every order that did not come from a session, and NULLs must not collide. Idempotent (`add column if not exists`, `create unique index if not exists`).
+  - `packages/db/src/schema.ts`: the column declared beside the 0042 address snapshot.
+  - `apps/admin/app/api/public/order/route.ts`: the claim written **inside** the order transaction, plus a conflict replay — on `23505` for that index **and no other**, the whole transaction has rolled back (no order, no line items, no inventory decrement, no voucher redemption) and the loser is handed the **winner's** order number. That is what makes the response identity stable: both callers read the same order back, and a retry after a process restart resolves to it instead of creating a second one. `isUniqueViolation()` walks the `cause` chain and requires the constraint NAME — matching on `23505` alone would dress a genuine bug (`orders.number`, the ledger's partial indexes) up as a duplicate checkout.
+  - `apps/admin/app/api/public/order/route.test.ts`: two suites — concurrent submission (one order, one decrement, one identity, exactly one `order_already_created`) and a later replay.
+  - `AGENTS.md`, `specs/docs/{SCHEMA,CODE_MAP,STATUS}.md`: migration count 97 → **98**, head → **0097**.
+  - `packages/db/src/schema-indexes.test.ts`: the new index classified `sql-only`, with the reason — drizzle's schema builder cannot express a PARTIAL unique index, and declaring it there would produce a different, TOTAL index that would reject every second session-less order.
+- **Verification Executed:**
+  - **Mutation proof first:** with `checkoutSessionId` removed from the insert, the concurrency test fails with both order numbers printed. Restored → 6/6.
+  - ⚠️ **Two of this repo's own guards caught this change and were right to.** `doc-counts` demanded the four documents publish the new numbers; `schema-indexes` refused an unclassified index. Both were strengthened in #279 for exactly this, and both did their job on the first change that came after.
+  - ⚠️ **`date +%s%3N` returns NANOSECONDS on this machine** (19 digits, measured again here) — the trap #279/#31 exist for. The stamp was computed in Python and asserted to be 13 digits and strictly greater than main's newest (`1787135123807`), then `verify-migrations` re-checked the whole journal.
+  - `TEST_DB_REQUIRED=1 npm test` → **105 files and 802 tests passed**. `tsc --noEmit -p apps/admin` → **0**. `npm run lint -w @tokophi/admin` → **0 errors** (23 warnings — the baseline moved 21 → 23 from `api/cron/order-expiry/route.test.ts`, another stream's file, already on main).
+  - ⚠️ **The migration has NOT been applied to the shared dev database**, per this file's own rule about not migrating an unmerged branch into the shared container. It was exercised against the derived `_test` database by the suite.
+  - ⚠️ **Not clicked in a browser.** The path is a public API driven by the storefront; the handler itself is exercised end to end above.
+- **Completed Task:** Stage 4 Task 4.8.
+
 ### [2026-08-20] — CI Executed By Hand For The First Time: The Workflow Was Red By Construction, And The Seed Step Was A No-Op
 
 - **Why by hand:** GitHub Actions has not run a single job since the account's billing failed. Every run since then completes in 3–4 s with the annotation *"The job was not started because recent account payments have failed or your spending limit needs to be increased."* Verified again 2026-08-20 on run `32330156109`. **That half is an owner action — Settings → Billing & plans — and nothing in this repository can substitute for it.** What CAN be done is the other half of the task: `#277` wired seven steps into this workflow that have **never once executed**.
