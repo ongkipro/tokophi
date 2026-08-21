@@ -65,6 +65,23 @@
 - **Completed Task:** Stage 4 Task 4.11.
 
 
+### [2026-08-21] — 🔴🔴 EIGHTEEN DAYS OF REJECTED ORDERS: The Ad Funnel Never Sent A Postcode
+
+- **The outage:** every order submitted from `/promo/<handle>` and `/lp/<slug>` has been **refused since 2026-08-03**, writing nothing. `b5f9ded` made `kodepos` required at `/api/public/order` that day and patched **only** `checkout.astro`; `OrderFunnel.astro` kept posting `address: {alamat, kota, provinsi}`. These are the pages paid traffic lands on.
+- **Measured, not reasoned:** `postcodeError(undefined)` → **"Kode pos wajib diisi."**, and `route.ts:362` collects it into `errs` where the first non-null becomes `bad(...)` — a 400 before any write. Confirmed by reading the funnel's own payload (`grep` over its submit block: `alamat`, `kota`, `provinsi`, and nothing else) and by running the validator on the exact value the funnel sends.
+- **Worse than a refusal — a SILENT one.** The funnel's `showErr` targets `[data-err="<field>"]`, and no such element existed for `kodepos`. So the shopper filled the whole form, pressed the button, and **nothing happened, with no message anywhere**. Found by a parallel audit agent, which correctly left it alone as another territory's browser-visible change.
+- **Files Created / Modified:**
+  - `apps/storefront/src/components/OrderFunnel.astro`: a **Kode pos** field — `required`, **always editable**, with its own error slot; auto-filled ONLY when the district resolves to exactly one postcode (several → the shopper picks, none → the shopper types, and the hint says which); a stale-response guard so a district the shopper has left cannot leave its postcode behind; validation before submit (presence + 5 digits, our sentence, not the browser's); and the value actually included in the posted `address`.
+  - ⚠️ **Never `readOnly`.** A readonly input is barred from constraint validation — `willValidate` is false and `valueMissing` never fires — so locking it once auto-filled would silently cancel `required`. That trap is already recorded for the cart checkout; it is written into this component too.
+  - `apps/storefront/src/lib/order-forms-post-kodepos.test.ts` (new): the guard for the CLASS. `checkout-kodepos.test.ts` beside it guards `checkout.astro` **by name** — which is exactly the blind spot that cost eighteen days. This one **derives** the forms: any storefront source that names the order API and builds an `address` object is one, so a form added tomorrow is covered the day it is written.
+- **Verification Executed:**
+  - ⚠️ **The guard failed three times before it was right, and each failure was the guard being wrong, not the code.** (1) It sliced from the FIRST `address :` in `checkout.astro`, which is a TYPE declaration hundreds of lines above the payload — reporting a correct file as broken. (2) It matched `data-err="kodepos"` literally, while the scanner joins tokens with single spaces (`data - err = "kodepos"`) — the whitespace-tolerance rule `test/source-code.ts` states and the draft ignored. (3) It demanded a STATIC error slot from both files, while `checkout.astro` creates one **dynamically** from the control's `name`; both mechanisms are legitimate and the guard now accepts either. **A guard that fails correct code gets weakened by the next person in a hurry** — so it was fixed rather than loosened.
+  - Self-proved: with the payload's `kodepos` stripped, the address assertion goes red.
+  - `TEST_DB_REQUIRED=1 npm test` → **111 files and 844 tests passed**; `astro check` storefront **120 files, 0 errors**, landing **29 files, 0 errors**.
+  - ⚠️ **Not clicked in a browser, and this is browser-visible** — the field, the cascade fill and the submit path all deserve a real click. Named rather than implied.
+  - ⚠️ **HELD LOCAL, not pushed.** The owner asked for remaining work to be built locally first.
+- **Completed Task:** none numbered — a production outage found by audit.
+
 ### [2026-08-21] — One Menu Handle Per Store, As A Rule Rather Than A Protocol (migration 0099)
 
 - **Scope:** Task 4.7 (#298) closed the duplicate-handle race by allocating under `pg_advisory_xact_lock(4707, hashtext(store_id))`, and deliberately shipped **without** a schema change — the migration on the abandoned branch was out of scope, not idempotent, and would have left a gap in the journal. That debt was recorded rather than forgotten; this closes it.
