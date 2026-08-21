@@ -21,7 +21,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { type NavMenu, type NavItem } from "@/lib/mock/store";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { saveMenu } from "@/lib/actions/menus";
+import { createMenu, saveMenu, type CreateMenuResult } from "@/lib/actions/menus";
 import { useCan } from "@/components/admin/permissions";
 import { TYPE_META } from "@/components/admin/navigasi/nav-meta";
 import {
@@ -377,22 +377,46 @@ function ItemRow({
 }
 
 // ---- create-menu dialog ----
-function CreateMenuDialog({ onCreate }: { onCreate: (title: string) => void }) {
+// The dialog closes ONLY after the server says the transaction committed. It used to close on the
+// click, which is what made a menu that was never written look saved until the next page load.
+function CreateMenuDialog({
+  onCreate,
+  disabled,
+}: {
+  onCreate: (title: string) => Promise<CreateMenuResult>;
+  disabled: boolean;
+}) {
   const [open, setOpen] = React.useState(false);
   const [title, setTitle] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, startCreating] = React.useTransition();
   const handle = title.trim() ? toHandle(title) : "";
+
+  function submit() {
+    startCreating(async () => {
+      setError(null);
+      const result = await onCreate(title.trim());
+      // Rejected: keep the dialog open with what they typed, so the retry costs one click.
+      if (!result.ok) setError(result.error);
+      else setOpen(false);
+    });
+  }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (pending) return;
         setOpen(o);
-        if (o) setTitle("");
+        if (o) {
+          setTitle("");
+          setError(null);
+        }
       }}
     >
       <DialogTrigger
         render={
-          <Button>
+          <Button disabled={disabled}>
             <Plus />
             Buat menu
           </Button>
@@ -412,6 +436,7 @@ function CreateMenuDialog({ onCreate }: { onCreate: (title: string) => void }) {
             placeholder="mis. Menu Promo"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            disabled={pending}
             autoFocus
           />
           {handle && (
@@ -419,17 +444,22 @@ function CreateMenuDialog({ onCreate }: { onCreate: (title: string) => void }) {
               Handle: <span className="font-mono">{handle}</span>
             </p>
           )}
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
         </div>
         <DialogFooter>
-          <DialogClose render={<Button variant="outline">Batal</Button>} />
-          <Button
-            disabled={!title.trim()}
-            onClick={() => {
-              onCreate(title.trim());
-              setOpen(false);
-            }}
-          >
-            Buat menu
+          <DialogClose
+            render={
+              <Button variant="outline" disabled={pending}>
+                Batal
+              </Button>
+            }
+          />
+          <Button disabled={!title.trim() || pending} onClick={submit}>
+            {pending ? "Membuat…" : "Buat menu"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -468,13 +498,19 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
     if (!activeMenu) return;
     if (!canWrite) { toast.error("Akses ditolak — peran Anda tidak bisa mengubah menu"); return; }
     startSaving(async () => {
-      try {
-        await saveMenu(activeMenu.handle, activeMenu.items);
-        toast.success("Menu disimpan");
-        router.refresh();
-      } catch {
-        toast.error("Gagal menyimpan menu");
+      const result = await saveMenu({
+        handle: activeMenu.handle,
+        title: activeMenu.title,
+        items: activeMenu.items,
+      });
+      // Read the result. A caller that awaits and ignores it reports success over a save that
+      // never happened — the failure this two-file rule exists to stop (AGENTS.md).
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
       }
+      toast.success("Menu disimpan");
+      router.refresh();
     });
   };
 
@@ -592,13 +628,24 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
     [activeMenu],
   );
 
-  function handleCreateMenu(title: string) {
-    const base = toHandle(title);
-    let handle = base;
-    let i = 2;
-    while (menus.some((m) => m.handle === handle)) handle = `${base}-${i++}`;
-    setMenus((prev) => [...prev, { handle, title, isDefault: false, items: [] }]);
-    setActiveHandle(handle);
+  // The handle is allocated by the SERVER, under a lock, against the store's committed rows — the
+  // browser's own list is only what this tab last loaded, so it cannot decide uniqueness.
+  async function handleCreateMenu(title: string): Promise<CreateMenuResult> {
+    if (!canWrite) {
+      return {
+        ok: false,
+        code: "save_failed",
+        error: "Akses ditolak — peran Anda tidak bisa membuat menu",
+      };
+    }
+
+    const result = await createMenu({ title, items: [] });
+    if (!result.ok) return result; // the dialog shows this inline and stays open
+    setMenus((prev) => [...prev, { handle: result.handle, title, isDefault: false, items: [] }]);
+    setActiveHandle(result.handle);
+    toast.success("Menu dibuat");
+    router.refresh();
+    return result;
   }
 
   return (
@@ -607,7 +654,7 @@ export function NavigasiClient({ menus: initialMenus }: { menus: NavMenu[] }) {
         title="Navigasi"
         desc="Atur menu yang tampil di header dan footer toko Anda."
       >
-        <CreateMenuDialog onCreate={handleCreateMenu} />
+        <CreateMenuDialog onCreate={handleCreateMenu} disabled={!canWrite} />
       </PageHeader>
 
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
