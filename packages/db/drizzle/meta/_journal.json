@@ -680,6 +680,13 @@
       "when": 1787135123807,
       "tag": "0096_order_line_items_order_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1787297930663,
+      "tag": "0097_orders_checkout_session",
+      "breakpoints": true
     }
   ]
 }

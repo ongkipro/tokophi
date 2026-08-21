@@ -8,7 +8,7 @@
 >
 > **Release blockers:** Stage 4 contains **13 P0 tasks** covering public-order availability, payment/order/receipt/subscription concurrency, false-success admin controls, reusable credentials, impersonation replay/provenance, and effective restricted database identity. The active queue totals **13 P0, 20 P1, and 9 P2**. No production deployment is approved until Stage 4 and the Stage 7 executable gate pass.
 >
-> **Data/security status:** the 97-entry migration journal is healthy through `0096_order_line_items_order_idx`, and the existing SQL/application RLS verifiers pass. Those results do not prove direct `inventory_levels` isolation or that deployed app surfaces actually connect as the restricted role; both remain explicit tasks.
+> **Data/security status:** the 98-entry migration journal is healthy through `0097_orders_checkout_session`, and the existing SQL/application RLS verifiers pass. Those results do not prove direct `inventory_levels` isolation or that deployed app surfaces actually connect as the restricted role; both remain explicit tasks.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >

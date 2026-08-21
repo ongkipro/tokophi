@@ -80,6 +80,11 @@ const INDEX_CENSUS: Record<string, Census> = {
   tracking_event_deliveries_order_idx: "drizzle",
   tracking_event_deliveries_store_idx: "drizzle",
   order_line_items_order_idx: "drizzle",
+  // Task 4.8. PARTIAL (`where checkout_session_id is not null`) — the whole point is that orders
+  // WITHOUT a checkout session must not collide with one another, and drizzle's schema builder has
+  // no way to express a partial unique index, so declaring it there would produce a DIFFERENT,
+  // total index that would reject every second session-less order.
+  orders_one_per_checkout_session: "sql-only: partial unique index, not expressible in schema.ts",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:

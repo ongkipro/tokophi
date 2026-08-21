@@ -471,6 +471,71 @@ suite("POST /api/public/order — public store availability", () => {
     },
   );
 
+  // ── Task 4.8: one checkout session buys at most once, and the DATABASE is what says so ────────
+  //
+  // The route already refused a resubmitted checkout — with a PREFLIGHT READ taken before the write
+  // transaction opens. Two submissions racing (a double tap, a retried request, a connection the
+  // browser retries on the shopper's behalf) both read "no order yet", both passed, and both wrote:
+  // the buyer billed twice and the stock decremented twice. `orders_one_per_checkout_session`
+  // (migration 0097) is the rule; the read is only an early exit.
+  //
+  // Fired through the REAL handler against real Postgres, concurrently, because the claim is about
+  // what two transactions do to each other — the one thing a sequential test cannot observe.
+  it("two concurrent submissions of one checkout produce ONE order and ONE decrement", async () => {
+    const key = "concurrent";
+    await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+    const fixture = fixtures[key]!;
+    const before = await mutationState(fixture.id);
+
+    const [a, b] = await Promise.all([
+      POST(orderRequest(key)),
+      POST(orderRequest(key)),
+    ]);
+    const [bodyA, bodyB] = await Promise.all([a.json(), b.json()]);
+    const after = await mutationState(fixture.id);
+
+    // ONE order, whichever request won.
+    expect(after.orders.length, JSON.stringify({ bodyA, bodyB })).toBe(1);
+    const created = after.orders[0]!;
+
+    // ONE decrement: the loser's whole transaction rolled back, so it moved no stock.
+    const stockBefore = Number(before.inventory[0]?.available ?? 0);
+    const stockAfter = Number(after.inventory[0]?.available ?? 0);
+    expect(stockBefore - stockAfter).toBe(1);
+
+    // A STABLE IDENTITY: both callers are told about the same order — one as the creator, the other
+    // as a duplicate — and neither is left holding a number that does not exist.
+    const numbers = [bodyA, bodyB]
+      .map((body) => (body as { orderNumber?: string }).orderNumber)
+      .filter(Boolean);
+    expect(numbers).toHaveLength(2);
+    expect(new Set(numbers).size, "both callers must name the same order").toBe(1);
+    expect(numbers[0]).toBe(created.number);
+
+    // Exactly one of the two is the duplicate answer, and it says so in a code the storefront can act on.
+    const codes = [bodyA, bodyB].map((body) => (body as { code?: string }).code);
+    expect(codes.filter((code) => code === "order_already_created")).toHaveLength(1);
+  }, 60_000);
+
+  // Retry after the fact — the same session submitted again, long after the first order committed.
+  // This is the path the preflight already covered; it must keep working, because the constraint
+  // makes the preflight redundant rather than wrong.
+  it("a later resubmission of the same checkout is refused with the same order", async () => {
+    const key = "replay";
+    await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+    const fixture = fixtures[key]!;
+
+    const first = await POST(orderRequest(key));
+    const firstBody = (await first.json()) as { orderNumber?: string };
+    const second = await POST(orderRequest(key));
+    const secondBody = (await second.json()) as { orderNumber?: string; code?: string };
+
+    const after = await mutationState(fixture.id);
+    expect(after.orders.length).toBe(1);
+    expect(secondBody.code).toBe("order_already_created");
+    expect(secondBody.orderNumber).toBe(firstBody.orderNumber);
+  }, 60_000);
+
   it("re-checks the store lock inside the transaction before the customer upsert", async () => {
     const fixture = fixtures.race!;
     const before = await mutationState(fixture.id);
