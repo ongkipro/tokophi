@@ -21,10 +21,22 @@ import { getShippingRates, createShipment, trackShipment } from "@/lib/actions/s
 // PARTIAL FAILURE IS THE NORMAL CASE and is reported per order, never summarised into "berhasil".
 // 8 booked / 2 failed must read as exactly that: the seller has to know WHICH two.
 
+// ⚠️ THE PER-RUN CEILING IS REPORTED, NEVER SILENT. `numbers.slice(0, 50)` was applied with nothing
+// carrying the remainder: the list page loads up to 200 rows (`lib/data/bulk-shipping.ts` `limit 200`)
+// and the button posts the WHOLE selection, so a seller selecting 150 orders got "50 pesanan
+// dibooking", `ok: true`, and 100 parcels that were never booked — named nowhere, in `done`, `failed`
+// or `awaitingResi`. That is the exact thing this file's own header forbids ("PARTIAL FAILURE IS THE
+// NORMAL CASE and is reported per order, never summarised into 'berhasil'"), and the exact thing
+// `markLabelsPrinted` below was fixed for.
+const BULK_MAX = 50;
+
 export type BulkResult = {
   ok: boolean;
   done: number;
   failed: { number: string; error: string }[];
+  /** Selected but NOT attempted, because the run hit `BULK_MAX`. Not a failure and not a success —
+   *  work still owed, which is why it has its own field and why `ok` goes false while it is non-empty. */
+  skipped: string[];
   /** Booked but the courier has not issued a waybill yet — the NORMAL post-booking state, not an
    *  error. KiriminAja returns awb:null until a courier accepts the pickup. */
   awaitingResi: string[];
@@ -42,9 +54,10 @@ export async function bulkGenerateResi(numbers: string[]): Promise<BulkResult> {
   const failed: { number: string; error: string }[] = [];
   const awaitingResi: string[] = [];
   const guessedDestination: { number: string; district: string }[] = [];
+  const skipped = numbers.slice(BULK_MAX);
   let done = 0;
 
-  for (const number of numbers.slice(0, 50)) {
+  for (const number of numbers.slice(0, BULK_MAX)) {
     try {
       // Re-quote per order: the price and the service list are live, and the order's own district +
       // real weight drive it. This is the same call the single-order screen makes.
@@ -92,7 +105,7 @@ export async function bulkGenerateResi(numbers: string[]): Promise<BulkResult> {
     }
   }
   revalidatePath("/pesanan/massal");
-  return { ok: failed.length === 0, done, failed, awaitingResi, guessedDestination };
+  return { ok: failed.length === 0 && skipped.length === 0, done, failed, skipped, awaitingResi, guessedDestination };
 }
 
 /** Ask KiriminAja for the waybill of every booked-but-resi-less order. trackShipment persists it. */
@@ -100,9 +113,10 @@ export async function bulkFetchResi(numbers: string[]): Promise<BulkResult> {
   await requireCapability("orders:write");
   const failed: { number: string; error: string }[] = [];
   const awaitingResi: string[] = [];
+  const skipped = numbers.slice(BULK_MAX);
   let done = 0;
 
-  for (const number of numbers.slice(0, 50)) {
+  for (const number of numbers.slice(0, BULK_MAX)) {
     try {
       const r = await trackShipment(number);
       if (r.awb) done++;
@@ -112,7 +126,7 @@ export async function bulkFetchResi(numbers: string[]): Promise<BulkResult> {
     }
   }
   revalidatePath("/pesanan/massal");
-  return { ok: failed.length === 0, done, failed, awaitingResi };
+  return { ok: failed.length === 0 && skipped.length === 0, done, failed, skipped, awaitingResi };
 }
 
 /** Stamp label_printed_at. Called AFTER the browser opened the print dialog.

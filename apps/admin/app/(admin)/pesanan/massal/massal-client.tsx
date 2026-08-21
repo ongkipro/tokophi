@@ -67,6 +67,8 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
   type BulkReport = {
     done: number;
     failed: { number: string; error: string }[];
+    /** Selected but never attempted — the run's own 50-order ceiling. Work still owed. */
+    skipped: string[];
     awaitingResi: string[];
     guessedDestination?: { number: string; district: string }[];
   };
@@ -75,6 +77,17 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
   // must read as exactly that: the seller has to know WHICH two.
   const report = (r: BulkReport, verb: string) => {
     if (r.done) toast.success(`${r.done} pesanan ${verb}.`);
+    // ⚠️ SAY WHAT WAS NOT ATTEMPTED. One run handles at most 50 orders while this list holds up to
+    // 200 and the button posts the whole selection, so selecting 150 used to read "50 pesanan
+    // dibooking" with nothing anywhere naming the other 100 — parcels that quietly never ship. The
+    // remainder stays selected, so pressing the button again continues the run.
+    if (r.skipped.length)
+      toast.warning(`${r.skipped.length} pesanan belum diproses`, {
+        description:
+          "Satu kali jalan menangani maksimal 50 pesanan supaya kurir tidak menolak permintaan di tengah jalan. " +
+          "Sisanya masih dipilih — tekan tombolnya lagi untuk melanjutkan.",
+        duration: 12000,
+      });
     if (r.awaitingResi.length)
       toast.info(`${r.awaitingResi.length} menunggu resi`, {
         // ⚠️ Say that it arrives ON ITS OWN. The poller (`cron-tracking`, every 15 min) fills

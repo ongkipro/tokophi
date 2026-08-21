@@ -8,6 +8,132 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-21 16:10 UTC] — Audit pass · MONEY-AUDIT-1 · Four shipped defects on the money/goods paths, each proved red before it was trusted green
+
+- **Executor:** Claude (Opus 5), worktree `uang`, branch `fix/audit-uang`.
+- **Scope audited (read end to end, not skimmed):** `apps/admin/lib/actions/**`, `apps/admin/lib/data/**`, `apps/admin/app/api/public/**`, `apps/admin/app/api/cron/**`, `packages/lib/src/{billing,payment-fees,kiriminaja,tracking-ids}.ts`, `apps/storefront/src/pages/api/**`. Everything below was **measured against real PostgreSQL**, on a throwaway database created and dropped by this pass — never the shared `tokophi`.
+
+#### ① `getBulkLabels` printed one label PER PAYMENT ROW, and half of them lied about the cash
+
+`lib/data/bulk-labels.ts` joined `left join payments p on p.order_id = o.id` — unordered, unlimited,
+against a table that routinely holds **more than one row per order** (a `gagal` VA beside the COD
+that was collected; a second bill raised after the first expired — the whole of
+`lib/data/order-payment.ts` exists because of that shape). The join **fans out**.
+
+Measured, one order with a failed `va` and a collected `cod`:
+
+```
+getBulkLabels join shape → rows: 2  [{"number":"INV-LBL-1","method":"va"},{"number":"INV-LBL-1","method":"cod"}]
+latestPaymentFirst (every other screen) → method: cod
+```
+
+Two thermal labels for **one AWB**, in one print job — one carrying `COD · Rp150.000` for the
+courier to collect, the other `NON-COD · Sudah dibayar`. Whichever the courier scans decides whether
+a COD parcel is handed over for nothing, or a buyer who has already paid is asked to pay again at
+the door. It was also the **third** screen that names an order's payment method and the only one not
+using `latestPaymentFirst()` — the shared ordering `data/orders.ts` and `data/order-detail.ts` were
+unified on precisely so this could not happen.
+
+**Fix:** the correlated scalar subquery the Pesanan list already uses (`payments` unaliased, ordered
+by `latestPaymentFirst()`, `limit 1`). A scalar subquery cannot multiply rows, and the third screen
+now gives the same answer as the other two.
+
+#### ② `updateFlashSale` / `deleteFlashSale` reported success over a write that matched nothing
+
+`lib/actions/flash.ts` read `owned` **specifically to prove tenancy** and then handed it to
+`writeItems` alone: the parent `UPDATE … WHERE id = $1` ran unconditionally, matched **zero rows**
+under RLS for an id that is gone or is another store's, and the action still returned
+`{ ok: true, id }`. `flash-editor.tsx` toasts *"Flash sale disimpan."* on that and navigates away.
+`deleteFlashSale` was `Promise<void>`, so **both** of its callers announced a deletion they could not
+observe. Same class as `markLabelsPrinted`, and the five blind writes fixed the day before.
+
+Measured (real Postgres, as the non-owning tenant): the shipped code answered `ok: true` for a
+random UUID **and** for another store's live sale, whose row was untouched.
+
+**Fix:** `.returning()` on both statements — the UPDATE is now both the write and the tenancy proof,
+which also closes the read-then-write gap the old shape carried. Zero rows is a refusal with a
+merchant-actionable sentence. `deleteFlashSale` returns `{ ok } | { ok, error }` and **both callers
+read it in this commit** (the repo's two-file rule).
+
+#### ③ A bulk run silently dropped every order past the 50th while reporting `ok: true`
+
+`lib/actions/bulk-shipping.ts` applied `numbers.slice(0, 50)` with nothing carrying the remainder.
+The list page loads up to **200** rows (`lib/data/bulk-shipping.ts` `limit 200`) and the button posts
+the whole selection (`canBook.map(...)`, label "Generate resi (N)"). A seller selecting 150 orders
+got *"50 pesanan dibooking"*, a green result, and **100 parcels that were never booked** — named in
+`done`, in `failed` and in `awaitingResi` exactly nowhere. The file's own header forbids this in as
+many words ("PARTIAL FAILURE IS THE NORMAL CASE and is reported per order, never summarised into
+'berhasil'").
+
+**Fix:** `BulkResult.skipped: string[]`, `ok` false while it is non-empty, and a warning toast in
+`massal-client.tsx` naming the count and telling the seller the remainder is **still selected** so
+pressing the button again continues the run (verified: `setSel` is called only by the row toggle and
+the select-all box, never after a run).
+
+#### ④ "Penghematan Pelanggan" counted vouchers on orders that were cancelled
+
+`lib/data/discounts.ts` summed `orders.discount_idr` with a `WHERE` of exactly one predicate
+(`store_id`), under a tile captioned *"nilai yang benar-benar dipotong"* — while
+`applyOrderStatusChange` restores a cancelled order's stock and `settleOrderLedger` claws its sale
+back in the same transaction. Measured, one Rp20.000 voucher on a completed sale beside a Rp50.000
+cancellation and a Rp30.000 return: **Rp100.000 shipped vs Rp50.000** with `batal` excluded.
+
+**Fix:** `ne(status, 'batal')` — the repo's own `NOT_CANCELLED` rule, which every other money
+aggregate on a merchant screen already applies. ⚠️ **`retur` is deliberately left IN and is an
+owner's call, not a bug**: the parcel was sold at the discounted price before it came back, and
+`lib/data/finance.ts` answers it the other way (`SALES` excludes both). The split is named at the
+function and pinned by a test, so changing it has to be deliberate.
+
+#### ⑤ (one-liner) `cron/tracking` wrote a liveness row that could not go red
+
+`recordCronRun("tracking", { ok: true, … })` was hard-coded while per-order failures were accumulated
+in `errors` and returned in the summary. A tick in which **every** sync threw wrote a green
+`cron_runs` row — over the one job whose week-long silence is why that table exists.
+`order-expiry/route.ts` beside it already computes `ok: summary.errors === 0`. Now so does this one.
+
+- **Files Created / Modified:**
+  - `apps/admin/lib/data/bulk-labels.ts` — scalar subquery via `latestPaymentFirst()`; query+render split behind `bulkLabels(db, numbers)` so a test can drive the real SQL and the real renderer (the `dailyStatsRows` seam).
+  - `apps/admin/lib/actions/flash.ts` — `.returning()` on the update and the delete; `deleteFlashSale` returns its outcome.
+  - `apps/admin/app/(admin)/flash-sale/flash-sale-client.tsx`, `apps/admin/app/(admin)/flash-sale/[id]/flash-editor.tsx` — both delete callers read the result.
+  - `apps/admin/lib/actions/bulk-shipping.ts` — `BULK_MAX`, `skipped`, honest `ok`.
+  - `apps/admin/app/(admin)/pesanan/massal/massal-client.tsx` — surfaces `skipped`.
+  - `apps/admin/lib/data/discounts.ts` — `discountSavingsFor(db, storeId)`, cancelled orders excluded.
+  - `apps/admin/app/api/cron/tracking/route.ts` — `ok` derived from `errors`.
+  - New guards: `apps/admin/lib/data/bulk-labels.test.ts` (4), `apps/admin/lib/actions/flash.test.ts` (5), `apps/admin/lib/actions/bulk-shipping.test.ts` (3), `apps/admin/lib/data/discounts.test.ts` (3).
+
+- **Verification Executed — mutation FIRST, in every case.** Each guard was proved RED against the
+  *shipped* code before it was trusted green; a test that has never failed is green for reasons
+  nobody checked.
+
+  | # | mutation (the shipped code put back) | tests that went red |
+  |---|---|---|
+  | ① | `left join payments p on p.order_id = o.id` + `p.method::text` | 3 of 4 |
+  | ② | read-back `owned` + unconditional UPDATE; `delete` returning `true` | 3 of 5 |
+  | ③ | `ok: failed.length === 0`, `skipped: []` | 2 of 3 |
+  | ④ | `.where(eq(orders.storeId, storeId))` alone | 2 of 3 |
+
+- **Gate (exit codes read directly, never through a pipe):**
+  - `TEST_DB_REQUIRED=1 npm test` → **exit 0** · **113 files / 849 tests passed** (baseline on this branch's merge-base: 109 / 834) · `check:storefront` 0 errors (119 files) · `check:landing` 0 errors (29 files).
+  - `npx tsc -p apps/admin --noEmit` → **exit 0**.
+  - `npm run lint -w @tokophi/admin` → **exit 0** · **0 errors, 21 warnings** (today's baseline, unchanged).
+
+- 🔴 **REPORTED, NOT FIXED — out of this pass's scope, and it is the biggest thing found.**
+  **Every order from `/promo/<handle>` and `/lp/<slug>` has been rejected since 2026-08-03.**
+  `apps/storefront/src/components/OrderFunnel.astro` — the component both paid-traffic funnels
+  render — posts `address: { alamat, kota, provinsi }` and **no `kodepos`**
+  (`grep -rl kodepos apps/storefront/src` returns only `checkout.astro`, `sukses.astro` and a test).
+  `b5f9ded` made kodepos required at `/api/public/order` and added the field to `checkout.astro`
+  only. Driven with the funnel's exact body against the real route handler:
+  `{"ok":false,"error":"Kode pos wajib diisi.","field":"kodepos"}` — **0 orders written**. The
+  funnel's `showErr("kodepos", …)` then looks up `[data-err="kodepos"]`, which does not exist on
+  that page, so the shopper is shown a banner naming a field they cannot see. Build, lint and
+  `astro check` are all green over it — the same shape as the `queueSave is not defined` outage.
+  Not touched here: the fix is a form field in a storefront component (another territory, and
+  browser-visible work), and making kodepos optional again would reverse a deliberate ruling.
+  **This needs routing now.**
+
+---
+
 ### [2026-08-21 08:20 UTC] — Stage 4 Task 4.11 · SEC-10 · Impersonation Is A One-Time Exchange Now, Not A JWT In A URL
 
 - **Executor:** Claude (Opus 5), worktree `t411`, branch `feat/task-4.11-impersonation-exchange`.
