@@ -65,6 +65,22 @@
 - **Completed Task:** Stage 4 Task 4.11.
 
 
+### [2026-08-21] — One Menu Handle Per Store, As A Rule Rather Than A Protocol (migration 0099)
+
+- **Scope:** Task 4.7 (#298) closed the duplicate-handle race by allocating under `pg_advisory_xact_lock(4707, hashtext(store_id))`, and deliberately shipped **without** a schema change — the migration on the abandoned branch was out of scope, not idempotent, and would have left a gap in the journal. That debt was recorded rather than forgotten; this closes it.
+- **Why the lock was not enough:** it protects exactly ONE code path. A data import, a fixture, or a future action that forgets it collides silently — and a duplicate handle is not cosmetic: the storefront resolves a menu BY handle, so the second row is a menu nobody can reach and a merchant who cannot tell which one they are editing. A lock is a protocol; an index is a rule.
+- ⚠️ **MEASURED BEFORE WRITING THE MIGRATION, because a TOTAL unique index refuses to build on existing duplicates and would abort the whole pending batch on deploy.** `select store_id, handle, count(*) … having count(*) > 1` returned **zero groups on the shared dev database AND on production** (2 menu rows there). The note is in the migration itself, with the instruction that a drifted database is fixed by renaming the losers, never by weakening the index.
+- **Files Created / Modified:**
+  - `packages/db/drizzle/0099_menus_store_handle_unique.sql` + journal entry (idx **99**, contiguous — `doc-counts` asserts `head === entries − 1`, so a reserved gap would leave that guard permanently red).
+  - `packages/db/src/schema.ts`: the index declared in drizzle, so the census classifies it `drizzle` rather than `sql-only`. Total, not partial — `handle` is NOT NULL here, so there is no null case to exempt.
+  - `packages/db/src/menus-unique-handle.test.ts` (new): the constraint fires, and the scope is per STORE — the half a plain `unique(handle)` gets wrong, since every shop wants a menu called "utama" and the first one to create it must not own the word.
+  - `packages/db/src/schema-indexes.test.ts`, `AGENTS.md`, `specs/docs/{SCHEMA,CODE_MAP,STATUS}.md`: census entry and the published counts, 99 → **100**, head → **0099**.
+- **Verification Executed:**
+  - **Mutation proof:** the index dropped from `tokophi_test` → the duplicate insert **succeeds** and the test fails with *"promise resolved instead of rejecting"*. Re-created → 2/2 green, and `pg_indexes` confirmed back to 1.
+  - `TEST_DB_REQUIRED=1 npm test` → **109 files and 834 tests passed**. `tsc --noEmit -p apps/admin` → **0**. `npm run lint -w @tokophi/admin` → **0 errors, 21 warnings** (the true baseline, restored in #300).
+  - ⚠️ **Not applied to the shared dev database** — it reaches there on merge, like every other migration.
+- **Completed Task:** the `UNIQUE (store_id, handle)` debt recorded when Task 4.7 landed.
+
 ### [2026-08-21] — Correction: The Two New Admin Lint Warnings Were Mine, Not Another Stream's
 
 - ⚠️ **THIS CORRECTS THE TASK 4.8 ENTRY BELOW AND ITS COMMIT MESSAGE.** Both recorded that the admin lint baseline had moved 21 → 23 warnings because of `apps/admin/app/api/cron/order-expiry/route.test.ts`, "another stream's file, already on main". That attribution was wrong. The two warnings are unused `afterAll` / `beforeAll` imports in **`apps/admin/lib/actions/shipment-payment-guard.test.ts` — a file I wrote in #293** and then rewrote into a source guard, leaving the imports behind. Removing them takes the baseline back to **21**, which is the measurement that settles it.

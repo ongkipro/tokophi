@@ -1,0 +1,22 @@
+-- One menu handle per store, enforced by the database.
+--
+-- Task 4.7 closed the race that produced duplicates -- `saveMenu` allocates a handle under
+-- `pg_advisory_xact_lock(4707, hashtext(store_id))`, so two concurrent "Buat menu" calls serialise
+-- and the second sees the first's handle. That lock is the only thing standing between this table
+-- and a duplicate today, and it protects exactly ONE code path: any other writer, a data import, or
+-- a future action that forgets the lock reintroduces the collision silently. A lock is a protocol;
+-- an index is a rule.
+--
+-- TOTAL, not partial: `handle` is NOT NULL on this table, so there is no null case to exempt, and a
+-- partial index here would only be a weaker version of the same claim.
+--
+-- ⚠️ MEASURED BEFORE WRITING THIS, because a total unique index REFUSES TO BUILD on existing
+-- duplicates and would abort the whole pending migration batch on deploy: `select store_id, handle,
+-- count(*) ... having count(*) > 1` returned ZERO groups on the shared dev database AND on
+-- production (2 menu rows there). If this ever has to be re-applied to a database that has drifted,
+-- run that query first -- the fix is to rename the losers, never to weaken the index.
+--
+-- Idempotent, like every migration here: drizzle applies the whole pending batch in ONE transaction,
+-- so a single "already exists" rolls back every migration behind it and prints nothing anyone reads.
+create unique index if not exists "menus_store_handle_unique"
+  on "menus" ("store_id", "handle");
