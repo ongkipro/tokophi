@@ -6,6 +6,7 @@ import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { cronIntervalSec, recordCronRun } from "../record-run";
+import { cronAuthorized } from "@/lib/cron-auth";
 // Daily billing job (schedule via Coolify Scheduled Task / external cron → GET with the secret):
 //   1) sync each store's stored `status` to its real-time EFFECTIVE state
 //   2) for stores whose period ended (past_due/suspended) with no pending subscription invoice,
@@ -24,24 +25,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
-  const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-
-  // FAIL CLOSED in production. This used to read `if (secret && provided !== secret)` — so with
-  // CRON_SECRET unset there was NO check at all, on a route that is excluded from the auth
-  // middleware and walks EVERY store to suspend it or raise an invoice against it. Anyone who
-  // guessed the path could bill the whole platform.
-  //
-  // This is the same fail-open shape that was already found and closed on the AutoLaris pay
-  // callback. It survived here because the guard reads as if it works: a missing secret quietly
-  // means "no gate" instead of "no entry". If it can mutate money, an absent secret must mean NO.
-  // Dev/local still runs without one so the job can be exercised offline.
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[cron/billing] CRON_SECRET unset in production — REJECTING.");
-      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
-  } else if (provided !== secret) {
+  // FAIL CLOSED in production, and HEADER ONLY. This used to read
+  // `if (secret && provided !== secret)` — so with CRON_SECRET unset there was NO check at all, on a
+  // route that is excluded from the auth middleware and walks EVERY store to suspend it or raise an
+  // invoice against it. Anyone who guessed the path could bill the whole platform. It then accepted
+  // the secret from `?secret=`, which is how every sidecar sent it. Both rules now live in ONE place —
+  // `lib/cron-auth.ts` — because this check was copy-pasted into six route files.
+  if (!cronAuthorized(req, "cron/billing")) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -89,7 +79,7 @@ export async function GET(req: NextRequest) {
           const totalWithPpn = withPpn(q.amount).total;
           const reffId = `SUB-${s.slug.slice(0, 8)}-${Date.now()}`;
           const number = "SUB-" + Date.now().toString().slice(-9);
-          const callbackUrl = payCallbackUrl();
+          const callbackUrl = payCallbackUrl(reffId);
           const r = await alCreatePayment({
             reffId,
             channelCode: "BCA",

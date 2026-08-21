@@ -6,7 +6,8 @@ info:
     Administrative HTTP contract for bulk shipping labels and secured scheduled
     jobs. Label generation uses the signed seller session and tenant-scoped RBAC.
     Cron routes run cross-tenant maintenance and therefore require `CRON_SECRET`
-    in production.
+    in production, supplied as the `X-Cron-Secret` header. The query-string form was
+    removed in Task 4.13 (SEC-16).
 servers:
   - url: https://app.tokophi.com
     description: Production admin API origin
@@ -78,9 +79,7 @@ paths:
         monthly subscription invoice when one is due and no pending invoice exists.
       security:
         - cronHeaderAuth: []
-        - cronQueryAuth: []
       parameters:
-        - $ref: '#/components/parameters/CronSecretQuery'
         - $ref: '#/components/parameters/CronInterval'
       responses:
         '200':
@@ -101,9 +100,7 @@ paths:
       description: Checks up to 20 provisioning domains and persists provider certificate state.
       security:
         - cronHeaderAuth: []
-        - cronQueryAuth: []
       parameters:
-        - $ref: '#/components/parameters/CronSecretQuery'
         - $ref: '#/components/parameters/CronInterval'
       responses:
         '200':
@@ -127,9 +124,7 @@ paths:
         failing its payment, and restoring inventory. COD orders are excluded.
       security:
         - cronHeaderAuth: []
-        - cronQueryAuth: []
       parameters:
-        - $ref: '#/components/parameters/CronSecretQuery'
         - $ref: '#/components/parameters/CronInterval'
       responses:
         '200':
@@ -156,9 +151,7 @@ paths:
         advances order state forward, and records encountered tracking problems.
       security:
         - cronHeaderAuth: []
-        - cronQueryAuth: []
       parameters:
-        - $ref: '#/components/parameters/CronSecretQuery'
         - $ref: '#/components/parameters/CronInterval'
       responses:
         '200':
@@ -184,9 +177,7 @@ paths:
         backfills delivery state where required.
       security:
         - cronHeaderAuth: []
-        - cronQueryAuth: []
       parameters:
-        - $ref: '#/components/parameters/CronSecretQuery'
         - $ref: '#/components/parameters/CronInterval'
       responses:
         '200':
@@ -210,21 +201,12 @@ components:
       type: apiKey
       in: header
       name: X-Cron-Secret
-      description: Shared secret for scheduled jobs.
-    cronQueryAuth:
-      type: apiKey
-      in: query
-      name: secret
-      description: Shared cron secret fallback. Prefer the header form so credentials do not enter URLs or logs.
+      description: |
+        Shared secret for scheduled jobs. This is the ONLY accepted transport since Task 4.13
+        (SEC-16): the query-string form was removed from both the routes and the compose sidecars,
+        because a URL puts the credential in the container command, the host process table and every
+        proxy access log. A request that supplies `?secret=` is refused and the refusal is logged.
   parameters:
-    CronSecretQuery:
-      name: secret
-      in: query
-      required: false
-      deprecated: true
-      description: Cron secret fallback represented explicitly for documentation; prefer `X-Cron-Secret`.
-      schema:
-        type: string
     CronInterval:
       name: every
       in: query

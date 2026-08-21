@@ -8,6 +8,61 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-21 09:20 UTC] — Stage 4 Task 4.13 · SEC-16 · The Credential Came Out Of The URL
+
+- **Executor:** Claude (Opus 5), worktree `t413`, branch `sec/task-4.13-callback-cron-auth`, off `origin/main` `b2a659e`.
+- **Scope:** Two reusable first-party secrets were being written into query strings. One was ours end to end and is now closed; the other belongs to a vendor's protocol and is now *unminted*, bound, documented and logged instead of pretended away. Plus exactly-one-identity on both halves of the payment callback.
+- 🔵 **WHAT WAS ALREADY DONE BEFORE THIS PASS, established by reading rather than assumed.** The payments half of `pay/callback` already resolved identity exactly (`trx_id` preferred, `reff_id` fallback, no `or()`), already refused an ambiguous multi-row match with a 400, already checked the PAID amount against `payments.amount_idr`, and already failed closed in production on an unset `AUTOLARIS_CALLBACK_SECRET`. None of that was re-done. What was **not** done: zero identifiers, the invoice half, and every URL on both sides.
+
+- 🔴 **`CRON_SECRET` was on the URL of every cron tick — CLOSED, because no vendor is involved.** All five compose sidecars called `…?secret=$CRON_SECRET&every=…`, and all six gated routes (five `api/cron/*` plus `api/health/env`) accepted it, each with its own hand-copied gate. That is the credential authorising a state-mutating sweep across **every tenant**, and a URL puts it in the container `command`, in `docker inspect`, in `docker top`, in the host process table and in every proxying access log. One gate now — `apps/admin/lib/cron-auth.ts`, header only, `timingSafeEqual`, fail-closed in production — and a request that still supplies `?secret=` is **refused AND logged**, so a caller left behind on the old shape is visible instead of looking like a wrong secret. `?every=` stays: it is the cadence the Sistem panel derives its staleness threshold from.
+- 🔴 **The pay callback URL carried the whole platform secret — now it carries a PER-PAYMENT SIGNATURE.** `payCallbackUrl()` embedded `AUTOLARIS_CALLBACK_SECRET` verbatim in every bill's `callback_url` — the string that can mark **any** payment or **any** subscription invoice on the platform paid, handed to a third party and copied into their dashboard. It now signs the reference: `?cb=<reff>.<hmac-sha256, 128 bits>`, ONE parameter of comparable length to the token it replaces (deliberately: the shape the gateway is known to echo back unchanged is the shape to keep). The route then **binds** that signature to the row it resolved — `payments.reff_id` / `invoices.reff_id`, compared against the ROW, not the request body, so it holds whether the vendor echoes `trx_id`, `reff_id` or both. Without that binding a signature is a bearer token with extra steps; it has its own test and its own mutation.
+- ⚠️ **THE `?token=` DOOR IS STILL OPEN AND THAT IS THE HONEST ANSWER, NOT AN UNFINISHED EDGE.** AutoLaris echoes `callback_url` and attaches no headers of its own. Refusing that parameter would 401 **every genuine payment**: `payments.status` stuck at `menunggu`, no order reaching `dibayar`, no ledger row, held conversions never released, and platform invoices no longer advancing `stores.current_period_end` until the platform suspends its own paying merchants — an outage this repo has already had once (see `CHANGELOG.md` "The payment webhook was rejecting every real payment"). **This half is vendor-blocked and is NOT claimed as closed.** What was ours is the minting side and it is closed; the door is unbound, logged as deprecated on every use, and pinned as a knowingly-open door WITH ITS REASON by `route.auth.test.ts`. It closes when the vendor confirms `X-Callback-Token` — branch and test deleted together, and the test says so.
+- **Exactly one identity, on BOTH halves.** A callback naming no payment used to answer `{ok:true}` with a 200 — indistinguishable from one we acted on; it is a 400 now, and a blank/whitespace `trx_id` counts as absent (it used to fall through to `reff_id` silently, which is what made the zero-identity branch unreachable). The **subscription-invoice** half had NO ambiguity guard at all: an ambiguous `trx_id` would have settled several invoices in one UPDATE. It now gets the same 400 the payments half already had.
+
+- **Files Created / Modified:**
+  - `packages/lib/src/pay-callback.ts`: `payCallbackUrl(reffId)` (signature required by the type), `signPayCallbackRef`, `verifyPayCallbackRef` — which returns the REFERENCE, never a boolean, so a caller cannot forget to bind it. Splits on the LAST dot: a `requestKey` may contain dots, a hex signature may not.
+  - `apps/admin/lib/cron-auth.ts` (new): the one gate, with the reasoning that used to be six copies.
+  - `apps/admin/app/api/public/pay/callback/route.ts`: `authorizeCallback` (header · signature · legacy token · dev), `bound()`, the zero-identity 400, the invoice ambiguity 400.
+  - The six gated routes + `docker-compose.coolify.yml` (five sidecars → `wget --header`).
+  - All five `payCallbackUrl()` call sites now pass the reference they store on the row: `order.number`, `requestKey`, `reffId` ×3.
+  - `apps/admin/lib/env-census.test.ts`: its claim was "the health route reads `process.env` only for its own gate". Moving the gate out would have made that assertion **vacuously stronger and then quietly rot**, so it is now made over BOTH files — the responder must read no environment at all, the shared gate only its two.
+  - Tests: `apps/admin/app/api/public/pay/callback/route.auth.test.ts` (new), `apps/admin/lib/cron-auth.test.ts` (new), `packages/lib/src/pay-callback.test.ts` (extended).
+  - Docs: `AGENTS.md`, `SECURITY.md` §6, `REQUIREMENTS.md` (SEC-16 → MET with the documented provider exception), `DEPLOY.md`, `specs/openapi/admin-api.yaml` (`cronQueryAuth` scheme and `CronSecretQuery` parameter removed), `CHANGELOG.md`, `STATUS.md`.
+  - ⚠️ **A near-miss worth recording:** `apps/admin/app/api/public/pay/callback/route.test.ts` already existed (Task 4.10, #286) and this pass **overwrote it** before noticing. Restored verbatim from `HEAD` and the new tests moved to `route.auth.test.ts`; the 4.10 suite is green against the changed route, which is itself useful evidence — its real-Postgres paid → expired → paid cases still pass. The lesson: after a rebase, `git status` before trusting that a path is new.
+
+- **Verification Executed — mutation FIRST, fourteen of them, each reverted immediately:**
+
+  | # | mutation | test that went red |
+  |---|---|---|
+  | 1 | `bound()` always true | signature bound to a payment · bound to an invoice (2) |
+  | 2 | zero identity answers `{ok:true}` again | names no payment · blank identifier (2) |
+  | 3 | invoice ambiguity guard removed | ambiguous SUBSCRIPTION INVOICE match |
+  | 4 | payment ambiguity guard removed | ambiguous payment match |
+  | 5 | legacy `?token=` use stops being logged | the legacy door is logged as deprecated |
+  | 6 | callback stops failing closed in production | FAILS CLOSED in production |
+  | 7 | `payCallbackUrl` mints the reusable secret again | never puts the reusable secret in the URL |
+  | 8 | `verifyPayCallbackRef` stops checking the signature | refuses a tampered reference/signature |
+  | 9 | `cronAuthorized` accepts the query secret again | REFUSES the secret in the query string |
+  | 10 | `cronAuthorized` stops failing closed in production | fails closed in production |
+  | 11 | one sidecar back to `?secret=` on the URL | no compose sidecar puts CRON_SECRET on a URL |
+  | 12 | one route back to reading the credential from the query | that route's source scan |
+  | 13 | `health/env` reads the environment in the responder | the responder reads no environment variable |
+  | 14 | the shared gate reads a third credential | the shared gate reads only its own two |
+
+  Restored ⇒ green in every case. Both source scans and the compose scan carry their own **vacuity self-check** — the same predicate is asserted to fire on a copy with the retired shape put back — so they cannot be green for want of matching anything.
+
+- **Measured on the wire, not asserted from the YAML.** The sidecar command was extracted from `docker-compose.coolify.yml`, `$$` expanded the way compose expands it, and ONE iteration run inside a real `alpine:3.20` against a probe server. BusyBox `wget` (v1.36.1) does support `--header`, and the server received `URL: /api/cron/billing?every=86400` with `x-cron-secret: "s3cr3t-value"` — credential in the header, **absent from the URL**, and `-qO-` still prints the response body to stdout, which is what `docker logs cron-billing` depends on.
+- **Gates (exit codes read DIRECTLY, never through a pipe):**
+  - `TEST_DB_REQUIRED=1 npm test` → **0 — 112 files, 870 tests passed** (baseline before this task on the same worktree: 109 files / 834 tests). `astro check`: storefront 0 errors / 0 warnings / 14 hints, landing 0/0/0.
+  - `npx tsc -p apps/admin --noEmit` → **0** · `npx tsc -p apps/super-admin --noEmit` → **0** · `npx tsc -p packages/db --noEmit` → **0**.
+  - `npm run lint -w @tokophi/admin` → **0 — 0 errors, 21 warnings**, exactly the baseline measured on this branch before any edit. `npm run lint -w @tokophi/super-admin` → **0 — 0 errors, 3 warnings**.
+  - Own throwaway database `tokophi_t413_test`, created by `globalSetup`, dropped afterwards. The shared `tokophi` on :5433 was never written to.
+- **No migration.** Nothing here needs storage: the signature is stateless HMAC over a column that already exists (`reff_id` on both `payments` and `invoices`, set by all five call sites). `0101` was reserved for this task and is deliberately **unused** — a reserved-but-empty index number is not free (`doc-counts.test.ts` asserts `head === entries - 1`), so no journal entry and no doc count moved.
+- ⚠️ **Deploy note, stated because nothing else will say it.** Routes and sidecars change in ONE commit but restart in an unguaranteed order. Old-sidecar-then-new-admin costs exactly one tick, logged as *"a cron credential arrived as a QUERY PARAMETER — refused"*; every job here is idempotent and forward-only, so that is a delay, not a wrong state. The reverse order is safe outright (the old routes read the header first). If that log line persists past the deploy, a sidecar did not restart.
+- **Not done here:** no browser pass — nothing in this change renders. The payment path itself cannot be exercised end to end without a live AutoLaris bill, which is exactly why the `?token=` acceptance is left alone.
+- **Completed Task:** Stage 4 Task 4.13.
+
+
 ### [2026-08-21 08:20 UTC] — Stage 4 Task 4.11 · SEC-10 · Impersonation Is A One-Time Exchange Now, Not A JWT In A URL
 
 - **Executor:** Claude (Opus 5), worktree `t411`, branch `feat/task-4.11-impersonation-exchange`.

@@ -1318,8 +1318,10 @@ async function handle(req: Request) {
       customerName: name,
       customerPhone: phone,
       customerEmail: email || "order@tokophi.id",
-      // WITH the token — the endpoint fails closed and a bare URL was a 401 on every real payment.
-      callbackUrl: payCallbackUrl(),
+      // SIGNED for THIS order — the endpoint fails closed and a bare URL was a 401 on every real
+      // payment. The reference must be the one stored on the payment row (`payments.reff_id`), because
+      // the callback binds the signature to the row it resolves. Both are `order.number`.
+      callbackUrl: payCallbackUrl(order.number),
     });
   } catch (err) {
     console.error("[order] alCreatePayment threw for", order.number, err);

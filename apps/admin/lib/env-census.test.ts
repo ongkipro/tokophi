@@ -92,14 +92,27 @@ describe("every env var the admin reads is classified", () => {
 });
 
 describe("the health route never reports a value", () => {
-  it("reads process.env only for its own gate", () => {
-    // Presence is a fact an operator needs; the value is one screenshot from being leaked, and half
-    // this list is credentials. The route may read CRON_SECRET (its gate) and NODE_ENV (fail-closed);
-    // anything else means a value is being touched inside the responder.
+  // Presence is a fact an operator needs; the value is one screenshot from being leaked, and half
+  // this list is credentials. The route may read CRON_SECRET (its gate) and NODE_ENV (fail-closed);
+  // anything else means a value is being touched inside the responder.
+  //
+  // ⚠️ SINCE TASK 4.13 THE GATE ITSELF LIVES IN `lib/cron-auth.ts` — one implementation shared by the
+  // five cron routes and this one. So the claim is now made over BOTH files: the responder must touch
+  // no environment at all, and the module it delegates to must touch only those two names. Asserting
+  // it over the route alone would have gone quietly vacuous the moment the gate moved out.
+  const envNames = (code: string) =>
+    [...new Set([...code.matchAll(/process\s*\.\s*env\s*\.\s*([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]))].sort();
+
+  it("the responder itself reads no environment variable", () => {
     const code = codeOfFile(ROUTE);
-    const names = [...code.matchAll(/process\s*\.\s*env\s*\.\s*([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]);
-    expect([...new Set(names)].sort()).toEqual(["CRON_SECRET", "NODE_ENV"]);
+    expect(envNames(code)).toEqual([]);
     // And it must never index the environment dynamically, which would slip past the check above.
+    expect(code).not.toMatch(/process\s*\.\s*env\s*\[/);
+  });
+
+  it("the shared gate reads only its own two", () => {
+    const code = codeOfFile("apps/admin/lib/cron-auth.ts");
+    expect(envNames(code)).toEqual(["CRON_SECRET", "NODE_ENV"]);
     expect(code).not.toMatch(/process\s*\.\s*env\s*\[/);
   });
 });

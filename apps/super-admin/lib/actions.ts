@@ -750,7 +750,7 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
   const q = quote(cycle, store.firstInvoicePaid);
   const amount = withPpn(q.amount).total;
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = payCallbackUrl();
+  const callbackUrl = payCallbackUrl(reffId);
   const r = await alCreatePayment({ reffId, channelCode: "VABCA", amount, customerId: storeId, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
 
