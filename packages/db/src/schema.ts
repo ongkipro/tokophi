@@ -1347,14 +1347,22 @@ export const articles = pgTable(
   (t) => [unique().on(t.storeId, t.handle)],
 );
 
-export const menus = pgTable("menus", {
-  id: pk(),
-  storeId: uuid()
-    .notNull()
-    .references(() => stores.id),
-  name: text().notNull(),
-  handle: text().notNull(),
-});
+export const menus = pgTable(
+  "menus",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    name: text().notNull(),
+    handle: text().notNull(),
+  },
+  // One handle per store, and the DATABASE is what says so (migration 0099). `saveMenu` allocates
+  // under `pg_advisory_xact_lock(4707, hashtext(store_id))` (Task 4.7), which serialises that ONE
+  // code path — an import, or a future action that forgets the lock, would collide silently. A lock
+  // is a protocol; an index is a rule. Total rather than partial: `handle` is NOT NULL here.
+  (t) => [uniqueIndex("menus_store_handle_unique").on(t.storeId, t.handle)],
+);
 
 export const menuItems = pgTable("menu_items", {
   id: pk(),
