@@ -17,15 +17,15 @@ export async function signSession(s: Session): Promise<string> {
   return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("7d").sign(secret());
 }
 
-// Short-lived token for cross-subdomain impersonation: passed in the URL to the admin's
-// /impersonate route, which verifies it and mints the real session cookie on the admin domain.
-// Prod admin/super-admin live on different subdomains → cookies aren't shared, so we can't set
-// the cookie here directly.
-// The impersonation exchange token carries a distinct audience so the admin /impersonate route can
-// require it — otherwise ANY session-shaped JWT signed with AUTH_SECRET (e.g. a stolen 7-day admin
-// session) would be accepted there and exchanged for a fresh session. Ephemeral (2m, consumed on the
-// redirect), so adding the claim strands nothing.
-export const IMPERSONATION_AUD = "tokophi:impersonate";
-export async function signImpersonation(s: Session): Promise<string> {
-  return new SignJWT({ ...s }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setAudience(IMPERSONATION_AUD).setExpirationTime("2m").sign(secret());
-}
+// 🔴 `signImpersonation` / `IMPERSONATION_AUD` ARE GONE (Task 4.11 / SEC-10), and this note is here so
+// nobody reintroduces them. They minted a session-shaped JWT with a distinct audience and a 2-minute
+// expiry, and `impersonateStore` put it in a query string: `/impersonate?token=<jwt>&slug=<slug>`.
+// The audience claim was a real fix for a real hole (it stopped a stolen 7-day merchant session being
+// exchanged here) but it could not touch the shape of the problem — a JWT is VERIFIED, never SPENT,
+// so the same URL worked again for every one of those 120 seconds, from browser history, from the
+// next request's `Referer`, from a proxy log, from a pasted support ticket.
+//
+// The exchange is a row now: `impersonation_grants` (migration 0098) holds sha256(handle) and is
+// consumed by one atomic UPDATE. The mint is in `lib/actions.ts` `impersonateStore`; the spend is
+// `apps/admin/lib/impersonation.ts`; both agree through `@tokophi/lib/impersonation`.
+// ⚠️ Adding any `sign*` here that a URL could carry puts the defect straight back.

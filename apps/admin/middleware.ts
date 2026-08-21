@@ -32,8 +32,12 @@ export async function middleware(req: NextRequest) {
   // unauthenticated: they are what *creates* the session.
   const isDaftar = pathname === "/daftar";
   const isGoogleAuth = pathname.startsWith("/api/auth/google/");
-  // /impersonate exchanges a signed one-time token (from the super-admin) for a session cookie
-  // on THIS domain — must run unauthenticated (cross-subdomain cookies aren't shared).
+  // /impersonate spends a one-time, server-side exchange handle (from the super-admin) for a session
+  // cookie on THIS domain — must run unauthenticated (cross-subdomain cookies aren't shared).
+  // ⚠️ EXACT MATCH, NOT A PREFIX, AND THAT IS LOAD-BEARING: `/impersonate/exit` is the other half of
+  // this feature and it must stay BEHIND the gate — it reads the session it is about to end, in
+  // order to name the operator in the audit line. A `startsWith` here would exempt it, and the exit
+  // would then log nothing. (Same class as the `/tema` prefix that ate its own index page.)
   const isImpersonate = pathname === "/impersonate";
   if (!valid && !isLogin && !isDaftar && !isGoogleAuth && !isImpersonate) {
     if (pathname.startsWith("/api/public/") || pathname.startsWith("/api/cron/")) {

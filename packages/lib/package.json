@@ -29,6 +29,7 @@
     "./store-slug": "./src/store-slug.ts",
     "./platform-theme": "./src/platform-theme.ts",
     "./session-revocation": "./src/session-revocation.ts",
+    "./impersonation": "./src/impersonation.ts",
     "./tracking-ids": "./src/tracking-ids.ts",
     "./pay-callback": "./src/pay-callback.ts",
     "./recovery": "./src/recovery.ts",

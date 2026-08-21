@@ -1928,6 +1928,79 @@ export const platformAdmins = pgTable("platform_admins", {
   createdAt: createdAt(),
 });
 
+/**
+ * ---------- impersonation exchanges (0098) — a handle that is SPENT, not verified ----------
+ *
+ * 🔴 THIS TABLE EXISTS BECAUSE A JWT CANNOT BE CONSUMED. "Buka Dashboard Seller" used to put a
+ * session-shaped, `AUTH_SECRET`-signed token in the query string and let `/impersonate` verify it.
+ * Verification is stateless by definition, so the same URL worked again — from history, from a
+ * `Referer`, from a proxy log, from a pasted ticket — for its whole two-minute life. Replay was not
+ * a defect in the route; there was nowhere to record that the link had already been used.
+ *
+ * A row can be spent. `consume` is ONE statement:
+ *
+ *   update impersonation_grants set consumed_at = now()
+ *    where token_hash = $1 and consumed_at is null and expires_at > now() returning …
+ *
+ * One row updated = the exchange happened, exactly once. Zero rows = unknown handle, already spent,
+ * or expired — three causes, one fail-closed answer. Postgres takes the row lock, so two concurrent
+ * redemptions of the same handle cannot both win: the loser blocks, re-evaluates the predicate after
+ * the winner commits, and matches nothing. (Same idiom as `receivePurchaseOrder`'s claim.)
+ *
+ * ⚠️ THE PLAINTEXT HANDLE IS NEVER STORED — only `sha256(handle)`, so this table is worth nothing to
+ * anyone who reads it. See `@tokophi/lib/impersonation` for why an unsalted digest is right for a
+ * 256-bit random input and wrong for a password.
+ *
+ * ⚠️ RLS IS ENABLED WITH **NO POLICY**, AND THAT IS THE STRICTEST SETTING, NOT AN OVERSIGHT. This is
+ * control-plane material: it is written by the super-admin and read by the admin's *pre-session*
+ * auth path, both on the OWNER connection (which bypasses RLS — no table here uses FORCE). The
+ * merchant role `tokophi_app` has no business seeing a grant for its own store, let alone anyone
+ * else's, and with RLS on and no policy it sees zero rows. A policy keyed on `app.store_id` would be
+ * strictly WEAKER and would read like protection. `verify-rls` check 5 is satisfied by
+ * `relrowsecurity`, so this needs no entry on its exception list.
+ *
+ * ⚠️ NOTHING PRUNES THIS TABLE and nothing needs to yet: a row is ~200 bytes and an impersonation is
+ * a rare, owner-ranked act. The rows are also the audit trail of who was handed a key to which shop,
+ * which is worth keeping — `platform_activity` records the outcome, this records the offer.
+ */
+export const impersonationGrants = pgTable(
+  "impersonation_grants",
+  {
+    id: pk(),
+    /** sha256 hex of the opaque handle. The handle itself lives only in the redirect URL. */
+    tokenHash: text().notNull(),
+    /** The store being entered, and the OWNER row whose session will be minted. Both re-read at
+     *  consume time — a grant is a permission to exchange, never a cached fact about membership. */
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** WHO asked. Carried into the minted session so a merchant write made under impersonation
+     *  names the operator as well as the merchant. */
+    operatorId: uuid()
+      .notNull()
+      .references(() => platformAdmins.id, { onDelete: "cascade" }),
+    /** Denormalised on purpose: the audit line must still read correctly after the operator row is
+     *  deleted, and the email is what a human recognises. The id above is the identity. */
+    operatorEmail: text().notNull(),
+    /** The rank at mint time. The consume path refuses if the live row no longer matches — a
+     *  demotion inside the exchange window kills the handle, without copying the rank LADDER into
+     *  `apps/admin` (it lives in `apps/super-admin/lib/platform-rank.ts` and must stay one copy). */
+    operatorRole: text().notNull(),
+    expiresAt: ts().notNull(),
+    /** NULL = never redeemed. The single field that makes replay impossible. */
+    consumedAt: ts(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // UNIQUE, not just an index: two rows sharing a hash would make "spend the one row" ambiguous.
+    uniqueIndex("impersonation_grants_token_hash_key").on(t.tokenHash),
+    index("impersonation_grants_store_idx").on(t.storeId),
+  ],
+);
+
 // ---------- media library (Shopify-style Files) — all uploaded images for a store ----------
 export const media = pgTable("media", {
   id: pk(),

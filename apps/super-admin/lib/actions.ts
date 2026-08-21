@@ -2,8 +2,8 @@
 import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { signImpersonation } from "./session";
 import { platformGate } from "./platform-auth";
+import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } from "@tokophi/lib/impersonation";
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
@@ -35,11 +35,26 @@ async function logPlatform(text: string): Promise<void> {
 // `cafe-senja` there. Same reason the password mint was converged — a copy is how the weaker half
 // survives a fix.
 
-// Impersonate a store's owner: mint the admin session cookie (host-scoped to localhost, so it
-// reaches :3000) and hand back the admin URL for the client to open.
-// Impersonation is the single most invasive thing an operator can do: it mints a merchant session
-// and walks into their shop as them. It requires OWNER, and it is AUDITED — it previously required
-// only "logged in" and left NO trace at all, so nobody could answer "who went into my store?".
+// Impersonate a store's owner: mint a ONE-TIME exchange and hand back the admin URL for the client
+// to open. The admin's `/impersonate` spends the handle and sets the session cookie on ITS domain
+// (cross-subdomain cookies are not shared, so we cannot set one from here).
+//
+// Impersonation is the single most invasive thing an operator can do: it opens a merchant's shop as
+// them. It requires OWNER, and it is AUDITED — it previously required only "logged in" and left NO
+// trace at all, so nobody could answer "who went into my store?".
+//
+// 🔴 WHAT CHANGED IN TASK 4.11 / SEC-10, AND WHY THE OLD SHAPE COULD NOT BE PATCHED. This used to
+// mint a session-shaped JWT and put it in the query string. Signed, audience-pinned, two minutes to
+// live — and REUSABLE for all 120 of those seconds by anyone holding the string, because a JWT is
+// verified, never spent. A URL is the worst carrier there is for a bearer credential: browser
+// history, the next request's `Referer`, a reverse-proxy access log, a screen share, a pasted ticket.
+// The handle below is 256 opaque bits that mean nothing on their own; the FACTS live in a row only
+// these two server processes can read, and the row is spent by one atomic UPDATE at the other end.
+//
+// ⚠️ THE ROW IS A PERMISSION TO EXCHANGE, NOT A CACHED FACT. Membership, the merchant's role, this
+// operator's existence and this operator's rank are ALL re-read at consume time — the same rule the
+// control plane already applies to its own cookie ("rank comes from `platform_admins`, on every
+// request"), extended across the two-minute gap between minting a link and clicking it.
 export async function impersonateStore(storeId: string): Promise<{ ok: boolean; adminUrl?: string; error?: string }> {
   const gate = await platformGate("owner");
   if (!gate.ok) return gate;
@@ -61,19 +76,30 @@ export async function impersonateStore(storeId: string): Promise<{ ok: boolean; 
 
   if (!owner) return { ok: false, error: "Toko tidak punya pemilik (owner) untuk dibukakan panelnya." };
 
-  // Short-lived token → admin's /impersonate exchanges it for a session cookie on the ADMIN
-  // domain (cross-subdomain cookies aren't shared, so we can't set it from here).
-  const token = await signImpersonation({
-    userId: owner.userId,
+  // The plaintext handle exists HERE and in the URL below, and nowhere else — the row stores only
+  // its sha256. Nothing logs it, and nothing can look it up afterwards.
+  const token = mintGrantToken();
+  await db.insert(schema.impersonationGrants).values({
+    tokenHash: grantTokenHash(token),
     storeId: owner.storeId,
-    role: owner.role,
-    email: owner.email,
-    name: owner.name ?? owner.email,
+    userId: owner.userId,
+    operatorId: admin.adminId,
+    operatorEmail: admin.email,
+    // The rank AT MINT TIME. The consume path refuses when the live row no longer matches, so a
+    // demotion inside the exchange window kills the handle — without copying the rank ladder
+    // (`platform-rank.ts`) into `apps/admin`, where a second copy is how the weaker half survives.
+    operatorRole: admin.role,
+    expiresAt: grantExpiresAt(),
   });
   // read at runtime (module-scope reads get baked at build time when the env is unset)
   const adminBase = process.env.ADMIN_URL ?? "http://localhost:3000";
-  const url = `${adminBase}/impersonate?token=${encodeURIComponent(token)}&slug=${encodeURIComponent(owner.slug)}`;
-  await logStore(storeId, `Impersonate toko oleh ${admin.email}`);
+  // ONE parameter. The slug used to ride along in the URL and no longer does: the grant row already
+  // knows which store this is, and a destination taken from the query string is a redirect a caller
+  // gets to choose.
+  const url = `${adminBase}/impersonate?grant=${encodeURIComponent(token)}`;
+  // Report what you WROTE: this created a link, it did not open anyone's panel. The other half of
+  // the sentence — that somebody actually walked in — is logged by the consume path, or never.
+  await logStore(storeId, `Tautan impersonate dibuat oleh ${admin.email} (sekali pakai, berlaku ${GRANT_TTL_SECONDS} detik)`);
   return { ok: true, adminUrl: url };
 }
 

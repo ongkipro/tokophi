@@ -4,7 +4,7 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import { Toaster } from "sonner";
 
-// Full-bleed routes hide the sidebar/topbar/billing-banner chrome entirely — Puck needs the whole
+// Full-bleed routes hide the sidebar/topbar/banner chrome entirely — Puck needs the whole
 // viewport, and its own toolbar replaces the topbar.
 //
 // ⚠️ These are ROUTES, not PREFIXES, and the difference was a real bug. This was
@@ -21,12 +21,15 @@ const FULL_BLEED = [/^\/tema\/[^/]+$/];
 export function AdminChrome({
   sidebar,
   topbar,
-  billingBanner,
+  banners,
   children,
 }: {
   sidebar: React.ReactNode;
   topbar: React.ReactNode;
-  billingBanner: React.ReactNode;
+  /** The full-width strips under the topbar. It was `billingBanner` (singular, and named for the
+   *  only one that existed); the impersonation strip is not a bill, and a prop whose name lies is
+   *  how the next one gets tucked into it too. Full-bleed routes still drop every one of them. */
+  banners: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -46,7 +49,7 @@ export function AdminChrome({
       {sidebar}
       <div className="flex min-w-0 flex-1 flex-col">
         {topbar}
-        {billingBanner}
+        {banners}
         <main className="flex-1 bg-muted/30 p-4 sm:p-6">{children}</main>
       </div>
       <Toaster position="top-center" richColors closeButton />

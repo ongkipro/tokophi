@@ -13,7 +13,32 @@ const secret = () => authSecretBytes();
 export const SESSION_COOKIE = "session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7d — matches the JWT expiry
 
-export type Session = { userId: string; storeId: string; role: string; email: string; name: string };
+/**
+ * WHO IS ACTING, when the person at the keyboard is not the merchant (Task 4.11 / SEC-10).
+ *
+ * Present ⇔ this session was minted by spending an `impersonation_grants` row, never by a login. It
+ * rides INSIDE the signed JWT, so the holder of the cookie can neither add it (that would forge an
+ * operator identity) nor strip it (that would launder an operator's writes into the merchant's own).
+ *
+ * ⚠️ IT IS AN IDENTITY, NOT A PERMISSION. Nothing grants capability from it — `requireCapability`
+ * still reads `store_users.role`, and `getSession()` still re-reads that row on every request. Its
+ * only jobs are the audit line on every gated write and the exit banner.
+ */
+export type ImpersonationContext = {
+  operatorId: string;
+  operatorEmail: string;
+  /** The `impersonation_grants` row this session came from — the join back to when and by whom. */
+  grantId: string;
+};
+
+export type Session = {
+  userId: string;
+  storeId: string;
+  role: string;
+  email: string;
+  name: string;
+  imp?: ImpersonationContext;
+};
 
 // Re-exported, not re-implemented. There were FIVE byte-identical copies of this four-line function
 // (here, `actions/security.ts`, `packages/db/src/seed.ts`, `@tokophi/lib/password`, and the deleted
@@ -59,12 +84,19 @@ export async function findLogin(email: string) {
  * just rotated the credential and must hand the merchant's own tab a replacement that is
  * unambiguously NEWER than the rotation it caused. See `sessionOutlivesPassword` for why "same
  * second" is not good enough. Everyone else mints at `now()`.
+ *
+ * `expiresIn` likewise has exactly one caller that is not the default: the impersonation exchange
+ * (`app/impersonate/route.ts`), which mints a BOUNDED session —
+ * `IMPERSONATION_SESSION_EXPIRY` = 30 minutes, not the merchant's own 7 days. An operator walking
+ * into somebody's shop is an intervention with an end; a week-long cookie is a standing key.
+ * ⚠️ The cookie's `maxAge` must be derived from the same constant, or one of the two outlives the
+ * other — see the note on `IMPERSONATION_SESSION_MAX_AGE` in `@tokophi/lib/impersonation`.
  */
-export async function signSession(s: Session, issuedAt?: Date): Promise<string> {
+export async function signSession(s: Session, issuedAt?: Date, expiresIn: string = "7d"): Promise<string> {
   return new SignJWT({ ...s })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt(issuedAt ? Math.floor(issuedAt.getTime() / 1000) : undefined)
-    .setExpirationTime("7d")
+    .setExpirationTime(expiresIn)
     .sign(secret());
 }
 
@@ -123,6 +155,10 @@ export async function getSession(): Promise<Session | null> {
     // the merchant changing their own password is the ONE lever that ends an operator's live
     // impersonation of them, and that is the incident-response behaviour you would want.
     if (!sessionOutlivesPassword(iat, membership.passwordChangedAt)) return null;
+    // `...claims` carries `imp` through when there is one — the operator identity is part of the
+    // signed payload, so it survives every re-check without a second lookup, and `role` is still
+    // overwritten from the row. An impersonated session is a merchant session in every respect that
+    // decides what may be DONE; `imp` only decides what gets WRITTEN DOWN.
     return { ...claims, role: membership.role };
   } catch (err) {
     // A database blip must not silently hand back a stale role. Fail closed: the user re-authenticates.
