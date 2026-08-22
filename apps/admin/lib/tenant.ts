@@ -5,8 +5,13 @@ import { getSession } from "@/lib/auth";
 // Runtime RLS enforcement for the merchant admin. Every read/write runs inside
 // `withTenant`, which (per transaction) sets the `app.store_id` GUC and drops to the
 // non-owner `tokophi_app` role so the Postgres RLS policies (migration 0012)
-// actually enforce. The app process still connects as the owner, but each tenant
-// query executes under the restricted role — mirroring the VPS/PostgREST model.
+// actually enforce.
+// Since Task 4.12 that transaction also runs on its OWN pool wherever
+// `DATABASE_RUNTIME_ROLE=app` — a connection whose login role is proved (against `pg_roles`,
+// once per process) to be neither superuser nor BYPASSRLS. This file used to say "the app
+// process still connects as the owner", which was true and was the gap: `SET LOCAL ROLE` does
+// not survive a `RESET ROLE`. Locally and in owner mode it is still one pool, and the
+// `SET LOCAL ROLE` is what enforces there.
 //
 // NOT used by: auth (`lib/auth.ts` reads store_users before a session exists → must
 // stay owner or it locks everyone out) and the super-admin app (cross-tenant/platform).
