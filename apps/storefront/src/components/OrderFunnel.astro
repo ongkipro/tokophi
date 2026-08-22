@@ -199,6 +199,28 @@ const funnelCatalogId = funnelProduct
       <p class="err mt-1 hidden text-sm text-rose-600" data-err="kecamatan"></p>
     </div>
 
+    <!-- 🔴 KODE POS. Its absence here rejected EVERY order from /promo and /lp for eighteen days.
+         `/api/public/order` made it required on 2026-08-03 and only the cart checkout was patched;
+         this funnel kept posting {alamat, kota, provinsi}, so the API answered "Kode pos wajib
+         diisi." and wrote nothing — on exactly the pages paid traffic lands on. Worse, the funnel's
+         showErr targeted a [data-err="kodepos"] that did not exist, so the shopper saw no reason at
+         all: they filled the whole form, pressed the button, and nothing happened.
+
+         ALWAYS EDITABLE, and it must stay that way. A `readOnly` input is barred from constraint
+         validation — `willValidate` is false and `valueMissing` never fires — so locking it once it
+         is auto-filled would silently cancel `required`. It is auto-filled only where the district
+         data can answer HONESTLY (one postcode for the whole district); anywhere else the shopper
+         types it, because ~4% of KiriminAja's districts have no kelurahan data and this number gets
+         printed on a real parcel. -->
+    <div>
+      <label for="f-kodepos" class="mb-1 block text-sm font-medium text-ink">Kode pos <span class="text-rose-500">*</span></label>
+      <input id="f-kodepos" name="kodepos" type="text" inputmode="numeric" autocomplete="postal-code"
+        maxlength="5" placeholder="5 digit"
+        class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
+      <p id="kodepos-hint" class="mt-1 text-xs text-stone-400">Terisi otomatis kalau kecamatannya hanya punya satu kode pos.</p>
+      <p class="err mt-1 hidden text-sm text-rose-600" data-err="kodepos"></p>
+    </div>
+
     {fc.summary && (
       <div class="rounded-xl border border-line bg-stone-50 p-4">
         <h3 class="mb-3 text-sm font-bold text-ink">Ringkasan Pesanan</h3>
@@ -424,8 +446,49 @@ const funnelCatalogId = funnelProduct
       byId("dest-prov").value = b.dataset.prov;
       results.classList.add("hidden");
       setText("ongkir-note", "Menghitung ongkir…");
+      fillKodepos(destId.value);
       fetchRates();
     });
+
+    // Auto-fill the postcode ONLY when the district has exactly one, which is the only case where
+    // this can answer honestly. Several postcodes → the shopper picks; none (or the lookup fails)
+    // → the shopper types. Never blocks, never invents: a wrong number here is a parcel at the
+    // wrong door, and the field is required precisely so a guess is never silently accepted.
+    var kodeposBox = byId("f-kodepos");
+    // A programmatic `el.value = …` fires neither `input` nor `change`, so the auto-fill above clears
+    // the error itself. This covers the shopper fixing it by hand after a failed submit.
+    if (kodeposBox) kodeposBox.addEventListener("input", function () { clearValidity("kodepos"); });
+
+    function fillKodepos(districtId) {
+      var box = byId("f-kodepos");
+      if (!box || !districtId) return;
+      if (box.value.trim()) return;              // the shopper already typed one — theirs wins
+      var destAtCall = String(districtId);
+      setText("kodepos-hint", "Mencari kode pos…");
+      api({ op: "kelurahan", destinationId: Number(districtId) }).catch(function () {
+        return { ok: true, kelurahan: [] };
+      }).then(function (res) {
+        // The shopper moved on to another kecamatan while this was in flight. Dropping the answer is
+        // the whole point: the checkout once left district A's postcode on an order shipping to B.
+        if (String(destId.value) !== destAtCall) return;
+        var list = (res && res.ok && res.kelurahan) || [];
+        var codes = {};
+        for (var i = 0; i < list.length; i++) {
+          var c = String(list[i].kodepos || list[i].postcode || "").trim();
+          if (/^[0-9]{5}$/.test(c)) codes[c] = 1;
+        }
+        var uniq = Object.keys(codes);
+        if (uniq.length === 1 && !box.value.trim()) {
+          box.value = uniq[0];
+          clearValidity("kodepos");
+          setText("kodepos-hint", "Terisi otomatis — ubah kalau tidak sesuai.");
+          return;
+        }
+        setText("kodepos-hint", uniq.length > 1
+          ? "Kecamatan ini punya beberapa kode pos — isi sesuai alamat Anda."
+          : "Isi kode pos sesuai alamat Anda.");
+      });
+    }
 
     function fetchRates() {
       if (!destId.value) return;
@@ -477,6 +540,14 @@ const funnelCatalogId = funnelProduct
       } else if (emailEl) clearValidity("email");
       if (form.alamat.value.trim().length < 10) { showErr("alamat", "Alamat terlalu pendek — sertakan jalan, RT/RW, dan patokan."); ok = false; }
       else clearValidity("alamat");
+      // The API refuses a payload without this (2026-08-03), so checking it here is what turns a
+      // silent 400 into a sentence beside the field the shopper can act on. Same rule as the cart
+      // checkout: PRESENCE + 5 digits, and deliberately NOT "must exist in our kelurahan snapshot" —
+      // postcodes get added and redrawn, and refusing a real new one loses the sale silently.
+      var kodeposVal = (byId("f-kodepos") && byId("f-kodepos").value || "").trim();
+      if (!kodeposVal) { showErr("kodepos", "Kode pos wajib diisi."); ok = false; }
+      else if (!/^[0-9]{5}$/.test(kodeposVal)) { showErr("kodepos", "Kode pos harus 5 angka."); ok = false; }
+      else clearValidity("kodepos");
       if (!destId.value) { showErr("kecamatan", "Pilih kecamatan dari daftar."); ok = false; }
       else clearValidity("kecamatan");
       return ok;
@@ -513,6 +584,8 @@ const funnelCatalogId = funnelProduct
             alamat: form.alamat.value.trim(),
             kota: byId("dest-kota").value,
             provinsi: byId("dest-prov").value,
+            // Without this the API answers "Kode pos wajib diisi." and writes no order at all.
+            kodepos: (byId("f-kodepos") && byId("f-kodepos").value || "").trim(),
           },
           shipping: { label: shipping.label, service: shipping.service, serviceType: shipping.serviceType, destId: Number(destId.value) },
           destId: Number(destId.value),
