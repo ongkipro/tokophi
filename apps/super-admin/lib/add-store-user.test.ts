@@ -91,6 +91,50 @@ describe("addStoreUser never reports a credential it did not write", () => {
   });
 });
 
+describe("addStoreUser never claims an acceptance nobody performed", () => {
+  // A membership written by an OPERATOR used to carry `acceptedAt: new Date()` — an assertion that
+  // this person accepted an invitation at the instant somebody in the control plane pressed
+  // "Tambah". Nobody observed that. The same stamp on the merchant side was measured landing on
+  // `accepted_at` identical to `invited_at` down to the millisecond, so neither writer was
+  // recording an acceptance; both were recording the invite twice.
+  //
+  // `accepted_at` has no database default, so removing the write leaves it NULL — and NULL is the
+  // honest state: nobody has signed in yet. It is stamped once, on first successful sign-in, by the
+  // merchant side.
+  const body = actionSource(ACTIONS, "addStoreUser");
+
+  it("writes the membership WITHOUT an acceptance stamp — THE DEFECT", () => {
+    const stampsAcceptance = (src: string) => /acceptedAt\s*:/.test(src);
+    expect(stampsAcceptance(body)).toBe(false);
+    // Mutation self-check: the shipped shape, before this change.
+    const old = codeOnly(
+      'await db.insert(schema.storeUsers).values({ storeId, userId: u.id, role: input.role, acceptedAt: new Date() });',
+    );
+    expect(stampsAcceptance(old), "the predicate must fire on the old shape, or it proves nothing").toBe(true);
+    // …and the insert it is talking about is still there, so this cannot pass by the function
+    // having been renamed out from under it.
+    expect(body).toContain(codeOnly("insert(schema.storeUsers)"));
+  });
+
+  it("does not sweep the store OWNER's own row into the same rule", () => {
+    // `createStore` provisions the shop's owner — an account that is CREATED, not invited — and its
+    // stamp is defensible. Judging each site is the point; a blanket ban would delete a true fact.
+    const create = actionSource(ACTIONS, "createStore");
+    expect(/acceptedAt\s*:/.test(create), "createStore's owner stamp is deliberate — see the comment there").toBe(true);
+  });
+
+  it("the read layer no longer derives a days-ago figure from that column", () => {
+    // Pre-fix rows still hold the invite's timestamp in `accepted_at`, so a non-null value proves
+    // nothing about them. Nothing rendered the derived number; publishing it would be a measurement
+    // with no measurement behind it.
+    const DATA = codeOnly(readFileSync(new URL("./data.ts", import.meta.url), "utf8"));
+    expect(DATA).not.toContain(codeOnly("acceptedDaysAgo"));
+    expect(DATA, "…and the column is not silently re-derived under another name").not.toContain(
+      codeOnly("daysBetween(r.acceptedAt)"),
+    );
+  });
+});
+
 describe("the caller reports what actually happened", () => {
   // Converting a return shape is a TWO-file change (CLAUDE.md): a caller that ignores the new field
   // reports success over something that did not happen. Here that means announcing a password

@@ -375,6 +375,33 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     30-minute bound; plus `codeOnly` claims that `jwtVerify` and `signImpersonation` stay gone) and
     `apps/admin/lib/rbac-impersonation.test.ts` (dual identity, fail-closed, no noise for a merchant's
     own session). Twelve mutations, twelve reds, recorded in `BUILD-LOG.md`.
+- 🔴 **THE RANK IS NOW CHECKED AT ROUTE ENTRY TOO — ADDITIVE, NEVER INSTEAD** (Task 5.17 / SEC-9,
+  2026-08-22). Every mutation had been rank-gated since 2026-07-15; no SCREEN ever was. The
+  middleware proves a cookie exists (edge — it cannot ask the database) and the layout proves the
+  operator row still exists; neither compared a rank. Measured on a live server with three real
+  operator rows: `support` typing `/pencairan` was served the payout queue in full — every
+  merchant's bank name, **account number**, holder and pending amount. The buttons refused, which is
+  the boundary working; the DATA had already been read, rendered and sent.
+  - **`lib/route-roles.ts` declares the floor per route group** (pure, no DB — same split as
+    `platform-rank.ts`) and **`platformRouteGate(path)` is the FIRST await of every `(platform)`
+    page**, above its first data read. It is NOT in the middleware and the rank is NOT in the
+    cookie: the edge has no database, and rank comes from `platform_admins` on every request.
+  - **The policy: the support desk and the context of ONE store are `support`; anything
+    platform-wide about money or configuration is `admin`.** `/toko/[id]` stays `support` (a ticket
+    about a withdrawal needs that store's own balance); `/` is `admin` because the dashboard IS MRR,
+    revenue, merchant float and the latest invoices — **a summary of privileged data is privileged**,
+    and drawing the line anywhere else leaks by the back door.
+  - **A route floor is the LOWEST rank that can use the screen, never the highest.** `/pengaturan`
+    hosts `admin`-rank actions beside `owner`-rank ones, so it is `admin`; the owner-only
+    affordances keep refusing at their own gate. A floor above an action locks out the operator that
+    action was written for.
+  - ⚠️ **The dashboard FORWARDS (`redirect(gate.landing)`) instead of refusing, and it is the only
+    page that does** — every login lands on `/`, so a `support` operator would otherwise meet a wall
+    on every sign-in. ⚠️ **A denial renders with HTTP 200**: a Server Component cannot set a status
+    without Next's experimental `authInterrupts`, and this surface is `noindex` with no machine
+    consumers. ⚠️ **An unlisted route is `owner` — fail closed**, and `route-roles.test.ts` derives
+    the page list from the DIRECTORY, so a new `page.tsx` fails the suite until it is classified and
+    gated. Nine mutations, nine reds; the live per-role/per-route table is in `BUILD-LOG.md`.
 - **`platformGate(min)` is the first statement of every mutating action** (33 call sites over 32 exported
   actions), and the rank is
   `support` 1 < `admin` 2 < `owner` 3. The ladder lives in `platform-rank.ts` — a PURE module, no DB
@@ -460,6 +487,20 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     is its own field on purpose — "no password" and "no password was NEEDED" read identically at a
     call site and only one of them is good news. Pinned by `apps/super-admin/lib/add-store-user.test.ts`
     (both files; proved red against three separate mutations before being trusted).
+- 🔴 **NEVER STAMP `store_users.accepted_at` FOR SOMEBODY ELSE** (2026-08-22; the merchant half is
+  #306). `addStoreUser` wrote `acceptedAt: new Date()` when an OPERATOR added a user — an assertion
+  that the invitee accepted an invitation at the instant a button was pressed in the control plane.
+  The same stamp on the merchant side was measured landing on `accepted_at` identical to
+  `invited_at` to the millisecond: neither writer recorded an acceptance, both recorded the invite
+  twice. The column has **no database default**, so removing the write leaves NULL — which is the
+  truth ("belum pernah masuk"). It is stamped once, by the first successful sign-in.
+  - ⚠️ **`createStore` / `provision.ts` keep the stamp for the store's OWN OWNER, deliberately** —
+    that account is created, not invited. **Judge each site; do not sweep.** Pinned both ways by
+    `apps/super-admin/lib/add-store-user.test.ts`.
+  - ⚠️ **A non-null `accepted_at` proves nothing about a row written before the fix**, because it
+    holds the invite's timestamp. `getStoreUsers` therefore no longer derives `acceptedDaysAgo` at
+    all (nothing rendered it). Any future "sudah pernah masuk" display must read the column directly
+    and say that only NULL is conclusive.
 - **Never anchor a date to the seed.** `health.ts` measured recency from a frozen `2026-07-02`, so a
   store 34 days dormant read "5 days, ok" and a live one read **−23 hari**. `data.ts` had already been
   migrated off that anchor; the healthcheck was missed. Same rule as the discount editor.
@@ -482,6 +523,25 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   - **Lifting restores the BILLING state and nothing more.** A store that was also overdue stays read-only, and both the toast and the audit line say so rather than announcing a reactivation that did not happen. Granting time is what "Gratiskan 1 bulan" is for.
   - **The audit entry reports an OUTCOME.** `suspendStore`/`liftSuspension` re-read the row through `.returning()`, recompute the effective state, and log *that* + the operator's email; a store id matching nothing logs nothing. Same rule as `markLabelsPrinted` — report what you WROTE. `compStore`/`extendTrial`/`setStoreComped` no longer assert `status: "active"` either; `syncStoredStatus()` derives it.
   - Pinned by `packages/lib/src/billing.test.ts` → *"operator suspension survives computeBilling"*.
+- 🔴 **A PAYOUT IS COMPLETED BY A COMPARE-AND-SWAP, AND `menunggu → selesai` USED TO BE LEGAL**
+  (Task 5.10 / F-M15, 2026-08-22). `markPayoutPaid` read the row, refused `selesai` and `gagal`, and
+  updated whatever was left. Measured against real Postgres with the shipped statements: a payout in
+  `menunggu` — one **no operator had started transferring** — was stamped LUNAS with a `paid_at`,
+  the merchant is told on `/saldo` that their money has been sent, and `processPayout` afterwards
+  matches **0 rows**, so the initiation step is not skipped but made *unreachable*, with the audit
+  trail recording a transfer nobody made.
+  - The decision is now `update payouts set status='selesai', paid_at=now() where id=$1 and
+    status='diproses' returning …` in **`payout-transition.ts`** — one statement decides and writes,
+    so two operators clicking "Tandai lunas" cannot both pass a check (measured: exactly one wins).
+    Zero rows ⇒ nothing written; a **locked** read then names one of four typed conflicts, and that
+    read is for the MESSAGE only — turning it back into the decision restores the race.
+  - **The action keeps the gate, the audit line and the revalidate, and writes no status of its
+    own** — two writers is two rules. **Nothing is posted to the ledger on any path** (the balance
+    was debited when the merchant REQUESTED the payout), which is what makes a repeated click
+    non-mutating rather than merely harmless-looking. It lives outside `actions.ts` for the same
+    reason `apps/admin/lib/payout.ts` does: `"use server"` + `@tokophi/db` at module scope cannot be
+    driven by a test. Pinned by `apps/super-admin/lib/payout-transition.test.ts` (all four source
+    statuses, real Postgres; six mutations, six reds).
 - **Super-admin per-store control** (`apps/super-admin/lib/actions.ts`): comp 1 month, extend trial, VIP toggle, reset owner/user password (scrypt), manage store users, `suspendStore`/`liftSuspension` — every action audit-logged to `platform_activity` (with `store_id` + `admin` kind). **A suspension REQUIRES a reason** (≥5 chars): the merchant is shown it, and one nobody wrote down cannot be reviewed, appealed or lifted with confidence. The store-list row menu therefore only offers *lift* inline — "Tangguhkan…" links to the detail, where the reason can actually be collected.
 - **`pct()` is a DELTA formatter; `share()` is the one for a part of a whole** (`@tokophi/lib/format`). The super-admin "Status Toko" card fed `count/total*100` to `pct()`, so the control plane read *"Ditangguhkan 5 **+83,3%**"* — a plus sign implying suspensions were climbing when nothing had moved. Two comments in `format.ts` already told callers to "format locally"; two obeyed by hand (`return-summary.tsx`, `keranjang-client.tsx`) and the third borrowed the delta formatter. A rule re-obeyed by hand at every call site is how the third one happened. ⚠️ **That card's slices must SUM TO EVERY STORE** — VIP was missing from `getStatusDistribution`, so it totalled 6 while the KPI beside it read "Toko aktif 2 / 7" and every share was against the short denominator. It has its own key type (`StatusSlice`, with `vip`), not `StoreStatus`.
 - **Client "Akun" section** `/akun/{profil,keamanan,langganan}` (NOT under Pengaturan) — tabbed layout; avatar menu links here. Langganan has payment history + printable **`/faktur/[number]`**. Sidebar shows a subscription badge under the logo.

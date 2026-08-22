@@ -805,15 +805,30 @@ export async function getStoreInvoices(storeId: string): Promise<StoreInvoiceRow
   return rows.map((r) => ({ number: r.number, amount: r.amount, status: r.status, kind: r.kind, cycle: r.cycle, daysAgo: daysBetween(r.issuedAt) }));
 }
 
-export type StoreUserRow = { id: string; userId: string; name: string; email: string; role: string; acceptedDaysAgo: number | null };
+/**
+ * ⚠️ THERE IS DELIBERATELY NO `acceptedDaysAgo` HERE ANY MORE (2026-08-22).
+ *
+ * It was `daysBetween(store_users.accepted_at)`, and the column could not carry that claim: the
+ * operator path (`addStoreUser`) stamped it at the moment the BUTTON was pressed, and the merchant
+ * path stamped it identically to `invited_at`, to the millisecond. Both writes have been removed —
+ * `accepted_at` is stamped once, by the first successful sign-in — but the ROWS THAT ALREADY EXIST
+ * still hold the old timestamp, so a non-null value proves nothing about them. NULL means "never
+ * signed in"; non-null means "either they signed in, or this row predates the fix".
+ *
+ * Nothing on any screen rendered the derived figure, so it is gone rather than relabelled: a
+ * one-sided fact nobody displays is a trap waiting for the next person who needs a column like it.
+ * If an operator-facing "sudah pernah masuk" indicator is wanted, it needs the column read directly
+ * with that ambiguity stated on screen — not a days-ago number that reads like a measurement.
+ */
+export type StoreUserRow = { id: string; userId: string; name: string; email: string; role: string };
 export async function getStoreUsers(storeId: string): Promise<StoreUserRow[]> {
   const rows = await db
-    .select({ id: schema.storeUsers.id, userId: schema.users.id, name: schema.users.name, email: schema.users.email, role: schema.storeUsers.role, acceptedAt: schema.storeUsers.acceptedAt })
+    .select({ id: schema.storeUsers.id, userId: schema.users.id, name: schema.users.name, email: schema.users.email, role: schema.storeUsers.role })
     .from(schema.storeUsers)
     .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
     .where(eq(schema.storeUsers.storeId, storeId))
     .orderBy(asc(schema.storeUsers.invitedAt));
-  return rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name ?? r.email, email: r.email, role: r.role, acceptedDaysAgo: r.acceptedAt ? daysBetween(r.acceptedAt) : null }));
+  return rows.map((r) => ({ id: r.id, userId: r.userId, name: r.name ?? r.email, email: r.email, role: r.role }));
 }
 
 // Per-store audit/activity: rows explicitly tagged with this store_id (operator actions + store events).

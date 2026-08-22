@@ -232,6 +232,7 @@
 - **Target Files:** `apps/super-admin/lib/actions.ts`, payout action tests.
 - **Change:** Lock the payout and require `status='diproses'` in the paid transition. Return a typed conflict for every other source state while preserving ledger entries.
 - **Done when:** Tests attempt each payout status; only `diproses → selesai` succeeds, repeated completion is idempotent/non-mutating, and no ledger amount changes.
+- **Status:** `[x]` **DONE 2026-08-22** — guard moved into the UPDATE's own WHERE (`payout-transition.ts`); typed conflicts; `apps/super-admin/lib/payout-transition.test.ts` drives all four source statuses against real PostgreSQL (6 mutations, 6 reds). See `BUILD-LOG.md` 2026-08-22.
 
 ### Task 5.11: Restore and Gate a Green Lint Baseline
 - **Requirement:** `NF-13`
@@ -274,6 +275,7 @@
 - **Target Files:** `apps/super-admin/middleware.ts`, `apps/super-admin/lib/platform-auth.ts`, protected route layouts/pages, focused authorization tests.
 - **Change:** Declare the minimum platform role for each protected route group and enforce it before the page loads privileged data. Keep action-level authorization as the final mutation boundary; route checks are additive, not a replacement.
 - **Done when:** Direct requests from `support`, `admin`, and `owner` sessions exercise every protected route class; under-privileged sessions receive the accepted denial without privileged data loading, and all action-level guards remain green.
+- **Status:** `[x]` **DONE 2026-08-22** — `lib/route-roles.ts` declares the floor per route group; `platformRouteGate(path)` runs above every page's first read. Measured live with three real operator rows across all eight route classes (9 mutations, 9 reds). Action gates untouched. See `BUILD-LOG.md` 2026-08-22.
 
 ### Task 5.18: Make Per-Courier Return Analytics Honest
 - **Requirement:** `F-S8`

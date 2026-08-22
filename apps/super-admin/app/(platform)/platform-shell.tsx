@@ -26,13 +26,18 @@ import {
   DropdownMenuContent,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
-import { NAV } from "@/lib/nav";
+import { NAV, navFor } from "@/lib/nav";
 import { signOut, changePlatformPassword } from "@/lib/actions/auth";
 
-type Admin = { name: string; email: string };
+type Admin = { name: string; email: string; role: string };
 
 export function PlatformShell({ admin, openTickets, children }: { admin: Admin; openTickets: number; children: React.ReactNode }) {
   const pathname = usePathname();
+
+  // Only the destinations this operator's rank can open. UX, not the boundary — see `navFor`. The
+  // TITLE is still resolved against the full NAV: a denied page must still be named in the header,
+  // or the refusal screen appears under the previous page's title.
+  const nav = navFor(admin.role);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/") || pathname.startsWith(href);
@@ -87,7 +92,7 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = isActive(item.href);
             const Icon = item.icon;
             // Real count of support_tickets with status = 'open'.

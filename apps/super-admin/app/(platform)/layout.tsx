@@ -19,7 +19,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   if (!session) redirect("/api/auth/signout");
   const openTickets = await getOpenTicketCount();
   return (
-    <PlatformShell admin={{ name: session.name, email: session.email }} openTickets={openTickets}>
+    <PlatformShell admin={{ name: session.name, email: session.email, role: session.role }} openTickets={openTickets}>
       {children}
     </PlatformShell>
   );

@@ -1,4 +1,5 @@
 import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, LifeBuoy, Banknote, History, type LucideIcon } from "lucide-react";
+import { canOpenPath } from "./route-roles";
 
 export type NavItem = { label: string; href: string; icon: LucideIcon };
 
@@ -12,3 +13,14 @@ export const NAV: NavItem[] = [
   { label: "Update Log", href: "/update-log", icon: History },
   { label: "Pengaturan", href: "/pengaturan", icon: Settings },
 ];
+
+/**
+ * The items this operator's rank can actually open.
+ *
+ * ⚠️ UX, NOT ENFORCEMENT — exactly like `useCan` on the seller side. The boundary is
+ * `platformRouteGate` at the top of each page (and `platformGate` inside each action); this only
+ * keeps a `support` operator from being offered a link that can do nothing but refuse. Deriving it
+ * from the SAME `ROUTE_RULES` the gate reads is what stops the two drifting: a sidebar computed
+ * from its own private list is how a screen ends up hidden but reachable, or offered but denied.
+ */
+export const navFor = (role: string | undefined): NavItem[] => NAV.filter((n) => canOpenPath(role, n.href));

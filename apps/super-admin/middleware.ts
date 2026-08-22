@@ -7,6 +7,17 @@ import { authSecretBytes } from "@tokophi/lib/secret";
 // NOT the admin app's `session` cookie (which is also present on localhost) — so an admin
 // login never grants super-admin access. `secret` is lazy (throws in prod if AUTH_SECRET is unset,
 // never at build) — see @tokophi/lib/secret.
+//
+// 🔴 THE RANK IS NOT ENFORCED HERE, AND IT CANNOT BE (Task 5.17 / SEC-9). This file runs on the
+// EDGE: it has no database, and the control plane's standing rule is that an operator's rank comes
+// from `platform_admins` on EVERY request, never from the cookie. Adding `role` to the JWT to make
+// a check possible here would hand every operator a rank they minted for themselves at login and
+// kept for seven days — precisely the defect `resolvePlatformSession` was written to close. The
+// route floors are enforced one layer in, by `platformRouteGate(path)` at the top of each page,
+// above its first privileged read (`lib/route-roles.ts` holds the map).
+// ⚠️ And note what this file must keep NOT doing: it may only redirect a request with NO valid JWT.
+// A dead-but-valid cookie is bounced by the layout/page to `/api/auth/signout`, because middleware
+// would send `/login` straight back to `/` and the two would ping-pong (ERR_TOO_MANY_REDIRECTS).
 const secret = () => authSecretBytes();
 
 // The control plane is never indexable. next.config.ts sets X-Robots-Tag on everything the router
