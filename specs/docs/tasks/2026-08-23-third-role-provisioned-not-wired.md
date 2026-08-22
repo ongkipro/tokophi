@@ -77,10 +77,22 @@ worth recording *why this is not a no-op for deploys*: Coolify pulls through a *
 anonymous HTTPS clone, and an App installation's access is granted per repository and is
 **independent of visibility** — so deploys are expected to keep working.
 
-**That expectation is not yet proven.** A GitHub App token could not be inspected from here (the
-endpoint needs a JWT signed by the App; a user token gets 401/403). **The first deploy after the flip
-is the test.** If it cannot clone, the fix is immediate and total: `gh repo edit ongkipro/tokophi
---visibility public`.
+✅ **PROVEN the same day, without waiting for a deploy.** The GitHub REST endpoint that describes an
+installation needs a JWT signed by the App itself, so a user token only earns 401/403 — but Coolify
+holds the App's private key, and its own helper can be driven from the box:
+
+```php
+$t = generateGithubInstallationToken(App\Models\GithubApp::find(1));   // → OBTAINED
+// git ls-remote https://x-access-token:$t@github.com/ongkipro/tokophi.git refs/heads/main
+// → 54e910b4c68a0ae783538acba3d4b30893cc96ac  refs/heads/main
+```
+
+The clone credential resolves and reads the **private** repository's current `main`. Deploys are not
+affected. ⚠️ Note the helper is `generateGithubInstallationToken` (camelCase) in this Coolify
+version — `generate_github_installation_token` does not exist and returns
+*"Call to undefined function"*, which reads like a broken integration when it is only a wrong name.
+
+Undo, should it ever be wanted: `gh repo edit ongkipro/tokophi --visibility public`.
 
 ## NEXT
 
