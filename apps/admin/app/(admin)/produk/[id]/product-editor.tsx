@@ -8,10 +8,6 @@ import { uploadProductImage, deleteProductImage } from "@/lib/actions/media";
 import { createPurchaseOrder } from "@/lib/actions/purchases";
 import {
   ChevronLeft,
-  Bold,
-  Italic,
-  List,
-  Link2,
   ImagePlus,
   Plus,
   Trash2,
@@ -39,7 +35,6 @@ import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { Textarea } from "@tokophi/ui/textarea";
 import { Switch } from "@tokophi/ui/switch";
-import { Separator } from "@tokophi/ui/separator";
 import {
   Table,
   TableBody,
@@ -154,9 +149,16 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [compareAt, setCompareAt] = React.useState(product?.compareAt ? String(product.compareAt) : "");
   const [cost, setCost] = React.useState(product?.cost ? String(product.cost) : "");
 
-  const [trackQty, setTrackQty] = React.useState(true);
+  // REMOVED: a "Lacak kuantitas" Switch. It gated nothing but the visibility of the Kuantitas input
+  // — `buildInput()` sent `stock` either way, there is no track-quantity column on `products` or
+  // `product_variants`, and inventory is levelled per variant unconditionally. So switching it OFF
+  // hid the number while the number kept being saved: a control that says "we are not tracking this"
+  // over a row we are still tracking. Kuantitas is now always visible.
   const [sku, setSku] = React.useState(product?.sku ?? "");
-  const [barcode, setBarcode] = React.useState("");
+  // Now READ BACK and SAVED (Task 5.2). It used to start empty on every open and never reach
+  // `buildInput()`, while `product_variants.barcode` has always existed and the storefront's product
+  // feed publishes it as `<g:gtin>`. Storage and a reader both existed; only the wiring was missing.
+  const [barcode, setBarcode] = React.useState(product?.barcode ?? "");
   const [qty, setQty] = React.useState(String(product?.stock ?? ""));
 
   const [hasVariants, setHasVariants] = React.useState<boolean>(!!(product?.variants?.length && product?.options?.length));
@@ -178,7 +180,15 @@ export function ProductEditor({ product }: { product?: Product }) {
     return m;
   });
 
-  const [physical, setPhysical] = React.useState(true);
+  // REMOVED: a "Produk fisik" Switch. It had no column to land in, and it was the only control here
+  // that DESTROYED data on its way past: `buildInput()` read `physical && weight ? … : null`, so
+  // switching it off and pressing Simpan NULLed `weight_grams` and the three dimension columns —
+  // the exact figures the KiriminAja quote and booking are built from (N30). Reopening the product
+  // then showed the switch back ON with the fabricated "500" default in the weight box, so the next
+  // Simpan wrote 500 g over the merchant's real value. Nothing anywhere sells a non-physical
+  // product: checkout always quotes ongkir and `weightForCart` falls back to 500 g, so a product
+  // marked "not physical" still shipped. There is no digital-goods concept to persist it into, and
+  // inventing a column for a toggle nothing reads is what Task 5.2 forbids.
   const [weight, setWeight] = React.useState(product?.weightGrams ? String(product.weightGrams) : "500");
   const [lengthCm, setLengthCm] = React.useState(product?.lengthCm ? String(product.lengthCm) : "");
   const [widthCm, setWidthCm] = React.useState(product?.widthCm ? String(product.widthCm) : "");
@@ -187,8 +197,6 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [status, setStatus] = React.useState<Product["status"]>(
     product?.status ?? "draft"
   );
-
-  const [chOnline, setChOnline] = React.useState(true);
 
   const [category, setCategory] = React.useState(product?.category ?? "Fashion");
   // Standard Google taxonomy (ADR 0011) — separate from the merchant's own `category` above.
@@ -200,7 +208,6 @@ export function ProductEditor({ product }: { product?: Product }) {
   const [material, setMaterial] = React.useState(product?.material ?? "");
   const [productType, setProductType] = React.useState(product?.productType ?? "");
   const [vendor, setVendor] = React.useState(product?.vendor || storeName);
-  const [tags, setTags] = React.useState("");
 
   const [seoTitle, setSeoTitle] = React.useState(product?.seoTitle ?? "");
   const [metaDesc, setMetaDesc] = React.useState(product?.seoDesc ?? "");
@@ -313,7 +320,10 @@ export function ProductEditor({ product }: { product?: Product }) {
     });
   };
   const buildInput = (): ProductInput => {
-    const useVar = hasVariants && parsedOptions.length > 0 && combos.length > 0;
+    // ONE definition, shared with the Inventaris card's disabled state (`useVariantRows`, derived
+    // below). Two copies of this condition would let the UI disable a field the payload still reads
+    // from, or leave one live over a value nothing writes — which is the defect this task is about.
+    const useVar = useVariantRows;
     return {
       name: name.trim(),
       description,
@@ -334,10 +344,11 @@ export function ProductEditor({ product }: { product?: Product }) {
       compareAt: compareAt ? Number(compareAt) : null,
       cost: cost ? Number(cost) : null,
       sku: sku || undefined,
-      weightGrams: physical && weight ? Number(weight) : null,
-      lengthCm: physical && lengthCm ? Number(lengthCm) : null,
-      widthCm: physical && widthCm ? Number(widthCm) : null,
-      heightCm: physical && heightCm ? Number(heightCm) : null,
+      barcode: barcode || undefined,
+      weightGrams: weight ? Number(weight) : null,
+      lengthCm: lengthCm ? Number(lengthCm) : null,
+      widthCm: widthCm ? Number(widthCm) : null,
+      heightCm: heightCm ? Number(heightCm) : null,
       stock: Number(qty) || 0,
       options: useVar ? parsedOptions.map((o) => ({ name: o.name, values: o.values })) : undefined,
       variants: useVar
@@ -496,6 +507,11 @@ export function ProductEditor({ product }: { product?: Product }) {
     .map((o) => ({ name: o.name.trim(), values: o.values.filter(Boolean) }))
     .filter((o) => o.name && o.values.length);
   const combos = hasVariants && parsedOptions.length ? cartesian(parsedOptions.map((o) => o.values)) : [];
+  // TRUE exactly when `buildInput()` submits the variant matrix instead of one implicit-default row
+  // — i.e. exactly when the product-level SKU / Barcode / Kuantitas have no row to be written to.
+  // Switching the Varian toggle on with no option VALUES yet still writes the default row, so this
+  // is the condition to disable on, not `hasVariants`.
+  const useVariantRows = hasVariants && parsedOptions.length > 0 && combos.length > 0;
   const variantAt = (key: string) => variantMap[key] ?? { price, stock: "0", sku: "" };
   const setVariantField = (key: string, field: "price" | "stock" | "sku", val: string) =>
     setVariantMap((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { price, stock: "0", sku: "" }), [field]: val } }));
@@ -665,33 +681,23 @@ export function ProductEditor({ product }: { product?: Product }) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="p-desc">Deskripsi</Label>
-                <div className="overflow-hidden rounded-lg border">
-                  <div className="flex items-center gap-0.5 border-b bg-muted/40 px-1.5 py-1">
-                    <Button variant="ghost" size="icon-sm" type="button" aria-label="Tebal">
-                      <Bold />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" type="button" aria-label="Miring">
-                      <Italic />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" type="button" aria-label="Daftar">
-                      <List />
-                    </Button>
-                    <Separator orientation="vertical" className="mx-1 h-5" />
-                    <Button variant="ghost" size="icon-sm" type="button" aria-label="Tautan">
-                      <Link2 />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" type="button" aria-label="Gambar">
-                      <ImagePlus />
-                    </Button>
-                  </div>
-                  <Textarea
-                    id="p-desc"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Ceritakan keunggulan produk ini…"
-                    className="min-h-40 rounded-none border-0 focus-visible:ring-0"
-                  />
-                </div>
+                {/* REMOVED: a five-button formatting toolbar (Tebal · Miring · Daftar · Tautan ·
+                    Gambar). Every one was a <Button> with an aria-label, a hover state and NO
+                    onClick — five controls a merchant could click all day for nothing. And there
+                    was nothing to wire them to in either direction: this is a plain <Textarea>, not
+                    a rich-text editor, and the storefront PDP renders `product.description` as TEXT
+                    (split on blank lines into <p class="whitespace-pre-line">, never `set:html`), so
+                    markup a toolbar inserted would be published to shoppers verbatim. Same call as
+                    the "Video produk" card below: nothing is scheduled, so a "segera hadir"
+                    placeholder would be the same promise in a quieter font. Bring the toolbar back
+                    in the commit that brings a formatting pipeline. */}
+                <Textarea
+                  id="p-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Ceritakan keunggulan produk ini…"
+                  className="min-h-40"
+                />
               </div>
             </CardContent>
           </Card>
@@ -871,14 +877,19 @@ export function ProductEditor({ product }: { product?: Product }) {
               <CardTitle>Inventaris</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="p-track">Lacak kuantitas</Label>
-                <Switch
-                  id="p-track"
-                  checked={trackQty}
-                  onCheckedChange={setTrackQty}
-                />
-              </div>
+              {/* ⚠️ These three fields belong to the IMPLICIT DEFAULT variant, so once a product has
+                  a variant matrix they have no row to write to: `variantRowsOf()` returns the
+                  matrix rows and drops the product-level `sku`/`barcode`/`stock` entirely. They used
+                  to stay live and editable anyway — a merchant retyping a SKU on a product with
+                  variants was typing into nothing. Disabled with a title naming where the value
+                  actually lives (the repo's convention for a control that cannot act right now),
+                  never hidden: the saved values still have to be readable. */}
+              {useVariantRows && (
+                <p className="text-xs text-muted-foreground">
+                  Produk ini punya varian, jadi SKU, barcode &amp; stok diatur per varian di kartu{" "}
+                  <span className="font-medium text-foreground">Varian</span>.
+                </p>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="p-sku">SKU</Label>
@@ -887,6 +898,8 @@ export function ProductEditor({ product }: { product?: Product }) {
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                     placeholder="SKU-000"
+                    disabled={useVariantRows}
+                    title={useVariantRows ? "Diatur per varian di kartu Varian" : undefined}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -896,27 +909,29 @@ export function ProductEditor({ product }: { product?: Product }) {
                     value={barcode}
                     onChange={(e) => setBarcode(e.target.value)}
                     placeholder="ISBN, UPC, GTIN…"
+                    disabled={useVariantRows}
+                    title={useVariantRows ? "Diatur per varian di kartu Varian" : undefined}
                   />
                 </div>
               </div>
-              {trackQty && (
-                <div className="grid gap-2 sm:max-w-[50%] sm:pr-2">
-                  <Label htmlFor="p-qty">Kuantitas</Label>
-                  <Input
-                    id="p-qty"
-                    inputMode="numeric"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                    placeholder="0"
-                    className="tabular-nums"
-                  />
-                  {qtyN > 0 && qtyN < LOW_STOCK && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Stok menipis
-                    </p>
-                  )}
-                </div>
-              )}
+              <div className="grid gap-2 sm:max-w-[50%] sm:pr-2">
+                <Label htmlFor="p-qty">Kuantitas</Label>
+                <Input
+                  id="p-qty"
+                  inputMode="numeric"
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                  placeholder="0"
+                  className="tabular-nums"
+                  disabled={useVariantRows}
+                  title={useVariantRows ? "Diatur per varian di kartu Varian" : undefined}
+                />
+                {!useVariantRows && qtyN > 0 && qtyN < LOW_STOCK && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Stok menipis
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -1051,52 +1066,45 @@ export function ProductEditor({ product }: { product?: Product }) {
               <CardTitle>Pengiriman</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="p-fisik">Produk fisik</Label>
-                <Switch
-                  id="p-fisik"
-                  checked={physical}
-                  onCheckedChange={setPhysical}
-                />
-              </div>
-              {physical && (
-                <div className="space-y-4">
-                  {/* Berat — prioritas untuk ongkir */}
-                  <div className="grid gap-2 sm:max-w-[50%]">
-                    <Label htmlFor="p-berat">Berat (gram) <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="p-berat"
-                      inputMode="numeric"
-                      value={weight}
-                      onChange={(e) => setWeight(e.target.value)}
-                      placeholder="mis. 250"
-                      className="tabular-nums"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Berat aktual barang, dipakai menghitung ongkir. Contoh: kaos ±250 g · dress ±400 g · jaket ±700 g · sepatu ±800 g.
-                    </p>
-                  </div>
-
-                  {/* Dimensi — untuk berat volumetrik */}
-                  <div className="grid gap-2">
-                    <Label>Dimensi paket (cm)</Label>
-                    <div className="grid grid-cols-3 gap-2 sm:max-w-md">
-                      <div className="relative">
-                        <Input id="p-panjang" inputMode="numeric" value={lengthCm} onChange={(e) => setLengthCm(e.target.value)} placeholder="Panjang" className="tabular-nums" />
-                      </div>
-                      <div className="relative">
-                        <Input id="p-lebar" inputMode="numeric" value={widthCm} onChange={(e) => setWidthCm(e.target.value)} placeholder="Lebar" className="tabular-nums" />
-                      </div>
-                      <div className="relative">
-                        <Input id="p-tinggi" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="Tinggi" className="tabular-nums" />
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Panjang × Lebar × Tinggi. Dipakai untuk <b>berat volumetrik</b> (P×L×T ÷ 6.000 = kg). Kurir memakai yang <b>lebih besar</b> antara berat aktual & volumetrik. Contoh: dress terlipat 30 × 25 × 5 cm · sepatu 33 × 22 × 12 cm.
-                    </p>
-                  </div>
+              {/* REMOVED: a "Produk fisik" Switch — see the note beside the `weight` state. It wrote
+                  to no column, survived no reload, and turning it off NULLed the weight and the
+                  three dimensions that price every shipment. */}
+              <div className="space-y-4">
+                {/* Berat — prioritas untuk ongkir */}
+                <div className="grid gap-2 sm:max-w-[50%]">
+                  <Label htmlFor="p-berat">Berat (gram) <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="p-berat"
+                    inputMode="numeric"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    placeholder="mis. 250"
+                    className="tabular-nums"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Berat aktual barang, dipakai menghitung ongkir. Contoh: kaos ±250 g · dress ±400 g · jaket ±700 g · sepatu ±800 g.
+                  </p>
                 </div>
-              )}
+
+                {/* Dimensi — untuk berat volumetrik */}
+                <div className="grid gap-2">
+                  <Label>Dimensi paket (cm)</Label>
+                  <div className="grid grid-cols-3 gap-2 sm:max-w-md">
+                    <div className="relative">
+                      <Input id="p-panjang" inputMode="numeric" value={lengthCm} onChange={(e) => setLengthCm(e.target.value)} placeholder="Panjang" className="tabular-nums" />
+                    </div>
+                    <div className="relative">
+                      <Input id="p-lebar" inputMode="numeric" value={widthCm} onChange={(e) => setWidthCm(e.target.value)} placeholder="Lebar" className="tabular-nums" />
+                    </div>
+                    <div className="relative">
+                      <Input id="p-tinggi" inputMode="numeric" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="Tinggi" className="tabular-nums" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Panjang × Lebar × Tinggi. Dipakai untuk <b>berat volumetrik</b> (P×L×T ÷ 6.000 = kg). Kurir memakai yang <b>lebih besar</b> antara berat aktual & volumetrik. Contoh: dress terlipat 30 × 25 × 5 cm · sepatu 33 × 22 × 12 cm.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -1207,26 +1215,17 @@ export function ProductEditor({ product }: { product?: Product }) {
             </CardContent>
           </Card>
 
-          {/* Saluran penjualan */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Saluran penjualan</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="ch-online">Toko Online</Label>
-                <Switch
-                  id="ch-online"
-                  checked={chOnline}
-                  onCheckedChange={setChOnline}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Produk dijual lewat toko online Anda. Sumber trafik &amp; konversi (Meta Ads,
-                TikTok Ads, Google Ads, Organic) dilacak terpisah di Analitik &amp; Pemasaran.
-              </p>
-            </CardContent>
-          </Card>
+          {/* REMOVED: the whole "Saluran penjualan" card and its "Toko Online" Switch — the sibling
+              of the one removed from `collection-editor.tsx` in #289, deliberately left for this
+              task. `buildInput()` never carried it, `products` has no channel column, and nothing in
+              any of the four surfaces read the value: switching it off, pressing Simpan and reading
+              "Perubahan produk disimpan" left it back ON after a reload. There is exactly ONE sales
+              channel in this product — the merchant's storefront, which renders every `active`
+              product — so the switch could only ever be on, and the card's own paragraph said the
+              ad channels beside it are tracked somewhere else entirely (Analitik & Pemasaran).
+              A per-product channel toggle needs a channel model first; storing a boolean nothing
+              consults is the speculative schema Task 5.2 forbids. `status` (Aktif/Draft) is the
+              control that already answers "is this product sellable", and it persists. */}
 
           {/* Organisasi */}
           <Card>
@@ -1322,20 +1321,23 @@ export function ProductEditor({ product }: { product?: Product }) {
                   placeholder="Nama vendor"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="p-tag">Tag</Label>
-                <Input
-                  id="p-tag"
-                  value={tags}
-                  onChange={(e) => setTags(e.target.value)}
-                  placeholder="Pisahkan dengan koma"
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  <Badge variant="secondary">terlaris</Badge>
-                  <Badge variant="secondary">baru</Badge>
-                  <Badge variant="secondary">promo</Badge>
-                </div>
-              </div>
+              {/* REMOVED: a "Tag" input ("Pisahkan dengan koma") and the three chips under it
+                  (terlaris · baru · promo). `products` has NO tags column — the only `tags` in the
+                  schema is `customers.tags` (CRM) — `buildInput()` never carried the value, and
+                  nothing in the admin, the storefront, the feeds or the collection conditions reads
+                  a product tag, so every comma-separated list a merchant typed was discarded on
+                  Simpan and the box came back empty. The three chips were plain <Badge>s with no
+                  onClick: they read as clickable suggestions and were decoration.
+                  ⚠️ Do not "fix" this by adding a `tags` column. `conditionField` DOES carry a
+                  `"tag"` member and the collection editor offers "Tag produk" — but NOTHING
+                  EVALUATES a collection condition anywhere in this repo (membership is the manual
+                  `collection_products` rows; `collection_conditions` is written and read back by
+                  that editor and by nothing else), so a stored tag would still feed nothing. The
+                  column earns its place in the commit that makes a condition, a storefront filter
+                  or a feed attribute actually consult it — one piece of work, not two halves that
+                  each look finished. `products.badge` + `products.bestseller` DO exist and DO reach the
+                  storefront ribbon, but they are single-valued and no editor exposes them; wiring
+                  those is its own piece of work, not a rename of this box. */}
             </CardContent>
           </Card>
 
