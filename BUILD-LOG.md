@@ -8,6 +8,31 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-22 15:55 UTC] — Stage 4 Task 4.12 · SEC-18 · PRODUCTION PROVISIONING + POST-DEPLOY VERIFICATION
+
+- **Executor:** Main Session (Claude, Opus 5) — the owner-gated half of Task 4.12. No application code changed in this pass; the code is `cb15532` (#310).
+- **Scope:** provision the restricted credential production never had, wire it, merge, and verify the runtime identity by measurement rather than by a healthy container.
+
+**① The credential (owner-authorised production write, 2026-08-22).** `tokophi_app` had `rolcanlogin = f` and no password — it existed only as a `SET LOCAL ROLE` target, so `APP_DATABASE_URL` had nothing to point at. Now `rolcanlogin = t`, password set, and re-measured `rolsuper = f`, `rolbypassrls = f`. The secret was generated **on the VPS** and never entered a transcript, a shell history on any other machine, or this repository; it lives root-only at `/root/.tokophi_app_password` (and the composed URL at `/root/.tokophi_app_url`, `0600`). A real login as that role was proved before anything was wired.
+
+**② The env (Coolify, before the merge — the order is the safety property).** `APP_DATABASE_URL` was created through Coolify's own ORM (`docker exec coolify php artisan tinker`; the API token still 401s), pointing at `tokophi_app@postgres:5432/tokophi`. ⚠️ **Setting it BEFORE the merge was safe only because the old compose forwarded no such variable to any service** — a container only receives what its compose block names. Had it been forwarded, the pre-4.12 code (`APP_DATABASE_URL ?? ownerUrl`, all three surfaces labelled `app`) would have connected every surface as the restricted role on the next deploy: auth's pre-session read, the storefront's host resolution and every super-admin read return **zero rows** under RLS with no GUC. Wire the env, then merge the code that knows what to do with it.
+
+**③ Verified after the deploy landed** (`cb15532`, fleet 4/4 healthy twice):
+
+| claim | evidence |
+|---|---|
+| labels are what the design says | `admin: role=app app_url_forwarded=1` · `super-admin: role=owner` · `storefront: role=owner` (read from `docker inspect`) |
+| the identity gate runs and passes | admin container log: `[@tokophi/db] restricted database identity verified: tokophi_app` |
+| **both pools are live, which is the whole point** | `pg_stat_activity`: `tokophi` **9** connections (owner: auth, `api/public/**`, cron, super-admin, storefront) · `tokophi_app` **1** (restricted, `withTenant` only). Before this deploy `tokophi_app` had never held a connection — it could not log in |
+| tenant scoping works under the restricted role | `set local role tokophi_app` + `app.store_id` = `batiknusantara` → **25 products, 1 store visible**; the same connection with a different store id → **1 product, 1 store visible** |
+| nothing regressed | `batiknusantara.tokophi.id` 200 · `toko.tokophi.id` 200 · `app.tokophi.com/login` 200 · `rich.tokophi.com/login` 200 |
+
+⚠️ **A test that resolves its own tenant id AFTER dropping to the restricted role measures nothing.** The first run of the scoping check reported `0 products` and looked like a production failure; the subquery finding the store had itself been filtered by RLS, so the GUC was set to an empty string. Resolve the id as owner, `\gset` it, then drop the role. The 0 was the probe, not the platform.
+
+**Grants were measured too, and are complete:** `tokophi_app` holds SELECT/INSERT/UPDATE/DELETE on all 82 objects and the schema has **no sequences** (UUID keys), so the usual "forgot to grant the sequence" failure cannot occur here.
+
+**Still open, deliberately, and NOT implied by this pass:** `FORCE ROW LEVEL SECURITY` is on **0** tables, so a non-superuser table owner would still bypass its own policies — a 54-table migration and an owner decision, recorded in `specs/docs/tasks/2026-08-22-board-analysis-and-4.12-preflight.md`. Rollback for everything above is one variable: `DATABASE_RUNTIME_ROLE=owner` on admin.
+
 ### [2026-08-22 15:35 UTC] — Stage 4 Task 4.12 · SEC-18 · Prove Restricted Database Identity Or Fail Closed
 
 - **Executor:** Claude (Opus 5) — Task 4.12, worktree `t412`, branch `sec/task-4.12-restricted-db-identity`, off `origin/main` `9107078` (+ the preflight doc, `446655d`).
