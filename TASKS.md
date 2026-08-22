@@ -162,6 +162,7 @@
 - **Target Files:** `packages/db/src/client.ts`, `docker-compose.coolify.yml`, per-surface startup/runtime probes, restricted-role tests.
 - **Change:** Remove owner-URL fallback from app-role mode. Require explicit restricted credentials and verify effective `session_user/current_user` lacks superuser and BYPASSRLS before serving traffic. Do not print connection strings.
 - **Done when:** Admin, Super Admin, and Storefront refuse mislabeled owner credentials; accepted app credentials report the restricted role; cross-tenant probes remain blocked.
+- **Status:** `[~]` **IN PROGRESS 2026-08-22** (Wave 1 lane H — the last open P0). 🔴 **Preflight measured on production, and the code change alone would take the fleet down:** `DATABASE_RUNTIME_ROLE=app` is set, `APP_DATABASE_URL` is **absent**, so `client.ts` resolves app-role mode to the OWNER connection — which is `rolsuper = t`, `rolbypassrls = t` — while `tokophi_app` has `rolcanlogin = f` and no password, and `relforcerowsecurity` is on **0** tables. The restricted credential must exist in the environment **before** this merges. Evidence + the owner-gated provisioning order: `specs/docs/tasks/2026-08-22-board-analysis-and-4.12-preflight.md`.
 
 ### Task 4.13: Harden First-Party Callback and Cron Authentication
 - **Requirement:** `SEC-16`
