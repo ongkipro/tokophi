@@ -42,13 +42,47 @@ tokophi_app` succeeds today only because a superuser may assume any role.
 
 So `GRANT tokophi_app TO tokophi;` is not optional tidiness; it is what keeps the escape hatch open.
 
-## Recipe, if the owner decides to proceed (NOT executed)
+## 🔴 ATTEMPTED THE SAME DAY — AND POSTGRESQL REFUSED. The recipe below cannot run.
 
-```sql
-GRANT tokophi_app TO tokophi;    -- FIRST: keeps Task 4.12's rollback path alive
-ALTER ROLE tokophi NOSUPERUSER;  -- keep CREATEROLE (see DR row above) unless a bootstrap
-                                 -- step is documented instead
+The owner authorised it; it was executed against production in the safe order, and the second
+statement was rejected by the engine:
+
 ```
+GRANT tokophi_app TO tokophi;      -- ✅ applied, verified: pg_has_role('tokophi','tokophi_app','member') = t
+ALTER ROLE tokophi NOSUPERUSER;    -- ❌ ERROR: permission denied to alter role
+                                   --    DETAIL: The bootstrap user must have the SUPERUSER attribute.
+```
+
+**`tokophi` is this cluster's BOOTSTRAP user** — the role `initdb` created from `POSTGRES_USER`.
+PostgreSQL forbids removing `SUPERUSER` from it, by *anyone*, including itself. This is not a
+privilege we can grant our way around and not a permission problem: it is a property of the cluster.
+**Demoting `tokophi` is impossible while it is the bootstrap role**, and no amount of `CREATEROLE`
+or membership changes it. Nothing was left half-applied: the state after the attempt is exactly the
+state before it, plus the GRANT.
+
+**The GRANT was kept, deliberately.** It grants `tokophi` nothing it did not already have (a
+superuser may assume any role), and it is what makes Task 4.12's documented rollback
+(`DATABASE_RUNTIME_ROLE=owner`, which puts `set local role tokophi_app` back on the owner pool) safe
+under any future owner role. Verified after: both surfaces 200, admin log still
+`restricted database identity verified: tokophi_app`, and a tenant-scoped read as `tokophi_app`
+still returns **25 products / 1 store** for `batiknusantara`.
+
+### What is actually left, and it is a different shape
+
+Reducing the app's privilege now means **not using the bootstrap role for application traffic** —
+never demoting it. Two options, and the first is much the smaller:
+
+- **(a) A THIRD role for the owner-mode paths.** A `NOSUPERUSER` role carrying **`BYPASSRLS`** plus
+  the same DML grants `tokophi_app` holds. `DATABASE_URL` for `admin`, `super-admin` and
+  `storefront` points at it; `migrate`/`seed` keep the bootstrap role. Auth's pre-session read, the
+  storefront's Host resolution and Super Admin keep their cross-tenant reads (that is what
+  `BYPASSRLS` buys, and why it must be a *separate* role — putting it on `tokophi_app` would undo
+  Task 4.12). This is the same shape 4.12 already proved: one role per purpose, named in compose,
+  provable from `pg_roles`.
+  ⚠️ Unmeasured, and it is the whole risk: whether those three surfaces touch anything that only an
+  *owner* may do (DDL, `truncate`, ownership-dependent grants). Measure before proposing it.
+- **(b) Transfer ownership** of the database and all 81 tables to a non-superuser role
+  (`REASSIGN OWNED`). Bigger, touches every object, and buys little over (a).
 
 - **Leave the tables UNFORCED.** Owner-bypass is what keeps auth's pre-session read, the storefront's
   Host resolution and Super Admin alive; that is the whole finding of the FORCE probe.
@@ -64,7 +98,12 @@ ALTER ROLE tokophi NOSUPERUSER;  -- keep CREATEROLE (see DR row above) unless a 
 
 ## NEXT
 
-Owner decision. If yes, run the two statements above against production, redeploy nothing (they take
-effect on the next connection), then re-verify: the four surfaces, the admin identity-gate log, both
-pools in `pg_stat_activity`, and one merchant read through `withTenant`. If no, this file records why
-the question is settled and what it would cost to reopen.
+**Do not re-file "demote `tokophi`"** — the engine refuses it and the reason is structural, recorded
+above with the exact error. The open question is now option **(a)**: measure whether the three
+owner-mode surfaces need owner-only privileges, and if they do not, add the third role. That is a
+compose + env change of the same shape as Task 4.12, not a migration.
+
+Two things are already true and worth keeping in view: every merchant read and write is already on a
+genuinely restricted connection (Task 4.12), which is where the tenant risk lived; and the residual
+exposure is that the three *deliberately* cross-tenant surfaces hold a superuser connection rather
+than a merely cross-tenant one.
