@@ -1,3 +1,3 @@
 export * from "./schema";
-export { db, schema, client } from "./client";
+export { db, appDb, schema, client, appClient, assertRestrictedDbIdentity } from "./client";
 export { withTenant } from "./rls";

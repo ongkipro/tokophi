@@ -8,6 +8,114 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-22 15:35 UTC] — Stage 4 Task 4.12 · SEC-18 · Prove Restricted Database Identity Or Fail Closed
+
+- **Executor:** Claude (Opus 5) — Task 4.12, worktree `t412`, branch `sec/task-4.12-restricted-db-identity`, off `origin/main` `9107078` (+ the preflight doc, `446655d`).
+- **Scope ID:** `SEC-18`. The last open P0 in Stage 4.
+
+**The defect, in one line of `packages/db/src/client.ts`:**
+
+    const appUrl = process.env.APP_DATABASE_URL ?? ownerUrl;
+
+so `DATABASE_RUNTIME_ROLE=app` with no `APP_DATABASE_URL` resolved, silently, to the OWNER connection. Measured on production 2026-08-22 (read-only probes): all three app services carried `DATABASE_RUNTIME_ROLE=app`, **none** carried `APP_DATABASE_URL`, and the role they connect as (`tokophi`) is `rolsuper = t`, `rolbypassrls = t`. The restricted label has been in place since Task 2.1; the restricted identity never was.
+
+#### What shipped: TWO POOLS, and the restricted one has to prove it
+
+| handle | pool | callers |
+|---|---|---|
+| `db` | owner (`DATABASE_URL`) — unchanged | the already-enumerated owner paths: `lib/auth.ts`'s pre-session `store_users` read, `apps/admin/app/api/public/**`, the cron sweeps, `lib/provision.ts`, super-admin, the storefront |
+| **`appDb`** (new) | restricted (`APP_DATABASE_URL`) in app-role mode, the owner pool otherwise | **`withTenant()` and nothing else** — every merchant read and write, 79 files |
+
+`withTenant` already issued `SET LOCAL ROLE tokophi_app`, which restricts *inside* the transaction even on an owner connection — that is what has enforced RLS for merchant traffic all along. What it cannot do is survive a `RESET ROLE`, and it says nothing about a connection that is a superuser to begin with. On the restricted pool the login role itself has no superuser and no BYPASSRLS, so there is nothing to reset back to.
+
+The probe reads `pg_roles` for **`current_user` AND `session_user`** (a superuser that has run `SET ROLE tokophi_app` looks restricted from `current_user` alone), plus `pg_has_role(current_user, 'tokophi_app', 'USAGE')` — without that last one every `withTenant` transaction would throw on its own `set local role`. It runs **once per process**: armed at module load so a mislabelled deploy dies in seconds with no traffic, and awaited by `withTenant` so nothing tenant-scoped can run inside that window. Failing closed is `process.exit(1)`; there is no useful degraded mode for a process whose tenant isolation is unknown, and Next/Astro expose no "refuse to listen" hook reachable from a package. **A connection string never reaches a log or an error — only the role name.**
+
+#### 🔴 The finding that changed the runbook
+
+The preflight's step 2 was *"set `APP_DATABASE_URL` for admin, super-admin and storefront, pointing at `tokophi_app`"*. **Measured, that is a total outage.** All **50** `CREATE POLICY` statements in `packages/db/drizzle/*.sql` are `TO PUBLIC` (**0** name a role), so they apply to any role without BYPASSRLS — including one that simply *is* `tokophi_app`. With no `app.store_id` GUC, `app_current_store_id()` is NULL, so every policed table returns nothing. On production, as `tokophi_app`, no GUC:
+
+| table | as `tokophi_app` | as owner |
+|---|---|---|
+| `stores` | **0** | 14 |
+| `store_users` | **0** | 13 |
+| `products` | **0** | 78 |
+
+Not a permission error — RLS filtering (the role holds SELECT on 82 tables and `USAGE` on `public`). So the surfaces that read **outside** `withTenant` cannot move: nobody could log in, every shop would 404, and the control plane would render empty. Measured call sites: **admin 79 files, super-admin 0, storefront 0**. `0058_*.sql`'s own header, `SECURITY.md` §4 and `.env.coolify.example` had each already recorded this; the compose file disagreed with all three.
+
+**Resolution — shape (b), two named pools, with the labels corrected as a consequence:** `admin` = `app` (its 79 files of tenant traffic move onto the restricted pool) with `APP_DATABASE_URL` required via `${VAR:?}`; `super-admin` and `storefront` = `owner`, which is what they have silently been. Admin's pre-session auth read keeps working because it is on `db`, the owner pool, deliberately and greppably — which is the same rule AGENTS.md has enforced since day one.
+
+#### Files
+
+| file | change |
+|---|---|
+| `packages/db/src/db-identity.ts` | **new.** PURE (no `./client` import — the same split as `platform-rank.ts`, because `client.ts` opens a pool at module scope and a rule inside it cannot be tested): `planPools()`, `judgeIdentity()`, `IDENTITY_SQL`, `factsFromRow()` |
+| `packages/db/src/db-identity.test.ts` | **new.** 22 tests — pure decision + judge, two `codeOnly` source claims with mutation self-checks, and a real-Postgres half that creates a genuinely restricted login role |
+| `packages/db/src/client.ts` | consumes the plan; two pools; the memoised probe; fail-closed exit |
+| `packages/db/src/rls.ts` | `withTenant` awaits the gate and runs on `appDb` |
+| `packages/db/src/index.ts` | exports `appDb`, `appClient`, `assertRestrictedDbIdentity` |
+| `docker-compose.coolify.yml` | admin `app` + required `APP_DATABASE_URL`; super-admin and storefront `owner`; three comment blocks carrying the measurement |
+| `specs/docs/tasks/2026-08-22-task-4.12-restricted-db-identity.md` | **new.** Handoff, committed before any code |
+
+#### Verification — real numbers
+
+- `npm install` fresh in the worktree (no hardlinked `node_modules`), then **`npm test` → 123 files, 1009 tests, 1009 passed, 0 failed.** `astro check` 0 errors on both storefront (120 files) and landing (29). No pre-existing failures to name.
+- ⚠️ **A repo-wide guard only sees TRACKED files, so it cannot judge your work until you commit it.**
+  The first `npm test` here was 1009/1009 **green** while `db-identity.test.ts` was still untracked;
+  the identical suite went red the moment it was committed, because `password.test.ts` walks
+  `trackedFiles()` and found the throwaway Postgres role's password being minted with a local
+  `randomBytes` — a second mint, which is exactly what that guard exists to forbid. Fixed by using the
+  one mint (`tempPassword()` from `@tokophi/lib/password`). **Re-run `npm test` after your first
+  commit, not only before it** — several of this repo's strongest guards (`password.test.ts`,
+  `no-published-credentials.test.ts`, `inventory-location.test.ts`) are structurally blind to a file
+  git does not know about.
+- `npx tsc -p packages/db --noEmit` → clean.
+- `npm run build -w @tokophi/storefront` → Complete.
+- `npm run build -w @tokophi/admin` → succeeds with the Dockerfile's own env (`DATABASE_RUNTIME_ROLE=owner DATABASE_URL=…build`). ⚠️ A **bare** `npm run build -w @tokophi/admin` in a worktree fails, and that is **pre-existing, not this change** — proved by restoring `client.ts`/`rls.ts`/`index.ts` from `446655d` and reproducing the identical failure. `.gitignore` is `.env*`, so a worktree can never hold a root `.env`; the base commit throws on the missing `DATABASE_URL` in exactly the same place.
+- **Driven end to end in app-role mode** against real Postgres (the `*_test` database), with a genuinely restricted login role:
+
+  | run | output | exit |
+  |---|---|---|
+  | restricted credential | `restricted database identity verified: t412_live_b87aeb` · `own=1 foreign=0 appPoolRole=t412_live_b87aeb/t412_live_b87aeb` | 0 |
+  | owner credential wearing the `app` label | `REFUSING TO SERVE — session_user "tokophi" is a SUPERUSER, so DATABASE_RUNTIME_ROLE=app is a false label…` | **1** |
+
+  That is the whole done-when in two runs: mislabelled owner credentials refused, an accepted app credential reporting the restricted role, and the cross-tenant probe still blocked (`foreign=0`).
+
+#### Mutation matrix — 16 mutations, 16 reds, and TWO of them found real blind spots
+
+Each patched one line of product source, ran the suite, and was reverted (`AFTER-REVERT: 22 passed` every time).
+
+| # | mutation | result |
+|---|---|---|
+| 1 | restore the owner fallback (`if (!env.APP_DATABASE_URL)` → `if (false)`) | 2 failed |
+| 2 | app-role mode stops requiring the owner URL | 3 failed |
+| 3–6 | drop each of the four superuser / BYPASSRLS checks | 2 failed each |
+| 7 | drop the `canAssumeAppRole` check | 2 failed |
+| 8 | put a connection string into a refusal | 1 failed |
+| 9 | `session_user::text as sess_user` → `current_user::text` | **GREEN — blind spot** |
+| 9b | the join predicate `s.rolname = session_user` → `current_user` | 1 failed |
+| 10 | probe a role that is never granted | 1 failed |
+| 11 | `console.log(plan.appUrl)` | **GREEN — blind spot** |
+| 11b | `console.error("…" + plan.ownerUrl)` | 1 failed |
+| 12 | `client.ts` reads a URL out of `process.env` itself | 1 failed |
+| 13 | `withTenant` drops the gate | 1 failed |
+| 14 | `withTenant` back on the owner pool (`appDb` → `db`) | 1 failed |
+
+- **M-9** exposed that the flags came from the join predicate while the *name* came from the projection, so a mutated projection reported the wrong role in a refusal and stayed green. Fixed by pinning both halves (`sessionUser` is asserted **not** to be the app role in the `SET ROLE` case).
+- **M-11** exposed a guard that could not see its own subject: `/\burl\b/` has no word boundary in front of the `url` in `appUrl`, so `console.log(plan.appUrl)` sailed past the "no connection string in a log" claim. The pattern is `/…url/i` now and both shapes are self-checked.
+
+  Both are recorded here rather than quietly fixed, because a guard that comes back green on its first mutation is the exact failure this repo has paid for nine times in `test/source-code.ts`.
+
+#### Deliberately out of scope
+
+- **`FORCE ROW LEVEL SECURITY`** — 0 tables carry it, so even a non-superuser table OWNER bypasses its own policies. Recorded as an owner decision in the preflight §3; it is a migration over 54 tables, not a rider on this task.
+- **Moving the owner paths onto the restricted pool** — impossible today, per the measurement above. The follow-up is the one named in the handoff's NEXT: give the enumerated cross-tenant readers a tenant context, or accept them as owner permanently.
+- **Role-membership closure** — a role that is a *member* of a superuser role passes the probe. Stated in `judgeIdentity`'s comment rather than half-implemented.
+
+#### Deployment precondition — this is NOT merge-and-forget
+
+`APP_DATABASE_URL` must be set in Coolify **on the `admin` service only**, pointing at the restricted role, **before** this merges. `${APP_DATABASE_URL:?…}` makes a deploy without it fail at compose-parse time with the message inline, which is the loud failure — but it fails the whole stack, so the variable comes first, then the merge. `tokophi_app` was given `LOGIN` + a password by the owner on 2026-08-22 and verified: `rolcanlogin = t`, `rolsuper = f`, `rolbypassrls = f`. Nothing in this pass set an env var or deployed.
+
+
 ### [2026-08-22 12:50 UTC] — Stage 5 Task 5.2 · F-C8 · Persist Or Remove Every Product Editor Control
 
 - **Executor:** Claude (Opus 5), worktree `s5c`, branch `fix/stage5-product-editor`, off `origin/main` `a98321c`.

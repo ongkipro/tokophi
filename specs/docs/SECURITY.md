@@ -84,8 +84,24 @@ the mint's entropy is load-bearing rather than a nice-to-have.
 - **Observed.** Merchant reads run inside `withCurrentTenant`, writes inside `withTenant`: a
   transaction that sets `app.store_id` and `SET LOCAL ROLE tokophi_app`, so tenant queries execute as
   a **non-owner** role with policies applied.
+- **Observed (Task 4.12 / SEC-18, 2026-08-22).** `withTenant` now runs on its **own pool** (`appDb`,
+  from `APP_DATABASE_URL`) wherever `DATABASE_RUNTIME_ROLE=app`, so the restriction is a property of
+  the *connection* rather than of the last statement anyone ran on it — `SET LOCAL ROLE` does not
+  survive a `RESET ROLE`, and says nothing about a connection that is a superuser to begin with.
+  `@tokophi/db` proves the role against `pg_roles` (`current_user` **and** `session_user`: no
+  superuser, no BYPASSRLS, and able to assume `tokophi_app`) **once per process, before the first
+  tenant query**, and `process.exit(1)`s if it cannot. There is no owner fallback: the label used to
+  resolve to `DATABASE_URL` when `APP_DATABASE_URL` was absent, which is how every app service ran as
+  `rolsuper = t, rolbypassrls = t` while claiming to be restricted.
 - **Decision.** Auth, Super Admin and the storefront stay on the owner connection — there is no
   session/tenant yet, the surface is deliberately cross-tenant, or the read is Host-resolved catalog.
+  ⚠️ **This is now MEASURED, not merely chosen.** All 50 policies are `TO PUBLIC`, so they apply to
+  any role without BYPASSRLS; with no `app.store_id` GUC, `app_current_store_id()` is NULL and every
+  policed table returns nothing. On production as `tokophi_app`: `stores` **0**, `store_users` **0**,
+  `products` **0** (owner sees 14 / 13 / 78) — RLS filtering, not a missing grant. Moving those
+  surfaces onto the restricted role would delete the login page, 404 every shop and empty the control
+  plane. Super Admin and the storefront have **zero** `withTenant` call sites and are therefore
+  declared `DATABASE_RUNTIME_ROLE: owner`; admin is `app`.
 - ⚠️ **`stores` is keyed by `id`, not `store_id`**, so `verify-rls` structurally could not see it.
   That blind spot leaked two merchants' data until `0058` added an id-based policy. **The `WHERE` is
   the rule; the policy is only the net.**
