@@ -1,9 +1,76 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { alInquirePaymentStatus } from "./autolaris";
-import { payCallbackAmountMatches, verifyPayCallbackSecret } from "./pay-callback";
+import {
+  PAY_CALLBACK_PARAM,
+  payCallbackAmountMatches,
+  payCallbackUrl,
+  signPayCallbackRef,
+  verifyPayCallbackRef,
+  verifyPayCallbackSecret,
+} from "./pay-callback";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+/**
+ * SEC-16: the callback URL we hand AutoLaris carries a per-payment signature, never the reusable
+ * `AUTOLARIS_CALLBACK_SECRET`. The secret is what marks ANY payment on the platform paid; a signature
+ * is worth exactly one reference. These are the claims that keep the old shape from coming back.
+ */
+describe("payCallbackUrl", () => {
+  const SECRET = "the-platform-callback-secret";
+
+  it("never puts the reusable secret in the URL, and signs the reference instead", () => {
+    vi.stubEnv("PUBLIC_APP_URL", "https://app.tokophi.test");
+    vi.stubEnv("AUTOLARIS_CALLBACK_SECRET", SECRET);
+
+    const url = payCallbackUrl("INV-4711");
+
+    expect(url).not.toContain(SECRET);
+    expect(url).not.toContain(encodeURIComponent(SECRET));
+    expect(url).not.toMatch(/[?&]token=/);
+
+    const parsed = new URL(url);
+    expect(parsed.origin + parsed.pathname).toBe("https://app.tokophi.test/api/public/pay/callback");
+    // ONE parameter, like the `?token=` it replaces — the shape the gateway is known to echo back.
+    expect([...parsed.searchParams.keys()]).toEqual([PAY_CALLBACK_PARAM]);
+    expect(verifyPayCallbackRef(parsed.searchParams.get(PAY_CALLBACK_PARAM), SECRET)).toBe("INV-4711");
+  });
+
+  it("stays bare with no secret configured — local dev, where the endpoint accepts an unauthenticated callback", () => {
+    vi.stubEnv("PUBLIC_APP_URL", "https://app.tokophi.test");
+    vi.stubEnv("AUTOLARIS_CALLBACK_SECRET", "");
+    expect(payCallbackUrl("INV-4711")).toBe("https://app.tokophi.test/api/public/pay/callback");
+  });
+});
+
+describe("verifyPayCallbackRef", () => {
+  const SECRET = "the-platform-callback-secret";
+  const signed = (ref: string) => `${ref}.${signPayCallbackRef(ref, SECRET)}`;
+
+  it("returns the reference it authorises, never a bare boolean", () => {
+    expect(verifyPayCallbackRef(signed("SUB-batik-991"), SECRET)).toBe("SUB-batik-991");
+    // A reference may contain dots (`requestKey` allows them); the signature never does.
+    expect(verifyPayCallbackRef(signed("ORD.2026.11"), SECRET)).toBe("ORD.2026.11");
+  });
+
+  it("refuses a tampered reference, a tampered signature, a foreign secret and malformed input", () => {
+    const good = signed("INV-4711");
+    // Same signature, different reference — the exact replay the binding exists to stop.
+    expect(verifyPayCallbackRef(`INV-4712.${good.split(".")[1]}`, SECRET)).toBeNull();
+    expect(verifyPayCallbackRef(`INV-4711.${"0".repeat(32)}`, SECRET)).toBeNull();
+    expect(verifyPayCallbackRef(good, "some-other-secret")).toBeNull();
+    expect(verifyPayCallbackRef(good.slice(0, -1), SECRET)).toBeNull();
+    expect(verifyPayCallbackRef("INV-4711", SECRET)).toBeNull();
+    expect(verifyPayCallbackRef(".abc", SECRET)).toBeNull();
+    expect(verifyPayCallbackRef("INV-4711.", SECRET)).toBeNull();
+    expect(verifyPayCallbackRef(null, SECRET)).toBeNull();
+    expect(verifyPayCallbackRef(good, undefined)).toBeNull();
+    // The secret itself is not a passport: pasting it where the signature goes proves nothing.
+    expect(verifyPayCallbackRef(`INV-4711.${SECRET}`, SECRET)).toBeNull();
+  });
 });
 
 describe("verifyPayCallbackSecret", () => {

@@ -83,7 +83,7 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
   const q = quote(cycle, store.firstInvoicePaid);
   const amount = withPpn(q.amount).total; // base + 11% PPN
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = payCallbackUrl();
+  const callbackUrl = payCallbackUrl(reffId);
   const r = await alCreatePayment({
     reffId, channelCode, amount,
     customerId: store.id, customerName: session.name || "Merchant", customerPhone: "081200000000", customerEmail: session.email, callbackUrl,

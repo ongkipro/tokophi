@@ -151,6 +151,25 @@ architecture decision before the PostgREST cutover.
 - **Gap, procedural not code.** The seed now mints per-account passwords, but **the seed is not a
   migration**: deployments created earlier still hold the old credential until rotated by hand.
   Procedure: `tasks/2026-08-03-rotate-exposed-owners.md`. **Unrun** (N29).
+- 🔴 **Decision (SEC-16, Task 4.13, 2026-08-21) — a reusable first-party secret never goes in a URL,
+  and nothing here mints one any more.** Two credentials used to travel that way:
+  - **`CRON_SECRET`** — all five compose sidecars sent `?secret=$CRON_SECRET` to the routes that
+    suspend stores, raise invoices, cancel orders and restore stock across **every tenant**, and all
+    six gated routes (five cron + `/api/health/env`) accepted it. It is now the `x-cron-secret`
+    **header** only, in one shared gate (`apps/admin/lib/cron-auth.ts`); a request that supplies
+    `?secret=` is refused **and logged**, so a caller left behind on the old shape is visible rather
+    than merely 401. There was no vendor on this path — both ends are ours — so it is fully closed.
+  - **`AUTOLARIS_CALLBACK_SECRET`** — `payCallbackUrl()` embedded the secret verbatim in every bill's
+    `callback_url`. It now emits a **per-payment HMAC** over the `reff_id` (`?cb=<reff>.<sig>`), and
+    `/api/public/pay/callback` binds that signature to the row it resolves, so a leaked callback URL
+    authorises one payment instead of every payment on the platform.
+- ⚠️ **Documented provider exception, the one SEC-16 allows for: the callback still ACCEPTS
+  `?token=<secret>`.** AutoLaris echoes `callback_url` and attaches no headers of its own, so until
+  the vendor confirms it can send `X-Callback-Token` (or its own signature — PROD_PLAN §7), refusing
+  that parameter would 401 every genuine payment. It is unbound and therefore the weakest of the
+  three transports; every use is logged as deprecated, and no new bill carries one. **Closing it is a
+  vendor conversation, not a code change** — pinned as a knowingly-open door by
+  `apps/admin/app/api/public/pay/callback/route.auth.test.ts`.
 
 ---
 

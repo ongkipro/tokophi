@@ -1120,6 +1120,33 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
   bot, and a privacy browser or a stripping proxy would have its order refused with no way for
   anyone to find out — the exact failure this repo calls a bug equal to the hole it closes. Rate
   limit + caps are the floor; the wall is Cloudflare at the edge.
+- 🔴 **A REUSABLE FIRST-PARTY SECRET NEVER GOES IN A URL — AND THE ONE EXCEPTION IS THE VENDOR'S, NOT
+  OURS** (Task 4.13 / SEC-16, 2026-08-21). Two credentials used to ride query strings.
+  - **`CRON_SECRET` is CLOSED.** All five compose sidecars sent `?secret=$CRON_SECRET`; all six gated
+    routes (five `api/cron/*` + `api/health/env`) accepted it, each with its own copy of the check.
+    A URL is not a private place: the credential sat in the container's `command`, in `docker
+    inspect`, in `docker top`, in the host process table and in every proxy access log — for the one
+    string that authorises a state-mutating sweep across **every tenant**. One gate now
+    (`apps/admin/lib/cron-auth.ts`), header only, and a request carrying `?secret=` is refused **and
+    logged** so a stale caller is visible instead of looking like a wrong secret. `?every=` stays —
+    it is the cadence, not a credential. ⚠️ Both halves must land in the same commit; a sidecar left
+    on the old shape costs one idempotent tick, which is why the refusal is logged.
+  - **The PAY CALLBACK URL is closed; the callback's `?token=` DOOR IS NOT, AND MUST STAY OPEN.**
+    `payCallbackUrl()` used to embed `AUTOLARIS_CALLBACK_SECRET` verbatim in every bill — the string
+    that can mark ANY payment or ANY subscription invoice paid, handed to a third party and copied
+    into their dashboard. It now signs the reference instead: `?cb=<reff>.<hmac>`, one parameter, and
+    the route **binds** that signature to the row it resolved (`payments.reff_id` /
+    `invoices.reff_id`), so a leaked URL is worth one payment rather than all of them. Unbinding it
+    would turn the signature back into a bearer token with extra steps.
+    ⚠️ **Do NOT "finish the job" by refusing `?token=`.** AutoLaris echoes `callback_url` and sends no
+    headers of its own; refusing it 401s **every genuine payment** — `payments.status` stuck at
+    `menunggu`, no order reaching `dibayar`, no ledger row, and platform invoices stop advancing
+    `stores.current_period_end` until the platform suspends its own paying merchants. That outage has
+    happened here once. It is closed when the VENDOR confirms a header, and the branch plus its test
+    are deleted together.
+  - **Exactly one identity, or nothing happens.** The callback resolves `trx_id` first, then
+    `reff_id`; **zero identifiers is a 400** (it used to answer `{ok:true}`) and an ambiguous match is
+    a 400 on the payment half **and** on the subscription-invoice half, which had no such guard at all.
 - Guarded by **`apps/admin/lib/public-guard.test.ts`** — real `Request`s through the cap (including
   a chunked body that declares no length), plus `codeOnly()` source claims that all four routes go
   through `readPublicBody` and that neither shipping route serves the provider's string. Both source

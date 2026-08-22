@@ -2,6 +2,65 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-08-21 — The credential came out of the URL (Task 4.13 · SEC-16)
+
+Two reusable first-party secrets were being written into query strings on every run. One of them was
+ours end to end and is now closed; the other belongs to a vendor's protocol and is now *unminted*,
+documented and logged rather than pretended away.
+
+### 🔴 `CRON_SECRET` was on the URL of every cron tick — closed
+
+All five compose sidecars called `…?secret=$CRON_SECRET&every=…`, and all six gated routes (the five
+`api/cron/*` plus `api/health/env`) accepted it, each carrying its own hand-copied gate. That is the
+one credential authorising a state-mutating sweep across **every tenant**, and a URL puts it in the
+container's `command`, in `docker inspect`, in `docker top`, in the host's process table and in the
+access log of anything that proxies the request. There is no vendor on this path — we write both the
+caller and the endpoint — so the query transport was purely our own choice.
+
+One gate now: `apps/admin/lib/cron-auth.ts`, header only, fail-closed in production. The sidecars send
+`wget --header "x-cron-secret: $CRON_SECRET"`. A request that still supplies `?secret=` is **refused
+and logged**, so a caller left behind on the old shape is visible rather than indistinguishable from a
+wrong secret. `?every=` stays — it is the cadence the Sistem panel derives its staleness threshold
+from, and inlining that number is how a panel starts promising a schedule nobody runs.
+
+### 🔴 The pay callback URL carried the whole platform secret — now it carries a per-payment signature
+
+`payCallbackUrl()` embedded `AUTOLARIS_CALLBACK_SECRET` verbatim in every bill's `callback_url`: the
+string that can mark **any** payment or **any** subscription invoice on the platform paid, handed to a
+third party and copied into their dashboard. It now signs the reference instead — `?cb=<reff>.<hmac>`,
+one parameter of comparable length to the token it replaces — and the route **binds** the signature to
+the row it resolved (`payments.reff_id` / `invoices.reff_id`). A leaked callback URL is worth one
+payment rather than all of them. Without that binding a signature is a bearer token with extra steps,
+so it is pinned by its own test.
+
+### ⚠️ The callback still ACCEPTS `?token=`, deliberately — this is vendor-blocked, not unfinished
+
+AutoLaris echoes `callback_url` and attaches no headers of its own. Refusing that parameter would 401
+**every genuine payment**: `payments.status` stuck at `menunggu`, no order reaching `dibayar`, no
+ledger row, held conversions never released, and platform invoices no longer advancing
+`stores.current_period_end` until the platform suspends its own paying merchants. That outage has
+happened here once already. What was ours to fix is the minting side, and it is fixed; the door is
+logged as deprecated on every use and pinned as a knowingly-open door, with the reason, in
+`route.auth.test.ts`. It closes when the **vendor** confirms a header, and the branch and its test are
+deleted together.
+
+### Exactly one payment identity, on both halves of the callback
+
+- A callback naming **no** payment used to answer `{ok:true}` with a 200 — indistinguishable from one
+  we acted on. It is a 400. A blank or whitespace `trx_id` counts as absent.
+- An **ambiguous** match was already refused on the payments half. The subscription-invoice half had
+  no such guard at all: an ambiguous `trx_id` would have settled several invoices in one UPDATE.
+
+**Files:** `packages/lib/src/pay-callback.ts` (+ `signPayCallbackRef` / `verifyPayCallbackRef`),
+`apps/admin/lib/cron-auth.ts` (new), `apps/admin/app/api/public/pay/callback/route.ts`, the six gated
+routes, all five `payCallbackUrl()` call sites, `docker-compose.coolify.yml`, and the docs
+(`AGENTS.md`, `SECURITY.md` §6, `REQUIREMENTS.md` SEC-16, `DEPLOY.md`, `specs/openapi/admin-api.yaml`).
+
+⚠️ **Deploy note for whoever merges this:** the routes and the sidecars change together in one commit,
+but the order they restart in is not guaranteed. New-admin-before-new-sidecar costs exactly one
+idempotent, forward-only tick, logged as *"a cron credential arrived as a QUERY PARAMETER — refused"*.
+If that line persists past the deploy, a sidecar did not restart.
+
 ## [1.0.0] — 2026-08-15 — Official Release Edition: Multi-Domain Audit Closure & Production Certification
 
 - **Monorepo Version Bump**: Advanced version to `1.0.0` across root `package.json`, `@tokophi/admin`, `@tokophi/super-admin`, `@tokophi/storefront`, `@tokophi/landing`, `@tokophi/db`, `@tokophi/lib`, `@tokophi/ui`, `@tokophi/sections`, and `@tokophi/data`.

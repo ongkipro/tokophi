@@ -282,7 +282,7 @@ Env (all optional, all with defaults; the alert-channel secrets belong in that s
 
 Subscription enforcement is real-time (`computeBilling` in `requireCapability` → suspended stores
 are read-only immediately, no job needed). But **recurring invoice generation + stored-status
-sync** run via `GET /api/cron/billing?secret=$CRON_SECRET`, and the thing that calls it is the
+sync** run via `GET /api/cron/billing` **with `x-cron-secret: $CRON_SECRET` in a HEADER**, and the thing that calls it is the
 `cron` **sidecar** in `docker-compose.coolify.yml`, alongside `cron-tracking` /
 `cron-tracking-events`. This heading used to read *"schedule this"* and told you to add a **Coolify
 Scheduled Task** — following that would have created a **second** caller. Verified 2026-08-03:
@@ -290,6 +290,20 @@ Scheduled Task** — following that would have created a **second** caller. Veri
 and always has been.
 - `CRON_SECRET` is set in the admin container (checked live: present, 40 chars) — the route
   **fails closed** without it in production, so an unset one is a 401 on every run, not a free pass.
+- 🔴 **IT TRAVELS IN A HEADER, AND `?secret=` NO LONGER AUTHENTICATES ANYTHING** (Task 4.13 / SEC-16,
+  2026-08-21). All five sidecars used to put `CRON_SECRET` on the URL, which puts it in the
+  container's `command`, in `docker inspect`, in `docker top`, in the host's process table and in the
+  access log of anything that proxies the request — for the one credential that authorises a
+  state-mutating sweep across **every tenant**. The compose commands now send
+  `wget --header "x-cron-secret: $CRON_SECRET"`, and the routes read the header only. `?every=` stays:
+  it is the cadence the Sistem panel derives its staleness threshold from, not a credential.
+  ⚠️ **Both halves ship in ONE commit and land in ONE deploy, and the order inside that deploy is not
+  guaranteed.** If a sidecar restarts before the admin container does, its header is accepted by the
+  old code too (it already read the header first), so that direction is safe. The other direction —
+  new admin, sidecar not yet restarted — costs **one tick**, logged as
+  `a cron credential arrived as a QUERY PARAMETER — refused`. Every job here is idempotent and
+  forward-only, so a skipped tick is a delay, never a wrong state. If you see that line persisting
+  past the deploy, a sidecar did not restart.
 - Returns `{stores, statusSynced, invoicesCreated}`. It generates a VA invoice for past-due/suspended
   stores with no pending subscription invoice; the payment callback then extends the period.
 
@@ -352,7 +366,7 @@ double-run happens and not whether it can.
 
 ## Tracking cron (scheduled — `cron-tracking` in the compose)
 
-`GET /api/cron/tracking?secret=$CRON_SECRET` pulls KiriminAja for orders that are **booked but not
+`GET /api/cron/tracking` **with `x-cron-secret: $CRON_SECRET` in a HEADER** pulls KiriminAja for orders that are **booked but not
 finished** (`ka_order_id IS NOT NULL` ∧ status ∈ `diproses`/`dikirim`), fills `orders.awb` the moment
 the courier issues it, and advances the order to match the courier. Returns
 `{scanned, advanced, awbFilled, errors}`.
@@ -374,7 +388,7 @@ and report `awbFilled: 0` forever against real ones.
 
 ## Conversion cron (scheduled — `cron-tracking-events` in the compose) — ADR 0012
 
-`GET /api/cron/tracking-events?secret=$CRON_SECRET` drains `tracking_event_deliveries` into the
+`GET /api/cron/tracking-events` **with `x-cron-secret: $CRON_SECRET` in a HEADER** drains `tracking_event_deliveries` into the
 merchant's own Meta Conversions API / GA4 Measurement Protocol / TikTok Events API. Returns
 `{ok, claimed, sent, failed, dead, released, backfilled}`.
 
@@ -544,7 +558,7 @@ Ask the process itself, from inside the container so the secret never reaches yo
 ```bash
 ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 \
   'c=$(docker ps --format "{{.Names}}" | grep -m1 "^admin-"); \
-   docker exec "$c" sh -lc "wget -qO- \"http://localhost:3000/api/health/env?secret=\$CRON_SECRET\""'
+   docker exec "$c" sh -lc "wget -qO- --header \"x-cron-secret: \$CRON_SECRET\" http://localhost:3000/api/health/env"'
 ```
 
 `{"ok":true,"missing":[]}` is the answer you want. `ok:false` names exactly which REQUIRED variable is
@@ -660,7 +674,7 @@ See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!
 4. **Harden secrets for prod**: rotate `AUTH_SECRET` (strong random — shared across admin+super-admin for cross-subdomain impersonation, gotcha #11), `POSTGRES_PASSWORD`, `CRON_SECRET`; set the **real** `KIRIMINAJA_API_KEY`/`AUTOLARIS_API_KEY` + `AUTOLARIS_CALLBACK_SECRET` (switch `KIRIMINAJA_ENV` sandbox→production when ready).
 5. **AutoLaris callback URL**: the pay callback the gateway hits is `PUBLIC_APP_URL + /api/public/pay/callback` = `https://app.tokophi.com/api/public/pay/callback` (set via `PUBLIC_APP_URL` in step 3; verify it in the AutoLaris dashboard) so paid VAs settle.
 6. **Cloudflare after proxied**: SSL/TLS mode **Full (strict)**; **Always Use HTTPS** on; cache rule = **bypass** for `app.` + `rich.` + any `/api/*` (dynamic, cookies), cache static `/_astro/*` + `/products/*` on `toko.`; keep `www → apex` redirect.
-7. **Billing cron**: update the Coolify Scheduled Task URL to `https://app.tokophi.com/api/cron/billing?secret=$CRON_SECRET` (daily).
+7. **Billing cron**: nothing to schedule — the `cron` sidecar in the compose is the only caller (see “Billing cron” above). If you ever call it by hand, send `x-cron-secret: $CRON_SECRET` as a **header**; `?secret=` is refused since Task 4.13.
 8. **Verify**: `https://toko.tokophi.com` (storefront 200 + a product page + a category), `https://app.tokophi.com/login` (merchant), `https://rich.tokophi.com` (platform), a real login, and an impersonation round-trip (cross-subdomain cookie — gotcha #11). (`https://tokophi.com` → landing page once built.)
 
 **Gotchas that will bite on real subdomains** (already fixed in code, but re-check): cross-subdomain cookies (impersonation via signed token, not a shared cookie); module-scope `process.env` reads baked at build (read env inside functions); Traefik `req.url` = internal host (use relative `Location` on redirects). See gotcha #11 above.

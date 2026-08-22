@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkEnv } from "@/lib/env-health";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 /**
  * "Did the environment actually reach this container?" — one request, after every deploy (N60).
@@ -20,14 +21,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[health/env] CRON_SECRET unset in production — REJECTING.");
-      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
-  } else if (provided !== secret) {
+  if (!cronAuthorized(req, "health/env")) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

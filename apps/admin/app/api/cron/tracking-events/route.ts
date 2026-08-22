@@ -6,6 +6,7 @@ import { sanitize, sendGa4Purchase, sendMetaPurchase, sendTiktokPurchase, type S
 import { systemDomainFor } from "@/lib/data/domain";
 import { enqueuePurchase } from "@/lib/tracking-events";
 import { cronIntervalSec, recordCronRun } from "../record-run";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 // CONVERSION DELIVERY WORKER (ADR 0012 §0.1, §16, §23) — the drain half of `tracking_event_deliveries`.
 // TokoΦ has no worker process, so this is a secured API route hit on a schedule, exactly like
@@ -84,14 +85,7 @@ type Payload = {
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
   // FAIL CLOSED in production, exactly like cron/tracking and cron/billing.
-  const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[cron/tracking-events] CRON_SECRET unset in production — REJECTING.");
-      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
-  } else if (provided !== secret) {
+  if (!cronAuthorized(req, "cron/tracking-events")) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
