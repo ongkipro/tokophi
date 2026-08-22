@@ -23,16 +23,16 @@ log that overstates is worse than one that is terse.
 - [x] Read `AGENTS.md` protocol (TASKS.md → BUILD-LOG.md → STATUS.md → `specs/docs/tasks/`)
 - [x] Read every `BUILD-LOG.md` entry dated 2026-08-16 onwards + `git log origin/main` for the range
 - [x] Commit this handoff **before** touching the data file
-- [ ] Add the grouped entries to `apps/super-admin/lib/data/dev-logs.ts` (newest first, existing
+- [x] Add the grouped entries to `apps/super-admin/lib/data/dev-logs.ts` (newest first, existing
       `DevLogEntry` shape, existing `DevLogCategory` / `DevLogSurface` unions — no new union members,
       so `CATEGORY_MAP` in `update-log-client.tsx` needs no change)
-- [ ] Leave the seven existing entries untouched
-- [ ] `npm install` fresh in this worktree (no hardlinked `node_modules`)
-- [ ] `npm run build -w @tokophi/super-admin` (typecheck + lint + build)
-- [ ] `npx vitest run` for the suites that touch these files
-- [ ] Record a `BUILD-LOG.md` entry with the real output
-- [ ] Tick the task in `specs/docs/TASKS.md`
-- [ ] Small logical commits · push · `gh pr create --base main` · **do not merge**
+- [x] Leave the seven existing entries untouched
+- [x] `npm install` fresh in this worktree (no hardlinked `node_modules`)
+- [x] `npm run build -w @tokophi/super-admin` (typecheck + lint + build)
+- [x] `npx vitest run` for the suites that touch these files
+- [x] Record a `BUILD-LOG.md` entry with the real output
+- [x] Tick the task in `specs/docs/TASKS.md`
+- [x] Small logical commits · push · `gh pr create --base main` · **do not merge**
 
 ## Grouping (7 entries, newest first)
 
@@ -54,6 +54,19 @@ log that overstates is worse than one that is terse.
   entry as "tracked separately by Task 5.5" and nothing else — no BUILD-LOG entry, no commit in the
   range. There is nothing shipped to report, so reporting it would be an invention.
 - Per-PR granularity. Seven grouped releases, not twenty-odd commits.
+
+## Result (measured)
+
+- `npm install` fresh in the worktree → exit 0.
+- `npx vitest run` → **exit 0 — 123 files / 1009 tests passed**, the same figure `origin/main` recorded
+  on 2026-08-22: no test added, none broken.
+- `npm run lint -w @tokophi/super-admin` → **exit 0 — 0 errors, 3 warnings** (the baseline; all three
+  pre-existing in `update-log-client.tsx`).
+- `npm run build -w @tokophi/super-admin` → **exit 0** with the Dockerfile's env; 15 routes including
+  `ƒ /update-log`. ⚠️ A **bare** build in a worktree fails on the missing root `DATABASE_URL` —
+  pre-existing (`.gitignore` is `.env*`), recorded identically for `apps/admin` on 2026-08-22, and it
+  happens after Turbopack and TypeScript have both succeeded.
+- Not clicked in a browser: seven data rows behind an unchanged renderer.
 
 ## NEXT
 

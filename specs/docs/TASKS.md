@@ -31,6 +31,7 @@
 - [ ] **Loading skeletons** · **S** · add to chart-heavy screens (Dashboard/Analitik/Pemasaran).
 
 ## Epic 2 — Super-admin prototype completeness
+- [x] **Update Log backfilled to 2026-08-23** · **S** · `/update-log` stopped at v1.0.0 (2026-08-15), so a week of shipped work was invisible to the operator. Seven grouped releases (`v1.0.1`–`v1.1.0`) added to `apps/super-admin/lib/data/dev-logs.ts`, every figure sourced from a `BUILD-LOG.md` entry or the merged commit — nothing estimated. See BUILD-LOG 2026-08-23 and `specs/docs/tasks/2026-08-23-dev-logs-since-v1.md`.
 - [ ] **Provisioning "Buat toko"** · **M** · wizard (nama, owner, paket, subdomain) → adds a store (mock). AC: new store in Toko list.
 - [ ] **Impersonation stub** · **S** · "Masuk sebagai" opens the merchant admin context (mock deep link/banner). AC: visible "sedang meng-impersonasi" state.
 - [ ] **Support / tiket** screen · **M** · list + detail of merchant support tickets (mock).
