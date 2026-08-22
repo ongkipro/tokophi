@@ -1648,3 +1648,163 @@ or API contracts"*, and inventing an edit to satisfy a checklist is the failure 
 to prevent.
 
 **Completed Task:** Epic 2 — *Update Log backfilled to 2026-08-23*.
+
+---
+
+## [2026-08-22 19:20 UTC] (2026-08-23 WIB) — Update Log: pagination, a collapsed detail, and KPI tiles that cannot rot
+
+**Task / Scope:** `ADM-UPDATELOG-2` · owner-approved UI work · worktree `ulpage`, branch
+`feat/update-log-pagination`, off `origin/main` `8c1cb55`
+**Executor:** Claude (Opus 5)
+**Files:** `specs/docs/tasks/2026-08-23-update-log-pagination.md` (new, committed BEFORE any code) ·
+`apps/super-admin/lib/list-page.ts` (new) · `apps/super-admin/lib/list-page.test.ts` (new) ·
+`apps/super-admin/app/(platform)/update-log/update-log-client.tsx` · `specs/docs/TASKS.md` ·
+`BUILD-LOG.md`.
+⚠️ **`apps/super-admin/lib/data/dev-logs.ts` is NOT touched** — the 14 entries are the input to this
+pass, not its subject.
+
+### ① Pagination — 5 per page, on `@tokophi/ui/pagination`
+
+Super Admin had never imported that component; this is its first consumer.
+`ADMIN_LIST_PAGE_SIZE = 10` lives in `apps/admin/components/admin/list-pagination.tsx` and must not
+cross the app boundary, so super-admin names its own `UPDATE_LOG_PAGE_SIZE = 5` — smaller
+deliberately, because a row there is a table line and a row here is a release note.
+
+🔴 **NO `href` IS EMITTED — not even `"#"` — and getting there cost one measured defect.**
+`PaginationLink` spreads its props onto the `<a>` inside Base UI's `render`, so `useButton` never
+receives our `onClick`; its own Enter/Space bridge (`internals/use-button/useButton.js`, the
+`!isNativeButton && isEnterKey → externalOnClick` arm) therefore calls **nothing**. Measured in a
+real Chromium before the fix: the link was focusable (`role="button"`, `tabIndex 0`) and **Enter did
+nothing at all**. `apps/admin`'s copy only escapes this because `href="#"` makes it a genuine link
+the browser activates natively — and then it must cancel the jump with `preventDefault()` on every
+path. A local `goTo()` handles the two keys instead, so the anchor **cannot navigate, cannot put a
+`#` in the URL, and cannot move the scroll position**, and Space answers as well as Enter (a
+`role="button"` should). The disabled Prev/Next spread **nothing** rather than a no-op handler, so
+"disabled" is a fact about the handlers and not only about a class string.
+
+⚠️ **The page index resets to 1 on a filter change DURING RENDER**, copied from
+`apps/admin/app/(admin)/blog/blog-client.tsx` (~117–129) and cited in a comment at the site. The
+effect version paints one frame of the old page under the new filter and trips
+`react-hooks/set-state-in-effect`. Without it, filtering 14 notes to 2 while on page 3 renders an
+**empty feed under a filter that matched** — measured in the harness: 5 cards, not 0.
+
+### ② problem / solution / verification behind a native `<details>`
+
+Five entries × four dense paragraphs is still ~20 paragraphs. `<details>`/`<summary>` is
+keyboard-operable and announced as a disclosure with no work of ours, adds no dependency and
+survives with JavaScript off — the native platform feature over a component, per the ladder. Version,
+date, title, category badge, surfaces and **summary** stay open; the marker triangle is replaced by a
+chevron rotated with `group-open:`, so the state is still visible.
+
+### ③ The KPI tiles are DERIVED
+
+The header read `Current Engine: v1.0.0 Stable`, `722 Tes Hijau`, `53 Tabel Gated` and
+`100% Passed` while the newest entry **on the same screen** said v1.1.0 with 1009 tests.
+
+| before (hand-typed) | after (computed from `DEV_LOGS`) | measured in the browser |
+|---|---|---|
+| `Current Engine: v1.0.0 Stable` | `DEV_LOGS[0].version` | `Current Engine: v1.1.0` |
+| `Total Dev Logs — 14 Catatan` | `DEV_LOGS.length` (already derived) | `14 Catatan` |
+| `Status Verifikasi — 100% Passed` | **Rilis Terbaru** = `DEV_LOGS[0].version` | `v1.1.0` |
+| `Keamanan & RLS — 53 Tabel Gated` | **Catatan Terbaru** = `DEV_LOGS[0].date` | `2026-08-22` |
+| `Vitest Suite — 722 Tes Hijau` | **Catatan Keamanan** = count of `category === "security"` | `4 Catatan` |
+
+🔴 **The live test count is DROPPED, not re-typed and not regexed out of prose.** It is not derivable
+at runtime — this is a client component over a static array, and nothing here can count a test. The
+alternative offered was to lift it out of `LATEST.verification`; rejected, because that field is
+hand-written prose ("123 files, 1009 tests passed" today, worded differently in the next entry), so a
+regex goes quietly wrong — or quietly blank — the first time somebody rephrases a sentence, and a
+number nobody can trace is exactly what this pass exists to remove. `AGENTS.md`: *a figure with no
+source is "—", never a number.* The count still lives on screen, inside the newest entry's own Bukti
+Verifikasi block, in the sentence that was actually measured, with its date attached.
+
+**Contract note:** `DEV_LOGS[0]` is now **read as the current release**. Newest-first was already the
+array's convention; it is load-bearing now.
+
+### The guard — a PURE module, then a test of THAT
+
+`apps/super-admin/lib/list-page.ts` — no React, no `@tokophi/db` — the same split as
+`platform-rank.ts` / `route-roles.ts`, and for the same reason: a rule inlined in a `.tsx` can only
+be executed by a browser, so it never gets a test. It holds `pageSlice` (clamps: an index past the
+end returns the LAST page, `pageCount` has a floor of 1, an empty list reports `start`/`end` = 0
+rather than "1–0 dari 0") and `filterChanged` (elementwise `Object.is`, i.e. exactly what a React
+dependency array compares, which is what makes the render-time reset equivalent to the effect).
+
+**Mutation matrix — 10 mutations, 10 reds, each applied to `list-page.ts` and reverted:**
+
+| # | mutation | test that went red |
+|---|---|---|
+| M1 | `Math.max(1, Math.ceil(total / perPage))` → `Math.ceil(…)` (floor of 1 dropped) | empty list is one page, start/end 0 |
+| M2 | `Math.ceil(total / perPage)` → `Math.floor(…) + 1` | exact multiple does not grow a trailing empty page |
+| M3 | `end: from + slice.length` → `from + perPage` | last page is partial and reports its real length |
+| M4 | `Math.min(Math.max(1, wanted), pageCount)` → `Math.max(1, wanted)` (no upper clamp) | index beyond the end CLAMPS, never blanks |
+| M5 | …→ `Math.min(wanted, pageCount)` (no lower clamp) | index below 1 / NaN falls back to page 1 |
+| M6 | `start: slice.length === 0 ? 0 : from + 1` → `from + 1` | empty list is one page, start/end 0 |
+| M7 | `!Object.is(value, next[i])` → `value !== next[i]` | uses Object.is (NaN→NaN unchanged, 0/−0 changed) |
+| M8 | `if (prev.length !== next.length) return true;` deleted | a tuple that gained/lost a member counts as changed |
+| M9 | `prev.some(…)` → `return false` | true when ANY member changes **+** the Object.is case (2 red) |
+| M10 | `UPDATE_LOG_PAGE_SIZE = 5` → `10` | last partial page **+** index beyond the end (2 red) |
+
+Every mutation failed exactly the assertion it should and nothing else; M9 and M10 took two each. The
+file was restored from a byte-identical copy afterwards (`md5sum` compared).
+
+### Verification Executed (exit codes read directly, never through a pipe)
+
+- `npm install` **fresh in this worktree** (no hardlinked `node_modules`) → **exit 0**.
+- `npx vitest run` → **exit 0 — 124 files, 1019 tests passed**. The base `8c1cb55` figure recorded on
+  2026-08-23 is **123 files / 1009 tests**; this pass adds exactly one file and ten tests, so the
+  arithmetic closes and there are **no pre-existing failures to name**.
+- `npm run lint -w @tokophi/super-admin` → **exit 0 — 0 errors, 3 warnings**, i.e. the recorded
+  baseline **unchanged**. All three are the pre-existing ones in `update-log-client.tsx`
+  (`CreditCard`, `ArrowUpRight`, `setSelectedSurface`). ⚠️ They were **deliberately left alone**: the
+  surface filter still has no UI, so removing `setSelectedSurface` would be deleting somebody else's
+  half-built feature inside a pagination pass, and keeping the baseline at 3 keeps it useful as a
+  regression signal. Nothing was added and nothing removed.
+- `npm run build -w @tokophi/super-admin` → **exit 0** with the Dockerfile's own env
+  (`DATABASE_RUNTIME_ROLE=owner DATABASE_URL=postgres://build:build@localhost:5432/build`). Compiled
+  in 6.1 s, TypeScript finished clean, 15 routes emitted including `ƒ /update-log`. ⚠️ A **bare**
+  build in a worktree fails while collecting page data on a missing `DATABASE_URL` — **pre-existing**,
+  recorded 2026-08-22 (`apps/admin`) and again 2026-08-23 (`apps/super-admin`); `.gitignore` is
+  `.env*`, so a worktree can never carry a root `.env`.
+- ⚠️ `apps/super-admin/next-env.d.ts` is rewritten by `next build`; restored with `git checkout --`
+  and **not** in any commit here.
+
+### The browser: what WAS driven, and what was NOT
+
+🔴 **NOT clicked in a browser as the real screen.** `/update-log` sits behind an operator login, the
+seeded platform passwords were rotated (N29), and the only ways to obtain one — rotating a
+`platform_admins` password by SQL, or inserting a throwaway operator — are a credential write to the
+**shared** dev control plane that would revoke another agent's session. That is an approval gate, and
+it was not crossed. Nothing on this branch touched the database.
+
+✅ **What WAS driven, in a real Chromium (Playwright 1.61.1, headless, 1280×800):** the actual
+`UpdateLogClient` component, bundled from source with esbuild against the real `DEV_LOGS` and the
+real `list-page.ts`, hydrated with `react-dom/client` in a scratch page **outside the repository**
+(nothing added to it). This exercises the component's behaviour, not the route, and **not Tailwind's
+stylesheet** — layout, spacing and the `group-open:` chevron are unverified. Measured:
+
+| claim | measured |
+|---|---|
+| 5 cards on page 1 | `5`, counter `Menampilkan 1–5 dari 14 catatan` |
+| tiles are derived | `14 Catatan` · `v1.1.0` · `2026-08-22` · `4 Catatan` · badge `Current Engine: v1.1.0` |
+| no navigating `href` | 5 anchors, `any anchor with href → false`, all `role="button"` + `tabIndex 0`, all `<A>` |
+| detail is collapsed | `details[open]` = **0** at load; **1** after clicking a summary; **2** after Enter on the next |
+| no scroll jump | `scrollY 3442 → 3442` clicking page 2, `url hash (none)`; re-measured in isolation with `page.mouse.click` (which does not auto-scroll like `locator.click`) → `2648 → 2648`, counter advanced to 6–10 |
+| keyboard works | Enter on "3" → `11–14 dari 14`; **Space** on "1" → `1–5 dari 14` |
+| last page is partial | 4 cards |
+| **the classic bug** | on page 3, typing `rls` → `Menampilkan 1–5 dari 6` and **5 cards**, not an empty feed |
+| empty filter state | `Tidak ada dev log yang cocok…`, and **0** pagination controls rendered |
+| console | **0 errors, 0 page errors** |
+
+⚠️ The Enter defect above was found **by this harness, after the code was written and typechecked**;
+lint, `tsc` and the build were all green over a pagination control that could not be operated from a
+keyboard. Recorded because it is the reason the harness was worth building.
+
+**`specs/docs/STATUS.md` deliberately NOT touched:** this pass alters no platform state, no API
+contract, and no count that file publishes. Its protocol trigger is *"changes that alter platform
+state or API contracts"*, and inventing an edit to satisfy a checklist is the failure mode the
+protocol exists to prevent.
+
+**Completed Task:** Epic 2 — *Update Log paginated, detail collapsed, KPI tiles derived*. No numbered
+Stage task is claimed: this is owner-requested UI work on the same screen as the 2026-08-23 backfill,
+so it is recorded as one more Epic 2 line beside its sibling rather than invented as a Stage entry.
