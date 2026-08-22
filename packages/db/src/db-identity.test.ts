@@ -2,6 +2,11 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
+// The ONE mint (`packages/lib/src/password.test.ts` polices this repo-wide, and it caught the first
+// version of this file minting its own). The probe role below needs a real password because a TCP
+// login is what makes it a genuine *login* role rather than a `SET ROLE`; there is no reason for
+// that string to come from anywhere but the shared generator.
+import { tempPassword } from "@tokophi/lib/password";
 import { codeOnly } from "../../../test/source-code";
 import { APP_ROLE, IDENTITY_SQL, factsFromRow, judgeIdentity, planPools } from "./db-identity";
 
@@ -214,7 +219,7 @@ const probeRole = `t412_probe_${randomBytes(4).toString("hex")}`;
 beforeAll(async () => {
   if (!TEST_URL) return;
   owner = postgres(TEST_URL, { max: 2, onnotice: () => {} }) as unknown as postgres.Sql<Record<string, never>>;
-  const password = randomBytes(24).toString("base64url");
+  const password = tempPassword();
   // `.unsafe` because a role name cannot be a bind parameter. Both halves are generated here, so
   // there is no user input anywhere near this string — and the password never leaves this process.
   await owner.unsafe(`create role "${probeRole}" login password '${password}'`);
