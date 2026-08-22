@@ -61,9 +61,10 @@ function RowActions({ id }: { id: string }) {
   const del = () =>
     start(async () => {
       try {
-        await deletePage(id);
-        toast.success("Halaman dihapus.");
-        router.refresh();
+        const res = await deletePage(id);
+        if (res.ok) toast.success("Halaman dihapus.");
+        else toast.error(res.error ?? "Gagal menghapus — coba lagi.");
+        router.refresh(); // either way: on a refusal this is what clears the row that is already gone
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
       }
