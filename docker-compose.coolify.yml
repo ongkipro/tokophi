@@ -106,8 +106,21 @@ services:
       # persist uploaded media across redeploys (next start runs from /app/apps/admin)
       - tokophi-uploads:/app/apps/admin/public/uploads
     environment:
+      # ── Task 4.12 / SEC-18 — TWO connections, and each one is named ────────────────────────────
+      # DATABASE_URL (owner) is what auth's pre-session `store_users` read, `api/public/**`, the cron
+      # sweeps and `lib/provision.ts` run on: none of them has a tenant to scope by, and measured on
+      # production as `tokophi_app` with no tenant GUC they read ZERO rows (RLS filtering, not a
+      # missing grant). They cannot move, and this file must keep forwarding it.
+      # APP_DATABASE_URL (restricted) is what `withTenant()` runs on — every merchant read and write,
+      # 79 files. `DATABASE_RUNTIME_ROLE: app` is what opts this service in, and `@tokophi/db` now
+      # PROVES the role behind that URL is neither superuser nor BYPASSRLS before serving; there is no
+      # fallback to the owner URL any more, which is what made the label untrue for months.
+      # 🔴 SET IT IN COOLIFY BEFORE MERGING. `:?` fails the deploy at parse time with this message,
+      # which is the loud failure; without it the service would start and refuse traffic instead.
+      # It must name the restricted role (`tokophi_app`, provisioned 2026-08-22), never `tokophi`.
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
       DATABASE_RUNTIME_ROLE: app
+      APP_DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL must be set to the RESTRICTED role (tokophi_app) — app-role mode no longer falls back to the owner connection}
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
       KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
@@ -174,8 +187,15 @@ services:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     environment:
+      # Task 4.12 / SEC-18 — `owner`, and that is the honest label, not a downgrade. This surface has
+      # ZERO `withTenant()` call sites (measured 2026-08-22): the control plane is cross-tenant by
+      # definition, so every read here would be filtered to zero rows under the restricted role —
+      # `stores` 0, `store_users` 0, `products` 0, measured on production. It carried
+      # `DATABASE_RUNTIME_ROLE: app` while the code silently fell back to this same owner URL; the
+      # label is now what the connection actually is. Giving it a restricted pool would gate nothing
+      # and open a pool nothing uses. `specs/docs/SECURITY.md` §4 has recorded this as a decision.
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
-      DATABASE_RUNTIME_ROLE: app
+      DATABASE_RUNTIME_ROLE: owner
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       ADMIN_URL: ${ADMIN_URL:-}
       KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
@@ -200,8 +220,12 @@ services:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
     environment:
+      # Task 4.12 / SEC-18 — `owner`, same reasoning as super-admin: ZERO `withTenant()` call sites.
+      # The tenant here is resolved from the Host header (ADR 0009) and THAT is its scoping; the
+      # catalog read never sets `app.store_id`, so under the restricted role `getStoreByHost` returns
+      # nothing and every shop 404s. Measured, not assumed. The label now matches the connection.
       DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
-      DATABASE_RUNTIME_ROLE: app
+      DATABASE_RUNTIME_ROLE: owner
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
       # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
