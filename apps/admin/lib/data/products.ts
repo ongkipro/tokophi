@@ -38,6 +38,10 @@ const selectProduct = {
   compareAt: schema.productVariants.compareAtIdr,
   cost: schema.productVariants.costIdr,
   sku: schema.productVariants.sku,
+  // Read back for the editor's "Barcode" field. Without this the field is write-only: a merchant
+  // types a GTIN, saves, reopens the product and the box is empty again — which is the same
+  // "reported success, came back wrong" shape as a control with no sink at all.
+  barcode: schema.productVariants.barcode,
 };
 
 function base(db: Tx, storeId: string, locationId: string | null) {
@@ -275,6 +279,7 @@ export async function getProduct(id: string): Promise<Product | null> {
       compareAt: rows[0].compareAt ?? null,
       cost: rows[0].cost ?? null,
       sku: rows[0].sku ?? "",
+      barcode: rows[0].barcode ?? "",
     };
   });
 }

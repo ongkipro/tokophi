@@ -8,6 +8,54 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-22 12:50 UTC] — Stage 5 Task 5.2 · F-C8 · Persist Or Remove Every Product Editor Control
+
+- **Executor:** Claude (Opus 5), worktree `s5c`, branch `fix/stage5-product-editor`, off `origin/main` `a98321c`.
+- **Method: MEASURED, not reasoned.** Every control on `/produk/[id]` was traced from its `React.useState` through `buildInput()` → `updateProduct`/`createProduct` → a column, and back out through `getProduct`. The predicate this pass's guard uses was then run against **the pre-fix file at `origin/main`** and printed exactly four submit-shaped controls that never reached the payload: `trackQty`, `barcode`, `chOnline`, `tags` (the other 17 it named are dialog/draft state and are classified as such).
+
+| control | sink | verdict |
+|---|---|---|
+| **Saluran penjualan → Toko Online** (`chOnline`) | none — no channel column on `products`, no reader in any of the four surfaces | **REMOVED** (card and all) |
+| **Tag** + chips `terlaris`/`baru`/`promo` | none — no `products.tags`; the only `tags` in the schema is `customers.tags` (CRM). The chips had no `onClick` at all | **REMOVED** |
+| ↳ *checked before removing:* `conditionField` really does carry a `"tag"` member and the collection editor offers "Tag produk" — but **nothing evaluates a collection condition anywhere in this repo**, so a stored tag would still feed nothing | | recorded in the file |
+| **Lacak kuantitas** (`trackQty`) | none — it hid the Kuantitas input while `stock` was saved either way | **REMOVED**; Kuantitas is always visible |
+| **Produk fisik** (`physical`) | no column — and `buildInput()` read `physical && weight`, so OFF + Simpan **NULLed `weight_grams` + the three dimension columns** | **REMOVED**; weight + dimensions always shown |
+| description toolbar (Tebal · Miring · Daftar · Tautan · Gambar) | none — five `<Button>`s with `aria-label` and no `onClick` over a plain `<Textarea>` | **REMOVED** |
+| **Barcode** | `product_variants.barcode` **exists** and the storefront feed publishes it as `<g:gtin>` — only the wiring was missing | **WIRED**, both directions |
+| SKU · Barcode · Kuantitas *while a product has variants* | `variantRowsOf()` returns the matrix rows and drops the product-level values entirely | **DISABLED** with a title naming the Varian card |
+| everything else (24 fields) | a column each | kept, unchanged |
+
+- 🔴 **"Produk fisik" was the expensive one.** It is the only control here that DESTROYED data on its way past: switching it off nulled the weight and dimensions that price every KiriminAja quote and booking (N30), then the product reopened with the switch back ON and the fabricated `"500"` default in the weight box — so the next Simpan wrote 500 g over a merchant's real figure. Nothing sells a non-physical product here: checkout always quotes ongkir and `weightForCart` falls back to 500 g, so a product marked "not physical" shipped anyway. There is no digital-goods concept to persist it into, and inventing a column for a toggle nothing reads is what this task forbids.
+- 🔵 **Barcode is the opposite case and is why "remove everything dead" would have been wrong.** The column has existed since `product_variants` did and `validGtin()` in `apps/storefront/src/lib/product-feed.ts` turns it into `<g:gtin>`. Storage and a reader both existed; `buildInput()` simply dropped the value and the box opened empty on every visit. Round-tripping it needed all three links — the editor seeds from `product?.barcode`, `variantRowsOf()` carries it onto the implicit-default row, `selectProduct` reads it back — and only two of the three existed for its neighbour `sku`.
+- ⚠️ **Known limit, stated rather than implied:** the variant MATRIX has no barcode column, so a product with variants cannot set one (the field is disabled and says why). Wiring per-variant barcodes is a feature, not part of this task.
+- ⚠️ **A product decision left alone:** `products.badge` and `products.bestseller` DO exist and DO reach the storefront ribbon, but no editor exposes them. That is a missing feature, not a dead control, and it is not a rename of the Tag box.
+
+- **Files Created / Modified:**
+  - `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`: the four removals + the toolbar, `barcode` seeded and submitted, the three per-variant fields disabled while `hasVariants`. Every removal leaves a comment saying what it was and why it went.
+  - `apps/admin/lib/actions/products.ts`: `ProductInput.barcode` + `VariantInput.barcode`; both writers persist it (`createProduct` insert, `updateProduct` reconcile).
+  - `apps/admin/lib/data/products.ts`: `selectProduct.barcode` (position-0 variant) + returned by `getProduct` — the "survives reload" half.
+  - `apps/admin/lib/mock/store.ts`: `Product.barcode`.
+  - `apps/admin/lib/product-editor-controls.test.ts` (new): the census.
+- **The guard is a CENSUS, not a list of the fields that were wrong today.** `Record<stateName, "payload" | { local: reason }>` over all 45 pieces of form state: a new control fails until someone classifies it, a deleted one fails until its entry goes, and every `"payload"` entry must be READ inside `buildInput()`. It reads the file's CODE (`test/source-code.ts`), and it counts a reference only when it is not an object key and not a property access — **the first draft was vacuous precisely because `material: material` satisfies a bare `\bmaterial\b` through its KEY alone**, so `material: undefined` would have kept it green.
+- **Verification Executed — six mutations on the census, each proved red before the guard was trusted:**
+
+  | # | mutation (on a COPY, never product source) | assertion that fired |
+  |---|---|---|
+  | 1 | `material:` line deleted from `buildInput()` | material reaches buildInput() |
+  | 2 | `material: material \|\| undefined` → `material: undefined` (key survives, value gone) | same |
+  | 3 | `barcode:` line deleted — the defect this task fixed | barcode reaches buildInput() |
+  | 4 | `const parsedOptions = options` → `= ([] as OptionDef[])` (the ONE indirection link cut) | options reaches buildInput() |
+  | 5 | `chOnline` / `tags` / `trackQty` / `physical` re-added as state | census covers exactly the state that exists |
+  | 6 | `const [material, setMaterial]` deleted, census entry left behind | same (stale side) |
+
+  Plus one for each of the five barcode links (contract type, both writers, the select, the read-back) cut in turn.
+- **Gates (exit codes read DIRECTLY, never through a pipe):**
+  - `TEST_DB_REQUIRED=1 npm test` → **0 — 118 files, 931 tests passed**. 117 files / 893 tests of that total are `origin/main`'s — derived by subtracting this pass's one new file and its 38 tests, not measured on a second run, and said that way rather than presented as a baseline reading.  `astro check`: storefront 0 errors / 0 warnings / 14 hints, landing 0/0/0.
+  - `npx tsc -p apps/admin --noEmit` → **0**.
+  - `npm run lint -w @tokophi/admin` → **0 — 0 errors, 21 warnings**, exactly the baseline; the five removals left nothing dangling (`Bold`/`Italic`/`List`/`Link2`/`Separator` imports removed with them).
+- ⚠️ **NOT clicked in a browser, and this change is browser-visible.** Said here rather than implied, exactly as #289 did for the same screen. The claims above are source/contract and schema claims; the reload round-trip is proved as a three-link source chain, not by driving the form.
+- **Completed Task:** Stage 5 Task 5.2.
+||||||| a98321c
 ### [2026-08-22 13:10 UTC] — Stage 5 Task 5.3 · SEC-15 · The invitation told the seller a story the row did not
 
 - **Executor:** Claude (Opus 5), worktree `s5b`, branch `fix/stage5-invitations`, off `origin/main` `a98321c`.

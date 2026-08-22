@@ -14,6 +14,14 @@ export type VariantInput = {
   price: number;
   stock: number;
   sku?: string | null;
+  // `product_variants.barcode` has existed since the table did, and the storefront's product feed
+  // READS it — `validGtin()` in apps/storefront/src/lib/product-feed.ts turns it into `<g:gtin>`.
+  // Nothing in the Seller panel ever wrote it: the editor rendered a "Barcode" input whose value
+  // `buildInput()` dropped on the floor. It travels with `sku`, on the same row, for the same reason.
+  // ⚠️ The variant MATRIX has no barcode column yet, so today only the implicit-default row carries
+  // one (the editor disables the field once a product has variants). When the matrix grows one, it
+  // fills this field per row and nothing else here has to change.
+  barcode?: string | null;
 };
 
 export type ProductInput = {
@@ -36,6 +44,7 @@ export type ProductInput = {
   compareAt?: number | null;
   cost?: number | null;
   sku?: string;
+  barcode?: string;
   weightGrams?: number | null;
   lengthCm?: number | null;
   widthCm?: number | null;
@@ -75,7 +84,7 @@ const productFields = (i: ProductInput) => ({
 const variantRowsOf = (input: ProductInput): VariantInput[] =>
   usesVariants(input)
     ? input.variants!
-    : [{ option1: null, option2: null, option3: null, price: input.price, stock: input.stock, sku: input.sku ?? null }];
+    : [{ option1: null, option2: null, option3: null, price: input.price, stock: input.stock, sku: input.sku ?? null, barcode: input.barcode ?? null }];
 
 export async function createProduct(input: ProductInput): Promise<{ id: string; number: number }> {
   const { storeId: sid } = await requireCapability("products:write");
@@ -104,7 +113,7 @@ export async function createProduct(input: ProductInput): Promise<{ id: string; 
           seq: pos + 1,
           productId: p.id, storeId: sid, title: comboTitle(v.option1 ?? null, v.option2 ?? null, v.option3 ?? null), position: pos++,
           option1: v.option1 ?? null, option2: v.option2 ?? null, option3: v.option3 ?? null,
-          priceIdr: v.price, sku: v.sku || null, compareAtIdr: input.compareAt ?? null, costIdr: input.cost ?? null, weightGrams: input.weightGrams ?? null,
+          priceIdr: v.price, sku: v.sku || null, barcode: v.barcode || null, compareAtIdr: input.compareAt ?? null, costIdr: input.cost ?? null, weightGrams: input.weightGrams ?? null,
         })
         .returning();
       if (locId) await db.insert(schema.inventoryLevels).values({ variantId: nv.id, locationId: locId, available: v.stock });
@@ -164,7 +173,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       const o1 = v.option1 ?? null, o2 = v.option2 ?? null, o3 = v.option3 ?? null;
       const key = comboKey(o1, o2, o3);
       keptKeys.add(key);
-      const fields = { title: comboTitle(o1, o2, o3), position: pos++, option1: o1, option2: o2, option3: o3, priceIdr: v.price, sku: v.sku || null, compareAtIdr: input.compareAt ?? null, costIdr: input.cost ?? null, weightGrams: input.weightGrams ?? null };
+      const fields = { title: comboTitle(o1, o2, o3), position: pos++, option1: o1, option2: o2, option3: o3, priceIdr: v.price, sku: v.sku || null, barcode: v.barcode || null, compareAtIdr: input.compareAt ?? null, costIdr: input.cost ?? null, weightGrams: input.weightGrams ?? null };
       const match = existingByKey.get(key);
       if (match) {
         await db.update(schema.productVariants).set(fields).where(eq(schema.productVariants.id, match.id));
