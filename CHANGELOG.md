@@ -2,6 +2,46 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-08-22 — Undangan pengguna toko sekarang melaporkan baris database, bukan tebakan (Task 5.3 · SEC-15)
+
+Mengundang anggota tim bisa **crash tanpa pesan apa pun** — dan pesan yang muncul saat berhasil pun
+tidak selalu benar.
+
+### 🔴 Balapan uniqueness adalah kasus yang paling sering, bukan edge case
+
+`inviteStoreUser` melakukan *read-then-write*: `select` ke `users.email`, lalu `insert` tanpa
+pengaman. Diukur pada PostgreSQL sungguhan — **19 dari 20** pasang undangan bersamaan untuk alamat
+baru yang sama melempar `users_email_unique` keluar dari server action. Server action yang melempar
+adalah promise yang ditolak dan tidak ditangkap dialog undangan: **tidak ada toast, tidak ada pesan
+apa pun di layar**. Padahal databasenya justru selalu benar (satu akun, satu keanggotaan, 20/20) —
+jadi penjual melihat kegagalan atas operasi yang sebenarnya berhasil. Jalur yang melempar itu juga
+sudah terlanjur men-*mint* kata sandi sementara.
+
+Sekarang kedua `insert` memakai `on conflict do nothing … returning`, dan **baris yang dikembalikan
+adalah satu-satunya yang boleh menentukan apa yang dilaporkan**. Ada baris ⇒ kita yang menulisnya ⇒
+kredensialnya boleh ditampilkan. Tidak ada baris ⇒ baris orang lain yang menang ⇒ baca ulang dan
+laporkan isi baris itu. Postgres yang menyerialkan tabrakannya, jadi dua pemanggil bertemu di hasil
+yang sama dan keanggotaan ganda tidak mungkin terbentuk.
+
+### 🔴 `accepted_at` adalah salinan `invited_at` — ditulis oleh orang yang bukan penerimanya
+
+Insert-nya `{ invitedAt: now, acceptedAt: now }`, sama persis sampai milidetik. Barisnya menyatakan
+seseorang menerima undangan **pada detik pemiliknya menekan "Undang"**, dan `getStoreUsers` membaca
+kolom itu lalu membuangnya: ditulis salah, tidak pernah dipakai. Sekarang **`signIn` yang menstempel
+`accepted_at`**, sekali, saat penerima undangan benar-benar berhasil masuk.
+
+### Lima keadaan, lima pesan
+
+Balasan aksi kini berupa `outcome`: `created` · `linked` · `already_invited` · `already_accepted` ·
+`failed`, dengan `password` selalu hadir (dan `null` di mana pun tidak ada yang ditulis). Sebelumnya
+dialog menyimpulkan "akun baru" hanya dari `if (r.tempPassword)` — sehingga kalimat *"Ia masuk dengan
+kata sandinya yang sudah ada"* muncul untuk **setiap** jalur yang tidak mengembalikan kata sandi,
+termasuk jalur yang sudah men-*mint* kredensial lalu gagal menyimpannya. Daftar anggota menampilkan
+**"Belum pernah masuk"** hanya ketika `accepted_at` benar-benar kosong.
+
+Tidak ada mailer di repo ini dan tidak ada yang dikirim lewat email — kata sandi sementara tetap
+diserahkan penjual sendiri.
+
 ## Unreleased — 2026-08-21 — The credential came out of the URL (Task 4.13 · SEC-16)
 
 Two reusable first-party secrets were being written into query strings on every run. One of them was

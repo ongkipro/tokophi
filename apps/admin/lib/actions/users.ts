@@ -21,9 +21,55 @@ import { withCurrentTenant } from "@/lib/tenant";
 
 export type StoreRole = "owner" | "admin" | "staff" | "gudang";
 export type ManageableRole = "admin" | "staff" | "gudang";
-export type StoreUserRow = { userId: string; name: string; email: string; role: StoreRole; isSelf: boolean };
+export type StoreUserRow = {
+  userId: string;
+  name: string;
+  email: string;
+  role: StoreRole;
+  isSelf: boolean;
+  /**
+   * ISO instant of the invitee's FIRST successful sign-in, or `null` — they have been given access
+   * and have never used it. Stamped by `signIn` (`lib/actions/auth.ts`), never by the invitation:
+   * see the note on `InviteResult` below. Rows written before Task 5.3 carry the invite's own
+   * timestamp here, so `null` proves "never signed in" while non-null does not, on its own, prove
+   * they did — which is why the UI only ever renders the `null` case.
+   */
+  acceptedAt: string | null;
+};
+
+/**
+ * WHAT INVITING SOMEBODY ACTUALLY DID — read back from the rows, never inferred (Task 5.3 / SEC-15).
+ *
+ * 🔴 `outcome` is its own field, and `password` is present on every branch. AGENTS.md records why:
+ * super-admin's `addStoreUser` returned a minted password whether or not it had hashed one into a
+ * row, and "no password" read identically to "no password was NEEDED" at the call site. Only one of
+ * those is good news. The old shape here had the same hole from the other side — the caller decided
+ * "created" vs "already had an account" purely from `tempPassword` being truthy, so ANY path that
+ * failed to mint would have rendered as a cheerful "they sign in with their existing password".
+ *
+ * The states, and what makes each one durable:
+ *  - `created`         a `users` row was INSERTED by this call and `password` is the string whose
+ *                      hash it carries — reported only because `.returning()` handed back that row.
+ *  - `linked`          the address already had an account (they work at another store); a membership
+ *                      was inserted and **their password was not touched**. Re-hashing here would
+ *                      silently lock them out of the other store, with no message (AGENTS.md).
+ *  - `already_invited` a membership already existed and nobody has ever signed in on it.
+ *  - `already_accepted` a membership already existed and the invitee has signed in.
+ *  - `failed`          nothing durable changed. Never carries a credential.
+ *
+ * ⚠️ There is NO MAILER in this repository. Nothing is emailed, so nothing may be reported on the
+ * strength of an email having been sent; the seller hands the temporary password over themselves.
+ */
+export type InviteResult =
+  | { outcome: "created"; email: string; role: ManageableRole; password: string }
+  | { outcome: "linked"; email: string; role: ManageableRole; password: null }
+  | { outcome: "already_invited"; email: string; role: StoreRole; invitedAt: string | null; password: null }
+  | { outcome: "already_accepted"; email: string; role: StoreRole; password: null }
+  | { outcome: "failed"; error: string; password: null };
 
 const MANAGEABLE: ManageableRole[] = ["admin", "staff", "gudang"];
+
+const fail = (error: string): InviteResult => ({ outcome: "failed", error, password: null });
 
 export async function getStoreUsers(): Promise<StoreUserRow[]> {
   const session = await getSession();
@@ -47,40 +93,104 @@ export async function getStoreUsers(): Promise<StoreUserRow[]> {
         email: r.email,
         role: r.role as StoreRole,
         isSelf: r.userId === selfId,
+        acceptedAt: r.acceptedAt ? r.acceptedAt.toISOString() : null,
       }))
       .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : a.name.localeCompare(b.name)));
   });
 }
 
+/**
+ * 🔴 THE UNIQUENESS RACE IS THE DEFECT, AND IT WAS THE COMMON CASE (measured 2026-08-22).
+ *
+ * The old body was read-then-write: `select … from users where email = …`, then an unguarded
+ * `insert`. Twenty concurrent double-invitations of the same new address, driven against real
+ * Postgres, produced **19 throws of `users_email_unique`** out of the server action — a rejected
+ * promise the dialog does not catch, so the seller got no toast at all, while the database had in
+ * fact converged on exactly one account and one membership every single time. The one time the race
+ * landed the other way it produced `store_users_storeId_userId_unique` instead. A password had
+ * already been minted on the throwing path.
+ *
+ * Both inserts are therefore `on conflict do nothing … returning`, and **the returned row is the
+ * only thing allowed to decide what is reported**:
+ *   - a row came back  ⇒ WE wrote it ⇒ `created` / `linked` may be claimed, and only then may the
+ *     minted password be revealed, because that row carries its hash;
+ *   - nothing came back ⇒ somebody else's row won ⇒ re-read it and report what IT says.
+ * Postgres serialises the collision for us, so two callers converge instead of one crashing, and no
+ * duplicate membership is reachable — the constraint, not a prior SELECT, is the arbiter.
+ *
+ * Everything durable happens in ONE transaction, so a failure anywhere leaves nothing behind and the
+ * seller may simply press the button again.
+ */
 export async function inviteStoreUser(input: {
   name: string; email: string; role: ManageableRole;
-}): Promise<{ ok: boolean; error?: string; tempPassword?: string }> {
+}): Promise<InviteResult> {
   const { storeId } = await requireCapability("settings:write");
   const name = input.name.trim();
   const email = normalizeEmail(input.email);
-  if (!name) return { ok: false, error: "Nama wajib diisi." };
-  if (!email) return { ok: false, error: "Email tidak valid." };
-  if (!MANAGEABLE.includes(input.role)) return { ok: false, error: "Peran tidak valid." };
+  if (!name) return fail("Nama wajib diisi.");
+  if (!email) return fail("Email tidak valid.");
+  if (!MANAGEABLE.includes(input.role)) return fail("Peran tidak valid.");
+  const role = input.role;
 
-  let temp: string | undefined;
-  const result = await db.transaction(async (tx) => {
-    const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
-    let userId = existing?.id;
-    if (!userId) {
-      temp = tempPassword();
-      const [created] = await tx.insert(schema.users).values({ email, name, passwordHash: hashPassword(temp) }).returning({ id: schema.users.id });
-      userId = created.id;
-    }
-    const [member] = await tx.select({ id: schema.storeUsers.id }).from(schema.storeUsers)
-      .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, userId))).limit(1);
-    if (member) return { ok: false as const, error: "Pengguna ini sudah menjadi anggota toko." };
-    const now = new Date();
-    await tx.insert(schema.storeUsers).values({ storeId, userId, role: input.role, invitedAt: now, acceptedAt: now });
-    return { ok: true as const };
-  });
-  if (!result.ok) return result;
-  revalidatePath("/pengaturan");
-  return { ok: true, tempPassword: temp };
+  let result: InviteResult;
+  try {
+    result = await db.transaction(async (tx): Promise<InviteResult> => {
+      // ── the login account ──────────────────────────────────────────────────────────────────────
+      let userId: string | undefined;
+      let password: string | null = null;
+      const [existing] = await tx.select({ id: schema.users.id }).from(schema.users)
+        .where(eq(schema.users.email, email)).limit(1);
+      if (existing) {
+        userId = existing.id;
+      } else {
+        const temp = tempPassword();
+        const [minted] = await tx.insert(schema.users)
+          .values({ email, name, passwordHash: hashPassword(temp) })
+          .onConflictDoNothing({ target: schema.users.email })
+          .returning({ id: schema.users.id });
+        if (minted) {
+          userId = minted.id;
+          password = temp; // ⚠️ set ONLY here: `minted` IS the row that carries this string's hash.
+        } else {
+          // Lost the race by microseconds. Their account and their password stand; `temp` is
+          // discarded unmentioned, exactly as an existing account is — never re-hashed over theirs.
+          const [raced] = await tx.select({ id: schema.users.id }).from(schema.users)
+            .where(eq(schema.users.email, email)).limit(1);
+          userId = raced?.id;
+        }
+      }
+      if (!userId) return fail("Gagal menyiapkan akun. Coba lagi.");
+
+      // ── the membership ─────────────────────────────────────────────────────────────────────────
+      // `accepted_at` stays NULL. It used to be stamped `now()` right here, which made it a copy of
+      // `invited_at` and left the panel unable to tell "given access, never used it" from "working
+      // here" — and it asserted, in the row, that somebody had accepted an invitation at the instant
+      // the OWNER pressed the button. Only the invitee can create that fact; `signIn` stamps it.
+      const [member] = await tx.insert(schema.storeUsers)
+        .values({ storeId, userId, role, invitedAt: new Date() })
+        .onConflictDoNothing({ target: [schema.storeUsers.storeId, schema.storeUsers.userId] })
+        .returning({ id: schema.storeUsers.id });
+      if (member) return password ? { outcome: "created", email, role, password } : { outcome: "linked", email, role, password: null };
+
+      // Already a member. `password` is necessarily null on this path (a `users` row this call had
+      // just created could not already hold a membership), so nothing minted is being dropped.
+      const [row] = await tx.select({ role: schema.storeUsers.role, invitedAt: schema.storeUsers.invitedAt, acceptedAt: schema.storeUsers.acceptedAt })
+        .from(schema.storeUsers)
+        .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, userId))).limit(1);
+      if (!row) return fail("Gagal membaca keanggotaan. Coba lagi.");
+      return row.acceptedAt
+        ? { outcome: "already_accepted", email, role: row.role as StoreRole, password: null }
+        : { outcome: "already_invited", email, role: row.role as StoreRole, invitedAt: row.invitedAt?.toISOString() ?? null, password: null };
+    });
+  } catch (e) {
+    // Nothing committed, so nothing is claimed — least of all a credential. Same two-file rule as a
+    // thrown error: the caller reads `outcome`, so a failure cannot render as a success.
+    console.error("[users] inviteStoreUser failed", e);
+    return fail("Gagal menyimpan undangan. Coba lagi.");
+  }
+  // Only a write changes what the page renders.
+  if (result.outcome === "created" || result.outcome === "linked") revalidatePath("/pengaturan");
+  return result;
 }
 
 export async function setStoreUserRole(userId: string, role: ManageableRole): Promise<{ ok: boolean; error?: string }> {
