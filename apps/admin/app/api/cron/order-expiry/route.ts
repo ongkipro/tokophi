@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { applyOrderStatusChange } from "@/lib/order-status";
 import { cronIntervalSec, recordCronRun } from "../record-run";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,15 +17,6 @@ type ExpirySummary = {
   skipped: number;
   errors: number;
 };
-
-function authorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-
-  // A production worker that changes orders and inventory must fail closed when its secret is absent.
-  if (!secret) return process.env.NODE_ENV !== "production";
-  return provided === secret;
-}
 
 /**
  * Cancel one candidate while holding both its order and payment rows.
@@ -85,7 +77,9 @@ async function expireCandidate(orderId: string, cutoff: Date): Promise<"cancelle
 
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
-  if (!authorized(req)) {
+  // A production worker that changes orders and inventory must fail closed when its secret is absent,
+  // and the credential arrives in a header — never in the URL. See `lib/cron-auth.ts`.
+  if (!cronAuthorized(req, "cron/order-expiry")) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

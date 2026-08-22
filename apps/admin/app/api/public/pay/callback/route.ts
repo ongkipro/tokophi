@@ -3,7 +3,12 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, inArray, ne, notInArray, or } from "drizzle-orm";
 import { rateLimit } from "@tokophi/lib/cache";
 import { addMonths } from "@tokophi/lib/billing";
-import { payCallbackAmountMatches, verifyPayCallbackSecret } from "@tokophi/lib/pay-callback";
+import {
+  PAY_CALLBACK_PARAM,
+  payCallbackAmountMatches,
+  verifyPayCallbackRef,
+  verifyPayCallbackSecret,
+} from "@tokophi/lib/pay-callback";
 import { clientIp, readPublicBody } from "@/lib/public-guard";
 import { creditSaleForPayment } from "@/lib/ledger-credit";
 import { releasePurchase } from "@/lib/tracking-events";
@@ -14,8 +19,41 @@ import { releasePurchase } from "@/lib/tracking-events";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// constant-time compare for the shared secret (avoids length/timing leaks).
-function secretOk(provided: string | null): boolean {
+/**
+ * How this request proved it may move money.
+ *
+ * `boundRef` is the whole point of the split. A `signature` caller proved it holds the URL we minted
+ * for ONE reference, so it may only act on the row carrying that `reff_id`. `header` and
+ * `query-token` carry the reusable secret itself and are therefore unbound — which is exactly why
+ * nothing mints a query token any more.
+ */
+type CallbackAuth =
+  | { ok: true; via: "header" | "signature" | "query-token" | "dev-unauthenticated"; boundRef: string | null }
+  | { ok: false };
+
+/**
+ * 🔴 THE `?token=` DOOR IS KNOWINGLY OPEN AND IT IS BLOCKED ON THE VENDOR. DO NOT CLOSE IT HERE.
+ *
+ * AutoLaris sends `callback_url` back verbatim and attaches no headers of its own. Until the vendor
+ * confirms it can send `X-Callback-Token` (or its own HMAC signature — PROD_PLAN §7), removing this
+ * branch would 401 **every genuine payment**: the shopper pays their VA, `payments.status` stays
+ * `menunggu` for ever, the order never becomes `dibayar`, no ledger row is written, and the platform's
+ * own subscription invoices stop advancing `stores.current_period_end`. That outage has happened here
+ * once already. A hardening that refuses real money is worse than the hole it closes.
+ *
+ * What was ours to fix, and IS fixed (Task 4.13 / SEC-16, 2026-08-21): we no longer MINT one.
+ * `payCallbackUrl()` now signs the reference instead of embedding `AUTOLARIS_CALLBACK_SECRET`, so no
+ * new bill puts a reusable platform credential into a URL, a gateway dashboard or a proxy log. This
+ * branch survives for the bills that were created BEFORE that change and are still inside their 24 h
+ * VA life — and for the vendor behaviour we have not been able to change. Every use is logged, so
+ * "is anything still arriving on the old door?" is a question the logs can answer rather than a guess.
+ *
+ * ⚠️ It is also the WEAKEST of the three: unlike a signature it is unbound, so anyone holding one of
+ * those old URLs can act on ANY payment. That is the cost of not breaking live payments, and it is
+ * why it is written down here instead of being quietly tolerated.
+ * Pinned by `route.test.ts` → "the legacy ?token= door".
+ */
+function authorizeCallback(req: Request, url: URL): CallbackAuth {
   const expected = process.env.AUTOLARIS_CALLBACK_SECRET;
 
   // FAIL CLOSED in production. This endpoint marks orders PAID and extends store subscriptions —
@@ -23,10 +61,49 @@ function secretOk(provided: string | null): boolean {
   // caller could forge payment for free goods. This used to `return true` and merely log a
   // warning, which is a landmine: the failure is silent and nobody reads warnings.
   // Dev/local still runs without a secret so the flow can be exercised offline.
-  if (!expected && process.env.NODE_ENV === "production") {
-    console.error("[pay/callback] AUTOLARIS_CALLBACK_SECRET unset in production — REJECTING callback.");
+  if (!expected) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[pay/callback] AUTOLARIS_CALLBACK_SECRET unset in production — REJECTING callback.");
+      return { ok: false };
+    }
+    return { ok: true, via: "dev-unauthenticated", boundRef: null };
   }
-  return verifyPayCallbackSecret(provided, expected, process.env.NODE_ENV !== "production");
+
+  // 1. The documented path. A header keeps the credential out of every URL-shaped log there is.
+  if (verifyPayCallbackSecret(req.headers.get("x-callback-token"), expected)) {
+    return { ok: true, via: "header", boundRef: null };
+  }
+
+  // 2. What we mint today: a signature over the reference this bill was raised under.
+  const signedRef = verifyPayCallbackRef(url.searchParams.get(PAY_CALLBACK_PARAM), expected);
+  if (signedRef) return { ok: true, via: "signature", boundRef: signedRef };
+
+  // 3. The legacy door — see the note above. Logged on every use, never the value.
+  if (verifyPayCallbackSecret(url.searchParams.get("token"), expected)) {
+    console.warn(
+      "[pay/callback] DEPRECATED: authenticated by the reusable ?token= query parameter. " +
+        "Nothing mints these any more; this is an old bill or the vendor's own configuration.",
+    );
+    return { ok: true, via: "query-token", boundRef: null };
+  }
+
+  return { ok: false };
+}
+
+/**
+ * A signed callback may only touch the row its signature names.
+ *
+ * Without this the signature is just a bearer token with extra steps: whoever reads ONE minted URL
+ * could post any `trx_id` at it and mark that payment paid. The comparison is against the row we
+ * RESOLVED, not against the request body, so it holds whether AutoLaris echoes `trx_id`, `reff_id`
+ * or both — the row carries the reference we billed under either way.
+ *
+ * An empty candidate list is bound trivially: there is nothing to act on, and the caller already
+ * passed authentication.
+ */
+function bound(auth: CallbackAuth & { ok: true }, rows: { reffId: string | null }[]): boolean {
+  if (auth.boundRef === null) return true;
+  return rows.every((row) => row.reffId === auth.boundRef);
 }
 
 export async function POST(req: Request) {
@@ -36,11 +113,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false }, { status: 429 });
   }
 
-  // Interim auth: shared secret via header (X-Callback-Token) or query (?token=). Swap for the
-  // real AutoLaris HMAC signature once the vendor confirms the signing spec (see PROD_PLAN §7).
+  // Header · per-payment signature · the vendor-blocked legacy `?token=`. See `authorizeCallback`.
   const url = new URL(req.url);
-  const provided = req.headers.get("x-callback-token") ?? url.searchParams.get("token");
-  if (!secretOk(provided)) {
+  const auth = authorizeCallback(req, url);
+  if (!auth.ok) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -55,29 +131,34 @@ export async function POST(req: Request) {
   } catch {
     /* tolerate form-encoded / empty */
   }
-  const trx = body.trx_id;
-  const reff = body.reff_id;
+  // A trimmed empty string is NOT an identifier. `body.trx_id = ""` used to fall through to `reff`
+  // silently; naming it here is what makes the ZERO-IDENTITY branch below reachable and testable.
+  const trx = typeof body.trx_id === "string" ? body.trx_id.trim() : "";
+  const reff = typeof body.reff_id === "string" ? body.reff_id.trim() : "";
   const status = (body.status ?? "").toUpperCase();
-  if (trx || reff) {
+
+  // ZERO IDENTITY IS A REFUSAL, NOT A SHRUG. An authenticated caller that names no payment used to
+  // get `{ok:true}` and a 200 — indistinguishable, from the outside, from a callback we acted on.
+  // Nothing here can be done without exactly one identifier, so say so.
+  if (!trx && !reff) {
+    console.error("[pay/callback] callback carried neither trx_id nor reff_id — rejected.");
+    return NextResponse.json({ ok: false, error: "missing transaction identifier" }, { status: 400 });
+  }
+
+  {
     const mapped = status === "PAID" ? "berhasil" : status === "EXPIRED" ? "gagal" : null;
     if (mapped) {
       // Exact identity resolution: prefer trx_id if provided, fall back to reff_id.
       // Do NOT use OR queries that can ambiguously match multiple unrelated payment rows.
-      const match = trx
-        ? eq(schema.payments.trxId, trx)
-        : reff
-        ? eq(schema.payments.reffId, reff)
-        : undefined;
-
-      if (!match) {
-        return NextResponse.json({ ok: false, error: "missing transaction identifier" }, { status: 400 });
-      }
+      const match = trx ? eq(schema.payments.trxId, trx) : eq(schema.payments.reffId, reff);
 
       const candidates = await db
         .select({
           id: schema.payments.id,
           orderId: schema.payments.orderId,
           amountIdr: schema.payments.amountIdr,
+          // Read back so a SIGNED callback can be bound to the row it names — see `bound()`.
+          reffId: schema.payments.reffId,
         })
         .from(schema.payments)
         .where(match);
@@ -85,6 +166,10 @@ export async function POST(req: Request) {
       if (candidates.length > 1) {
         console.error("[pay/callback] Ambiguous callback match resolved to multiple payment rows — rejected.");
         return NextResponse.json({ ok: false, error: "ambiguous payment match" }, { status: 400 });
+      }
+      if (!bound(auth, candidates)) {
+        console.error("[pay/callback] signed callback does not name the payment it resolved — rejected.");
+        return NextResponse.json({ ok: false, error: "callback signature does not match this payment" }, { status: 403 });
       }
       const matched = mapped === "berhasil"
         ? candidates.filter((payment) => payCallbackAmountMatches(body.amount, payment.amountIdr))
@@ -164,15 +249,23 @@ export async function POST(req: Request) {
 
       // subscription invoice? → mark paid + extend the store's subscription one month.
       const invStatus = mapped === "berhasil" ? ("dibayar" as const) : ("gagal" as const);
-      const invMatch = trx
-        ? eq(schema.invoices.trxId, trx)
-        : reff
-        ? eq(schema.invoices.reffId, reff)
-        : undefined;
+      const invMatch = trx ? eq(schema.invoices.trxId, trx) : eq(schema.invoices.reffId, reff);
       const invoiceCandidates = await db
-        .select({ id: schema.invoices.id, amountIdr: schema.invoices.amountIdr })
+        .select({ id: schema.invoices.id, amountIdr: schema.invoices.amountIdr, reffId: schema.invoices.reffId })
         .from(schema.invoices)
         .where(and(invMatch, eq(schema.invoices.kind, "subscription")));
+
+      // The same two rules the payment half gets, and for the same reasons. This branch had NEITHER:
+      // an ambiguous `trx_id` would have paid several subscription invoices at once, and a signed
+      // callback for one store's invoice could have settled another's.
+      if (invoiceCandidates.length > 1) {
+        console.error("[pay/callback] Ambiguous callback match resolved to multiple subscription invoices — rejected.");
+        return NextResponse.json({ ok: false, error: "ambiguous invoice match" }, { status: 400 });
+      }
+      if (!bound(auth, invoiceCandidates)) {
+        console.error("[pay/callback] signed callback does not name the invoice it resolved — rejected.");
+        return NextResponse.json({ ok: false, error: "callback signature does not match this invoice" }, { status: 403 });
+      }
       const invoiceMatches = mapped === "berhasil"
         ? invoiceCandidates.filter((invoice) => payCallbackAmountMatches(body.amount, invoice.amountIdr))
         : invoiceCandidates;

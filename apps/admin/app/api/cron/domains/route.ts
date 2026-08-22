@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { getCustomHostname, provisioningState } from "@/lib/cloudflare-saas";
 import { cronIntervalSec, recordCronRun } from "../record-run";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,14 +12,7 @@ const BATCH = 20;
 
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
-  const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[cron/domains] CRON_SECRET unset in production — REJECTING.");
-      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
-  } else if (provided !== secret) {
+  if (!cronAuthorized(req, "cron/domains")) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

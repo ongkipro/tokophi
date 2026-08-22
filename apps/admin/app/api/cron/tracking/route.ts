@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { KaTransportError, kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
 import { cronIntervalSec, recordCronRun } from "../record-run";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 // Tracking POLLER (BACKLOG shipping #1/#2) — the pull half. A booking returns `awb: null`; the waybill,
 // and every state after it, only exist once a courier accepts the pickup. This cron sweeps the orders
@@ -69,14 +70,7 @@ const RETRYABLE_4XX: Record<number, true> = { 408: true, 409: true, 423: true, 4
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
   // FAIL CLOSED in production, exactly like cron/billing: an unset secret must mean NO, not "no gate".
-  const secret = process.env.CRON_SECRET;
-  const provided = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[cron/tracking] CRON_SECRET unset in production — REJECTING.");
-      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
-  } else if (provided !== secret) {
+  if (!cronAuthorized(req, "cron/tracking")) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

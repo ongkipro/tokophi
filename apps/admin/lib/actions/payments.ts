@@ -389,7 +389,9 @@ export async function createOrderPayment(
       customerName: claim.order.name ?? "Pelanggan",
       customerPhone: claim.order.phone ?? "081200000000",
       customerEmail: claim.order.email ?? "order@tokophi.id",
-      callbackUrl: payCallbackUrl(),
+      // Signed for THIS bill. `requestKey` is what lands in `payments.reff_id` below, and the
+      // callback binds the signature to that column.
+      callbackUrl: payCallbackUrl(requestKey),
     });
   } catch {
     return finishFailedRequest(
