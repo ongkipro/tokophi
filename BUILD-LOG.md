@@ -188,7 +188,6 @@ Each patched one line of product source, ran the suite, and was reverted (`AFTER
   - `npm run lint -w @tokophi/admin` → **0 — 0 errors, 21 warnings**, exactly the baseline; the five removals left nothing dangling (`Bold`/`Italic`/`List`/`Link2`/`Separator` imports removed with them).
 - ⚠️ **NOT clicked in a browser, and this change is browser-visible.** Said here rather than implied, exactly as #289 did for the same screen. The claims above are source/contract and schema claims; the reload round-trip is proved as a three-link source chain, not by driving the form.
 - **Completed Task:** Stage 5 Task 5.2.
-||||||| a98321c
 ### [2026-08-22 13:10 UTC] — Stage 5 Task 5.3 · SEC-15 · The invitation told the seller a story the row did not
 
 - **Executor:** Claude (Opus 5), worktree `s5b`, branch `fix/stage5-invitations`, off `origin/main` `a98321c`.
@@ -418,7 +417,6 @@ in `errors` and returned in the summary. A tick in which **every** sync threw wr
   **This needs routing now.**
 
 ---
-||||||| b2a659e
 ### [2026-08-21 09:20 UTC] — Stage 4 Task 4.13 · SEC-16 · The Credential Came Out Of The URL
 
 - **Executor:** Claude (Opus 5), worktree `t413`, branch `sec/task-4.13-callback-cron-auth`, off `origin/main` `b2a659e`.
@@ -605,7 +603,6 @@ in `errors` and returned in the summary. A tick in which **every** sync threw wr
   - ⚠️ **The migration has NOT been applied to the shared dev database**, per this file's own rule about not migrating an unmerged branch into the shared container. It was exercised against the derived `_test` database by the suite.
   - ⚠️ **Not clicked in a browser.** The path is a public API driven by the storefront; the handler itself is exercised end to end above.
 - **Completed Task:** Stage 4 Task 4.8.
-||||||| 0d6f1d1
 ### [2026-08-21] — Stage 4 Task 4.7 Persisted Navigation Menu Creation
 
 - **Scope:** "Buat menu" now writes. The menu row and its whole initial item tree land in ONE tenant transaction, the action returns a typed accepted/rejected result, and the dialog closes only after the commit.
