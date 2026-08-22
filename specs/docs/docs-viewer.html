@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokoΦ — UI/UX Docs</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Tailwind Typography Plugin -->
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+
+  <!-- Marked.js for parsing Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    body {
+      background-color: #f8fafc;
+    }
+    .markdown-content h1 { color: #4c1d95; }
+    .markdown-content h2 { border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; margin-top: 2rem; color: #1e293b; }
+    .markdown-content h3 { color: #334155; }
+    .markdown-content a { color: #6d28d9; text-decoration: underline; }
+    .markdown-content code { background-color: #f1f5f9; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.875em; color: #db2777; }
+    .markdown-content pre { background-color: #1e293b; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; color: #f8fafc; }
+    .markdown-content pre code { background-color: transparent; color: inherit; padding: 0; }
+    
+    /* Tabs styling */
+    .tab-btn {
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      color: #64748b;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: #6d28d9;
+      border-bottom: 2px solid #6d28d9;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body class="antialiased text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="font-bold text-xl text-purple-700">TokoΦ Docs</div>
+      <div class="flex gap-4">
+        <button onclick="switchTab('pattern')" id="tab-pattern" class="tab-btn active">PATTERN_UIUX.md</button>
+        <button onclick="switchTab('improvement')" id="tab-improvement" class="tab-btn">IMPROVEMENT_UIUX.md</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-5xl mx-auto px-6 py-12">
+    
+    <div class="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200">
+      
+      <!-- PATTERN MD CONTENT -->
+      <div id="content-pattern" class="tab-content active prose prose-slate max-w-none markdown-content"></div>
+      
+      <!-- IMPROVEMENT MD CONTENT -->
+      <div id="content-improvement" class="tab-content prose prose-slate max-w-none markdown-content"></div>
+
+    </div>
+
+  </main>
+
+  <!-- Raw Markdown Data -->
+  <script type="text/markdown" id="md-pattern">
+# TokoΦ — UI/UX & Component Architecture Pattern
+
+**Date**: 2026-08-04
+**Target**: Merchant Admin (`apps/admin`), Super Admin (`apps/super-admin`), Storefront (`apps/storefront`), Landing Page (`apps/landing`).
+
+---
+
+## 1. Global UI Architecture & Tech Stack
+
+TokoΦ adopts a monorepo structure where UI primitives and design tokens are centralized to ensure visual consistency across all 4 surfaces.
+
+- **CSS Framework**: **Tailwind CSS v4** (menggunakan `@import "tailwindcss"` dan integrasi `@theme inline`).
+- **Color Format**: **OKLCH** (digunakan secara eksplisit di `globals.css` untuk akurasi dan vibransi warna yang modern, memastikan *light* dan *dark mode* memiliki kontras yang identik).
+- **Component Library**: **shadcn/ui** yang berjalan di atas **Base UI** (`@base-ui/react`), BUKAN Radix Primitives. Ini memengaruhi pola penulisan *Trigger* (menggunakan prop `render` alih-alih `asChild`).
+- **Icons**: **Lucide React** & **Lucide Astro** (Stroke-based, dirender selaras dengan `currentColor` dan *brand scale*, tidak menggunakan sistem font-icon/emoji).
+- **Animations**: `tw-animate-css` terintegrasi.
+
+---
+
+## 2. Design Tokens & Theming (`packages/ui/src/styles/globals.css`)
+
+Semua variabel tema dan warna dideklarasikan sebagai variabel CSS berbasis OKLCH.
+
+- **Brand Accent**: Indigo/Violet (`--primary: oklch(0.515 0.23 277)`).
+- **Radius**: Menggunakan variabel hierarkis `--radius` yang diskala secara matematis (`--radius-sm`, `--radius-md`, `--radius-lg` hingga `--radius-4xl`).
+- **Dark Mode**: Didukung secara native dengan `class="dark"`. State disimpan via `MutationObserver` pada *document element* untuk menghindari *cascading renders* (bukan via `useEffect` yang berat).
+- **Background & Surface**: Menggunakan `oklch(1 0 0)` (Pure White) untuk *light mode*, dan abu-abu gelap `oklch(0.145 0 0)` untuk *dark mode*.
+
+---
+
+## 3. Surface-Specific Patterns
+
+### A. Merchant Admin (`apps/admin`) & Super Admin (`apps/super-admin`)
+Pendekatan: **Console-clean, Data-dense, Dashboard SaaS Modern**.
+
+- **Layout Structure**: 
+  - Dibungkus oleh `<AdminChrome>` yang menangani *full-bleed routes* (seperti Store Builder) vs *standard routes*.
+  - *Standard routes* memiliki `<Sidebar>` (sticky) dan `<Topbar>` (sticky dengan *backdrop-blur-md*).
+  - Konten utama berada dalam `<main className="flex-1 bg-muted/30 p-4 sm:p-6">`.
+- **Top Navigation (`Topbar`)**:
+  - Global Search (Shortcut `⌘K`) di tengah.
+  - *Saldo Chip* yang tersembunyi elegan (hanya angka, klik untuk rincian).
+  - Theme Toggle, Notifikasi, dan Avatar Profile (Dropdown Menu) diletakkan rata kanan.
+- **Data Display (`DashboardClient`)**:
+  - **Cards**: Menggunakan *Base UI Card* dengan proporsi *gap* konsisten (`space-y-5`).
+  - **Charts**: Recharts (di-wrap dengan komponen `<SalesChart>`, `<ChannelChart>`).
+  - **KPIs**: Menghindari *false-promises*. Data kosong akan menampilkan status "—" atau status abu-abu (*graceful degradation*).
+  - **Formatting**: Terpusat menggunakan `@tokophi/lib/format` (`IDR()`, `num()`, `pct()`). Menggunakan *tabular-nums* agar angka sejajar secara vertikal.
+
+### B. Storefront (`apps/storefront`) & Landing (`apps/landing`)
+Pendekatan: **Aesthetic E-commerce, Conversion-optimized, Astro SSR**.
+
+- **Structure**: Halaman didorong oleh SSR Astro. *Page structure* diatur melalui `SectionRenderer` jika menggunakan *Store Builder*, atau *fallback* hardcode (seperti `<Hero>`, `<TrustStrip>`).
+- **Micro-interactions**: 
+  - *Hover effect* pada `<ProductCard>` dan kategori menggunakan Tailwind (`hover:-translate-y-0.5`, `hover:shadow-xl`, `hover:scale-110`).
+  - *Focus states* jelas (`focus-visible:ring-brand-400`).
+- **Content Hierarchy**: 
+  - `<Hero>` -> `<Trust Strip>` (Alasan membeli) -> `<Koleksi>` -> `<Cerita Kami>` -> `<Bestsellers>` -> `<Closing CTA>`.
+  - Tombol aksi utama berbentuk kapsul (`rounded-full`) dengan efek bayangan dan transisi warna halus.
+
+---
+
+## 4. Component Rules & Gotchas
+
+1. **Trigger Base UI**: `DropdownMenuTrigger`, `SheetTrigger`, dll HARUS menggunakan prop `render={<Button />}`. Jangan menggunakan `asChild`.
+2. **Buttons sebagai Link**: Gunakan `nativeButton={false}` lalu isi `render={<Link href="..." />}` untuk menghindari *console errors*.
+3. **Select vs DropdownMenu**: Hindari komponen `<Select>` bawaan Base UI karena API-nya berbeda; gunakan `<DropdownMenu>` atau `<Tabs>` untuk *pickers/filters*.
+4. **Icons**: Selalu definisikan `size`, `stroke-width` jika perlu, dan sebisa mungkin gunakan *opacity* (via text-muted-foreground) untuk hierarki visual, bukan sekadar memperkecil ukuran.
+  </script>
+
+  <script type="text/markdown" id="md-improvement">
+# TokoΦ — UI/UX Improvement Suggestions
+
+**Date**: 2026-08-04
+**Goal**: Elevate UI/UX into a Premium, Dynamic, and "Wow" Experience without touching the backend system.
+
+---
+
+## 1. Aesthetic Enhancements (Premium Feel)
+
+### A. Glassmorphism & Translucency
+- **Topbar & Navigation**: Saat ini Topbar admin memiliki `bg-background/80 backdrop-blur-md`. Untuk kesan lebih premium, turunkan opasitas menjadi `bg-background/60` dan tambahkan `border-b border-border/50` serta sedikit saturasi blurnya (`backdrop-saturate-150`) agar konten di belakangnya (saat di-scroll) terlihat lebih estetik layaknya interface macOS/iOS modern.
+- **Card Overlays**: Pada `<ProductCard>` di Storefront, gunakan _glass effect_ pada area nama/harga saat di-hover, atau di atas gradient shadow.
+
+### B. Soft Depth & Layering (Shadows)
+- Hindari _box-shadow_ hitam standar (`rgba(0,0,0,0.1)`). 
+- **Admin Cards**: Ubah ke _tinted shadows_ yang mengambil sedikit aksen dari warna brand utama. (Contoh: `shadow-lg shadow-primary/5`).
+- **Storefront Buttons**: Tambahkan _glow effect_ (cahaya berpendar) saat _hover_ (`hover:shadow-brand-500/25`), bukan sekadar bayangan drop biasa.
+
+### C. Refined Color Usage (Oklch Gradients)
+- Ganti _solid accent color_ sesekali dengan _subtle gradients_.
+- **Dashboard Progress Bars / KPIs**: Gunakan gradasi OKLCH dari `--primary` ke warna analog (misalnya ungu muda ke indigo) untuk mengisi _progress bar_ pesanan dan indikator target.
+
+---
+
+## 2. Dynamic Interactions & Micro-animations
+
+### A. Staggered Entries (Admin & Storefront)
+- Integrasikan `tw-animate-css` secara agresif tapi halus.
+- Saat `<DashboardClient>` atau list produk (`/pesanan`, `/produk`) di-*mount*, elemen-elemennya tidak boleh muncul bersamaan. Gunakan _stagger_ (contoh: `animate-in fade-in slide-in-from-bottom-2 duration-500 delay-[50ms*i]`) sehingga tabel atau kartu KPI masuk secara beruntun (*cascading*).
+
+### B. Interactive Feedback
+- **Buttons**: Setiap klik tombol aksi utama (Simpan, Ekspor) harus memiliki skala tekan (*active state*): `active:scale-95 transition-transform`.
+- **Sidebar (Admin)**: Saat kursor melakukan _hover_ pada _NavItem_, _highlight background_-nya jangan muncul secara instan, tapi berikan durasi `duration-200 ease-out`. Item aktif harus memiliki penanda vertikal halus (contoh: border kiri 2px warna `--primary`).
+
+### C. Skeleton & Loading States
+- Saat _route transition_, transisinya terasa kaku jika hanya me-render `skeleton.tsx` biasa. Tambahkan animasi `shimmer` dengan _gradient_ yang _fluid_, atau gunakan *skeleton* berbasis teks berdenyut.
+
+---
+
+## 3. Layout & Typography Refinements
+
+### A. Breathing Room (Whitespace)
+- **Admin Dashboard**: Jarak antar _Card_ (`gap-4` atau `space-y-5`) sudah cukup baik, tapi perhatikan *padding* internal komponen dalam `<CardContent>`. Pada tabel yang padat informasi, longgarkan `line-height` dan tambahkan ruang kosong di sel agar data terlihat rileks.
+- **Storefront**: Pertimbangkan memperlebar `<section>` pada _desktop view_ dengan menambahkan batas _max-width_ yang lebih adaptif, serta meningkatkan ukuran _font heading_ 10-15% agar lebih dominan dan _editorial-style_.
+
+### B. Modern Typography
+- Pastikan semua _metric numbers_ (contoh: angka pendapatan, saldo) menggunakan `font-variant-numeric: tabular-nums` (Tailwind: `tabular-nums`) dan `tracking-tight` agar terasa rapi dan tegas.
+- Judul bagian pada _Storefront_ (`Koleksi`, `Paling Dicari`) bisa memanfaatkan *letter-spacing* yang sedikit lebih negatif (`tracking-tight`) untuk _font-display_ guna mendapatkan *vibe* premium _magazine/fashion_.
+
+---
+
+## 4. Eksekusi Teknis Berikutnya (Next Steps)
+Jika pola ini disetujui, kita bisa langsung memperbarui:
+1. `packages/ui/src/styles/globals.css` untuk mendaftarkan utilitas animasi dan bayangan baru.
+2. Komponen `Card`, `Button`, `Sidebar`, dan `Topbar` di `apps/admin/components` & `packages/ui/src/components/ui`.
+3. Komponen `<ProductCard>` dan `<Hero>` di `apps/storefront/src/components`.
+  </script>
+
+  <script>
+    // Render Markdown
+    document.getElementById('content-pattern').innerHTML = marked.parse(document.getElementById('md-pattern').innerHTML);
+    document.getElementById('content-improvement').innerHTML = marked.parse(document.getElementById('md-improvement').innerHTML);
+
+    // Tab Logic
+    function switchTab(tabId) {
+      // Hide all content
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      // Deactivate all buttons
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      
+      // Show selected content
+      document.getElementById('content-' + tabId).classList.add('active');
+      // Activate selected button
+      document.getElementById('tab-' + tabId).classList.add('active');
+    }
+  </script>
+
+</body>
+</html>

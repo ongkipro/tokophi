@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokoΦ — UI/UX Pattern Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            // Mocking OKLCH Brand Accent
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              200: '#ddd6fe',
+              300: '#c4b5fd',
+              400: '#a78bfa',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+              800: '#5b21b6',
+              900: '#4c1d95',
+            },
+            background: '#ffffff',
+            foreground: '#0f172a',
+            muted: '#f8fafc',
+            'muted-foreground': '#64748b',
+            border: '#e2e8f0',
+            card: '#ffffff',
+          },
+          boxShadow: {
+            'soft': '0 4px 20px -2px rgba(124, 58, 237, 0.05)',
+            'glow': '0 0 20px rgba(124, 58, 237, 0.25)',
+          },
+          animation: {
+            'fade-in-up': 'fade-in-up 0.5s ease-out forwards',
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            'fade-in-up': {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Utility for staggered animation delays */
+    .delay-100 { animation-delay: 100ms; }
+    .delay-200 { animation-delay: 200ms; }
+    .delay-300 { animation-delay: 300ms; }
+    
+    /* Base reset */
+    body { background-color: #f8fafc; color: #0f172a; }
+  </style>
+</head>
+<body class="antialiased selection:bg-brand-200 selection:text-brand-900">
+
+  <!-- ==========================================
+       SECTION 1: MERCHANT ADMIN PROTOTYPE
+       ========================================== -->
+  <div class="max-w-6xl mx-auto my-12 bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 flex h-[700px]">
+    
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-50 border-r border-slate-200 flex flex-col">
+      <div class="h-16 flex items-center px-6 border-b border-slate-200 bg-white">
+        <div class="font-display font-bold text-xl text-brand-600 tracking-tight">TokoΦ</div>
+      </div>
+      <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-brand-50 text-brand-700 font-medium relative group transition-colors">
+          <!-- Active Indicator -->
+          <span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-brand-600 rounded-r-full"></span>
+          <svg class="w-5 h-5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+          Dashboard
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 font-medium hover:bg-slate-100 transition-colors">
+          <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+          Pesanan
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 font-medium hover:bg-slate-100 transition-colors">
+          <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+          Produk
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col bg-slate-50/50 relative overflow-y-auto">
+      
+      <!-- Topbar (Glassmorphism) -->
+      <header class="sticky top-0 z-30 h-16 flex items-center justify-between px-6 bg-white/60 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
+        <div class="relative w-64">
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <input type="text" placeholder="Cari pesanan... ⌘K" class="w-full pl-9 pr-4 py-2 rounded-md bg-white border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition-shadow">
+        </div>
+        
+        <div class="flex items-center gap-4">
+          <!-- Saldo Chip -->
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+            <span class="text-sm font-semibold tabular-nums text-slate-700">Rp 4.500.000</span>
+          </div>
+          <div class="w-px h-5 bg-slate-200"></div>
+          <!-- Avatar -->
+          <button class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center ring-2 ring-white shadow-sm hover:scale-105 active:scale-95 transition-transform">
+            OP
+          </button>
+        </div>
+      </header>
+
+      <!-- Dashboard Content -->
+      <main class="p-6 space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+          <p class="text-sm text-slate-500 mt-1">Pantau performa toko Anda hari ini.</p>
+        </div>
+
+        <!-- KPI Cards (Staggered Animation + Soft Depth) -->
+        <div class="grid grid-cols-3 gap-5">
+          <!-- Card 1 -->
+          <div class="bg-white p-5 rounded-xl shadow-soft border border-slate-100 opacity-0 animate-fade-in-up">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Pendapatan</p>
+                <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">Rp 12.450.000</p>
+              </div>
+              <div class="p-2 rounded-lg bg-green-50 text-green-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+              <span class="text-xs font-medium text-green-600">+14.5%</span>
+              <span class="text-xs text-slate-400">vs bulan lalu</span>
+            </div>
+            <!-- Subtle Gradient Progress -->
+            <div class="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-brand-400 to-brand-600 w-3/4 rounded-full"></div>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="bg-white p-5 rounded-xl shadow-soft border border-slate-100 opacity-0 animate-fade-in-up delay-100">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Pesanan Baru</p>
+                <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">142</p>
+              </div>
+              <div class="p-2 rounded-lg bg-brand-50 text-brand-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+              <span class="text-xs font-medium text-green-600">+5.2%</span>
+              <span class="text-xs text-slate-400">vs bulan lalu</span>
+            </div>
+          </div>
+
+          <!-- Card 3 (Action Required) -->
+          <div class="bg-white p-5 rounded-xl shadow-soft border border-orange-100 opacity-0 animate-fade-in-up delay-200 relative overflow-hidden">
+            <!-- decorative glow -->
+            <div class="absolute -right-4 -top-4 w-24 h-24 bg-orange-400/10 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div class="flex justify-between items-start relative">
+              <div>
+                <p class="text-xs font-medium text-orange-600/80 uppercase tracking-wider">Menunggu Diproses</p>
+                <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">28</p>
+              </div>
+              <div class="p-2 rounded-lg bg-orange-50 text-orange-600 animate-pulse-slow">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              </div>
+            </div>
+            <div class="mt-5">
+              <button class="w-full py-2 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg text-xs font-semibold transition-colors active:scale-95">
+                Proses Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+
+  <!-- ==========================================
+       SECTION 2: STOREFRONT PROTOTYPE
+       ========================================== -->
+  <div class="max-w-6xl mx-auto my-12 bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+    
+    <!-- Storefront Hero (Minimal, Large Typography) -->
+    <div class="relative bg-slate-900 py-24 px-6 text-center overflow-hidden">
+      <!-- Decor -->
+      <div class="absolute inset-0 bg-gradient-to-br from-brand-900/40 to-slate-900"></div>
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-full bg-brand-500/20 blur-[100px] pointer-events-none"></div>
+      
+      <div class="relative z-10 max-w-2xl mx-auto">
+        <p class="text-brand-300 text-sm font-semibold tracking-[0.2em] uppercase mb-4">Koleksi Terbaru</p>
+        <h1 class="text-4xl md:text-5xl font-display font-semibold text-white tracking-tight leading-tight">
+          Siluet Modern untuk Perempuan Elegan.
+        </h1>
+        <div class="mt-10">
+          <button class="px-8 py-3.5 bg-brand-500 hover:bg-brand-400 text-white rounded-full font-semibold shadow-glow transition-all hover:-translate-y-1 active:scale-95">
+            Mulai Belanja
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Product Grid -->
+    <div class="p-10">
+      <h2 class="text-2xl font-display font-semibold text-slate-900 tracking-tight">Paling Dicari</h2>
+      
+      <div class="grid grid-cols-4 gap-6 mt-6">
+        
+        <!-- Product Card (Premium Hover State) -->
+        <div class="group relative block opacity-0 animate-fade-in-up delay-100 cursor-pointer">
+          <div class="aspect-[4/5] bg-slate-100 rounded-xl overflow-hidden relative border border-slate-200/50">
+            <!-- Mock Image -->
+            <div class="absolute inset-0 bg-slate-200 flex items-center justify-center text-4xl group-hover:scale-105 transition-transform duration-700">👗</div>
+            
+            <!-- Quick Add Overlay (Glass) -->
+            <div class="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+              <button class="w-full py-2.5 bg-white/90 backdrop-blur-sm text-slate-900 font-semibold text-sm rounded-lg shadow-sm hover:bg-white active:scale-95 transition-all">
+                Beli Cepat
+              </button>
+            </div>
+          </div>
+          <div class="mt-4">
+            <h3 class="text-sm font-medium text-slate-900 line-clamp-1 group-hover:text-brand-600 transition-colors">Gamis Katun Rayon Premium</h3>
+            <p class="mt-1 text-sm font-semibold tabular-nums text-slate-900">Rp 250.000</p>
+          </div>
+        </div>
+
+        <!-- Product Card 2 -->
+        <div class="group relative block opacity-0 animate-fade-in-up delay-200 cursor-pointer">
+          <div class="aspect-[4/5] bg-slate-100 rounded-xl overflow-hidden relative border border-slate-200/50">
+            <div class="absolute inset-0 bg-slate-200 flex items-center justify-center text-4xl group-hover:scale-105 transition-transform duration-700">👚</div>
+            <div class="absolute inset-x-0 bottom-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+              <button class="w-full py-2.5 bg-white/90 backdrop-blur-sm text-slate-900 font-semibold text-sm rounded-lg shadow-sm hover:bg-white active:scale-95 transition-all">
+                Beli Cepat
+              </button>
+            </div>
+          </div>
+          <div class="mt-4">
+            <h3 class="text-sm font-medium text-slate-900 line-clamp-1 group-hover:text-brand-600 transition-colors">Blus Tangan Panjang</h3>
+            <p class="mt-1 text-sm font-semibold tabular-nums text-slate-900">Rp 175.000</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
