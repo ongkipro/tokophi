@@ -43,10 +43,12 @@ const TEMPLATE_OPTIONS: { value: string; label: string }[] = [
   { value: "page.full-width", label: "page.full-width" },
 ];
 
-// Seed a plausible body from the page title for the edit view (demo mock).
-function seedBody(title: string): string {
-  return `Selamat datang di halaman ${title}. Halaman ini berisi informasi lengkap seputar ${title.toLowerCase()} untuk membantu pelanggan memahami toko kami.`;
-}
+// REMOVED (Task 5.16): `seedBody(title)`, which manufactured "Selamat datang di halaman <judul>…"
+// from the page title. It was already unreachable — the editor initialises from `page.body ?? ""`
+// — but a function whose whole purpose is to fabricate body text sitting one call away from the
+// edit path is a loaded gun: wiring it back would make opening an EMPTY page show invented prose,
+// and pressing Simpan would persist it over the merchant's deliberate emptiness. An empty page is a
+// choice (the storefront already renders `page.body.trim() ? <Prose/> : …`), not a gap to fill.
 
 const TITLE_LIMIT = 100;
 const SEO_TITLE_LIMIT = 70;
@@ -99,7 +101,15 @@ export function PageEditor({ page }: { page?: CmsPage }) {
     startTransition(async () => {
       try {
         if (isEdit && page) {
-          await updatePage(page.id, buildInput());
+          // Read the outcome. A page deleted in another tab (or one that was never this store's —
+          // RLS filters it out with no error) matches zero rows, and announcing "disimpan" over
+          // that is how a merchant loses an afternoon's writing believing it is safe.
+          const res = await updatePage(page.id, buildInput());
+          if (!res.ok) {
+            toast.error(res.error ?? "Gagal menyimpan halaman");
+            router.refresh();
+            return;
+          }
           toast.success("Halaman disimpan");
         } else {
           await createPage(buildInput());
@@ -116,7 +126,12 @@ export function PageEditor({ page }: { page?: CmsPage }) {
     if (!page) return;
     startTransition(async () => {
       try {
-        await deletePage(page.id);
+        const res = await deletePage(page.id);
+        if (!res.ok) {
+          toast.error(res.error ?? "Gagal menghapus halaman");
+          router.refresh();
+          return;
+        }
         toast.success("Halaman dihapus");
         router.push("/halaman");
         router.refresh();
