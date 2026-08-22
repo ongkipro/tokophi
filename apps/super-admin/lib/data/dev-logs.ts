@@ -25,6 +25,90 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.1.0-restricted-db-identity",
+    version: "v1.1.0",
+    date: "2026-08-22",
+    title: "Restricted Database Identity Or Fail Closed — Two Pools, And Stage 4 Closed",
+    category: "security",
+    surfaces: ["Seller Admin", "Super Admin", "Storefront", "Database & RLS"],
+    summary: "Merchant traffic now runs on a separate restricted PostgreSQL pool that proves its own identity before the first tenant query. Closes SEC-18 — the last open P0, so all 13 release blockers (Tasks 4.1 through 4.13) are done.",
+    problem: "packages/db/src/client.ts resolved APP_DATABASE_URL ?? ownerUrl, so DATABASE_RUNTIME_ROLE=app fell back to the OWNER connection silently. Measured on production: all three app services carried the app label, none carried APP_DATABASE_URL, and the role they actually connected as was rolsuper = t, rolbypassrls = t. The restricted label had been in place since Task 2.1; the restricted identity never was.",
+    solution: "Two named pools — db (owner) and appDb (restricted), whose only caller is withTenant(). In app-role mode the connected role is proved against pg_roles once per process, before the first tenant query, and the process exits if it cannot; DATABASE_RUNTIME_ROLE=app with no APP_DATABASE_URL now refuses to start. The runbook changed with the measurement: only admin moves to the restricted pool, because all 50 policies are TO PUBLIC and the surfaces that read outside withTenant would return zero rows.",
+    verification: "npm test after a fresh install: 123 files, 1009 tests passed; astro check 0 errors on storefront (120 files) and landing (29); 16 mutations, 16 reds, two of which exposed real blind spots in the new guard. Post-deploy on production: pg_stat_activity showed tokophi 9 connections and tokophi_app 1 (its first ever), the admin container logged the identity gate passing, and tenant scoping under the restricted role returned 25 products and 1 store for batiknusantara."
+  },
+  {
+    id: "v1.0.6-custom-domain-hsts",
+    version: "v1.0.6",
+    date: "2026-08-22",
+    title: "Custom-Domain HSTS Raised To One Year",
+    category: "security",
+    surfaces: ["Storefront"],
+    summary: "Merchant custom domains now answer max-age=31536000; includeSubDomains at the origin, matching the platform hosts.",
+    problem: "Custom domains sat at max-age=86400 — the deliberate 24-hour ladder step taken on 2026-08-11 — while the .com and .id hosts had carried a year since 2026-08-07. Every fresh http:// visit to a merchant domain therefore kept a longer strippable window than the platform's own hosts did.",
+    solution: "stsSeconds 86400 to 31536000 in the Traefik middleware tokophi-custom-hsts, hot-reloaded by the file provider with no restart and no deploy, pre-raise file backed up. preload stays off. SECURITY.md section 5 no longer carries this as an open decision and now states what includeSubDomains at a year commits a merchant to — every subdomain pinned to https, surviving their departure — so it can be said to them before their domain is attached.",
+    verification: "Health was measured BEFORE the raise, not after: every host healthy on https (apex 200, www 301, valid certs), because a year-long pin over a host that cannot serve https is the one version of this that cannot be walked back. Re-measured immediately after on all four hosts — taniniaga.com, www.taniniaga.com, beautyinu.co, www.beautyinu.co — each answering max-age=31536000; includeSubDomains. Four hosts, not the three earlier notes claimed."
+  },
+  {
+    id: "v1.0.5-stage5-wave",
+    version: "v1.0.5",
+    date: "2026-08-22",
+    title: "Stage 5 Wave — Product Editor, Invitations, Payouts, CMS Pages And A Route-Entry Role Gate",
+    category: "bugfix",
+    surfaces: ["Seller Admin", "Super Admin", "Database & RLS"],
+    summary: "Six Stage 5 tasks in one wave: 5.2 product-editor controls, 5.3 invitations, 5.10 payout compare-and-swap, 5.11 admin lint baseline, 5.16 CMS page bodies, 5.17 route-entry role gate on the control plane.",
+    problem: "Screens kept promising what the database never did. Four product-editor controls never reached the payload, and Produk fisik NULLed the weight and dimensions that price every shipping quote. inviteStoreUser was read-then-write: 19 of 20 concurrent invitations threw users_email_unique out of the server action, which the dialog never catches, so the seller saw no toast at all over an operation that had in fact succeeded. markPayoutPaid accepted menunggu to selesai, stamping LUNAS on a withdrawal no operator had started transferring. updatePage and deletePage wrote blind. And no super-admin SCREEN had ever compared an operator rank — measured live, a support operator typing /pencairan was served the payout queue in full, including every merchant's bank account number.",
+    solution: "Dead controls removed and barcode wired in both directions (5.2); both invitation inserts are now on conflict do nothing with returning, the reply is a discriminated union on outcome, and accepted_at is stamped by signIn rather than by the person doing the inviting (5.3); the payout transition moved into the UPDATE's own WHERE as a compare-and-swap in payout-transition.ts (5.10); both page writes return what they matched, with all three callers changed in the same commit (5.16); lib/route-roles.ts declares a rank floor per route group and platformRouteGate(path) is the first await of every platform page, additive to the mutation gates rather than replacing them (5.17); four prop-into-state effects converted to render-time adjustment (5.11).",
+    verification: "Mutations proved red before anything was trusted green — 6 on the product-editor census, 8 on invitations, 6 on the payout transition, 9 on the route gate. npm test on the payout and route-gate branch: 119 files / 934 tests, exit 0 (937 after the related addStoreUser fix); the product-editor and invitation branches measured 118 files / 931 and 118 / 900 on their own bases. tsc 0 on admin and super-admin; lint 0 errors on both. The route gate was driven live across three ranks by eight route classes: support got 307 to /tiket on the dashboard, 200 on three routes, and the denial screen with zero privileged markers on the other four."
+  },
+  {
+    id: "v1.0.4-credentials-out-of-urls",
+    version: "v1.0.4",
+    date: "2026-08-21",
+    title: "Credentials Out Of URLs — One-Time Impersonation And A Header-Only Cron Gate",
+    category: "security",
+    surfaces: ["Super Admin", "Seller Admin", "Payments"],
+    summary: "Tasks 4.11 (SEC-10) and 4.13 (SEC-16): the impersonation link became a single-use opaque exchange, and no reusable first-party secret rides a query string any more.",
+    problem: "Buka Dashboard Seller minted a session-shaped JWT and put it in the query string. It was signed, audience-pinned and expired in two minutes — and reusable for every one of those 120 seconds, because a JWT is verified, never spent; the 7-day merchant session it exchanged for carried no mark that an operator was inside. Separately, CRON_SECRET travelled on the URL of every cron tick, so the credential authorising a state-mutating sweep across every tenant sat in the container command, in docker inspect, in the host process table and in every proxy access log; and payCallbackUrl() embedded the whole callback secret in every bill handed to the payment provider.",
+    solution: "impersonation_grants (migration 0098) stores only the hash of a 256-bit opaque handle, and one UPDATE with consumed_at is null and expires_at > now() RETURNING is the entire security model. Membership, the merchant role, the operator row, rank and password rotation are all re-read at consume time; the session minted is 30 minutes and carries a signed operator identity that requireCapability writes into the audit log on every gated write, failing closed. Cron auth is now one shared header-only gate, and a request still carrying ?secret= is refused AND logged. The callback URL carries a per-payment signature bound to the row it resolved.",
+    verification: "4.11: npm test 109 files / 834 tests, exit 0; 12 mutations, 12 reds; verify-migrations green at 99 entries, head 0098; verify-rls 53/54, so the new table is genuinely policed. 4.13: 112 files / 870 tests, exit 0; 14 mutations, 14 reds; the sidecar command was extracted from the compose file and run inside a real alpine:3.20 container against a probe server, which received the credential in the header and absent from the URL. The provider's own ?token= door is deliberately still accepted and logged as deprecated — refusing it would reject every genuine payment — so that half is not claimed as closed."
+  },
+  {
+    id: "v1.0.3-money-audit-and-funnel",
+    version: "v1.0.3",
+    date: "2026-08-21",
+    title: "The Money And Goods Audit, And Eighteen Days Of Rejected Ad-Funnel Orders",
+    category: "bugfix",
+    surfaces: ["Seller Admin", "Storefront", "Logistics", "Payments"],
+    summary: "An audit pass over the money and goods paths shipped four fixes and reported a fifth finding that turned out to be a live outage: every order from /promo and /lp had been refused since 2026-08-03.",
+    problem: "getBulkLabels joined payments unbounded, so one order holding a failed VA beside a collected COD printed two thermal labels for one waybill — one telling the courier to collect cash, the other saying it was already paid. updateFlashSale and deleteFlashSale reported success over an UPDATE that matched zero rows under RLS. A bulk resi run sliced at 50 with nothing carrying the remainder, so a seller selecting 150 orders was told 50 pesanan dibooking and left with 100 parcels never booked. The Penghematan Pelanggan tile summed discounts on cancelled orders. And OrderFunnel.astro — the component both paid-traffic funnels render — never posted a postcode, which the order API had made required on 2026-08-03.",
+    solution: "The label query now uses the same correlated scalar subquery the other two payment-method screens use; both flash-sale writes return what they matched and both callers read it; the bulk result carries a skipped list with an honest ok and a toast naming the remainder; the savings tile excludes cancelled orders, with returns deliberately left in and the split pinned by a test. The funnel gained a required, always-editable Kode pos field with a stale-response guard, and its guard DERIVES the storefront's order forms instead of naming one file — the blind spot that cost eighteen days.",
+    verification: "Every guard was proved red against the shipped code first: 3 of 4, 3 of 5, 2 of 3 and 2 of 3 tests respectively. The audit pass ran npm test at 113 files / 849 tests exit 0, storefront check 0 errors (119 files), landing 0 errors (29 files), tsc 0, lint 0 errors. The funnel fix measured 111 files / 844 tests with astro check 0 errors on both surfaces, and is recorded as not yet clicked in a browser — named rather than implied, because the change is browser-visible."
+  },
+  {
+    id: "v1.0.2-kiriminaja-v62",
+    version: "v1.0.2",
+    date: "2026-08-20",
+    title: "Booking Migrated To KiriminAja v6.2, And The Query Bug That Refused Paid Orders A Waybill",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Seller Admin", "Payments"],
+    summary: "Shipment booking moved to the v6.2 pickup endpoint, verified with the one sandbox booking the owner authorised — which first required fixing two shipped query defects that were refusing waybills to orders that had genuinely been paid.",
+    problem: "The v6.2 request contract had been mapped field by field, but the SUCCESS response was deliberately left unproven, because proving it means creating a real booking. The first two attempts never reached the courier API: the shipment action refused them for non-payment. Two causes, both in our own SQL. Postgres names an unaliased exists() expression exists, so two of them in one target list come back as a single column and the second value is lost; and drizzle renders a column interpolated into a sql template UNQUALIFIED, so eight correlated subqueries across three files compared a table to itself — which also blanked every line-item image on the order detail and collapsed the abandoned-but-not-yet-contacted count to zero for a whole store.",
+    solution: "Both exists() pairs aliased, and the third still-correct site aliased too — patch the class, not the instance. The eight interpolations qualified by name, with a repo-wide guard for the class: a sql template that carries its own FROM must not interpolate a schema column. Then the booking itself: the endpoint path flipped, drop:false sent explicitly, and v6.2's empty-string awb normalised away — v6.1 answered null, and an empty string would have claimed a waybill the parcel does not have and sorted it to the back of the tracking poller's queue.",
+    verification: "The authorised booking returned ok:true with a real order id and pickup number, made through the real seller path rather than the library in isolation, and its measured response body is committed as a fixture so nobody has to book again. Three mutations, three distinct failures. npm test 105 files / 800 tests for the booking pass and 104 / 794 for the scoping fix, tsc 0 and lint 0 errors on both. The repo-wide guard found the eighth interpolation site itself, in a file no manual reading had reached."
+  },
+  {
+    id: "v1.0.1-pipeline-and-screening",
+    version: "v1.0.1",
+    date: "2026-08-20",
+    title: "Delivery Pipeline And The Screening Sweep — CI, The Deploy Window, And Ten Findings",
+    category: "minor",
+    surfaces: ["Seller Admin", "Super Admin", "Storefront", "Database & RLS"],
+    summary: "Between 2026-08-16 and 2026-08-20 the gates themselves were repaired: CI was red by construction, the deploy 503 window went from about 15 minutes to 81 seconds, and a screening sweep closed ten findings (A to J) alongside Tasks 4.9 and 4.10.",
+    problem: "main's CI sat red from 2026-08-15 because the storefront verify step ran against the empty, never-migrated base database, and the seed step above it was a silent no-op that exited 0 — so CI could not have gone green on any commit, ever. Every deploy also held all three surfaces down for the whole demo-data chain. verify-migrations could not see a wrong stamp SCALE, and an index census found order_line_items.order_id declared in Drizzle but created by no migration and absent from the dev database AND production. The sweep itself found ten shipped defects, five of them writes that reported success while RLS clamped them to zero rows.",
+    solution: "The verify step moved after the seed and was pinned to the test database, with template seeding and a browser added; the seed chain moved off the deploy critical path into its own service that nothing waits on; a pure migration-stamp module now refuses a wrong scale; migration 0096 created the missing index. From the sweep: setOrderStatus reports what it wrote, five blind writes now return what they matched, four dead controls were removed or honestly disabled (one had been persisting the wrong category), the manual invoice flip is documented as bookkeeping by owner ruling, and the AutoLaris status badge was removed because the column behind it gates nothing.",
+    verification: "The whole CI job was executed by hand against a throwaway database, step for step — 11 steps, all exit 0, with the storefront suite going from fatal to 5 PASS and 1 documented SKIP. The deploy window was probed every 20 s from the second of merge: about 15 minutes, then 81 seconds (503 from +506 s to +587 s), then none observed at 15-second resolution — the doc records that as no 503 at that resolution, not as zero downtime. Test counts moved 96 files / 748 tests to 105 / 800 across the sweep, exit 0 throughout, and both lint gates were restored to 0 errors. GitHub Actions itself remains dead on a billing failure, which is an owner action nothing in the repository can substitute for."
+  },
+  {
     id: "v1.0.0-release",
     version: "v1.0.0",
     date: "2026-08-15",
