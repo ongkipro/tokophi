@@ -1575,3 +1575,79 @@ rewritten the verification boundary. **Re-measured on the merged tree: `TEST_DB_
 lint 0 errors / 3 warnings; admin lint 0 errors / 20 warnings** (main's own baseline moved from 21 to
 20 in #307 — not this branch's doing). The per-task numbers in the entries above are what those
 tasks measured on their own base and are left as the dated record.
+
+---
+
+## 2026-08-23 — The operator's Update Log stopped at v1.0.0; a week of shipped work was invisible (Doc Session)
+
+**Task / Scope:** `DOC-DEVLOG-1` · documentation/data only · worktree `devlog`, branch
+`feat/dev-logs-since-v1`, off `origin/main` `94cabd1`
+**Files:** `apps/super-admin/lib/data/dev-logs.ts` · `specs/docs/tasks/2026-08-23-dev-logs-since-v1.md`
+(new, committed BEFORE the data change) · `specs/docs/TASKS.md` · `BUILD-LOG.md`
+
+**What was wrong.** `/update-log` on the Super Admin panel renders `DEV_LOGS`, whose newest entry was
+**v1.0.0, 2026-08-15**. Everything between then and today — the Stage 4 P0 close-out including Task
+4.12, the Stage 5 wave, the money/goods audit, the eighteen-day ad-funnel outage, the v6.2 booking
+migration, and the CI/deploy/guard repairs — existed only in this file and in `git log`. The screen an
+operator opens to answer *"what changed?"* answered *"nothing, for a week"*.
+
+**What was added.** Seven grouped releases, newest first, in the existing `DevLogEntry` shape:
+
+| version | date | grouped from |
+|---|---|---|
+| `v1.1.0` | 2026-08-22 | `[2026-08-22 15:35 UTC]` + `[2026-08-22 15:55 UTC]` — Task 4.12 / SEC-18, implementation and production provisioning |
+| `v1.0.6` | 2026-08-22 | commit `68764b0`, `SECURITY.md` §5, `specs/docs/tasks/2026-08-06-open-work.md` — custom-domain HSTS 86400 → 31536000 |
+| `v1.0.5` | 2026-08-22 | Tasks 5.2 · 5.3 · 5.16 · 5.10 · 5.17 · 5.11 and the super-admin `addStoreUser` addition |
+| `v1.0.4` | 2026-08-21 | `[2026-08-21 09:20]` Task 4.13 / SEC-16 + `[2026-08-21 08:20]` Task 4.11 / SEC-10 |
+| `v1.0.3` | 2026-08-21 | `[2026-08-21 16:10]` MONEY-AUDIT-1 + the `/promo` · `/lp` postcode outage |
+| `v1.0.2` | 2026-08-20 | N40 phase 2 + the two query-scoping entries that had to land before the booking could be made |
+| `v1.0.1` | 2026-08-20 | 2026-08-16 → 2026-08-20: CI by hand, the deploy 503 window, the stamp/index guards, screening findings A–J, Tasks 4.9 + 4.10 |
+
+- **Every figure is transcribed, never estimated.** The sources are `BUILD-LOG.md` and the merged
+  commits (plus, for the HSTS entry, the two documents that commit changed — it has no BUILD-LOG
+  entry of its own, and the verification field says what was actually measured: four hosts, before
+  and after). Where a pass recorded a caveat, the caveat travels with the number — *no 503 observed
+  at 15-second resolution* rather than *zero downtime*; the provider's `?token=` door logged as
+  deprecated rather than claimed closed; two entries carrying their own *not clicked in a browser*.
+- **No new union members.** The categories and surfaces are the existing `DevLogCategory` /
+  `DevLogSurface` values, so `CATEGORY_MAP` in `update-log-client.tsx` is untouched — a new category
+  there would have rendered an undefined label.
+- **The seven pre-existing entries are byte-identical**; the diff is an insertion above `v1.0.0-release`.
+- ⚠️ **Stage 5 Task 5.5 is deliberately absent.** It is named exactly once in the range — in the Task
+  4.1 entry, as *"24 pre-existing 320 px topbar overflows tracked separately by Task 5.5"* — with no
+  BUILD-LOG entry and no commit. Nothing shipped, so there was nothing to report that would not have
+  been invented.
+
+**Verification Executed** (exit codes read directly, never through a pipe):
+- `npm install` **fresh in this worktree** (no hardlinked `node_modules`) → exit 0.
+- `npx vitest run` → **exit 0 — 123 files, 1009 tests passed**, which is `origin/main`'s own figure
+  from the 4.12 pass: this change adds no test and breaks none. Run against the derived `tokophi_test`
+  database; the shared dev `tokophi` was never written to.
+- `npm run lint -w @tokophi/super-admin` → **exit 0 — 0 errors, 3 warnings**, exactly the recorded
+  baseline. All three are pre-existing in `update-log-client.tsx` (two unused lucide imports and
+  `setSelectedSurface`); none is in the file this pass edited.
+- `npm run build -w @tokophi/super-admin` → **exit 0** with the Dockerfile's own env
+  (`DATABASE_RUNTIME_ROLE=owner DATABASE_URL=postgres://build:build@localhost:5432/build`).
+  Compiled in 6.0 s, TypeScript finished clean, 15 routes emitted including `ƒ /update-log`.
+  ⚠️ **A bare `npm run build -w @tokophi/super-admin` in a worktree fails** —
+  `Failed to collect configuration for /pengaturan … DATABASE_URL is not set` — and that is
+  **pre-existing, not this change**: `.gitignore` is `.env*`, so a worktree can never hold a root
+  `.env`, and the failure happens during page-data collection, after Turbopack and TypeScript have
+  both already succeeded. `apps/admin` was recorded with the identical limitation on 2026-08-22.
+- ⚠️ **Not clicked in a browser.** The change is seven rows of data behind a screen whose renderer is
+  unchanged; `tsc` (inside the build) is what proves the shape, and the route is emitted. Named
+  rather than implied.
+- ⚠️ `apps/super-admin/next-env.d.ts` is rewritten by `next build` (dev → prod route-types path).
+  Restored with `git checkout --`; it is **not** in any commit here.
+
+**Found while reading, left alone:** `BUILD-LOG.md` carries three unresolved merge artefacts
+(`||||||| a98321c`, `||||||| b2a659e`, `||||||| 0d6f1d1`) from an earlier merge. They are somebody
+else's conflict resolution to finish, and repairing them sideways inside a documentation pass would
+bury the fact.
+
+**`specs/docs/STATUS.md` deliberately NOT touched:** this pass changes no platform state, no API
+contract, no count that file publishes. Its protocol trigger is *"changes that alter platform state
+or API contracts"*, and inventing an edit to satisfy a checklist is the failure mode this file exists
+to prevent.
+
+**Completed Task:** Epic 2 — *Update Log backfilled to 2026-08-23*.
