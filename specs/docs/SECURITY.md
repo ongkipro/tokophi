@@ -148,8 +148,23 @@ architecture decision before the PostgREST cutover.
 - 🔴 **Decision with a consequence that outlives the setting.** HSTS cannot be withdrawn early:
   disabling it stops us *sending* the header but does not reach a browser that already holds one,
   which refuses `http://` for this domain and every subdomain for up to a year from its last visit.
-- ⚠️ **Open decision.** If Cloudflare for SaaS custom hostnames are wired, this header is emitted on
-  the **merchant's own domain** too, `includeSubDomains` and all, at a year. Settle it *before* wiring.
+- ✅ **SETTLED 2026-08-22 (owner) — the merchant's own domain carries it too, at a year.** Custom
+  hostnames are wired, and the header is emitted **at the origin** by the Traefik middleware
+  `tokophi-custom-hsts` (`/data/coolify/proxy/dynamic/tokophi-custom-domains.yaml`), not by the zone:
+  whether Cloudflare's zone-level HSTS reaches SaaS custom-hostname traffic is undocumented, so the
+  origin header is the certain one. It walked the same ladder `.com` and `.id` did — live at `86400`
+  from 2026-08-11, raised to `31536000` on 2026-08-22 after eleven quiet days, hot-reload, no deploy.
+  Measured immediately after on all four hosts: `taniniaga.com` 200, `www.taniniaga.com` 301,
+  `beautyinu.co` 200, `www.beautyinu.co` 301 — every one `max-age=31536000; includeSubDomains`.
+  `preload` stays **off**.
+  🔴 **What the merchant is now signed up to, stated plainly:** `includeSubDomains` at a year means
+  every subdomain of their domain is pinned to https in any browser that has visited, including
+  subdomains TokoΦ does not serve, and it survives them leaving the platform — a browser that holds
+  the pin refuses `http://` there for up to a year from its last visit. Certs are Cloudflare-managed
+  and auto-renew, so the pin is safe to honour while the domain is with us. **Say this to a merchant
+  before attaching their domain, not after.**
+  ⚠️ The middleware attaches **per router**, so every future `Host()` block must list
+  `tokophi-custom-hsts` or that domain ships bare and nothing reports it.
 
 ---
 
