@@ -1,3 +1,5 @@
+import { platformRouteGate } from "@/lib/platform-auth";
+import { RouteDenied } from "@/components/route-denied";
 import { Wallet, TrendingUp, Receipt, ShoppingBag, Truck, CreditCard, Database, Server, Cpu, MemoryStick, CircleCheck, CircleAlert, CircleHelp, MapPin, Timer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
@@ -15,6 +17,11 @@ const uptime = (s: number) => {
 };
 
 export default async function AnalitikPage() {
+  // SEC-9: the rank floor for this route group, BEFORE a single privileged read.
+  // `platformGate(min)` inside each action stays the mutation boundary; this is additive.
+  const gate = await platformRouteGate("/analitik");
+  if (!gate.ok) return <RouteDenied need={gate.need} role={gate.role} reason={gate.reason} landing={gate.landing} />;
+
   const [stores, fin, sub, sys, srv, geo, float, conv, courier] = await Promise.all([
     getStores(), getFinanceStats(), getSubscriptionStats(), getSystemStatus(), getServerMetrics(),
     getGmvByCity(), getPlatformFloat(), getConversion(), getCourierCostAbsorbed(),

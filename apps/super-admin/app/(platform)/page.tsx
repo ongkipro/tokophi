@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { platformRouteGate } from "@/lib/platform-auth";
 import Link from "next/link";
 import {
   Wallet,
@@ -49,6 +51,17 @@ const STATUS_BAR: Record<StatusSlice, string> = {
 };
 
 export default async function PlatformDashboard() {
+  // SEC-9: the rank floor for this route group, BEFORE a single privileged read.
+  // `platformGate(min)` inside each action stays the mutation boundary; this is additive.
+  //
+  // ⚠️ THE DASHBOARD FORWARDS INSTEAD OF REFUSING, and it is the ONE page that does. Every login
+  // lands here — `middleware.ts` sends a signed-in operator from `/login` to `/`, and it runs on
+  // the edge where it cannot know a rank — so a `support` operator would meet a wall every single
+  // time they signed in. They are sent to their own home instead. The enforcement is identical:
+  // this returns before a single figure is read.
+  const gate = await platformRouteGate("/");
+  if (!gate.ok) redirect(gate.landing);
+
   const [platform, stores, subStats, statusDistribution, invoices, activity, revenue, float, risk, conv, fin, pending] =
     await Promise.all([
       getPlatform(),

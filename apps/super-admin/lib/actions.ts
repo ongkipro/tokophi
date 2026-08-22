@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { platformGate } from "./platform-auth";
+import { markPayoutPaidInTxn, type PayoutConflict } from "./payout-transition";
 import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } from "@tokophi/lib/impersonation";
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
@@ -362,6 +363,10 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
       // so this path stays instant and never enters the signup review queue (0090). The queue is for
       // `apps/admin/lib/provision.ts`, the self-serve door, where nobody has proved anything.
       const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name, slug, city, status: "trial", trialEndsAt, firstInvoicePaid: false, catalogIdScheme: "number", approvedAt: new Date() }).returning();
+      // ⚠️ `acceptedAt` IS CORRECT HERE, and it is the one place it is. This row is the shop's own
+      // owner, created together with the shop — there was no invitation to accept, and the account
+      // exists because this statement made it. `addStoreUser` (an operator adding SOMEBODY ELSE)
+      // must not stamp it: there, the person has not been anywhere near the product yet.
       await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
       await tx.insert(schema.locations).values({ storeId: st.id, name: "Gudang Utama", isDefault: true });
       await tx.insert(schema.storeSettings).values({ storeId: st.id });
@@ -1018,7 +1023,13 @@ export async function addStoreUser(storeId: string, input: { name: string; email
   }
   const [dup] = await db.select({ id: schema.storeUsers.id }).from(schema.storeUsers).where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.userId, u.id))).limit(1);
   if (dup) return { ok: false, error: "User sudah ada di toko ini." };
-  await db.insert(schema.storeUsers).values({ storeId, userId: u.id, role: input.role, acceptedAt: new Date() });
+  // 🔴 NO `acceptedAt` HERE. It used to write `new Date()`, which asserts that this person accepted
+  // an invitation at the instant an OPERATOR pressed a button in the control plane — a fact nobody
+  // observed. `accepted_at` is stamped once, on the merchant side, by the first successful sign-in;
+  // until then NULL is the truth and reads as "belum pernah masuk".
+  // ⚠️ The store's OWN OWNER row (`createStore`, `provision.ts`) is a different case and correctly
+  // keeps its stamp: that account is created, not invited. Judge each site; do not sweep.
+  await db.insert(schema.storeUsers).values({ storeId, userId: u.id, role: input.role });
   // The audit line says which of the two happened too — "ditambahkan" alone cannot be reviewed later
   // to answer "was this person given a credential?".
   const how = minted ? "akun baru dibuat" : "akun yang sudah ada dihubungkan";
@@ -1065,20 +1076,24 @@ export async function processPayout(payoutId: string): Promise<{ ok: boolean; er
  * Nothing is posted to the ledger here — and that is correct. The merchant's balance was already
  * debited when they REQUESTED the payout; paying it out settles an obligation we had already
  * recorded. Crediting or debiting again here would double-count.
+ *
+ * 🔴 THE SOURCE STATE IS ENFORCED IN THE UPDATE'S OWN WHERE, NOT BY A READ ABOVE IT (Task 5.10 /
+ * F-M15). This used to read the row, refuse `selesai` and `gagal`, and update whatever was left —
+ * so `menunggu → selesai` passed: a payout **no operator had started transferring** was stamped
+ * LUNAS, the merchant was told on `/saldo` that their money had been sent, and `processPayout`
+ * could never run again because the status was no longer `menunggu`. The decision now lives in
+ * `markPayoutPaidInTxn` (`payout-transition.ts`), where it can be driven against real Postgres for
+ * every source status; this function stays what it should be — the gate, the audit line and the
+ * revalidate. Do NOT re-add a status check or a status write here: two writers is two rules.
  */
-export async function markPayoutPaid(payoutId: string): Promise<{ ok: boolean; error?: string }> {
+export async function markPayoutPaid(payoutId: string): Promise<{ ok: boolean; error?: string; conflict?: PayoutConflict }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  const r = await db.transaction(async (tx) => {
-    const [p] = await tx.select().from(schema.payouts).where(eq(schema.payouts.id, payoutId)).for("update").limit(1);
-    if (!p) return { ok: false as const, error: "Pencairan tidak ditemukan." };
-    if (p.status === "selesai") return { ok: false as const, error: "Pencairan sudah lunas." };
-    if (p.status === "gagal") return { ok: false as const, error: "Pencairan sudah ditolak — dananya sudah dikembalikan." };
-    const paidAt = new Date();
-    await tx.update(schema.payouts).set({ status: "selesai", paidAt }).where(eq(schema.payouts.id, payoutId));
-    return { ok: true as const, storeId: p.storeId, amount: p.amountIdr };
-  });
-  if (!r.ok) return r;
+  const r = await db.transaction(async (tx) => markPayoutPaidInTxn(tx, payoutId));
+  // A refusal wrote nothing, so there is nothing to log and nothing to revalidate. `conflict` rides
+  // along because "already lunas" and "never processed" are different facts to a caller; the toast
+  // still prints `error`.
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
   await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} ditandai LUNAS — dana sudah ditransfer`);
   revalidatePath("/pencairan");
   revalidatePath(`/toko/${r.storeId}`);

@@ -1,3 +1,5 @@
+import { platformRouteGate } from "@/lib/platform-auth";
+import { RouteDenied } from "@/components/route-denied";
 import { notFound } from "next/navigation";
 
 import {
@@ -18,6 +20,11 @@ export default async function StoreDetailPage({
   // belong in the browser at once.
   searchParams: Promise<{ tx?: string }>;
 }) {
+  // SEC-9: the rank floor for this route group, BEFORE a single privileged read.
+  // `platformGate(min)` inside each action stays the mutation boundary; this is additive.
+  const gate = await platformRouteGate("/toko");
+  if (!gate.ok) return <RouteDenied need={gate.need} role={gate.role} reason={gate.reason} landing={gate.landing} />;
+
   const { id } = await params;
   const { tx } = await searchParams;
   const [store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals] = await Promise.all([

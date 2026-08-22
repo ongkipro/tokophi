@@ -1213,3 +1213,232 @@ would not be caught — the honest claim is "no 503 at 15-second resolution", no
 variation between 81 s and none is itself expected: it depends on whether the new container's
 healthcheck passes before the old one is released, which nothing in the current arrangement
 guarantees. The doc now says in those words not to promise seamless deploys off one clean sample.
+
+---
+
+## 2026-08-22 — Payout completion: `menunggu → selesai` was legal, and the fix is the WHERE clause (Stage 5 Agent)
+
+**Task / Scope:** Stage 5 Task 5.10 · `F-M15` · 19:35–20:05 UTC
+**Files:** `apps/super-admin/lib/payout-transition.ts` (new) · `apps/super-admin/lib/payout-transition.test.ts` (new) · `apps/super-admin/lib/actions.ts`
+
+**The defect, measured — not read.** `markPayoutPaid` was a read-then-check: `select … for update`,
+refuse `selesai`, refuse `gagal`, update everything else. Driving the shipped statements verbatim
+against real PostgreSQL on a payout in `menunggu`:
+
+```
+payout created: { id: 5717…, status: 'menunggu' }
+the shipped code ACCEPTED the transition from: menunggu
+after  : { status: 'selesai', paid_at: 2026-08-22T12:42:36.334Z }
+processPayout afterwards would match rows: 0
+```
+
+So a withdrawal **no operator had started transferring** was stamped LUNAS — the merchant is told on
+`/saldo` that their money has been sent — and the initiation step became *unreachable*, because
+`processPayout` only matches `status = 'menunggu'`. The audit trail then records a transfer nobody
+made, and there is no path back to the state that would have made it true.
+
+**The fix.** The legal source state moved into the UPDATE's own WHERE — the same compare-and-swap
+shape `applyDiscount` uses for its usage limit and the impersonation exchange uses to spend a grant:
+
+```sql
+update payouts set status = 'selesai', paid_at = now()
+ where id = $1 and status = 'diproses'
+returning store_id, amount_idr
+```
+
+One row ⇒ this call performed the transition. Zero rows ⇒ nothing was written, and a **locked**
+classification read (for the MESSAGE only, never the decision) names which of four typed conflicts
+it is: `tidak_ditemukan` · `belum_diproses` · `sudah_lunas` · `sudah_ditolak`. The action keeps the
+gate, the audit line and the revalidate, and no longer writes a status of its own — two writers is
+two rules. Nothing is posted to the ledger on any path, which is what makes a repeated "Tandai
+lunas" non-mutating rather than merely harmless-looking.
+
+**Verification.** `apps/super-admin/lib/payout-transition.test.ts` — 9 tests against real PostgreSQL,
+every one inside a rolled-back transaction on a throwaway `_test` database:
+
+| claim | result |
+|---|---|
+| all four source statuses attempted | `{menunggu:false, diproses:true, selesai:false, gagal:false}` |
+| repeat completion | conflict `sudah_lunas`, `paid_at` unchanged to the millisecond, ledger row count and sum unchanged |
+| rejected payout | refused; the opposing `adjustment` entry that returned the money is untouched |
+| two concurrent completions | exactly one `ok`, the other `sudah_lunas` |
+| unknown id | `tidak_ditemukan`, not a throw |
+
+**Six mutations, six reds** (each applied to the shipped file, test run, file restored):
+
+| mutation | red |
+|---|---|
+| M1 guard dropped from the CAS WHERE | 5 failed / 4 passed |
+| M2 the old rule in the WHERE (`<> 'selesai' and <> 'gagal'`) | 2 failed / 7 passed |
+| M3 a paid payout may be re-claimed | 3 failed / 6 passed |
+| M4 success posts a ledger entry | 2 failed / 7 passed |
+| M5 the conflict misnames the source state | 1 failed / 8 passed |
+| M6 the action writes the status itself again | 1 failed / 8 passed |
+
+**Gates:** `TEST_DB_REQUIRED=1 npm test` → **119 files / 934 tests, exit 0** (baseline before this
+branch: 117 / 893) · `npx tsc -p apps/super-admin --noEmit` exit 0 · `npm run lint -w
+@tokophi/super-admin` 0 errors / 3 warnings (baseline) · `npm run lint -w @tokophi/admin` 0 errors /
+21 warnings (baseline) · storefront `astro check` 0 errors / 14 hints, landing 0 / 0.
+
+**Contract note for other surfaces:** `markPayoutPaid` now returns `{ ok, error?, conflict? }`. The
+existing caller (`pencairan-client.tsx`) reads `error` and is unchanged; `conflict` is additive, for
+a caller that must distinguish "already paid" from "never processed" without matching prose.
+
+**Completed Task:** Stage 5 Task 5.10.
+
+---
+
+## 2026-08-22 — The control plane checked a rank on every button and on no page (Stage 5 Agent)
+
+**Task / Scope:** Stage 5 Task 5.17 · `SEC-9` · 19:45–20:20 UTC
+**Files:** `apps/super-admin/lib/route-roles.ts` (new) · `apps/super-admin/lib/route-roles.test.ts`
+(new) · `apps/super-admin/components/route-denied.tsx` (new) · `apps/super-admin/lib/platform-auth.ts`
+· `apps/super-admin/lib/nav.ts` · `apps/super-admin/middleware.ts` (comment only) ·
+`apps/super-admin/app/(platform)/layout.tsx` · `platform-shell.tsx` · all ten `(platform)` pages
+
+**The defect, measured on a running server.** Every super-admin mutation has been rank-gated since
+2026-07-15 (`platformGate(min)`); no SCREEN ever was. `middleware.ts` proves a cookie exists (edge —
+it cannot ask the database) and the layout proves the operator row still exists; neither compares a
+rank. Three real `platform_admins` rows (`support`/`admin`/`owner`) plus a minted cookie each,
+against `next dev`, with the gate removed from `/pencairan`:
+
+```
+BEFORE — support GET /pencairan → http=200
+  merchant bank account "1234567890" in body: 1
+  "Permintaan tarik saldo" in body:           1
+```
+
+The buttons would have refused. The **data had already been read, rendered and sent** — every
+merchant's bank name, account number, holder and pending amount. Hiding a nav item is not
+enforcement.
+
+**The fix.** `lib/route-roles.ts` declares a minimum rank per route group (pure, no DB — the same
+split as `platform-rank.ts`), and `platformRouteGate(path)` is the **first await of every page**,
+above its first data read. The policy: *the support desk and the context of ONE store are `support`;
+anything platform-wide about money or configuration is `admin`.* `/toko/[id]` stays `support` — an
+operator answering "where is my withdrawal?" needs that store's own balance; what they do not get is
+the cross-merchant book. `/` is `admin` because the dashboard IS MRR, collected revenue, merchant
+float and the six most recent invoices: **a summary of privileged data is privileged**, and drawing
+the line anywhere else leaks by the back door.
+
+Three things this deliberately does NOT do:
+- **No rank in the middleware, and none in the cookie.** The edge has no database, and rank comes
+  from `platform_admins` on every request — a `role` claim in the JWT is a rank the holder minted
+  for themselves at login and keeps for seven days. `middleware.ts` gained a comment saying so and
+  nothing else.
+- **No replacement of the action gates.** `platformGate(min)` is untouched at all 33 call sites; a
+  route check cannot see a server-action POST. Route floors are additive.
+- **No floor above an action the screen hosts.** `/pengaturan` carries `admin`-rank actions beside
+  `owner`-rank ones, so its floor is `admin` and the owner-only affordances keep refusing at their
+  own gate.
+
+**Verification — live, all three ranks × all eight route classes** (`support` row shown; `admin` and
+`owner` were 200 with the privileged marker present on every route):
+
+| role | `/` | `/toko` | `/tiket` | `/update-log` | `/paket` | `/pencairan` | `/analitik` | `/pengaturan` |
+|---|---|---|---|---|---|---|---|---|
+| support | 307 → `/tiket` | 200 | 200 | 200 | denial | denial | denial | denial |
+| admin | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
+| owner | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
+
+On every `support` denial the body carried the denial screen and **zero** privileged markers — no
+`1234567890`, no `INV-9006`, no `admin@tokophi.id`, no "MRR (pendapatan kami)". The sidebar for
+`support` rendered `/tiket /toko /update-log` and nothing else. A **dead-but-valid cookie** (no such
+operator row) returned **307 → `/api/auth/signout`** on both `/` and `/pencairan` — not `/login`,
+which is what the ERR_TOO_MANY_REDIRECTS ping-pong is made of.
+
+⚠️ **The dashboard FORWARDS rather than refusing, and it is the only page that does.** Every login
+lands on `/` (middleware sends a signed-in operator there from `/login` and cannot know a rank), so
+a support operator would otherwise meet a wall on every sign-in. The enforcement is identical — it
+returns before a single figure is read.
+⚠️ **The denial renders with HTTP 200.** A Server Component cannot set a status without Next's
+experimental `authInterrupts`, and enabling an app-wide experimental flag to change a number no
+human reads was not worth it. The control plane is `noindex` and has no machine consumers. If that
+ever changes, this is the line to revisit.
+
+**Nine mutations, nine reds** (each applied, test run, restored):
+
+| mutation | red |
+|---|---|
+| R1 `/pencairan` loses its gate | wiring claim |
+| R2 the gate runs AFTER the data read | wiring claim (ordering) |
+| R3 `/pencairan` floor lowered to `support` | 3 policy claims |
+| R4 the `/pengaturan` rule deleted | 5 claims incl. the directory sweep |
+| R5 unlisted routes fail OPEN | 2 claims |
+| R6 the sidebar renders the unfiltered `NAV` | sidebar claim |
+| R7 a page gates with somebody else's route | wiring claim |
+| R8 the nav filter stops using the shared rules | sidebar claim |
+| R9 a new unclassified `page.tsx` appears | 2 claims — the sweep is derived from the DIRECTORY |
+
+**Gates:** identical to the entry above — `TEST_DB_REQUIRED=1 npm test` **119 files / 934 tests,
+exit 0**; `tsc -p apps/super-admin --noEmit` 0; super-admin lint 0 errors / 3 warnings; admin lint
+0 errors / 21 warnings.
+
+**Housekeeping:** the three probe operator rows were created by targeted SQL on the shared dev
+database and **deleted afterwards** (`select count(*) … where email like 'probe-%'` → **0**); the
+dev server ran on port 3051 and only its own PID was killed.
+
+**Completed Task:** Stage 5 Task 5.17.
+
+---
+
+## 2026-08-22 — Addition (not part of 5.10/5.17): the control plane stamped an acceptance nobody performed (Stage 5 Agent)
+
+**Task / Scope:** coordinator hand-off from the Task 5.3 stream — the super-admin mirror of PR #306
+(merchant side, unmerged at the time of writing). Not part of Stage 5 Task 5.10 or 5.17.
+**Files:** `apps/super-admin/lib/actions.ts` (`addStoreUser`, plus a comment on `createStore`) ·
+`apps/super-admin/lib/data.ts` (`getStoreUsers`) · `apps/super-admin/lib/add-store-user.test.ts`
+
+**The lie.** `addStoreUser` wrote `acceptedAt: new Date()` on the membership. That column says *this
+person accepted an invitation*, and what actually happened was that an OPERATOR pressed "Tambah" in
+the control plane; the invitee has not been near the product. (Measured on the merchant side by the
+other stream: the same stamp landed on `accepted_at` identical to `invited_at` to the millisecond —
+neither writer was recording an acceptance, both were recording the invite twice.)
+
+**The fix.** The write is gone. `store_users.accepted_at` has **no database default** — measured
+against real Postgres with exactly the statement the action now issues:
+
+```
+insert into store_users (store_id, user_id, role) values (…, 'staff');
+role | invited_is_null | accepted_is_null
+staff | t               | t
+```
+
+— so NULL is what lands, and NULL is the truth: nobody has signed in yet. The stamp belongs to the
+first successful sign-in, on the merchant side (#306).
+
+⚠️ **`createStore` keeps its stamp, and that is not an oversight.** That row is the shop's own
+OWNER, created together with the shop — there was no invitation to accept, and the account exists
+because that statement made it. The comment now says so in the code, and the guard asserts it stays,
+so the next sweep cannot delete a true fact along with the false one.
+
+⚠️ **`getStoreUsers` no longer derives `acceptedDaysAgo`.** Rows written before this fix still carry
+the invite's timestamp in `accepted_at`, so the field is one-sided: NULL proves "never signed in",
+non-null proves nothing. **Nothing on any screen rendered it** (checked: `store-detail.tsx` never
+read it), so it is deleted rather than relabelled — a one-sided fact nobody displays is a trap for
+whoever next needs a column like it. An operator-facing "sudah pernah masuk" indicator, if wanted,
+must read the column directly and state the ambiguity on screen.
+
+**Three mutations, three reds** (in the existing `add-store-user.test.ts`, which already guards this
+function): the stamp put back → *"writes the membership WITHOUT an acceptance stamp"* red; the
+owner's stamp removed → *"does not sweep the store OWNER's own row"* red; a days-ago figure
+re-derived in the read layer → *"the read layer no longer derives a days-ago figure"* red.
+
+**Gates:** re-run after this change — `TEST_DB_REQUIRED=1 npm test` **119 files / 937 tests, exit
+0**; `tsc -p apps/super-admin --noEmit` 0; super-admin lint 0 errors / 3 warnings; admin lint 0
+errors / 21 warnings.
+
+**Not touched:** `apps/admin/**` — the merchant half (`signIn` stamping once, `provision.ts`) is
+#306's, and this branch stayed inside `apps/super-admin/**`.
+
+**Merge note (same day).** `origin/main` moved three PRs ahead while this branch was open (#305,
+#306, #307). Merged in rather than rebased — history here is additive. Two documentation conflicts,
+both resolved by keeping the OTHER side and correcting it rather than replacing it: `AGENTS.md`,
+where #306's new paragraph said *"Super-admin's `addStoreUser` still stamps `acceptedAt`… not fixed
+in 5.3 because another stream owned those files"* — true when written, closed by the addition above,
+so that ⚠️ is now a ✅ naming both halves; and `specs/docs/STATUS.md`, where both branches had
+rewritten the verification boundary. **Re-measured on the merged tree: `TEST_DB_REQUIRED=1 npm test`
+→ 122 files / 987 tests, exit 0; `tsc -p apps/super-admin` and `-p apps/admin` both 0; super-admin
+lint 0 errors / 3 warnings; admin lint 0 errors / 20 warnings** (main's own baseline moved from 21 to
+20 in #307 — not this branch's doing). The per-task numbers in the entries above are what those
+tasks measured on their own base and are left as the dated record.

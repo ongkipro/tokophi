@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import { scryptSync, timingSafeEqual } from "node:crypto";
 import { db, schema } from "@tokophi/db";
@@ -121,6 +122,9 @@ export async function getPlatformSession(): Promise<PlatformSession | null> {
 // guards every super-admin mutation can actually be tested.
 export type { PlatformRole } from "./platform-rank";
 import { clearsRank, type PlatformRole } from "./platform-rank";
+// The route floors are pure data in their own module, for the same reason the ladder is: this file
+// pulls @tokophi/db at module scope, so anything living in it cannot be tested.
+import { landingForRole, minRoleForPath, reasonForPath } from "./route-roles";
 
 /** The refusal shape every super-admin action already speaks: `{ ok: false, error }`. */
 export type PlatformRefusal = { ok: false; error: string };
@@ -154,8 +158,54 @@ export type PlatformGate = { ok: true; admin: PlatformSession } | PlatformRefusa
 export async function platformGate(min: PlatformRole = "admin"): Promise<PlatformGate> {
   const s = await getPlatformSession();
   if (!s) return { ok: false, error: "Sesi berakhir atau akun tidak aktif lagi. Masuk lagi lalu ulangi." };
-  if (!clearsRank(s.role, min)) {
-    return { ok: false, error: `Tidak diizinkan — perlu peran ${min}, akun ini ${s.role || "tanpa peran"}.` };
+  if (!clearsRank(s.role, min)) return { ok: false, error: rankRefusal(min, s.role) };
+  return { ok: true, admin: s };
+}
+
+/**
+ * The ONE sentence a rank refusal is spoken in — shared by the action gate above and the route gate
+ * below. Two copies would drift, and the operator would be told two different things about one
+ * rule; that is the same reason `platform-rank.ts` and `session-revocation` are single
+ * implementations.
+ */
+export const rankRefusal = (min: PlatformRole, role: string | undefined): string =>
+  `Tidak diizinkan — perlu peran ${min}, akun ini ${role || "tanpa peran"}.`;
+
+/**
+ * ROUTE ENTRY — the additive half of SEC-9 (Task 5.17).
+ *
+ * Called as the FIRST await of every protected page, ABOVE its data reads, because the defect being
+ * closed is that the privileged data was already fetched and rendered before anything looked at a
+ * rank. `platformGate` stays exactly where it is inside each action: this does not replace it, and
+ * a mutation must never rely on it (a server-action POST does not re-enter the page).
+ *
+ * ⚠️ NO SESSION HERE MEANS THE OPERATOR ROW IS GONE OR THEIR PASSWORD WAS ROTATED — the middleware
+ * already turned away anyone without a valid JWT, on the edge, where it cannot ask the database. So
+ * this redirects to the sign-out ROUTE, never straight to `/login`: middleware sees the still-valid
+ * cookie and bounces `/login` back to `/`, and the two ping-pong (`ERR_TOO_MANY_REDIRECTS`, measured
+ * on this repo before). Only a route handler can delete a cookie. Same rule, same target, as the
+ * platform layout.
+ *
+ * COST: one indexed primary-key lookup, on top of the layout's. There is no `react` `cache()`
+ * pattern in this repo and this does not earn inventing one — see the note on `getPlatformSession`.
+ */
+export type PlatformRouteGate =
+  | { ok: true; admin: PlatformSession }
+  | { ok: false; need: PlatformRole; role: string; reason: string; error: string; landing: string };
+
+export async function platformRouteGate(path: string): Promise<PlatformRouteGate> {
+  const s = await getPlatformSession();
+  if (!s) redirect("/api/auth/signout");
+  const need = minRoleForPath(path);
+  if (!clearsRank(s.role, need)) {
+    return {
+      ok: false,
+      need,
+      role: s.role,
+      reason: reasonForPath(path),
+      error: rankRefusal(need, s.role),
+      landing: landingForRole(s.role),
+    };
   }
   return { ok: true, admin: s };
 }
