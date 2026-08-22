@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, useMemo, type ComponentType } from "react";
-import { Search, GitCommit, CheckCircle2, ShieldCheck, Bug, Sparkles, Truck, CreditCard, Filter, ArrowUpRight } from "lucide-react";
+import { useState, useMemo, type ComponentType, type KeyboardEvent } from "react";
+import { Search, GitCommit, CheckCircle2, ShieldCheck, Bug, Sparkles, Truck, CreditCard, Filter, ArrowUpRight, CalendarDays, ChevronRight } from "lucide-react";
 import { Input } from "@tokophi/ui/input";
 import { Badge } from "@tokophi/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@tokophi/ui/pagination";
+import { num } from "@tokophi/lib/format";
 import { DEV_LOGS, type DevLogCategory, type DevLogSurface } from "@/lib/data/dev-logs";
+import { UPDATE_LOG_PAGE_SIZE, filterChanged, pageSlice } from "@/lib/list-page";
 
 const CATEGORY_MAP: Record<DevLogCategory, { label: string; badgeVariant: "default" | "secondary" | "outline" | "destructive"; icon: ComponentType<{ className?: string }> }> = {
   major: { label: "Major Release", badgeVariant: "default", icon: Sparkles },
@@ -16,10 +27,32 @@ const CATEGORY_MAP: Record<DevLogCategory, { label: string; badgeVariant: "defau
   logistics_payment: { label: "Logistik & Payment", badgeVariant: "secondary", icon: Truck },
 };
 
+// ⚠️ EVERY FIGURE ON THIS HEADER IS DERIVED FROM `DEV_LOGS`. A derived figure cannot rot.
+//
+// The tiles used to be hand-typed — `Current Engine: v1.0.0 Stable`, `722 Tes Hijau`,
+// `53 Tabel Gated`, `100% Passed` — while the newest entry on the SAME SCREEN read v1.1.0 with 1009
+// tests. The page contradicted itself in two places a reader can see at once.
+//
+// `DEV_LOGS` is newest-first (the file's own contract; every entry has been added at the top), so
+// `[0]` is the current release.
+const LATEST = DEV_LOGS[0];
+const SECURITY_COUNT = DEV_LOGS.filter((log) => log.category === "security").length;
+
+// 🔴 THE TEST-COUNT TILE IS DROPPED, NOT RE-TYPED.
+// A live `npx vitest run` figure is not derivable at runtime — this is a client component reading a
+// static array, and nothing here can count a test. The two honest options were "drop it" or "parse
+// it out of `LATEST.verification`"; parsing was rejected because that field is free prose written by
+// hand ("123 files, 1009 tests passed" today, worded differently in the next entry), so a regex
+// would go quietly wrong — or quietly blank — the first time somebody rephrases a sentence, and a
+// number nobody can trace is exactly what this pass exists to remove. AGENTS.md: *a figure with no
+// source is "—", never a number*. The count still LIVES on the screen: it is in the newest entry's
+// own "Bukti Verifikasi" block, in the sentence that was actually measured, with its own date.
+
 export function UpdateLogClient() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedSurface, setSelectedSurface] = useState<string>("all");
+  const [page, setPage] = useState(1);
 
   const filteredLogs = useMemo(() => {
     return DEV_LOGS.filter((log) => {
@@ -38,6 +71,46 @@ export function UpdateLogClient() {
     });
   }, [search, selectedCategory, selectedSurface]);
 
+  // Reset ke halaman 1 saat filter berubah — DI RENDER, bukan di effect. Pola ini disalin dari
+  // `apps/admin/app/(admin)/blog/blog-client.tsx` (~117–129) dan alasannya sama persis: versi effect
+  // men-setState setelah paint (`react-hooks/set-state-in-effect`), jadi ada satu frame yang
+  // menampilkan halaman lama di bawah filter baru. Pola resmi React "adjust state during render"
+  // (prev-tuple + perbandingan Object.is yang identik dengan deps effect) memotong frame itu.
+  // Tanpa reset ini: menyaring 14 catatan menjadi 2 sementara operator ada di halaman 3 menghasilkan
+  // feed KOSONG di bawah filter yang sebenarnya cocok.
+  const filterKey = [search, selectedCategory, selectedSurface] as const;
+  const [prevFilter, setPrevFilter] = useState<readonly unknown[]>(filterKey);
+  if (filterChanged(prevFilter, filterKey)) {
+    setPrevFilter(filterKey);
+    setPage(1);
+  }
+
+  // `pageSlice` CLAMPS: an index past the end returns the last page, never a blank one. That is the
+  // second half of the guard above — the reset handles the filter changing, the clamp handles every
+  // other way `page` and the list can disagree.
+  const view = pageSlice(filteredLogs, page, UPDATE_LOG_PAGE_SIZE);
+  const pageNumbers = Array.from({ length: view.pageCount }, (_, index) => index + 1).filter(
+    (item) => item === 1 || item === view.pageCount || Math.abs(item - view.page) <= 1,
+  );
+
+  // ⚠️ THE ANCHOR IS ACTIVATED BY POINTER **AND** BY KEYBOARD, AND THE SECOND HALF IS NOT FREE.
+  // `PaginationLink` spreads its props onto the `<a>` inside Base UI's `render`, so `useButton`
+  // never receives our `onClick` — its own Enter/Space bridge then calls nothing. Measured in a
+  // browser before this helper existed: the link was focusable (`role="button"`, `tabIndex 0`) and
+  // **Enter did nothing**. `apps/admin`'s copy only escapes that because it carries `href="#"`, i.e.
+  // it is a real link the browser activates natively — and then has to cancel the jump with
+  // `preventDefault()` on every path. Handling the two keys here instead means the anchor emits no
+  // `href` at all: it cannot navigate, cannot put a `#` in the URL, and cannot move the scroll
+  // position, and Space works as well as Enter (a `role="button"` should answer to both).
+  const goTo = (target: number) => ({
+    onClick: () => setPage(target),
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      setPage(target);
+    },
+  });
+
   return (
     <div className="space-y-6 p-6">
       {/* Header section */}
@@ -49,11 +122,11 @@ export function UpdateLogClient() {
           </p>
         </div>
         <Badge variant="outline" className="w-fit px-3 py-1 text-xs font-semibold text-primary border-primary/30 bg-primary/5">
-          Current Engine: v1.0.0 Stable
+          Current Engine: {LATEST.version}
         </Badge>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — all four derived from DEV_LOGS (see the comment above the component) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -62,7 +135,7 @@ export function UpdateLogClient() {
             </div>
             <div>
               <p className="text-xs font-medium text-muted-foreground">Total Dev Logs</p>
-              <h3 className="text-xl font-bold">{DEV_LOGS.length} Catatan</h3>
+              <h3 className="text-xl font-bold tabular-nums">{num(DEV_LOGS.length)} Catatan</h3>
             </div>
           </div>
         </Card>
@@ -70,11 +143,11 @@ export function UpdateLogClient() {
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-emerald-500/10 p-2.5 text-emerald-600">
-              <CheckCircle2 className="size-5" />
+              <Sparkles className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Status Verifikasi</p>
-              <h3 className="text-xl font-bold">100% Passed</h3>
+              <p className="text-xs font-medium text-muted-foreground">Rilis Terbaru</p>
+              <h3 className="text-xl font-bold">{LATEST.version}</h3>
             </div>
           </div>
         </Card>
@@ -82,11 +155,11 @@ export function UpdateLogClient() {
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-500/10 p-2.5 text-blue-600">
-              <ShieldCheck className="size-5" />
+              <CalendarDays className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Keamanan & RLS</p>
-              <h3 className="text-xl font-bold">53 Tabel Gated</h3>
+              <p className="text-xs font-medium text-muted-foreground">Catatan Terbaru</p>
+              <h3 className="text-xl font-bold tabular-nums">{LATEST.date}</h3>
             </div>
           </div>
         </Card>
@@ -94,11 +167,11 @@ export function UpdateLogClient() {
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-purple-500/10 p-2.5 text-purple-600">
-              <Sparkles className="size-5" />
+              <ShieldCheck className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Vitest Suite</p>
-              <h3 className="text-xl font-bold">722 Tes Hijau</h3>
+              <p className="text-xs font-medium text-muted-foreground">Catatan Keamanan</p>
+              <h3 className="text-xl font-bold tabular-nums">{num(SECURITY_COUNT)} Catatan</h3>
             </div>
           </div>
         </Card>
@@ -146,12 +219,12 @@ export function UpdateLogClient() {
 
       {/* Log Feed */}
       <div className="space-y-4">
-        {filteredLogs.length === 0 ? (
+        {view.items.length === 0 ? (
           <Card className="p-8 text-center">
             <p className="text-sm text-muted-foreground">Tidak ada dev log yang cocok dengan pencarian / filter Anda.</p>
           </Card>
         ) : (
-          filteredLogs.map((log) => {
+          view.items.map((log) => {
             const categoryMeta = CATEGORY_MAP[log.category] || CATEGORY_MAP.minor;
             const CategoryIcon = categoryMeta.icon;
 
@@ -180,38 +253,96 @@ export function UpdateLogClient() {
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="space-y-3 p-4 text-xs">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {/* Problem */}
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                      <p className="font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mb-1">
-                        <Bug className="size-3.5" /> Di mana Bug / Isu:
-                      </p>
-                      <p className="text-muted-foreground leading-relaxed">{log.problem}</p>
-                    </div>
+                {/* ⚠️ NATIVE `<details>`, NOT A COMPONENT.
+                    Five entries per page over four dense paragraphs each is still ~20 paragraphs, so
+                    problem / solution / verification collapse and only the summary above stays open.
+                    `<details>`/`<summary>` is keyboard-operable and announced as a disclosure by
+                    screen readers with no work of ours, it survives with JavaScript off, and it adds
+                    no dependency — the native platform feature beats a component here. The default
+                    triangle marker is hidden (`list-none` + the WebKit pseudo-element) and replaced
+                    by a chevron that rotates with `group-open:`, so the state is still visible. */}
+                <CardContent className="p-4 text-xs">
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md py-1 font-semibold text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                      <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+                      Detail teknis — isu, solusi & bukti verifikasi
+                    </summary>
 
-                    {/* Solution */}
-                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-                      <p className="font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 mb-1">
-                        <CheckCircle2 className="size-3.5" /> Solusi & Perbaikan:
-                      </p>
-                      <p className="text-muted-foreground leading-relaxed">{log.solution}</p>
-                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      {/* Problem */}
+                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                        <p className="font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mb-1">
+                          <Bug className="size-3.5" /> Di mana Bug / Isu:
+                        </p>
+                        <p className="text-muted-foreground leading-relaxed">{log.problem}</p>
+                      </div>
 
-                    {/* Verification */}
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-                      <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 mb-1">
-                        <ShieldCheck className="size-3.5" /> Bukti Verifikasi:
-                      </p>
-                      <p className="text-muted-foreground leading-relaxed">{log.verification}</p>
+                      {/* Solution */}
+                      <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                        <p className="font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 mb-1">
+                          <CheckCircle2 className="size-3.5" /> Solusi & Perbaikan:
+                        </p>
+                        <p className="text-muted-foreground leading-relaxed">{log.solution}</p>
+                      </div>
+
+                      {/* Verification */}
+                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 mb-1">
+                          <ShieldCheck className="size-3.5" /> Bukti Verifikasi:
+                        </p>
+                        <p className="text-muted-foreground leading-relaxed">{log.verification}</p>
+                      </div>
                     </div>
-                  </div>
+                  </details>
                 </CardContent>
               </Card>
             );
           })
         )}
       </div>
+
+      {/* Pagination — `@tokophi/ui/pagination`, first consumer in this app.
+          ⚠️ NO `href` IS EMITTED — not even `"#"`; `goTo()` above says why and what was measured.
+          The disabled Prev/Next spread NOTHING rather than a no-op handler, so "disabled" is a fact
+          about the handlers and not only about `pointer-events-none` in a class string. */}
+      {view.items.length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Menampilkan <span className="font-medium tabular-nums text-foreground">{num(view.start)}–{num(view.end)}</span> dari{" "}
+            <span className="font-medium tabular-nums text-foreground">{num(filteredLogs.length)}</span> catatan
+          </p>
+          {view.pageCount > 1 && (
+            <Pagination className="mx-0 w-auto justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    text="Sebelumnya"
+                    aria-disabled={view.page === 1}
+                    className={view.page === 1 ? "pointer-events-none opacity-50" : undefined}
+                    {...(view.page > 1 ? goTo(view.page - 1) : {})}
+                  />
+                </PaginationItem>
+                {pageNumbers.map((item, index) => (
+                  <PaginationItem key={item}>
+                    {index > 0 && pageNumbers[index - 1] !== item - 1 && <PaginationEllipsis />}
+                    <PaginationLink isActive={item === view.page} {...goTo(item)}>
+                      {item}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    text="Berikutnya"
+                    aria-disabled={view.page === view.pageCount}
+                    className={view.page === view.pageCount ? "pointer-events-none opacity-50" : undefined}
+                    {...(view.page < view.pageCount ? goTo(view.page + 1) : {})}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
+      )}
     </div>
   );
 }
