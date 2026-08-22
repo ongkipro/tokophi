@@ -6,6 +6,7 @@ import { verifyTotp } from "@tokophi/lib/totp";
 import { clearFailedLogins, failedLoginLocked, rateLimit, recordFailedLogin } from "@tokophi/lib/cache";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 import { db, schema } from "@tokophi/db";
+import { and, eq, isNull } from "drizzle-orm";
 
 export type SignInState = { error?: string; need2fa?: boolean };
 
@@ -33,6 +34,37 @@ async function noteFailedLogin(email: string, storeId: string | null): Promise<v
     await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
   } catch (e) {
     console.error("[auth] failed-login audit write failed", e);
+  }
+}
+
+/**
+ * ACCEPTING AN INVITATION IS A FACT ABOUT THE INVITEE (Task 5.3 / SEC-15).
+ *
+ * `store_users.accepted_at` used to be stamped by `inviteStoreUser` at the moment the OWNER pressed
+ * "Undang", which made it an exact copy of `invited_at` and asserted, in the row, that somebody had
+ * accepted an invitation they had not yet been told about. Nothing else ever wrote it, so the seller
+ * panel could not tell "given access, never used it" from "working here". The only event that proves
+ * acceptance is the invitee holding the credential and getting in — this, and it is stamped once:
+ * `accepted_at is null` in the predicate means a later sign-in matches no row and the original
+ * instant stands.
+ *
+ * ⚠️ It never throws into the login path — same rule as `noteFailedLogin`. A session that has been
+ * fully earned must not be refused because a bookkeeping UPDATE failed.
+ */
+async function noteAccepted(userId: string, storeId: string): Promise<void> {
+  try {
+    await db
+      .update(schema.storeUsers)
+      .set({ acceptedAt: new Date() })
+      .where(
+        and(
+          eq(schema.storeUsers.userId, userId),
+          eq(schema.storeUsers.storeId, storeId),
+          isNull(schema.storeUsers.acceptedAt),
+        ),
+      );
+  } catch (e) {
+    console.error("[auth] invitation acceptance stamp failed", e);
   }
 }
 
@@ -74,6 +106,7 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
     }
   }
   clearFailedLogins("seller", email);
+  await noteAccepted(row.userId, row.storeId);
   const token = await signSession({
     userId: row.userId,
     storeId: row.storeId,

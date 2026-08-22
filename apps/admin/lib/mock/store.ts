@@ -111,6 +111,7 @@ export type Product = {
   compareAt?: number | null;
   cost?: number | null;
   sku?: string;
+  barcode?: string; // default variant's `product_variants.barcode` — the feed's <g:gtin> source
   hasVariants?: boolean;
   options?: { name: string; values: string[] }[]; // option definitions in order (editor)
   variants?: { id: string; option1: string | null; option2: string | null; option3: string | null; sku: string | null; price: number; stock: number }[];

@@ -18,13 +18,15 @@ import {
 import { useCan } from "@/components/admin/permissions";
 import {
   getStoreUsers, inviteStoreUser, setStoreUserRole, removeStoreUser,
-  type StoreUserRow, type ManageableRole,
+  type StoreUserRow, type ManageableRole, type InviteResult,
 } from "@/lib/actions/users";
 
 const ROLE_LABEL: Record<string, string> = { owner: "Pemilik", admin: "Admin", staff: "Staf", gudang: "Staf Gudang" };
 const ROLE_BADGE: Record<string, "default" | "secondary" | "outline"> = {
   owner: "default", admin: "secondary", staff: "outline", gudang: "outline",
 };
+const fmtTanggal = (iso: string) =>
+  new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 const MANAGEABLE: { role: ManageableRole; label: string }[] = [
   { role: "admin", label: "Admin" },
   { role: "staff", label: "Staf" },
@@ -86,6 +88,10 @@ export function PenggunaCard() {
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{m.email}</p>
               </div>
+              {/* Only the NULL case is rendered. A stamp proves they signed in; its absence proves
+                  they never have — but rows written before Task 5.3 carry the invite's own timestamp,
+                  so "sudah masuk" is not a claim this data can support. */}
+              {m.acceptedAt === null && <Badge variant="outline">Belum pernah masuk</Badge>}
               <Badge variant={ROLE_BADGE[m.role]}>{ROLE_LABEL[m.role]}</Badge>
               {canManage && m.role !== "owner" && (
                 <DropdownMenu>
@@ -132,20 +138,42 @@ function InviteDialog({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => 
   const [email, setEmail] = React.useState("");
   const [role, setRole] = React.useState<ManageableRole>("staff");
   const [pending, start] = React.useTransition();
-  // Set once a new user is created: the one-time password to hand over. Locks the form into a "done" state.
-  const [created, setCreated] = React.useState<{ email: string; password?: string } | null>(null);
+  // Set ONLY on `outcome: "created"` — the branch where the action wrote the row carrying this
+  // string's hash. Locks the form into a "done" state; the password is shown once and never re-read.
+  const [created, setCreated] = React.useState<{ email: string; password: string } | null>(null);
   const [copied, setCopied] = React.useState(false);
 
+  // 🔴 EVERY BRANCH IS KEYED ON `outcome`, NEVER ON THE PRESENCE OF A PASSWORD. This used to read
+  // `if (r.tempPassword) … else "ia masuk dengan kata sandinya yang sudah ada"` — so the cheerful
+  // "they already have a password" line was what the seller saw for *any* path that did not hand one
+  // back, including one that had minted a credential and then failed to store it. AGENTS.md: "no
+  // password" and "no password was NEEDED" read identically, and only one of them is good news.
+  // A reload is issued only where a row was actually written.
   const submit = () =>
     start(async () => {
-      const r = await inviteStoreUser({ name, email, role });
-      if (!r.ok) { toast.error(r.error ?? "Gagal mengundang."); return; }
-      onDone();
-      if (r.tempPassword) {
-        setCreated({ email: email.trim(), password: r.tempPassword });
-      } else {
-        toast.success("Pengguna ditambahkan. Ia masuk dengan kata sandinya yang sudah ada.");
-        onOpenChange(false);
+      const r: InviteResult = await inviteStoreUser({ name, email, role });
+      switch (r.outcome) {
+        case "created":
+          onDone();
+          setCreated({ email: r.email, password: r.password });
+          return;
+        case "linked":
+          onDone();
+          toast.success(`${r.email} ditambahkan ke tim. Akunnya sudah ada, jadi kata sandinya TIDAK berubah.`);
+          onOpenChange(false);
+          return;
+        case "already_invited":
+          toast.info(
+            `${r.email} sudah diundang${r.invitedAt ? ` pada ${fmtTanggal(r.invitedAt)}` : ""} sebagai ` +
+              `${ROLE_LABEL[r.role] ?? r.role} dan belum pernah masuk. Kata sandinya tidak diubah.`,
+          );
+          return;
+        case "already_accepted":
+          toast.info(`${r.email} sudah menjadi ${ROLE_LABEL[r.role] ?? r.role} di toko ini. Tidak ada yang diubah.`);
+          return;
+        case "failed":
+          toast.error(r.error);
+          return;
       }
     });
 

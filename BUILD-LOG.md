@@ -8,6 +8,158 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-22 12:50 UTC] — Stage 5 Task 5.2 · F-C8 · Persist Or Remove Every Product Editor Control
+
+- **Executor:** Claude (Opus 5), worktree `s5c`, branch `fix/stage5-product-editor`, off `origin/main` `a98321c`.
+- **Method: MEASURED, not reasoned.** Every control on `/produk/[id]` was traced from its `React.useState` through `buildInput()` → `updateProduct`/`createProduct` → a column, and back out through `getProduct`. The predicate this pass's guard uses was then run against **the pre-fix file at `origin/main`** and printed exactly four submit-shaped controls that never reached the payload: `trackQty`, `barcode`, `chOnline`, `tags` (the other 17 it named are dialog/draft state and are classified as such).
+
+| control | sink | verdict |
+|---|---|---|
+| **Saluran penjualan → Toko Online** (`chOnline`) | none — no channel column on `products`, no reader in any of the four surfaces | **REMOVED** (card and all) |
+| **Tag** + chips `terlaris`/`baru`/`promo` | none — no `products.tags`; the only `tags` in the schema is `customers.tags` (CRM). The chips had no `onClick` at all | **REMOVED** |
+| ↳ *checked before removing:* `conditionField` really does carry a `"tag"` member and the collection editor offers "Tag produk" — but **nothing evaluates a collection condition anywhere in this repo**, so a stored tag would still feed nothing | | recorded in the file |
+| **Lacak kuantitas** (`trackQty`) | none — it hid the Kuantitas input while `stock` was saved either way | **REMOVED**; Kuantitas is always visible |
+| **Produk fisik** (`physical`) | no column — and `buildInput()` read `physical && weight`, so OFF + Simpan **NULLed `weight_grams` + the three dimension columns** | **REMOVED**; weight + dimensions always shown |
+| description toolbar (Tebal · Miring · Daftar · Tautan · Gambar) | none — five `<Button>`s with `aria-label` and no `onClick` over a plain `<Textarea>` | **REMOVED** |
+| **Barcode** | `product_variants.barcode` **exists** and the storefront feed publishes it as `<g:gtin>` — only the wiring was missing | **WIRED**, both directions |
+| SKU · Barcode · Kuantitas *while a product has variants* | `variantRowsOf()` returns the matrix rows and drops the product-level values entirely | **DISABLED** with a title naming the Varian card |
+| everything else (24 fields) | a column each | kept, unchanged |
+
+- 🔴 **"Produk fisik" was the expensive one.** It is the only control here that DESTROYED data on its way past: switching it off nulled the weight and dimensions that price every KiriminAja quote and booking (N30), then the product reopened with the switch back ON and the fabricated `"500"` default in the weight box — so the next Simpan wrote 500 g over a merchant's real figure. Nothing sells a non-physical product here: checkout always quotes ongkir and `weightForCart` falls back to 500 g, so a product marked "not physical" shipped anyway. There is no digital-goods concept to persist it into, and inventing a column for a toggle nothing reads is what this task forbids.
+- 🔵 **Barcode is the opposite case and is why "remove everything dead" would have been wrong.** The column has existed since `product_variants` did and `validGtin()` in `apps/storefront/src/lib/product-feed.ts` turns it into `<g:gtin>`. Storage and a reader both existed; `buildInput()` simply dropped the value and the box opened empty on every visit. Round-tripping it needed all three links — the editor seeds from `product?.barcode`, `variantRowsOf()` carries it onto the implicit-default row, `selectProduct` reads it back — and only two of the three existed for its neighbour `sku`.
+- ⚠️ **Known limit, stated rather than implied:** the variant MATRIX has no barcode column, so a product with variants cannot set one (the field is disabled and says why). Wiring per-variant barcodes is a feature, not part of this task.
+- ⚠️ **A product decision left alone:** `products.badge` and `products.bestseller` DO exist and DO reach the storefront ribbon, but no editor exposes them. That is a missing feature, not a dead control, and it is not a rename of the Tag box.
+
+- **Files Created / Modified:**
+  - `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`: the four removals + the toolbar, `barcode` seeded and submitted, the three per-variant fields disabled while `hasVariants`. Every removal leaves a comment saying what it was and why it went.
+  - `apps/admin/lib/actions/products.ts`: `ProductInput.barcode` + `VariantInput.barcode`; both writers persist it (`createProduct` insert, `updateProduct` reconcile).
+  - `apps/admin/lib/data/products.ts`: `selectProduct.barcode` (position-0 variant) + returned by `getProduct` — the "survives reload" half.
+  - `apps/admin/lib/mock/store.ts`: `Product.barcode`.
+  - `apps/admin/lib/product-editor-controls.test.ts` (new): the census.
+- **The guard is a CENSUS, not a list of the fields that were wrong today.** `Record<stateName, "payload" | { local: reason }>` over all 45 pieces of form state: a new control fails until someone classifies it, a deleted one fails until its entry goes, and every `"payload"` entry must be READ inside `buildInput()`. It reads the file's CODE (`test/source-code.ts`), and it counts a reference only when it is not an object key and not a property access — **the first draft was vacuous precisely because `material: material` satisfies a bare `\bmaterial\b` through its KEY alone**, so `material: undefined` would have kept it green.
+- **Verification Executed — six mutations on the census, each proved red before the guard was trusted:**
+
+  | # | mutation (on a COPY, never product source) | assertion that fired |
+  |---|---|---|
+  | 1 | `material:` line deleted from `buildInput()` | material reaches buildInput() |
+  | 2 | `material: material \|\| undefined` → `material: undefined` (key survives, value gone) | same |
+  | 3 | `barcode:` line deleted — the defect this task fixed | barcode reaches buildInput() |
+  | 4 | `const parsedOptions = options` → `= ([] as OptionDef[])` (the ONE indirection link cut) | options reaches buildInput() |
+  | 5 | `chOnline` / `tags` / `trackQty` / `physical` re-added as state | census covers exactly the state that exists |
+  | 6 | `const [material, setMaterial]` deleted, census entry left behind | same (stale side) |
+
+  Plus one for each of the five barcode links (contract type, both writers, the select, the read-back) cut in turn.
+- **Gates (exit codes read DIRECTLY, never through a pipe):**
+  - `TEST_DB_REQUIRED=1 npm test` → **0 — 118 files, 931 tests passed**. 117 files / 893 tests of that total are `origin/main`'s — derived by subtracting this pass's one new file and its 38 tests, not measured on a second run, and said that way rather than presented as a baseline reading.  `astro check`: storefront 0 errors / 0 warnings / 14 hints, landing 0/0/0.
+  - `npx tsc -p apps/admin --noEmit` → **0**.
+  - `npm run lint -w @tokophi/admin` → **0 — 0 errors, 21 warnings**, exactly the baseline; the five removals left nothing dangling (`Bold`/`Italic`/`List`/`Link2`/`Separator` imports removed with them).
+- ⚠️ **NOT clicked in a browser, and this change is browser-visible.** Said here rather than implied, exactly as #289 did for the same screen. The claims above are source/contract and schema claims; the reload round-trip is proved as a three-link source chain, not by driving the form.
+- **Completed Task:** Stage 5 Task 5.2.
+||||||| a98321c
+### [2026-08-22 13:10 UTC] — Stage 5 Task 5.3 · SEC-15 · The invitation told the seller a story the row did not
+
+- **Executor:** Claude (Opus 5), worktree `s5b`, branch `fix/stage5-invitations`, off `origin/main` `a98321c`.
+- **Scope:** `inviteStoreUser` — make the DATABASE ROW authoritative, arbitrate the uniqueness races deterministically, and give the seller a message per durable state instead of one derived from whether a password happened to come back.
+
+- 🔴 **THE UNIQUENESS RACE WAS THE COMMON CASE, NOT AN EDGE — MEASURED 19 OF 20.** The action was
+  read-then-write: `select … from users where email = …`, then an unguarded `insert`. Driving the
+  REAL action against real PostgreSQL, twenty pairs of concurrent invitations of the same new
+  address produced **19 throws of `users_email_unique`** out of the server action and **one**
+  `store_users_storeId_userId_unique`. A thrown server action is a rejected promise the invite
+  dialog does not catch: `start(async () => { const r = await inviteStoreUser(…) })` — no toast, no
+  message, nothing on screen. Meanwhile the database had converged correctly **every single time**
+  (`memberships=1`, 20/20), so the seller was shown a crash for an operation that had in fact
+  succeeded. And the throwing path had already **minted a temporary password** before it died.
+- 🔴 **`accepted_at` WAS A COPY OF `invited_at`, WRITTEN BY THE PERSON WHO IS NOT THE INVITEE.** The
+  insert was `{ invitedAt: now, acceptedAt: now }` — measured identical to the millisecond
+  (`2026-08-22 12:42:45.52+00` in both columns). The row therefore asserted that somebody had
+  accepted an invitation at the instant the OWNER pressed "Undang". Nothing else on the merchant
+  side ever wrote that column, and `getStoreUsers` **selected it and threw it away**: written
+  falsely, read never. Super Admin *does* read it (`data.ts` → `acceptedDaysAgo`), so the control
+  plane was being told "accepted 0 hari lalu" about people who had never signed in.
+- 🔴 **"CREATED" vs "THEY ALREADY HAD AN ACCOUNT" WAS DECIDED BY `if (r.tempPassword)`.** This is the
+  `addStoreUser` hole from the other side (AGENTS.md, 2026-08-03): the cheerful *"Ia masuk dengan
+  kata sandinya yang sudah ada"* was what the seller saw for **any** path that did not hand a
+  password back — including one that had minted a credential and then failed to store it. "No
+  password" and "no password was NEEDED" read identically at a call site and only one is good news.
+- **And "already a member" was reported as a FAILURE** — one red toast covering two very different
+  durable states, with no way to tell "invited, never signed in" from "works here".
+- ⚠️ **THERE IS NO MAILER IN THIS REPOSITORY** (grepped: no nodemailer, no Resend, no SMTP, no
+  `sendMail`). The task's "database failure after mail success" has no mail to succeed. Its real
+  shape here is one step earlier and worse: the action MINTS a password whose only copy is the
+  string it returns. That is what the fault-injection test asserts against — a failure after the
+  mint must carry **no** credential and leave **no** account.
+
+- **The fix — the returned ROW is the only thing allowed to decide what is reported:**
+  - Both inserts are `on conflict do nothing … returning`. A row came back ⇒ we wrote it ⇒
+    `created`/`linked` may be claimed and the minted password revealed (that row carries its hash).
+    Nothing came back ⇒ somebody else's row won ⇒ re-read it and report what IT says. Postgres
+    serialises the collision, so two callers converge instead of one crashing, and a duplicate
+    membership is unreachable — the constraint is the arbiter, not a prior SELECT.
+  - `InviteResult` is a discriminated union on **`outcome`** with `password` present on every branch:
+    `created` (password) · `linked` (null — their existing login is untouched; re-hashing would lock
+    them out of the other store, AGENTS.md) · `already_invited` (null, carries `invitedAt`) ·
+    `already_accepted` (null) · `failed` (null). Dropping `ok` is deliberate: an un-updated caller
+    cannot read this as a success.
+  - `accepted_at` is **not** stamped at invite. `signIn` stamps it on the invitee's first successful
+    sign-in, once (`where … and accepted_at is null`), in a `try/catch` that never throws into the
+    login path — the same discipline as `noteFailedLogin` beside it.
+  - `revalidatePath` fires only on `created`/`linked`. Report what you WROTE.
+- **UI:** every branch keyed on `outcome`, five distinct Indonesian messages, and the credential
+  dialog reachable from `created` alone. The team list shows **"Belum pernah masuk"** on
+  `acceptedAt === null` and renders nothing otherwise — deliberately one-sided, because rows written
+  before this task carry the invite's own timestamp there, so `null` proves "never signed in" while
+  non-null does not prove they did.
+
+- **Files Created / Modified:**
+  - `apps/admin/lib/actions/users.ts` — `InviteResult`, both `onConflictDoNothing … returning` paths,
+    the try/catch, `StoreUserRow.acceptedAt`.
+  - `apps/admin/components/admin/pengaturan/pengguna-card.tsx` — the `switch (r.outcome)`, the
+    "Belum pernah masuk" badge, `created.password` now non-optional.
+  - `apps/admin/lib/actions/auth.ts` — `noteAccepted()` + one call in `signIn`. ⚠️ **A third file,
+    named deliberately**: without a writer, `accepted_at` is a column decided by nothing that
+    observes it, which is the very defect this task exists to remove.
+  - `apps/admin/lib/actions/users.test.ts` (new, 7 tests, real PostgreSQL).
+  - Docs: `AGENTS.md`, `CHANGELOG.md`, `specs/docs/STATUS.md`.
+
+- **Verification Executed — all 7 proved RED against the unfixed action first** (`expected { ok: true, tempPassword: 'tokophi-dp46rv452nx3' } to match object { outcome: 'created' }`, and `PostgresError: injected membership failure` escaping the action outright), **then eight mutations, each reverted immediately:**
+
+  | # | mutation | tests that went red |
+  |---|---|---|
+  | 1 | `acceptedAt: new Date()` back on the invite insert | 4 of 7 |
+  | 2 | `users` insert without `on conflict` | the concurrent invitation |
+  | 3 | `store_users` insert without `on conflict` | 3 of 7 |
+  | 4 | the `catch` re-throws | failure after the mint |
+  | 5 | `password = temp` assigned before the insert is known to have won | never reports the password of an account it lost the race to create |
+  | 6 | `signIn` stops stamping acceptance | invited → accepted |
+  | 7 | `revalidatePath` on every outcome | the duplicate retry |
+  | 8 | re-hash over an existing account (the "fix" AGENTS.md forbids) | 2 of 7 |
+
+  ⚠️ **Mutation 5 was GREEN on the first attempt and that gap was real, not a formality.** The
+  single-store race cannot expose it: its loser is `already_invited`, whose reply is a literal `null`
+  either way. The reachable shape is **two different stores** inviting the same new address at once —
+  the loser still writes a perfectly good membership and returns a success, which would have carried
+  a well-formed `tokophi-…` hashed into nothing. A seventh test was added for exactly that, and only
+  then did the mutation go red.
+  ⚠️ **The races are FORCED, never hoped for.** Two bare `Promise.all` invitations collide only
+  sometimes (measured above: 19/20 on the unfixed code — and after the fix, mutation 2 was green on
+  the first run purely on timing). Both concurrency tests now hold the first transaction open inside
+  its `store_users` insert with a `pg_sleep(0.3)` trigger, which pins the interleave: the second
+  caller runs its `select` while the first `users` row is written but uncommitted, then blocks on the
+  unique index. A coin-toss test is green for the wrong reason often enough not to be trusted.
+
+- **Gates (exit codes read DIRECTLY, never through a pipe):**
+  - `TEST_DB_REQUIRED=1 npm test` → **0 — 118 files, 900 tests passed** (baseline on this branch before the new suite: 117 files / 893 tests).
+  - `npx tsc -p apps/admin --noEmit` → **0**.
+  - `npm run lint -w @tokophi/admin` → **0 — 0 errors, 21 warnings**, exactly the baseline. None of the 21 is in a file this task touched (checked by name).
+  - Measurement and every mutation ran against **my own throwaway `tokophi_s5b_test`**, created by `globalSetup` and `drop database`d afterwards. The shared `tokophi` on :5433 was never written to.
+- **No migration.** `store_users.invited_at` / `accepted_at` have existed since `0000`; this task changes only *who* writes them and *when*. `0102` was available and is deliberately unused, so no journal entry and no published count moved.
+- **Known, deliberately not fixed here (outside this task's files):** `apps/super-admin/lib/actions.ts` `addStoreUser` (line ~1021) still writes `acceptedAt: new Date()` when an operator adds a store user, and `apps/super-admin/lib/data.ts` renders it as `acceptedDaysAgo`. That is the same false stamp on the control plane's side, and another stream owns those files today. Owner provisioning (`createStore`, `provision.ts`) stamping it is arguably fine — the owner is the person creating the store — but the operator-added case is not.
+- **Not done here:** no browser pass. The dialog's copy is exercised through the action's contract and `tsc`, not rendered; the messages changed, the flow did not.
+- **Completed Task:** Stage 5 Task 5.3.
+
+---
+
 ### [2026-08-21 16:10 UTC] — Audit pass · MONEY-AUDIT-1 · Four shipped defects on the money/goods paths, each proved red before it was trusted green
 
 - **Executor:** Claude (Opus 5), worktree `uang`, branch `fix/audit-uang`.
@@ -245,6 +397,19 @@ in `errors` and returned in the summary. A tick in which **every** sync threw wr
 - **Not done here:** no browser pass. The screens involved are a server-rendered strip and two redirects, and the claims that matter — spend-once, replay, tamper, expiry, revocation, dual identity — are transaction boundaries a browser cannot exercise. Driving the full operator flow end to end needs both apps up and a real operator login, and is the natural first thing to do on the deploy.
 - **Completed Task:** Stage 4 Task 4.11.
 
+
+### [2026-08-22] — Stage 5 Task 5.16: CMS Page Bodies Survive The Round Trip, Empty Included
+
+- **What the task expected vs what was there:** the spec asked to "initialize the editor from `page.body`" and "remove runtime title-derived filler from the edit path". Measured first: the editor **already** initialises from `page.body ?? ""`, and `seedBody(title)` — which manufactures *"Selamat datang di halaman &lt;judul&gt;…"* — was **never called**. So the premise was half-true, and saying so is part of the work.
+- **It was removed anyway, and the reason is not tidiness.** A function whose entire purpose is to fabricate body text, sitting one call away from the edit path, is a loaded gun: wiring it back makes an EMPTY page render invented prose, and the first Simpan persists it over the merchant's deliberate emptiness. **An empty page is a choice** — the storefront already renders `page.body.trim() ? <Prose/> : …`, so the editor must not disagree with it. Removing it also took the admin lint baseline **21 → 20 warnings**.
+- 🔴 **The real defect in this territory was a different one, and it is the class this session has now fixed six times: `updatePage` and `deletePage` were blind writes returning `void`.** RLS scopes them to the session's store, so a page id that is gone — or was never ours — matches **zero rows with no error**, and all three call sites announced *"Halaman disimpan"* / *"Halaman dihapus"* over nothing. A merchant who keeps writing into a page another tab deleted is told their work is safe. Both now `.returning()` and report; **all three callers changed in the same commit**, because converting an action to `{ok, error}` while leaving a caller ignoring it is worse than the original bug.
+- **Files Created / Modified:** `apps/admin/app/(admin)/halaman/[id]/page-editor.tsx` (filler gone, both call sites read the outcome), `apps/admin/lib/actions/pages.ts` (both writes report; the `|| null` on body documented as the thing that makes empty round-trip as empty), `apps/admin/app/(admin)/halaman/halaman-client.tsx` (the list screen's delete), `apps/admin/lib/actions/pages.test.ts` (new).
+- **Verification Executed:**
+  - **Two mutations, two distinct pairs of reds:** putting the filler back on the write path fails *"an intentionally empty body stays empty"* **and** *"clearing a body persists the clearing"*; removing the existence checks fails both refusal tests. Restored → 5/5.
+  - `TEST_DB_REQUIRED=1 npm test` → **118 files and 898 tests passed**. `tsc --noEmit -p apps/admin` → **0**. `npm run lint -w @tokophi/admin` → **0 errors, 20 warnings** (down from 21).
+  - ⚠️ **Not clicked in a browser.** The actions are exercised end to end against real Postgres; the screens' branches are covered by `tsc` and by the callers being changed in the same commit.
+- ⚠️ **FOUND AND DELIBERATELY NOT FIXED — the page editor's SEO fields have no storage.** `seoTitle` and `metaDesc` are rendered with character counters and tone hints, initialise from `""` (never from the page), are **absent from `buildInput()`**, and `pages` has **no seo columns at all** — measured against `schema.ts`. A merchant can write a meta description, press Simpan, read "tersimpan", and reload to find it gone. Both honest fixes — remove the controls, or add the columns and wire them — are outside 5.16's stated scope (which forbids speculative schema), and which one is right is a product decision. Filed rather than guessed.
+- **Completed Task:** Stage 5 Task 5.16.
 
 ### [2026-08-21] — 🔴🔴 EIGHTEEN DAYS OF REJECTED ORDERS: The Ad Funnel Never Sent A Postcode
 
@@ -1265,3 +1430,15 @@ errors / 21 warnings.
 
 **Not touched:** `apps/admin/**` — the merchant half (`signIn` stamping once, `provision.ts`) is
 #306's, and this branch stayed inside `apps/super-admin/**`.
+
+**Merge note (same day).** `origin/main` moved three PRs ahead while this branch was open (#305,
+#306, #307). Merged in rather than rebased — history here is additive. Two documentation conflicts,
+both resolved by keeping the OTHER side and correcting it rather than replacing it: `AGENTS.md`,
+where #306's new paragraph said *"Super-admin's `addStoreUser` still stamps `acceptedAt`… not fixed
+in 5.3 because another stream owned those files"* — true when written, closed by the addition above,
+so that ⚠️ is now a ✅ naming both halves; and `specs/docs/STATUS.md`, where both branches had
+rewritten the verification boundary. **Re-measured on the merged tree: `TEST_DB_REQUIRED=1 npm test`
+→ 122 files / 987 tests, exit 0; `tsc -p apps/super-admin` and `-p apps/admin` both 0; super-admin
+lint 0 errors / 3 warnings; admin lint 0 errors / 20 warnings** (main's own baseline moved from 21 to
+20 in #307 — not this branch's doing). The per-task numbers in the entries above are what those
+tasks measured on their own base and are left as the dated record.
