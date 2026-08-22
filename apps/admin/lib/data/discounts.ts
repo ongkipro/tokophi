@@ -1,7 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
-import { withCurrentTenant } from "@/lib/tenant";
-import { asc, eq, sql } from "drizzle-orm";
+import { withCurrentTenant, type Tx } from "@/lib/tenant";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import type { Discount } from "@/lib/mock/store";
 
 // Admin display status is derived from the dates (real terjadwal / aktif / kadaluarsa).
@@ -73,11 +73,31 @@ export async function getDiscount(id: string): Promise<Discount | null> {
  * on a return that never happened").
  */
 export async function getDiscountSavings(): Promise<number> {
-  return withCurrentTenant(async (db, storeId) => {
-    const [row] = await db
-      .select({ total: sql<number>`coalesce(sum(${schema.orders.discountIdr}), 0)`.mapWith(Number) })
-      .from(schema.orders)
-      .where(eq(schema.orders.storeId, storeId));
-    return row?.total ?? 0;
-  });
+  return withCurrentTenant(discountSavingsFor);
+}
+
+/**
+ * ⚠️ A CANCELLED ORDER DEDUCTED NOTHING. The `where` used to be `eq(orders.storeId, storeId)` and
+ * nothing else, so a `batal` order's `discount_idr` was summed into a tile captioned *"nilai yang
+ * benar-benar dipotong"* — while `applyOrderStatusChange` had already restored its stock and
+ * `settleOrderLedger` had already clawed its sale back. Measured on real Postgres: one Rp20.000
+ * voucher on a completed sale, one Rp50.000 on a cancelled order and one Rp30.000 on a return read
+ * **Rp100.000** where the money that actually left the till is Rp20.000.
+ *
+ * `status <> 'batal'` is the repo's own `NOT_CANCELLED` rule (`lib/data/analytics.ts`), which every
+ * other money aggregate on a merchant screen already applies. ⚠️ `retur` is deliberately LEFT IN:
+ * a returned parcel WAS sold at the discounted price before it came back, and whether a refunded
+ * order still counts as a customer saving is a business question, not a bug — `lib/data/finance.ts`
+ * answers it the other way (`SALES` excludes both). Changing that is an owner's call, not a
+ * silent one; the split is named here so the next reader can see both standards exist.
+ *
+ * Separable from `withCurrentTenant` so `discounts.test.ts` can run the REAL query under
+ * `SET LOCAL ROLE tokophi_app` against a throwaway database — the same seam `dailyStatsRows` uses.
+ */
+export async function discountSavingsFor(db: Tx, storeId: string): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<number>`coalesce(sum(${schema.orders.discountIdr}), 0)`.mapWith(Number) })
+    .from(schema.orders)
+    .where(and(eq(schema.orders.storeId, storeId), ne(schema.orders.status, "batal")));
+  return row?.total ?? 0;
 }

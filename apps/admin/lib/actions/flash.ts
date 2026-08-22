@@ -113,29 +113,56 @@ export async function createFlashSale(input: FlashInput): Promise<FlashResult> {
   return { ok: true, id: r.value };
 }
 
+// ⚠️ REPORT WHAT YOU WROTE, NEVER WHAT YOU WERE ASKED TO WRITE — the `markLabelsPrinted` rule, which
+// this pair broke in the loudest possible way. `owned` was read specifically to prove tenancy and
+// then consumed by `writeItems` ALONE: the parent UPDATE ran unconditionally, matched zero rows under
+// RLS for an id that is gone or is another store's, and the action still returned `{ ok: true, id }`.
+// The editor's caller toasts "Flash sale disimpan." and navigates away, so a merchant whose sale was
+// deleted in another tab (or by a colleague) between opening the editor and pressing Simpan is told
+// their campaign is saved while nothing exists — and the storefront keeps charging full price.
+// `.returning()` is the only honest source; zero rows is a REFUSAL, not a success.
+const GONE = "Flash sale ini sudah tidak ada — mungkin dihapus dari perangkat lain. Muat ulang halaman.";
+
 export async function updateFlashSale(id: string, input: FlashInput): Promise<FlashResult> {
   const { storeId } = await requireCapability(CAP);
   const r = await guard(() =>
     withTenant(storeId, async (db) => {
-      // Prove the sale is the tenant's BEFORE writing items keyed on it (flash_sales is RLS'd).
-      const [owned] = await db.select({ id: schema.flashSales.id }).from(schema.flashSales).where(eq(schema.flashSales.id, id)).limit(1);
-      await db.update(schema.flashSales).set(saleFields(input)).where(eq(schema.flashSales.id, id));
-      await writeItems(db, id, !!owned, input.items);
+      // The UPDATE is now BOTH the write and the tenancy proof: RLS scopes `flash_sales`, so a row
+      // coming back is a row this tenant owns — the separate read-back it replaces could only ever
+      // agree with it. That also removes the read-then-write gap the old shape carried.
+      const written = await db
+        .update(schema.flashSales)
+        .set(saleFields(input))
+        .where(eq(schema.flashSales.id, id))
+        .returning({ id: schema.flashSales.id });
+      if (!written.length) return null;
+      await writeItems(db, id, true, input.items);
       return id;
     }),
   );
   if (!r.ok) return r;
+  if (r.value === null) return { ok: false, error: GONE };
   revalidatePath("/flash-sale");
   revalidatePath(`/flash-sale/${id}`);
   return { ok: true, id };
 }
 
-export async function deleteFlashSale(id: string): Promise<void> {
+// Returns its outcome for the same reason `setOrderStatus` does: a caller that awaits and ignores it
+// reports a deletion that never happened. Converting a `void` action is a two-file change — the
+// callers in `flash-sale-client.tsx` and `flash-editor.tsx` read this in the same commit.
+export async function deleteFlashSale(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { storeId } = await requireCapability(CAP);
-  await withTenant(storeId, async (db) => {
+  const gone = await withTenant(storeId, async (db) => {
     // The FK `flash_sale_items.flash_sale_id` is ON DELETE CASCADE, so deleting the (RLS'd) parent takes
-    // its items with it — no separate child delete to scope. A foreign id simply deletes nothing.
-    await db.delete(schema.flashSales).where(eq(schema.flashSales.id, id));
+    // its items with it — no separate child delete to scope. A foreign id simply deletes nothing, which
+    // is why the row count is the answer and not an assumption.
+    const rows = await db
+      .delete(schema.flashSales)
+      .where(eq(schema.flashSales.id, id))
+      .returning({ id: schema.flashSales.id });
+    return rows.length > 0;
   });
+  if (!gone) return { ok: false, error: GONE };
   revalidatePath("/flash-sale");
+  return { ok: true };
 }

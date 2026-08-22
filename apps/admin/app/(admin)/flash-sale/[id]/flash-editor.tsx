@@ -111,7 +111,10 @@ export function FlashEditor({
   const del = () =>
     start(async () => {
       try {
-        await deleteFlashSale(sale!.id);
+        // Same rule as the save path above: the result is READ, or a delete that matched nothing
+        // is announced as a deletion and the merchant navigates away believing it.
+        const r = await deleteFlashSale(sale!.id);
+        if (!r.ok) return void toast.error(r.error, { duration: 9000 });
         toast.success("Flash sale dihapus.");
         router.push("/flash-sale");
         router.refresh();

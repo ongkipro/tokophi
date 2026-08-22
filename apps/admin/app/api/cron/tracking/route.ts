@@ -241,8 +241,14 @@ export async function GET(req: NextRequest) {
   // what a human sees without going looking. Storing the counts, not just the timestamp, is the half
   // that matters here: `awbFilled` was 0 for a week and "the cron ran" would have been true all week.
   const summary = { scanned: orders.length, advanced, awbFilled, problems, problemsCleared, errors: errors.length };
-  await recordCronRun("tracking", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: summary });
-    return NextResponse.json({ ok: true, ...summary });
+  // ⚠️ `ok` IS DERIVED FROM `errors`, NOT HARD-CODED. It was `ok: true`, so a tick in which every
+  // single sync threw wrote a GREEN `cron_runs` row — over the one job whose week-long silence is
+  // the reason this table exists at all. `order-expiry` beside it already computes
+  // `ok: summary.errors === 0`; this route did not, and a liveness row that cannot go red is a row
+  // nobody can act on.
+  const ok = errors.length === 0;
+  await recordCronRun("tracking", { ok, startedAt, intervalSec: cronIntervalSec(req), result: summary });
+    return NextResponse.json({ ok, ...summary });
   } catch (error) {
     console.error("[cron/tracking] sweep failed", error);
     await recordCronRun("tracking", {

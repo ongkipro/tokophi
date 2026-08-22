@@ -1,8 +1,9 @@
 import "server-only";
 import { sql } from "drizzle-orm";
-import { withCurrentTenant } from "@/lib/tenant";
+import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { buildLabelHtml, composeSenderLine, formatWeight } from "@/components/admin/pesanan/shipping-label";
 import { DEFAULT_WEIGHT_GRAMS, MIN_BILLABLE_GRAMS } from "@/lib/shipping-weight";
+import { latestPaymentFirst } from "@/lib/data/order-payment";
 
 // Many thermal labels, one printable document.
 //
@@ -14,9 +15,34 @@ import { DEFAULT_WEIGHT_GRAMS, MIN_BILLABLE_GRAMS } from "@/lib/shipping-weight"
 // It prints ONLY orders with a real `awb`. buildLabelHtml throws without one — deliberately — and
 // that throw is caught per order and reported as `skipped`, never swallowed: an order quietly
 // missing from a print run is a parcel that quietly does not ship.
+//
+// 🔴 ONE ROW PER ORDER, AND ONE DEFINITION OF "THE ORDER'S PAYMENT". This used to be
+// `left join payments p on p.order_id = o.id` — an unordered, unlimited join to a table that
+// routinely holds MORE THAN ONE row per order (a `gagal` VA beside the COD that was collected; a
+// second bill raised after the first expired). The join FANS OUT, so one parcel produced one label
+// PER PAYMENT ROW, and `isCod` came from whichever row Postgres happened to emit: measured on real
+// Postgres, an order with a failed `va` and a collected `cod` printed **two labels for one AWB**,
+// one reading "COD (Bayar di Tempat) — Rp150.000 to collect" and the other "Sudah dibayar". A
+// courier scanning the wrong one either collects nothing on a COD parcel or asks a prepaid buyer to
+// pay again. `latestPaymentFirst()` (lib/data/order-payment.ts) is the SAME ordering the Pesanan
+// list and the order detail use, so this third screen can no longer be the odd one out — and a
+// scalar subquery cannot multiply rows. `payments` is deliberately UNALIASED: the shared fragment
+// interpolates its columns, which drizzle renders UNQUALIFIED, so an alias would break the
+// reference rather than silently reorder.
+//
+// Split so `bulk-labels.test.ts` can drive the REAL query + the REAL renderer against a throwaway
+// Postgres — the same seam `dailyStatsRows` uses, and for the same reason: a test that re-types the
+// SQL guards nothing.
 
 export async function getBulkLabels(numbers: string[]): Promise<{ html: string | null; skipped: string[] }> {
-  return withCurrentTenant(async (db) => {
+  return withCurrentTenant((db) => bulkLabels(db, numbers));
+}
+
+export async function bulkLabels(
+  db: Tx,
+  numbers: string[],
+): Promise<{ html: string | null; skipped: string[] }> {
+  {
     // RLS scopes this to the caller's store: a number from another tenant simply returns no row, so
     // a label cannot be minted for someone else's parcel even by guessing.
     const rows = (await db.execute(sql`
@@ -28,7 +54,8 @@ export async function getBulkLabels(numbers: string[]): Promise<{ html: string |
              st.name as store_name,
              ss.sender_phone, ss.sender_address, ss.sender_kecamatan_name, ss.sender_postcode,
              w.grams,
-             p.method::text as method,
+             (select payments.method::text from payments where payments.order_id = o.id
+              order by ${latestPaymentFirst()} limit 1)          as method,
              coalesce((
                -- ⚠️ The variant TITLE lives on product_variants (order_line_items has only
                -- variant_id). This used to read li.variant — a column that has never existed —
@@ -43,7 +70,6 @@ export async function getBulkLabels(numbers: string[]): Promise<{ html: string |
       left join customers c on c.id = o.customer_id
       left join stores st on st.id = o.store_id
       left join store_settings ss on ss.store_id = o.store_id
-      left join payments p on p.order_id = o.id
       left join platform_couriers pc on pc.courier = o.courier
       left join lateral jsonb_array_elements(pc.services) s on s->>'type' = o.service_type
       left join lateral (
@@ -112,5 +138,5 @@ export async function getBulkLabels(numbers: string[]): Promise<{ html: string |
 <style>.label{page-break-after:always}.label:last-child{page-break-after:auto}</style>
 </head><body>${bodies.join("\n")}</body></html>`;
     return { html, skipped };
-  });
+  }
 }

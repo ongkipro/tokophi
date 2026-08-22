@@ -33,8 +33,14 @@ function RowActions({ id }: { id: string }) {
   const [pending, start] = React.useTransition();
   const del = () =>
     start(async () => {
-      try { await deleteFlashSale(id); toast.success("Flash sale dihapus."); router.refresh(); }
-      catch { toast.error("Gagal menghapus — coba lagi."); }
+      // The action RETURNS its outcome now — awaiting and ignoring it reported "dihapus" over a
+      // DELETE that matched no row (a sale already gone, or another store's id under RLS).
+      try {
+        const r = await deleteFlashSale(id);
+        if (!r.ok) return void toast.error(r.error, { duration: 9000 });
+        toast.success("Flash sale dihapus.");
+        router.refresh();
+      } catch { toast.error("Gagal menghapus — coba lagi."); }
     });
   return (
     <DropdownMenu>
