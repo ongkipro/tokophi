@@ -22,11 +22,15 @@ Super Admin has never imported that component; this is its first consumer.
 `apps/admin/components/admin/list-pagination.tsx` owns `ADMIN_LIST_PAGE_SIZE = 10` and **must not be
 imported across apps**, so super-admin gets its own named constant.
 
-- ⚠️ **`PaginationLink` renders an `<a>`.** No `href` is emitted at all — not even `"#"`. Base UI's
-  `Button` is already passed `nativeButton={false}`, so for a non-`<button>` element it applies
-  `role="button"`, `tabIndex={0}` and Enter/Space → click (`internals/use-button/useButton.js`). An
-  `href="#"` would need a `preventDefault()` on every path to stop the scroll jump; no `href` cannot
-  jump at all, and the keyboard affordance is the component's own, not ours.
+- ⚠️ **`PaginationLink` renders an `<a>`.** No `href` is emitted at all — not even `"#"`: an
+  `href="#"` would need a `preventDefault()` on every path to stop the scroll jump, while an anchor
+  with no `href` cannot jump at all.
+  🔴 **This bullet was written planning to inherit the keyboard affordance from Base UI, and that
+  turned out to be FALSE — see "What actually happened" below.** `nativeButton={false}` does supply
+  `role="button"` and `tabIndex={0}`, but its Enter/Space → click bridge fires
+  `externalOnClick`, which is a prop `useButton` itself received — and `PaginationLink` spreads ours
+  onto the `<a>` inside `render`, where `useButton` never sees it. Measured in a browser: Enter did
+  nothing. The two keys are handled locally instead.
 - ⚠️ **The page index resets to 1 when a filter changes, DURING RENDER.** Copied from
   `apps/admin/app/(admin)/blog/blog-client.tsx` (~117–129) and cited in a comment: the `useEffect`
   version paints one frame of the old page under the new filter and trips
