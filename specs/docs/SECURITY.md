@@ -102,6 +102,38 @@ the mint's entropy is load-bearing rather than a nice-to-have.
   surfaces onto the restricted role would delete the login page, 404 every shop and empty the control
   plane. Super Admin and the storefront have **zero** `withTenant` call sites and are therefore
   declared `DATABASE_RUNTIME_ROLE: owner`; admin is `app`.
+- 🔴 **`FORCE ROW LEVEL SECURITY` IS NOT THE MISSING HARDENING — MEASURED ON PRODUCTION 2026-08-22, AND
+  IT IS THE WRONG CHANGE FOR THIS DESIGN.** It has been carried as an open owner decision ("0 of 54
+  tables are forced") since Task 4.12's preflight. It is now closed by measurement, in a rolled-back
+  transaction against a scratch table so no real table was touched:
+
+  | owner of the table | RLS | rows the OWNER sees through a `USING (false)` policy |
+  |---|---|---|
+  | `tokophi` (**superuser**, owns all 81 tables) | enabled | **1** — bypassed |
+  | `tokophi` (**superuser**) | enabled **+ FORCED** | **1** — still bypassed |
+  | a non-superuser role | enabled | 1 — owner bypass |
+  | a non-superuser role | enabled **+ FORCED** | **0** — bound at last |
+
+  Two conclusions, and they point the same way:
+  1. **Today it would change nothing.** PostgreSQL lets a superuser bypass row security
+     *unconditionally*; `FORCE` binds a table's OWNER, and cannot bind a superuser. Applying it to 54
+     tables would produce a migration, a changelog line and the appearance of a closed gap, with
+     identical behaviour — the exact shape of defect this document exists to catch (see the
+     `DATABASE_RUNTIME_ROLE=app` label that was true of nothing for months).
+  2. **The day the owner is demoted, it would be an outage.** Auth's pre-session read, the
+     storefront's Host resolution and every Super Admin read are cross-tenant **by design** and run on
+     the owner connection. Forced, they return 0 rows — the same failure measured for `tokophi_app`
+     two bullets up.
+
+  **What would actually reduce privilege** is demoting `tokophi` from `rolsuper` while leaving the
+  tables *unforced*: owner-bypass keeps those three paths alive, and the connection loses superuser
+  powers (server-side file access, role management, DDL beyond its own objects). ⚠️ **Prerequisite,
+  measured the same day:** `tokophi` holds **no membership** in `tokophi_app` (`pg_auth_members`: 0
+  rows) — `SET ROLE tokophi_app` succeeds today *only* because superuser may assume any role. Demoting
+  without `GRANT tokophi_app TO tokophi` breaks anything still doing that. The only installed
+  extension is `plpgsql` and `app_current_store_id()` is **not** `SECURITY DEFINER`, so neither blocks
+  the demotion; the open question is whether the deploy-time `migrate`/`seed` chain needs superuser for
+  any statement it runs. **Not attempted here — it is a deploy-path change, not a migration.**
 - ⚠️ **`stores` is keyed by `id`, not `store_id`**, so `verify-rls` structurally could not see it.
   That blind spot leaked two merchants' data until `0058` added an id-based policy. **The `WHERE` is
   the rule; the policy is only the net.**
