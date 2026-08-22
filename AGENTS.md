@@ -460,6 +460,38 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     is its own field on purpose — "no password" and "no password was NEEDED" read identically at a
     call site and only one of them is good news. Pinned by `apps/super-admin/lib/add-store-user.test.ts`
     (both files; proved red against three separate mutations before being trusted).
+  - 🔴 **THE SELLER'S OWN INVITE HAD THE SAME HOLE FROM THE OTHER SIDE, PLUS A RACE THAT WAS THE
+    COMMON CASE** (Task 5.3 / SEC-15, 2026-08-22). `inviteStoreUser` was read-then-write against
+    `users.email`, and **19 of 20 concurrent double-invitations threw `users_email_unique` out of the
+    server action** (measured, real Postgres) — a rejected promise the dialog never catches, so no
+    toast at all, while the database had converged on one account and one membership **every time**.
+    The throwing path had already minted a password. Both inserts are now
+    `on conflict do nothing … returning`, and **the returned row is the only thing allowed to decide
+    what is reported**: a row came back ⇒ we wrote it ⇒ the credential may be revealed; nothing came
+    back ⇒ re-read the row and report what IT says. The reply is a discriminated union on `outcome`
+    (`created` · `linked` · `already_invited` · `already_accepted` · `failed`) with `password`
+    present on every branch — the caller used to decide "created" from `if (r.tempPassword)`, which
+    is the same ambiguity one bullet up.
+    ⚠️ **`store_users.accepted_at` is NOT written by the invitation.** It used to be
+    `{ invitedAt: now, acceptedAt: now }` — identical to the millisecond — so the row asserted that
+    somebody accepted an invitation at the instant the OWNER pressed the button, and
+    `getStoreUsers` selected the column only to discard it: written falsely, read never. **`signIn`
+    stamps it now**, once (`where … and accepted_at is null`), in a `try/catch` that never throws
+    into the login path. The team list renders **only** the `null` case ("Belum pernah masuk"):
+    pre-5.3 rows carry the invite's timestamp, so `null` proves "never signed in" while non-null
+    proves nothing.
+    ⚠️ **Super-admin's `addStoreUser` still stamps `acceptedAt: new Date()`** (`actions.ts` ~1021,
+    rendered as `acceptedDaysAgo` by `data.ts`) — the same false stamp, on the control plane. Not
+    fixed in 5.3 because another stream owned those files that day. Owner provisioning
+    (`createStore`, `provision.ts`) stamping it is defensible; the operator-added case is not.
+    ⚠️ **A CONCURRENCY TEST THAT MERELY FIRES TWO PROMISES IS A COIN TOSS.** Both races here are
+    FORCED, by a `pg_sleep(0.3)` trigger holding the first transaction open inside its `store_users`
+    insert — the second caller then reliably runs its `select` against an uncommitted row and blocks
+    on the unique index. And the mutation that matters (`password` assigned before the insert is
+    known to have won) was **green** against the single-store race, because its loser is
+    `already_invited`, whose reply is a literal `null` either way: the reachable shape is **two
+    different stores** inviting one new address at once, where the loser writes a real membership and
+    returns a success. `apps/admin/lib/actions/users.test.ts`, 7 tests, 8 mutations.
 - **Never anchor a date to the seed.** `health.ts` measured recency from a frozen `2026-07-02`, so a
   store 34 days dormant read "5 days, ok" and a live one read **−23 hari**. `data.ts` had already been
   migrated off that anchor; the healthcheck was missed. Same rule as the discount editor.
