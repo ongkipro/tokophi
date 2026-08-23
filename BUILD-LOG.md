@@ -8,6 +8,27 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-23 09:15 UTC] — PRODUKSI · holder tema platform diperbarui, dan sebelas toko berhenti mengiklankan batik
+
+- **Executor:** Main Session (Claude, Fable 5). Owner-authorised. **Deploy 488** (`ee65660`) selesai — lima container sehat — lalu **satu baris data produksi** diperbarui.
+- 🔴 **PREDIKSI TERKONFIRMASI: DEPLOY-NYA SENDIRI TIDAK MENGUBAH APA PUN.** Diperiksa langsung setelah 488 mendarat, baris holder masih yang lama — `first_section = hero-batik`, **3720 B**. Persis seperti yang ditulis di PR #329: seeder `insert-if-absent`, holder produksi sudah punya barisnya, jadi merge + deploy saja meninggalkan sebelas toko tetap menayangkan tema batik. **Kalau langkah data ini dilewatkan, semuanya akan terlihat "sukses" dan tidak ada yang berubah.**
+- **Perubahan data:** satu `UPDATE`, terfilter `s.slug='tema-platform' AND t.type='homepage'`, di dalam `begin/commit`, `returning` satu baris. Payload diproduksi dari sumbernya (`npx tsx -e '… PLATFORM_DEFAULT_HOMEPAGE'`), tidak diketik ulang. Cadangan baris lama (**3727 B**) diambil lebih dulu. Hasil: `hero-batik` 3720 B → `hero` **1644 B**, `features=[]`, **nol string batik** di ketiga baris holder.
+- **Sebelum → sesudah, diukur di browser terhadap produksi:**
+
+  | toko | sebelum | sesudah |
+  |---|---|---|
+  | `she-store` (0 produk) | `h1` "Batik Modern untuk Hari-Harimu" · 10 gambar · badge strip | `h1` **"Judul utama toko kamu"** · 0 gambar · tanpa badge |
+  | `zanobyshop` | idem batik | netral |
+  | `amanahofficial` | idem batik | netral |
+  | `valoish-store` (tema sendiri) | 6 gambar | **6 gambar, tidak berubah** |
+  | `batiknusantara` (tema sendiri) | 31 gambar | **31 gambar, tidak berubah** |
+
+- **Sapuan seluruh tenant:** 14 storefront, **semua HTTP 200, nol error JS**, dan **nol kebocoran batik** kecuali `batiknusantara` sendiri. Database sebagai otoritas: **4 toko punya homepage sendiri, 10 memakai fallback platform.**
+  ⚠️ **Label "neutral/own" pada sapuan itu SALAH UKUR dan dikoreksi di sini**: ia mengklasifikasi dari teks `h1`, padahal Store Builder memakai frasa placeholder yang sama ("Judul utama toko kamu") untuk tema milik toko sendiri — `valoish-store` dan `permata-store` punya homepage sendiri tapi terbaca "NEUTRAL". **Untuk pertanyaan "toko ini pakai fallback atau tidak", tanyakan `page_templates`, jangan teks halaman.**
+- ⚠️ **TIGA BARIS `page_templates` MERCHANT MEMANG BERUBAH HARI INI, DAN ITU BUKAN PERUBAHAN INI.** Sebuah pemeriksaan "berapa baris merchant tersentuh" mengembalikan **3**, yang bertentangan dengan klaim "nol baris merchant disentuh". Ditelusuri, bukan diasumsikan: ketiganya adalah tiga template **`batiknusantara` sendiri**, di-upsert `seed-templates.ts` yang memang jalan di setiap rantai deploy — **ukurannya tidak berubah** (3720 / 175 / 91 B), hanya `updated_at` yang bergeser. Tidak ada toko merchant lain yang tersentuh, di lingkungan mana pun. Klaim PR tetap benar untuk perubahan ini; angkanya yang butuh dibaca sampai selesai.
+- **Files:** tidak ada perubahan kode. Entri ini + `specs/docs/tasks/2026-08-23-platform-default-theme-neutral.md` (dari #329) adalah catatannya.
+- **Sisa yang diketahui:** default sengaja **tanpa gambar**. Sepuluh toko sekarang punya beranda berbentuk lengkap dengan panel bernuansa brand masing-masing dan teks yang jelas minta diganti — menyediakan pustaka foto netral adalah pekerjaan tersendiri, bukan bagian dari ini.
+
 ### [2026-08-23 08:15 UTC] — Tema default platform berhenti menjadi tema Batik Nusantara
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner. Tidak ada migrasi, tidak ada perubahan env, **tidak ada baris `page_templates` merchant yang disentuh di lingkungan mana pun**.
