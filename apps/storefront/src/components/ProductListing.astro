@@ -16,7 +16,7 @@
 // contradicted the page. Sorting on the server by the same `sort` the control reflects makes the two
 // agree, and the whole thing works with JS disabled (it is a GET form).
 //
-// ── PAGINATION, AND THE FILTER THAT WAS REMOVED ─────────────────────────────────────────────────
+// ── PAGINATION ──────────────────────────────────────────────────────────────────────────────────
 //
 // The listing used to render EVERY product, every time — invisible on a 14-product demo store, one
 // page carrying 300 images on a real merchant. `?page=` fixes that: 12 per page (12 divides the
@@ -28,18 +28,40 @@
 // controls that look alike, mean different things, and only one of which can be linked to. RevealGrid
 // still serves /blog and /kategori, which are single-page lists.
 //
-// ⚠️ **A category / price / promo FILTER BAR lived here and was REMOVED by the owner** (2026-07-22):
-// on a category page it collapsed to "Filter · Harga [min]–[max] · Terapkan", a form-shaped band
-// above every grid, earning far less than the weight it added. The params went with the controls —
-// leaving `?kategori=`/`?min=`/`?max=`/`?promo=` parsed but unrenderable would be exactly the
-// half-working control this repo keeps paying for. If filtering comes back, it should come back as
-// something a phone can use with one thumb, not as a desktop form row.
+// ── THE FILTER BAR CAME BACK (2026-08-23), AND THE OLD OBJECTION IS THE SPEC ─────────────────────
+//
+// A category / price / promo filter bar lived here and was REMOVED by the owner on 2026-07-22:
+// "on a category page it collapsed to 'Filter · Harga [min]–[max] · Terapkan', a form-shaped band
+// above every grid, earning far less than the weight it added… If filtering comes back, it should
+// come back as something a phone can use with one thumb, not as a desktop form row."
+//
+// That sentence is the design, so read it before changing any of this:
+//
+//   ① **A FACET RENDERS ONLY IF IT PARTITIONS THIS SET.** Two or more options, and not one of them
+//      matching everything. On a 3-product category NOTHING renders and the bar is a count and a
+//      sort — which is exactly the case that earned the removal. The bar cannot be a permanent band
+//      again, because it is derived, not declared.
+//   ② **NO min/max NUMBER PAIR.** Price is preset ranges a thumb can hit, derived from the prices
+//      actually present (a fixed "Rp0–100rb" ladder is three dead chips in a shop selling batik at
+//      Rp450rb). The BOUNDARY travels in the URL (`?harga=100000-300000`), never a bucket index —
+//      `?harga=2` would mean different money on a different page and a shared link would lie.
+//   ③ **NO "Terapkan" BUTTON WITH JS ON.** Ticking a chip navigates. The button exists inside
+//      <noscript> only, where it is the difference between a control and a decoration.
+//   ④ **NO LIBRARY.** This storefront has no React integration (checked: `apps/storefront/package.json`
+//      has none), so shadcn/Base UI — which is `packages/ui`, for the two Next apps — cannot render
+//      here at all. The disclosure is `<details>`, the chips are `<label>` + a visually-hidden
+//      checkbox styled through `peer-checked:`. Zero JS, keyboard-operable, works with JS off. Adding
+//      an island to draw eight chips would ship a framework to do what a checkbox already does.
+//
+// ⚠️ **FILTERED-EMPTY IS NOT EMPTY.** "Belum ada produk" over a category that has twenty of them,
+// because the shopper ticked XXL, is the storefront telling them the shop is bare. The two states are
+// separate below and only one of them offers a way out.
 
 import ProductCard from "./ProductCard.astro";
 import EmptyState from "./EmptyState.astro";
 import Pagination from "./Pagination.astro";
-import { ChevronDown, PackageOpen } from "@lucide/astro";
-import { num } from "@tokophi/lib/format";
+import { ChevronDown, PackageOpen, SlidersHorizontal, SearchX } from "@lucide/astro";
+import { num, IDR } from "@tokophi/lib/format";
 import type { Product } from "../data/catalog";
 
 interface Props {
@@ -68,9 +90,167 @@ const SORTS = { terbaru: "Terbaru", termurah: "Harga terendah", termahal: "Harga
 type SortKey = keyof typeof SORTS;
 const sort: SortKey = (params.get("sort") as SortKey) in SORTS ? (params.get("sort") as SortKey) : "terbaru";
 
+// ── SELECTION ────────────────────────────────────────────────────────────────────────────────────
+// Within a facet the options are OR'd; across facets they are AND'd. That is what every shopper
+// already expects from every shop: "S or M" and "on sale".
+const selSize = params.getAll("ukuran");
+const selPrice = params.getAll("harga");
+const selCat = params.getAll("kategori");
+const onSale = params.get("diskon") === "1";
+
+const isDiscounted = (p: Product) => typeof p.compareAt === "number" && p.compareAt > p.price;
+
+/** `"0-100000"` / `"300000-"` — the boundary is IN the URL, so a shared link keeps its meaning. */
+function inPriceRange(price: number, range: string) {
+  const [lo, hi] = range.split("-");
+  const min = Number(lo);
+  if (!Number.isFinite(min)) return false;
+  if (price < min) return false;
+  if (hi === "" || hi === undefined) return true;
+  const max = Number(hi);
+  return Number.isFinite(max) && price < max;
+}
+
+// One predicate per facet, so counts can be taken with a facet EXCLUDED (below).
+const MATCH = {
+  ukuran: (p: Product) => !selSize.length || (p.sizes ?? []).some((s) => selSize.includes(s)),
+  harga: (p: Product) => !selPrice.length || selPrice.some((r) => inPriceRange(p.price, r)),
+  kategori: (p: Product) => !selCat.length || selCat.includes(p.categoryHandle),
+  diskon: (p: Product) => !onSale || isDiscounted(p),
+} as const;
+type FacetKey = keyof typeof MATCH;
+const FACET_KEYS = Object.keys(MATCH) as FacetKey[];
+
+const matchesAll = (p: Product) => FACET_KEYS.every((k) => MATCH[k](p));
+/** Everything the OTHER facets allow — the honest denominator for this facet's counts. */
+const matchesExcept = (p: Product, skip: FacetKey) =>
+  FACET_KEYS.every((k) => k === skip || MATCH[k](p));
+
+// ── FACET DERIVATION ─────────────────────────────────────────────────────────────────────────────
+// Built from the products that ARRIVED, never from a hard-coded list: a chip with nothing behind it
+// is a dead end the shopper only discovers by tapping it.
+
+/** S/M/L before numbers before anything else, so the row reads like a size run and not like a hash. */
+const LETTER_RUN = ["xs", "s", "m", "l", "xl", "xxl", "2xl", "xxxl", "3xl"];
+function sizeRank(s: string) {
+  const k = s.trim().toLowerCase();
+  const i = LETTER_RUN.indexOf(k);
+  if (i >= 0) return i;
+  const n = Number(k);
+  return Number.isFinite(n) ? 100 + n : 1000;
+}
+
+/** Round to a step a shopper reads as a price, not as arithmetic: 50rb below 1jt, else 100rb. */
+const roundPrice = (v: number) => {
+  const step = v < 1_000_000 ? 50_000 : 100_000;
+  return Math.round(v / step) * step;
+};
+
+function priceRanges(list: Product[]): { value: string; label: string }[] {
+  const prices = list.map((p) => p.price).sort((a, b) => a - b);
+  if (prices.length < 4) return [];
+  const q = (f: number) => prices[Math.floor((prices.length - 1) * f)];
+  const t1 = roundPrice(q(1 / 3));
+  const t2 = roundPrice(q(2 / 3));
+  // Collapsed thresholds mean the catalogue has no price spread worth splitting — say nothing.
+  if (!(t1 > prices[0] && t2 > t1 && t2 < prices[prices.length - 1])) return [];
+  return [
+    { value: `0-${t1}`, label: `< ${IDR(t1)}` },
+    { value: `${t1}-${t2}`, label: `${IDR(t1)} – ${IDR(t2)}` },
+    { value: `${t2}-`, label: `> ${IDR(t2)}` },
+  ];
+}
+
+type Facet = {
+  key: FacetKey;
+  legend: string;
+  options: { value: string; label: string; count: number; checked: boolean }[];
+};
+
+function buildFacets(): Facet[] {
+  const out: Facet[] = [];
+
+  const sizes = [...new Set(products.flatMap((p) => p.sizes ?? []))].sort(
+    (a, b) => sizeRank(a) - sizeRank(b) || a.localeCompare(b),
+  );
+  if (sizes.length > 1) {
+    out.push({
+      key: "ukuran",
+      legend: "Ukuran",
+      options: sizes.map((s) => ({
+        value: s,
+        label: s,
+        count: products.filter((p) => matchesExcept(p, "ukuran") && (p.sizes ?? []).includes(s)).length,
+        checked: selSize.includes(s),
+      })),
+    });
+  }
+
+  const cats = [...new Map(products.map((p) => [p.categoryHandle, p.category])).entries()];
+  if (cats.length > 1) {
+    out.push({
+      key: "kategori",
+      legend: "Kategori",
+      options: cats
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([handle, name]) => ({
+          value: handle,
+          label: name,
+          count: products.filter((p) => matchesExcept(p, "kategori") && p.categoryHandle === handle).length,
+          checked: selCat.includes(handle),
+        })),
+    });
+  }
+
+  const ranges = priceRanges(products);
+  if (ranges.length) {
+    out.push({
+      key: "harga",
+      legend: "Harga",
+      options: ranges.map((r) => ({
+        ...r,
+        count: products.filter((p) => matchesExcept(p, "harga") && inPriceRange(p.price, r.value)).length,
+        checked: selPrice.includes(r.value),
+      })),
+    });
+  }
+
+  // A single toggle, and only when it SPLITS the set: all-on-sale or none-on-sale filters nothing.
+  const discounted = products.filter(isDiscounted).length;
+  if (discounted > 0 && discounted < products.length) {
+    out.push({
+      key: "diskon",
+      legend: "Promo",
+      options: [
+        {
+          value: "1",
+          label: "Sedang diskon",
+          count: products.filter((p) => matchesExcept(p, "diskon") && isDiscounted(p)).length,
+          checked: onSale,
+        },
+      ],
+    });
+  }
+
+  // ① Every option matching every product partitions nothing — drop the facet rather than draw it.
+  return out.filter((f) => f.options.some((o) => o.count < products.length));
+}
+
+// ⚠️ **AND THE FLOOR: NO FILTERS UNDER ONE FULL PAGE.** Facet derivation alone was not enough —
+// measured in a browser, `/kategori/dress` (THREE products) drew "Ukuran S·M·L·XL" plus "Promo",
+// because with 3 products each size genuinely partitions the set. Technically true, and exactly the
+// bar the owner deleted on 2026-07-22: a control row above a grid the shopper can already see whole.
+// Filtering only earns its space once the list does not fit on one page — below that it removes
+// items from a list nobody had to scroll. `> PER_PAGE`, not a hand-picked number, so the rule stays
+// tied to the thing it is about.
+const facets = products.length > PER_PAGE ? buildFacets() : [];
+const activeCount = selSize.length + selPrice.length + selCat.length + (onSale ? 1 : 0);
+
+const filtered = products.filter(matchesAll);
+
 // Sort a COPY — never mutate the prop, which a caller may still be reading. `terbaru` = newest first
 // (createdAt is epoch ms), so it is the reverse of the oldest-first order the list arrives in.
-const sorted = [...products].sort((a, b) =>
+const sorted = [...filtered].sort((a, b) =>
   sort === "termurah" ? a.price - b.price
   : sort === "termahal" ? b.price - a.price
   : b.createdAt - a.createdAt,
@@ -85,20 +265,29 @@ const page = Number.isInteger(requested) && requested >= 1 ? Math.min(requested,
 const from = (page - 1) * PER_PAGE;
 const visible = sorted.slice(from, from + PER_PAGE);
 
-// The sort form must re-emit every OTHER query param as a hidden field — above all `q` on /cari,
-// which sorting would otherwise drop, turning "urutkan hasil pencarian" into "buang pencarian saya".
-// `page` is deliberately NOT carried: changing the order returns you to page 1, because page 7 of the
-// old order is a different set of products from page 7 of the new one.
-const OWNED = new Set(["sort", "page"]);
+// The form must re-emit every OTHER query param as a hidden field — above all `q` on /cari, which
+// sorting would otherwise drop, turning "urutkan hasil pencarian" into "buang pencarian saya".
+//
+// ⚠️ **EVERY KEY THIS FORM OWNS AS A CONTROL MUST BE HERE**, or it is submitted twice: once from the
+// checkbox and once from the hidden copy, so one tick reads as two and unticking never clears it.
+// `page` is deliberately NOT carried: changing the order or the filter returns you to page 1,
+// because page 7 of the old set is a different set of products from page 7 of the new one.
+const OWNED = new Set<string>(["sort", "page", ...FACET_KEYS]);
 const carryParams = [...params.entries()].filter(([k]) => !OWNED.has(k));
+/** "Hapus filter" — keeps the search query and drops only what this bar owns. */
+const clearHref = carryParams.length
+  ? `${Astro.url.pathname}?${new URLSearchParams(carryParams).toString()}`
+  : Astro.url.pathname;
 
-// Minimalist sort control (Shopify-clean): a bare select with a CUSTOM chevron — `appearance-none` drops
-// the browser's default arrow so the chevron never doubles up; a light rounded border, not a heavy pill.
-const FIELD =
-  "min-h-10 cursor-pointer appearance-none rounded-lg border border-line bg-white py-2 pl-3.5 pr-9 text-sm font-medium text-ink transition-colors hover:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
+// Flat by design: a hairline rule under the row, no card. The old bar was a rounded, bordered,
+// blurred panel floating above every grid — a frame around two controls.
+const CHIP =
+  "inline-flex min-h-9 cursor-pointer select-none items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-sm text-ink transition-colors hover:border-brand-400 peer-checked:border-brand-600 peer-checked:bg-brand-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400 peer-focus-visible:ring-offset-2 motion-reduce:transition-none";
+const SORT_FIELD =
+  "min-h-9 cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 text-sm font-medium text-ink transition-colors hover:border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none";
 ---
 
-<section class:list={["mx-auto max-w-7xl px-4 py-12 sm:px-6", className]}>
+<section class:list={["mx-auto max-w-7xl px-4 py-10 sm:px-6", className]}>
   {
     products.length === 0 ? (
       // Nothing arrived at all — no filter can fix that, so no controls are drawn.
@@ -113,72 +302,132 @@ const FIELD =
       <Fragment>
         {/* ONE form for filters AND sort. Two forms would need two copies of the hidden carry
             fields, and the first one to be submitted would silently discard the other's values. */}
-        <form
-          id="listing-controls"
-          method="get"
-          action={Astro.url.pathname}
-          class="rounded-[1.25rem] border border-line bg-white/80 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-cream/80 sm:p-5"
-        >
+        <form id="listing-controls" method="get" action={Astro.url.pathname}>
           {carryParams.map(([k, v]) => <input type="hidden" name={k} value={v} />)}
 
-          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {/* The count is the FILTERED total, and the range says which slice is on screen. A bare
-                "14 produk" over a grid of 12 is a page arguing with itself. */}
-            <div class="space-y-2">
-              <div class="flex flex-wrap items-center gap-2.5">
-                <span class="inline-flex min-h-9 items-center rounded-full border border-brand-200 bg-brand-50 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-700">
-                  Katalog
-                </span>
-                <span class="inline-flex min-h-9 items-center rounded-full border border-line bg-cream px-3 text-xs font-medium uppercase tracking-[0.16em] text-muted">
-                  12 / halaman
-                </span>
-              </div>
-              <p class="text-sm leading-relaxed text-muted">
-                {sorted.length > 0 ? (
-                  <Fragment>
-                    Menampilkan{" "}
-                    <span class="font-medium text-ink tabular-nums">
-                      {num(from + 1)}–{num(from + visible.length)}
-                    </span>{" "}
-                    dari <span class="font-medium text-ink tabular-nums">{num(sorted.length)}</span> produk di halaman ini
-                  </Fragment>
-                ) : null}
-              </p>
-            </div>
+          <div class="flex items-center justify-between gap-4 border-b border-line pb-3">
+            {/* The count is the FILTERED total. A bare "14 produk" over a grid of 12 is a page
+                arguing with itself, so the range appears only when there is more than one page. */}
+            <p class="text-sm text-muted">
+              {totalPages > 1 ? (
+                <Fragment>
+                  <span class="font-medium text-ink tabular-nums">
+                    {num(from + 1)}–{num(from + visible.length)}
+                  </span>{" "}
+                  dari <span class="font-medium text-ink tabular-nums">{num(sorted.length)}</span> produk
+                </Fragment>
+              ) : (
+                <Fragment>
+                  <span class="font-medium text-ink tabular-nums">{num(sorted.length)}</span> produk
+                </Fragment>
+              )}
+              {activeCount > 0 ? (
+                <Fragment>
+                  {" · "}
+                  <a href={clearHref} class="underline underline-offset-2 hover:text-ink">
+                    Hapus filter
+                  </a>
+                </Fragment>
+              ) : null}
+            </p>
 
-            <div class="flex flex-col gap-2 md:items-end">
-              <label class="flex items-center justify-between gap-3 text-sm text-muted md:justify-end">
-                <span>Urutkan</span>
-                <div class="relative shrink-0">
-                  <select id="sort-select"
-                    aria-label="Urutkan produk"
-                    name="sort"
-                    class={FIELD}
-                  >
-                    {Object.entries(SORTS).map(([k, label]) => (
-                      <option value={k} selected={k === sort}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" stroke-width={2} />
-                </div>
-              </label>
-              <p class="text-xs text-muted md:text-right">
-                Urutan tersimpan di URL agar mudah dibagikan dan konsisten saat pindah halaman.
-              </p>
+            <div class="relative shrink-0">
+              <select id="sort-select" aria-label="Urutkan produk" name="sort" class={SORT_FIELD}>
+                {Object.entries(SORTS).map(([k, label]) => (
+                  <option value={k} selected={k === sort}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                class="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-muted"
+                stroke-width={2}
+              />
             </div>
-            {/* JS off, and no filter bar to borrow a submit button from: without this the sort
-                dropdown is a control that cannot be applied. */}
-            <noscript>
-              <button
-                type="submit"
-                class="min-h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
-              >
-                Urutkan
-              </button>
-            </noscript>
           </div>
+
+          {facets.length > 0 ? (
+            /* ⚠️ **`<details>` WAS TRIED HERE FIRST AND CANNOT DO THIS JOB.** It has the better
+               semantics and it is what a disclosure should be — but the requirement is
+               "collapsed on a phone, an inline row on desktop", and that is the `open` ATTRIBUTE,
+               which CSS cannot set. Both attempts to force it open with CSS were measured and both
+               FAILED, in opposite directions and for different reasons:
+                 · `display` on the child — Chrome 131+ hides the contents through
+                   `::details-content { content-visibility: hidden }`, one level ABOVE the child, so
+                   the declaration lands on an element the collapse does not use;
+                 · `::details-content { content-visibility: visible }` — did not reopen it either.
+               And the failure was invisible from the DOM: `clientHeight` came back **412** for a
+               panel a SCREENSHOT showed was not on the page, because querying a `content-visibility`
+               subtree forces exactly the layout you are trying to measure. The screenshot is what
+               found it, twice.
+               So the toggle is an unnamed checkbox — unnamed, therefore never submitted with the
+               form — and the panel is a plain div whose display this file owns at both widths. Zero
+               JS, no flash of the wrong state, and `for=`/`id=` keeps it keyboard-operable.
+               ⚠️ Honest trade: a screen reader announces this as a checkbox, not as an expandable
+               region. `<details>` would announce it properly. That is the price of doing it without
+               JS, and it is written down rather than glossed. */
+            <div class="mt-3 sm:mt-4">
+              <input
+                id="facet-toggle"
+                type="checkbox"
+                class="facet-toggle sr-only"
+                checked={activeCount > 0}
+              />
+              <label
+                for="facet-toggle"
+                class="facet-label inline-flex min-h-10 cursor-pointer select-none items-center gap-2 text-sm font-medium text-ink"
+              >
+                <SlidersHorizontal class="size-4" stroke-width={2} aria-hidden="true" />
+                Filter
+                {activeCount > 0 ? (
+                  <span class="inline-flex size-5 items-center justify-center rounded-full bg-brand-600 text-[0.6875rem] font-semibold text-white tabular-nums">
+                    {activeCount}
+                  </span>
+                ) : null}
+                <ChevronDown class="chev size-4 text-muted" stroke-width={2} aria-hidden="true" />
+              </label>
+
+              <div class="facet-panel flex-col gap-3 pt-3 sm:pt-0">
+                {facets.map((f) => (
+                  <fieldset class="flex flex-wrap items-center gap-2">
+                    <legend class="sr-only">{f.legend}</legend>
+                    <span class="mr-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted" aria-hidden="true">
+                      {f.legend}
+                    </span>
+                    {f.options.map((o) => (
+                      <label class="inline-flex">
+                        <input
+                          type="checkbox"
+                          class="peer sr-only"
+                          name={f.key}
+                          value={o.value}
+                          checked={o.checked}
+                          disabled={o.count === 0 && !o.checked}
+                        />
+                        <span
+                          class:list={[CHIP, o.count === 0 && !o.checked && "cursor-not-allowed opacity-40"]}
+                        >
+                          {o.label}
+                          <span class="text-xs tabular-nums opacity-70">{num(o.count)}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* JS off: ticking a chip or changing the order does nothing until something submits the
+              form. With JS on this is unreachable, which is why it is not a permanent button. */}
+          <noscript>
+            <button
+              type="submit"
+              class="mt-3 min-h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white"
+            >
+              Terapkan
+            </button>
+          </noscript>
         </form>
 
         {visible.length > 0 ? (
@@ -190,13 +439,55 @@ const FIELD =
               <ProductCard product={p} level={2} />
             ))}
           </div>
-        ) : null}
+        ) : (
+          /* ⚠️ NOT "Belum ada produk". Products arrived; the shopper's own filter excluded them, and
+             the only useful thing on this screen is the way back. */
+          <EmptyState
+            icon={SearchX}
+            title="Tidak ada yang cocok"
+            body="Coba longgarkan filternya — mungkin ukuran atau rentang harganya terlalu sempit."
+            ctaHref={clearHref}
+            ctaLabel="Hapus filter"
+          />
+        )}
 
         <Pagination page={page} totalPages={totalPages} />
       </Fragment>
     )
   }
 </section>
+
+<style>
+  /* The whole responsive mechanism, in four rules and no script. The panel's display is owned HERE
+     rather than by Tailwind utilities, because `hidden`/`flex` on the element itself would need a
+     `peer-checked:` variant and a `sm:` variant fighting for the same property — the specificity
+     accident that hid these chips on desktop once already. */
+  .facet-panel {
+    display: none;
+  }
+  .facet-toggle:checked ~ .facet-panel {
+    display: flex;
+  }
+  .facet-toggle:focus-visible ~ .facet-label {
+    outline: 2px solid var(--color-brand-400, currentColor);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+  .facet-toggle:checked ~ .facet-label .chev {
+    transform: rotate(180deg);
+  }
+  /* From `sm` up there is no disclosure at all: the chips ARE the row, so the toggle's label goes
+     and the panel shows whatever the checkbox says. A shopper who collapsed it on a phone and then
+     rotated to landscape gets the row, not a remembered collapse. */
+  @media (min-width: 640px) {
+    .facet-label {
+      display: none;
+    }
+    .facet-panel {
+      display: flex;
+    }
+  }
+</style>
 
 <script is:inline>
   // A change-LISTENER, not an inline onchange attribute, to stay clear of any inline-handler CSP.
@@ -207,6 +498,9 @@ const FIELD =
     // A GET form submits every named control it owns, so choosing the default order still writes
     // `?sort=terbaru` — a statement that says nothing, in a URL a shopper may share. A DISABLED
     // control is not submitted, and the page navigates away immediately, so nobody sees it go grey.
+    //
+    // ⚠️ Only the SORT default is dropped. An unticked checkbox submits nothing on its own, so the
+    // filters need no equivalent — and disabling them here would drop the ticked ones too.
     function dropDefaults() {
       var sort = form.elements["sort"];
       if (sort && sort.value === "terbaru") sort.disabled = true; // the default the server falls back to
@@ -216,12 +510,24 @@ const FIELD =
 
     // ⚠️ `form.submit()` does NOT fire the submit event, so `dropDefaults` has to be called by
     // hand here. Wiring it to the event alone would silently leave `?sort=terbaru` in the URL.
-    var select = document.getElementById("sort-select");
-    if (select) {
-      select.addEventListener("change", function () {
-        dropDefaults();
-        form.submit();
-      });
+    function go() {
+      dropDefaults();
+      form.submit();
     }
+
+    var select = document.getElementById("sort-select");
+    if (select) select.addEventListener("change", go);
+
+    // Ticking a chip navigates — the "Terapkan" button lives in <noscript> only. Delegated, because
+    // the chips are derived per request and a per-element listener would have to be re-bound.
+    //
+    // ⚠️ `t.name` IS THE GUARD, NOT A TIDY-UP. `#facet-toggle` — the phone's open/close control — is
+    // a checkbox in this same form, deliberately unnamed so it never becomes a query param. Without
+    // this test, TAPPING "Filter" would submit the form and reload the page, which re-renders the
+    // panel collapsed: the button to open the filters would close them.
+    form.addEventListener("change", function (e) {
+      var t = e.target;
+      if (t && t.type === "checkbox" && t.name) go();
+    });
   })();
 </script>
