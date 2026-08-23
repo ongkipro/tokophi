@@ -2,6 +2,7 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { activeSvgConstruct, sniffImageKind } from "./image-content";
 
 // The ONE place an uploaded image becomes a file on disk. Extracted from lib/actions/media.ts so the
 // store logo/favicon can reuse it — two copies of the encode/resize rules would drift, and the day
@@ -42,7 +43,25 @@ export type SavedImage = {
 
 export async function saveImage(input: Buffer, mime: string, baseName: string): Promise<SavedImage> {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  if (mime === "image/svg+xml") {
+
+  // ── Task 6.5 / SEC-17 — the BYTES decide, not the caller's `mime` ─────────────────────────────
+  // `mime` arrives as `file.type`: a string the client sends. It used to pick the branch below, so
+  // `Content-Type: image/svg+xml` wrote ANY body to disk unparsed under a name we then serve. The
+  // sniff is the gate now; `mime` is only a claim we cross-check against it.
+  const kind = sniffImageKind(input);
+  if (kind.kind === "unknown") throw new Error("file is not a supported image");
+  if ((mime === "image/svg+xml") !== (kind.kind === "svg")) {
+    // Declared one thing, contains another. Refused rather than believed-and-stored: whichever half
+    // is wrong, we would be writing a file whose extension does not describe its content.
+    throw new Error("file content does not match its declared type");
+  }
+
+  if (kind.kind === "svg") {
+    // REFUSE active SVG; never strip it. A partial strip stores a file everyone then trusts —
+    // the same reasoning `set:html` carries for landing pages. The serving route's
+    // `sandbox; default-src 'none'` stays the execution boundary for anything this misses.
+    const active = activeSvgConstruct(input);
+    if (active) throw new Error(`SVG berisi ${active} — hapus bagian itu lalu unggah lagi`);
     const name = `${baseName}.svg`;
     await fs.writeFile(path.join(UPLOAD_DIR, name), input);
     return { url: `/api/uploads/${name}`, mime, size: input.length, width: null, height: null };
