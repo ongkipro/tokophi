@@ -806,12 +806,16 @@ if (rToken) {
             computes anything: every figure is written by the same `recompute()` that writes the top
             bar and the desktop panel. One function, one string, three destinations. */}
         <div class="lg:hidden">
+          {/* FLAT, no box — owner decision 2026-08-23, matching the reference: the bar sits on the
+              page like a row, not inside a rounded bordered card. A hairline above is the only
+              separation; the expanded detail below keeps a hairline of its own instead of
+              continuing a border that no longer exists. */}
           <button
             type="button"
             id="summary2-toggle"
             aria-expanded="false"
             aria-controls="summary2-body"
-            class="flex w-full items-center gap-3 rounded-lg border border-[var(--co-line)] px-4 py-3 text-left"
+            class="flex w-full items-center gap-3 border-t border-[var(--co-line)] px-1 py-4 text-left"
           >
             <img id="summary2-thumb" alt="" hidden class="h-10 w-9 shrink-0 rounded object-cover" />
             <span class="min-w-0 flex-1">
@@ -828,7 +832,7 @@ if (rToken) {
               aria-hidden="true"
             />
           </button>
-          <div id="summary2-body" hidden class="rounded-b-lg border border-t-0 border-[var(--co-line)] px-4 pb-4">
+          <div id="summary2-body" hidden class="border-t border-[var(--co-line)] px-1 pb-4">
             <div id="summary2-items" class="max-h-[24rem] space-y-4 overflow-y-auto pt-4"></div>
             <div class="mt-4 space-y-2 border-t border-[var(--co-line)] pt-3 text-sm">
               <div class="flex items-center justify-between">
@@ -1485,18 +1489,17 @@ if (rToken) {
       // can disagree is worse than no total at all: the shopper reads one and is charged the other.
       // recompute() is the single funnel; every ongkir change already runs through it.
       //
-      // ⚠️ THE TOTAL IS ALWAYS A NUMBER — owner decision 2026-08-23, REVERSING the earlier "no ongkir
-      // yet = no total yet" ruling that rendered "Belum lengkap" here. The reference (Shopify's
-      // mobile bar) shows the running total before shipping is known and lets it grow when the
-      // courier is picked; a bar reading "Belum lengkap" showed NO price at the exact moment a
-      // shopper is deciding whether to continue. What keeps the growing number honest is the ONGKIR
-      // row, not the total: it reads "Dihitung" until a courier is picked (below), so the detail
-      // says exactly which part is still missing. With no courier selectedShipping() is 0, so the
-      // figure is goods + PPN − discounts — the same thing Shopify's pre-shipping total is. Do not
-      // reintroduce a placeholder string here without a new owner decision.
+      // ⚠️ "BELUM LENGKAP" UNTIL A COURIER IS PICKED — and this line has now been ruled on TWICE, so
+      // read the history before touching it again. The original ruling ("no ongkir yet = no total
+      // yet") rendered this placeholder. On 2026-08-23 a Shopify reference screenshot was read as
+      // reversing that, and `totalShown = total` shipped in #331 — the running goods total, growing
+      // when the courier lands. The owner then clarified THE SAME DAY: the complaint was the bar's
+      // BORDER, never the words — "kata belum lengkap gak papa, soalnya belum isi kecamatan". So the
+      // placeholder is the standing owner decision, restored in this commit, and the ongkir row's
+      // "Dihitung" keeps saying which part is missing once a total does show.
       var priced = !!selectedShippingEl();
       var shipShown = priced ? shipText : "Dihitung";
-      var totalShown = total;
+      var totalShown = priced ? total : "Belum lengkap";
       setText("summary-shipping", shipShown);
       setText("summary-total", totalShown);
       setText("summary-total-bar", totalShown);
