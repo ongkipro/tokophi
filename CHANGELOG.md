@@ -2,6 +2,43 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-08-23 — Tema default platform berhenti menjadi tema Batik Nusantara
+
+Sebelas toko hidup menayangkan beranda toko batik sebagai beranda mereka sendiri. Diukur di
+produksi: **`she-store`, yang punya NOL produk**, merender foto batik, judul *"Batik Modern untuk
+Hari-Harimu"*, dan tombol *"Lihat Koleksi Dress"* menuju `/kategori/dress` — koleksi yang tidak dia
+punya.
+
+### Mekanismenya benar; isinya yang salah
+
+Fallback per-slot (`theme-source.ts`) dan prefill kanvas `/tema` (`getPlatformDefaultSections`) sudah
+bekerja seperti seharusnya. Yang keliru adalah holder `tema-platform` **disalin dari toko demo**, jadi
+yang disebarkan ke setiap slot kosong adalah materi pemasaran satu toko. Default sekarang **ditulis**
+(`packages/db/src/platform-theme-default.ts`), bukan disalin, dengan lima aturan:
+
+- tidak ada kata yang menyebut produk, kategori, atau niche — placeholder mengatakan *apa yang harus
+  ditulis* ("Judul utama toko kamu");
+- setiap tautan adalah rute yang dimiliki semua toko (`/produk`) — `/kategori/<handle>` adalah 404 di
+  toko lain, dan itu persis yang dikirim ke sebelas toko;
+- **tanpa gambar** — semua gambar di `public/` milik demo batik, dan Hero/ImageText/Lookbook merender
+  panel bernuansa brand saat `imageUrl` kosong;
+- seksi yang membaca data toko sendiri yang menyesuaikan (`category-nav` dengan `items` kosong
+  menurunkan dari koleksi toko itu) — bukan bahasa template, yang sengaja tidak diciptakan;
+- 🔴 **`features` tetap kosong**, karena `@tokophi/sections` sudah menulis alasannya: *"never an
+  over-promise like 'Gratis Ongkir' a store does not actually offer"*. Dari empat badge tema batik
+  hanya satu yang benar untuk semua toko.
+
+Struktur **9 seksi dipertahankan** — itu justru nilainya: merchant mendapat halaman yang sudah
+berbentuk halaman, bukan kanvas kosong.
+
+⚠️ **Merchant yang sudah menyesuaikan temanya tidak tersentuh** — fallback hanya mengisi slot yang
+kosong (Decision B), dan itu diverifikasi ulang di browser: toko demo tetap 11 seksi dengan copy-nya
+sendiri, sementara `kopi-senja` berubah ke placeholder netral tanpa satu pun kata batik.
+
+⚠️ **Deploy saja belum cukup.** Seeder ini insert-if-absent dan holder produksi sudah punya barisnya,
+jadi 11 toko tetap menayangkan tema batik sampai satu baris `UPDATE` dijalankan — SQL-nya ada di
+`specs/docs/tasks/2026-08-23-platform-default-theme-neutral.md`.
+
 ## Unreleased — 2026-08-23 — Katalog storefront: bar datar, dan filter yang hanya muncul kalau memilah
 
 Bar kontrol di atas setiap grid produk dulunya sebuah **kartu** — `rounded-[1.25rem]`, `border`,
