@@ -2,6 +2,50 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-08-23 — Katalog storefront: bar datar, dan filter yang hanya muncul kalau memilah
+
+Bar kontrol di atas setiap grid produk dulunya sebuah **kartu** — `rounded-[1.25rem]`, `border`,
+`bg-white/80`, `shadow-sm`, `backdrop-blur` — yaitu bingkai mengelilingi dua kontrol. Sekarang satu
+baris datar dengan garis rambut: jumlah di kiri, urutkan di kanan. Ikut hilang: pill "Katalog" (yang
+melabeli halaman katalog sebagai katalog), pill "12 / halaman" (ukuran halaman bukan urusan pembeli),
+dan kalimat *"Urutan tersimpan di URL agar mudah dibagikan…"* — toko tidak menjelaskan skema URL-nya
+sendiri. Teksnya juga berhenti berdebat dengan dirinya: `Menampilkan 1–3 dari 3 produk di halaman ini`
+menjadi `3 produk`, dan rentang hanya muncul kalau halamannya memang lebih dari satu.
+
+### Filter kembali — dan keberatan owner yang lama itu spesifikasinya
+
+Filter bar pernah dihapus owner pada 2026-07-22 karena *"a form-shaped band above every grid, earning
+far less than the weight it added"*, dengan syarat kalau kembali harus *"something a phone can use
+with one thumb"*. Empat aturan itu sekarang ada di kode:
+
+- **Facet diturunkan dari produk yang ada.** Ukuran, Kategori, Harga, Promo hanya dirender kalau
+  benar-benar memilah himpunan ini; chip membawa jumlah yang dihitung terhadap facet lain yang aktif.
+- 🔴 **Tidak ada filter di bawah satu halaman penuh.** Derivasi facet saja ternyata TIDAK cukup:
+  diukur di browser, kategori berisi **tiga** produk tetap menggambar "Ukuran S·M·L·XL" — secara
+  teknis benar, dan persis bar yang dulu dihapus. Lantainya `> PER_PAGE`, terikat pada hal yang
+  memang jadi alasannya.
+- **Harga = rentang preset, bukan sepasang kotak angka**, diturunkan dari sebaran harga nyata. Batasnya
+  ikut di URL (`?harga=100000-300000`), bukan indeks bucket — indeks akan berarti uang berbeda di
+  halaman lain dan membuat tautan yang dibagikan berbohong.
+- **Tombol "Terapkan" hanya ada di `<noscript>`.** Dengan JS, mencentang chip langsung navigasi.
+
+### Mekanismenya: tanpa library, dan `<details>` tidak bisa dipakai
+
+Storefront ini Astro **tanpa integrasi React**, jadi shadcn/Base UI (`packages/ui`, untuk dua aplikasi
+Next) tidak bisa dirender di sini sama sekali. Chip = `<label>` + checkbox `sr-only` + `peer-checked:`.
+`<details>` dicoba lebih dulu dan gagal: kebutuhannya "tertutup di ponsel, inline di desktop" adalah
+atribut `open`, yang tidak bisa disetel CSS — dan dua cara memaksanya (`display` pada anak, lalu
+`::details-content { content-visibility: visible }`) dua-duanya diukur dan tidak membukanya, karena
+Chrome menyembunyikan isi satu tingkat di atas anak itu. Sekarang: checkbox tanpa `name` (tidak pernah
+ikut terkirim) + panel `div` biasa. ⚠️ Harga jujurnya: screen reader membacanya sebagai checkbox, bukan
+region yang bisa dibentang.
+
+⚠️ **Pelajaran yang lebih mahal dari fiturnya:** panel yang tertutup mengembalikan `clientHeight: 412`
+dan `offsetParent` non-null, karena membaca subtree `content-visibility` memaksa layout yang sedang
+diukur. Selama dua putaran, properti DOM "membuktikan" chip yang di screenshot tidak ada di halaman.
+**Untuk klaim visual, ambil gambarnya.** Detail + verifikasi di
+`specs/docs/tasks/2026-08-23-catalog-flat-controls-and-filters.md`.
+
 ## Unreleased — 2026-08-22 — Undangan pengguna toko sekarang melaporkan baris database, bukan tebakan (Task 5.3 · SEC-15)
 
 Mengundang anggota tim bisa **crash tanpa pesan apa pun** — dan pesan yang muncul saat berhasil pun
