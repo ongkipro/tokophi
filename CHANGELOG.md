@@ -2,6 +2,39 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-08-23 — Builder tema hidup lagi setelah mati sembilan hari, dan bar ringkasan checkout jadi flat
+
+### 🔴 Builder `/tema/[id]` crash di SETIAP build produksi sejak 15 Agustus (#333)
+
+Laporan owner *"tenant belum bisa edit tema"* ternyata outage: sejak `d5bf796` (2026-08-15), membuka
+builder di produksi melempar React #185 (loop update tak berhingga) ke error boundary — untuk semua
+tenant. Membuat template bisa; mengeditnya tidak. Di-bisect komit per komit **pada build produksi
+sungguhan**: `d5bf796^` render, `d5bf796` crash.
+
+Mekanismenya: `overrides.headerActions` Puck adalah komponen inline (identitas baru tiap render) →
+dialog tema **remount** setiap render → effect mount-nya memanggil `onPreviewChange` →
+`setPreviewTheme` menyimpan objek baru bernilai sama → render ulang → remount → selamanya.
+**Perbaikannya satu ekspresi**: functional setState yang mengembalikan `prev` saat `font`/`tone`
+sama — React bail-out, rantai putus.
+
+⚠️ **Kenapa sembilan hari tak terlihat: `next dev` app admin ini tidak menjalankan sisi klien.**
+Halaman yang sama mulus di dev dan crash di `next start`. Komit penyebabnya bahkan "diverifikasi
+browser" — tapi yang dibuka halaman daftar `/tema`, bukan builder-nya. Aturannya sekarang tertulis:
+untuk `apps/admin`, verifikasi = build produksi + `next start` + **layar yang persis itu** dibuka.
+
+Diverifikasi end-to-end sebelum merge (build produksi, tenant sungguhan): builder terbuka, prefill
+netral render di kanvas, **Publish menyimpan** (27 B → 1680 B / 9 seksi). Pasca-deploy: bundle
+produksi terbukti memuat ekspresi perbaikannya. Bisect lengkap + jebakan instrumen:
+`specs/docs/tasks/2026-08-23-tema-builder-loop-bisect.md`.
+
+### Bar ringkasan checkout mobile: flat, tanpa kartu (#331, #332)
+
+Kartu ber-border membungkus bar "Total / Belum lengkap" menjadi baris flat dengan garis rambut —
+mengikuti referensi Shopify yang dikirim owner. Baris total sempat diganti jadi angka berjalan (#331)
+lalu **dikembalikan ke "Belum lengkap"** (#332) setelah owner menjelaskan keluhannya adalah border,
+bukan kata-katanya; kedua ruling terekam di komentar kode supaya tidak di-"perbaiki" balik. Angka di
+bar bawah naik ke `text-lg` menyamai bar atas. Baris ongkir tetap "Dihitung" sampai kurir dipilih.
+
 ## Unreleased — 2026-08-23 — Tema default platform berhenti menjadi tema Batik Nusantara
 
 Sebelas toko hidup menayangkan beranda toko batik sebagai beranda mereka sendiri. Diukur di
