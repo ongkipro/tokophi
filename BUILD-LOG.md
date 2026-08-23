@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
+
+- **Executor:** Main Session (Claude, Fable 5). Entri docs-only; tidak memicu build (Coolify `watch_paths = '!**/*.md'` — perilaku yang diinginkan, tercatat 2026-08-23 pagi).
+- **Deploy 490** (`5ac3228`, bar checkout flat) — **finished + diverifikasi di produksi**: markup tersaji `border-t …` tanpa kartu `rounded-lg`, kedua bar "Belum lengkap", ongkir "Dihitung", 18 px, 0 error JS (di-drive di browser terhadap `batiknusantara.tokophi.id/checkout`).
+- **Deploy 491** (`16b4393`, fix builder tema) — **finished + diverifikasi di produksi**: lima container sehat, dan **bundle yang tersaji terbukti memuat ekspresi perbaikannya** — `useCallback(e=>{f(t=>t.font===e.font&&t.tone===e.tone?t:e)},[])`, di-grep langsung di container admin yang berjalan, dengan kontrol positif (string toast) supaya hasil kosong tidak tertukar salah-path. ⚠️ Batas yang dinyatakan: drive penuh builder di produksi butuh login tenant yang tidak dipegang; klaimnya "artefak yang sama dengan yang terbukti end-to-end lokal, terpasang dan tersaji".
+- **Yang mendarat hari ini, urut:** #324 gerbang SVG (SEC-17) · #325 RLS `inventory_levels` (F-T8, migrasi 0100 + verifikasi data pra-merge) · #326/#328/#330 docs + README polos · #327 katalog flat + filter · #329 tema default platform ditulis netral + **UPDATE holder produksi** (11 toko berhenti mengiklankan batik) · #331→#332 bar checkout · #333 **fix outage builder tema sembilan hari**. Deploy 485–491, semuanya `finished` dan diverifikasi.
+- **Fakta operasional yang dikonfirmasi hari ini, untuk sesi berikutnya:** CI GitHub Actions masih mati (billing — check merah/hijau periode ini bukan bukti) · `watch_paths` mengabaikan push markdown-only · worktree baru mewarisi `node_modules` checkout utama yang basi (dua kali menggagalkan suite; `npm install` di worktree adalah pembukanya) · `next dev` admin tidak menjalankan klien (lihat entri 14:05) · bendera `[x]` di `TASKS.md` melaporkan JAUH lebih sedikit dari yang sudah dikerjakan — belum direkonsiliasi, itu pekerjaan tersendiri.
+
 ### [2026-08-23 14:05 UTC] — 🔴 Builder /tema/[id] mati di produksi sejak 15 Agustus — bisect ke `d5bf796`, fix satu ekspresi
 
 - **Executor:** Main Session (Claude, Fable 5). Laporan owner: *"tenant belum bisa edit tema."* Benar, dan lebih buruk dari kedengarannya: **sejak `d5bf796` (2026-08-15) setiap tenant yang membuka builder di build produksi mendapat "Halaman ini gagal dimuat"** — React #185, loop update tak berhingga. Sembilan hari, semua tenant, tanpa satu pun laporan otomatis.
