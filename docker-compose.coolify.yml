@@ -118,7 +118,16 @@ services:
       # 🔴 SET IT IN COOLIFY BEFORE MERGING. `:?` fails the deploy at parse time with this message,
       # which is the loud failure; without it the service would start and refuse traffic instead.
       # It must name the restricted role (`tokophi_app`, provisioned 2026-08-22), never `tokophi`.
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      # ── SEC-18 step 2 — the OWNER pool stops being the bootstrap superuser ────────────────────
+      # `tokophi` is this cluster's BOOTSTRAP role and PostgreSQL refuses to demote it ("The
+      # bootstrap user must have the SUPERUSER attribute", measured 2026-08-22), so the only way to
+      # take superuser off an app connection is to STOP USING that role for app traffic.
+      # `tokophi_platform` is `nosuperuser` + `bypassrls` + DML: it reproduces exactly the
+      # cross-tenant visibility auth's pre-session read, `api/public/**`, cron and `provision.ts`
+      # depend on (measured as that role on production: stores 14, store_users 13, products 78 —
+      # the owner's own numbers), and it CANNOT create a table (measured: permission denied for
+      # schema public). `migrate`/`seed` keep the bootstrap role; they create objects.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
       DATABASE_RUNTIME_ROLE: app
       APP_DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL must be set to the RESTRICTED role (tokophi_app) — app-role mode no longer falls back to the owner connection}
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
@@ -194,7 +203,10 @@ services:
       # `DATABASE_RUNTIME_ROLE: app` while the code silently fell back to this same owner URL; the
       # label is now what the connection actually is. Giving it a restricted pool would gate nothing
       # and open a pool nothing uses. `specs/docs/SECURITY.md` §4 has recorded this as a decision.
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      # SEC-18 step 2 — that owner connection is now `tokophi_platform`, not the bootstrap
+      # superuser. `bypassrls` is what keeps EVERY read on this cross-tenant surface working; see
+      # the admin block above for why the bootstrap role could not simply be demoted.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
       DATABASE_RUNTIME_ROLE: owner
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       ADMIN_URL: ${ADMIN_URL:-}
@@ -224,7 +236,9 @@ services:
       # The tenant here is resolved from the Host header (ADR 0009) and THAT is its scoping; the
       # catalog read never sets `app.store_id`, so under the restricted role `getStoreByHost` returns
       # nothing and every shop 404s. Measured, not assumed. The label now matches the connection.
-      DATABASE_URL: postgres://tokophi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/tokophi
+      # SEC-18 step 2 — and that owner connection is `tokophi_platform` now, not the bootstrap
+      # superuser: the Host-resolved catalog read needs `bypassrls`, not the right to create tables.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
       DATABASE_RUNTIME_ROLE: owner
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
