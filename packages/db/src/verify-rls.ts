@@ -155,8 +155,11 @@ async function main() {
   //     one appearing means somebody added a table whose writers nobody has audited — which is exactly
   //     how all seven got in. Adding a name here is cheap; it is meant to force the reading of the rule.
   const REVIEWED_CHILD_TABLES = [
+    // ⚠️ `inventory_levels` LEFT this list in migration 0100 (Task 6.2 / F-T8) — it now carries a real
+    // policy derived from `product_variants.store_id`, so the query below no longer returns it and a
+    // name left here would make the summary count claim one more un-RLS'd table than exists.
     "collection_conditions", "collection_products", "customer_addresses", "discount_usages",
-    "fulfillments", "inventory_levels", "menu_items", "order_line_items", "product_media",
+    "fulfillments", "menu_items", "order_line_items", "product_media",
     "product_options", "purchase_order_items",
     // flash_sale_items (0076): child of flash_sales; every write in lib/actions/flash.ts writeItems()
     // proves the parent sale AND each product_id belong to the tenant (RLS'd reads) before insert.

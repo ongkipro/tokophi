@@ -314,6 +314,7 @@
 - **Target Files:** `packages/db/src/schema.ts`, one new numbered migration, `packages/db/src/verify-rls.ts`, `packages/db/src/verify-rls-app.ts`.
 - **Change:** Enforce direct-ID store isolation through an accepted RLS policy derived from the variant/product ownership chain, without adding a denormalized `store_id` unless the policy cannot be made safe and performant otherwise.
 - **Done when:** Restricted-role tests prove cross-store select/update/delete by known row id returns or affects zero rows; same-store operations still pass; migration and Drizzle schema remain in parity.
+- **Status:** `[x]` **DONE 2026-08-23** — migration **0100**, no denormalized `store_id`: the policy derives ownership through `variant_id → product_variants.store_id`. ⚠️ `USING` checks the variant; `WITH CHECK` checks the variant **and** the location — without that asymmetry a tenant could write its own variant against **another store's location**, a row that reads as ours and corrupts their stock picture. `schema.ts` untouched (drizzle does not model policies, so parity holds); `inventory_levels` removed from `verify-rls.ts` `REVIEWED_CHILD_TABLES` — it is no longer un-RLS'd. 6 restricted-role tests, **4 policy mutations / 4 reds**; repo 126 files / 1041 tests green. See `specs/docs/tasks/2026-08-23-inventory-levels-tenant-isolation.md`.
 
 ### Task 6.3: Move Public Rate Limits to Shared Production Enforcement
 - **Requirement:** `NF-6`
