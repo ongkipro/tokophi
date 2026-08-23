@@ -8,6 +8,32 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-23 12:35 UTC] — POST-DEPLOY VERIFICATION · SEC-18 step 2, Task 6.5, Task 6.2 (deploys 485 + 486)
+
+- **Executor:** Main Session (Claude, Fable 5). No code change — this entry exists because three passes had landed with **no record that they landed**, which is the half of the protocol that gets skipped. The SEC-18 step-2 entry (03:05 UTC) records the change and the pre-merge provisioning; it never recorded the deploy.
+- **Deploys:** `485` → `81873fa` (Task 6.5) **finished** · `486` → `65c3582` (Task 6.2) **finished**. All five containers `(healthy)` after 486: admin, super-admin, storefront, landing, postgres. Live hosts: `tokophi.com` **200**, `batiknusantara.tokophi.id` **200**, `app.` / `rich.` **307** (the unauthenticated login redirect).
+- ⚠️ **A verification that reads its own echo proves nothing, and two of mine did before being redone.** The first Task 6.5 check ended in `rc=$?` — the exit status of `head`, not of the search — and printed nothing while looking like a pass. The first production summary printed `containers_healthy=ok`, a **string literal I had written into the SQL**, not a measurement. Both were re-run as real checks. Same family as the `grep healthy` that also matched "un**healthy**" (2026-08-22) and the busybox `--include` that returned 0 for everything.
+
+**Task 6.5 / SEC-17 — the gate is in the running image.** In the deployed admin container, `grep -rl` over `.next` finds **4** files carrying `"SVG berisi"` and **4** carrying `"does not match its declared type"`. What is NOT claimed: an end-to-end upload was not driven (it needs an authenticated merchant session); the claim proved here is that the gate's code is in the artifact production is serving.
+
+**Task 6.2 / F-T8 — the policy binds on production data.** Measured against the production database, every probe inside a transaction that `ROLLBACK`s:
+
+| check | result |
+|---|---|
+| `0100` applied (newest stamp) | `1787302186123` ✓ |
+| `relrowsecurity` on `inventory_levels` | `true` ✓ |
+| policy present | `tenant_isolation` ✓ |
+| tenant sees own rows (as `tokophi_app`, GUC set) | **107** of 165 ✓ |
+| foreign tenant sees | **0** ✓ |
+| **same-store UPDATE still passes** | **107 rows** ✓ |
+| cross-store `location_id` UPDATE | **refused** — `new row violates row-level security policy` ✓ |
+
+- 🔴 **The pre-merge data check is the one that mattered, and it is the step to repeat for any future child-table policy.** `WITH CHECK` requires the location to belong to the tenant, so a single production row whose variant and location disagreed would have locked that merchant out of saving stock the moment 0100 applied — an outage caused by a security fix. Measured **before** merging: 165 rows, `variant_missing` 0, `location_missing` 0, `cross_store_rows` 0, no NULL `store_id` on either side. The probe left the table unchanged (165 rows, 0 cross-store, after).
+
+**Shared dev DB.** `0100` applied there too, so the transient red is closed. ⚠️ It also turned out to be **three migrations behind `main`** — `0097`, `0098`, `0099` were applied in the same run — and it carries **more applied rows than `main` has journal entries** (108 vs 101), i.e. migrations from branches that were never merged or were renumbered. That divergence is pre-existing and is exactly the hazard AGENTS.md describes; it is recorded here, not fixed here. `npm run verify-rls -w @tokophi/db` is **green**: coverage **54/55**, and the child-table line now reads **11 un-RLS'd child tables** (was 12) — `inventory_levels` left that list because it is no longer on it.
+
+- 🔴 **CI PROVED NOTHING ON EITHER PR, AND "RED" HERE IS NOT A RESULT.** Both #324 and #325 show a failing `tests · astro check · typecheck` check that **never started a job**: *"The job was not started because recent account payments have failed or your spending limit needs to be increased."* `ci.yml`'s own comments already record that Actions has not run since the billing lapse. Every number in these entries was measured locally or against the live systems. **Do not read a red check from this period as a failure, or a green one as evidence** — until billing is restored, `main` is back to the state N59 was written to end: nothing runs the suite unless a human remembers to.
+
 ### [2026-08-23 05:35 UTC] — Task 6.2 / F-T8 · `inventory_levels` gets its own RLS policy, via the ownership chain
 
 - **Executor:** Main Session (Claude, Fable 5). Migration **0100** — journal 100 → **101 entries (0000–0100)**.
