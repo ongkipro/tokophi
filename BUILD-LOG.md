@@ -8,6 +8,24 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-23 03:05 UTC] — SEC-18 step 2 · the app surfaces stop connecting as the bootstrap superuser
+
+- **Executor:** Main Session (Claude, Opus 5). Owner-authorised. Compose change only — no migration, no schema change, no application code.
+- **Why this shape and not the obvious one:** `FORCE ROW LEVEL SECURITY` was refuted (a superuser bypasses RLS unconditionally; forcing it would be a no-op today and an outage after any demotion — `2026-08-22-force-rls-measured-and-refuted.md`), and demoting `tokophi` is **impossible**: it is the cluster's bootstrap role and PostgreSQL answers *"The bootstrap user must have the SUPERUSER attribute"*. What is left is to stop using that role for application traffic.
+
+| role | used by, after this change | privilege |
+|---|---|---|
+| `tokophi` (bootstrap) | `migrate`, `seed` only — they create objects | superuser |
+| **`tokophi_platform`** | `DATABASE_URL` for **admin · super-admin · storefront** | `nosuperuser`, `bypassrls`, DML |
+| `tokophi_app` | `APP_DATABASE_URL` → `withTenant` only (Task 4.12) | `nosuperuser`, no `bypassrls`, DML |
+
+- **Files:** `docker-compose.coolify.yml` — three `DATABASE_URL` values (admin, super-admin, storefront) become `${PLATFORM_DATABASE_URL:?…}`; `migrate`/`seed` and `APP_DATABASE_URL` deliberately untouched.
+- **Production preparation, done BEFORE the merge and in this order:**
+  1. `grant tokophi_app to tokophi_platform` — ⚠️ **not tidiness.** Task 4.12's documented rollback is `DATABASE_RUNTIME_ROLE=owner` on admin, which puts `withTenant`'s `set local role tokophi_app` back on the OWNER pool. Without the membership that rollback fails at the moment it is needed. Same class as the `GRANT tokophi_app TO tokophi` of 2026-08-22.
+  2. `PLATFORM_DATABASE_URL` created in Coolify (env id 93) from the root-only URL on the VPS. Safe before the merge **only because no compose block forwarded that name yet** — a container receives only what its own block names.
+- **Verification before the merge:** role attributes `super=false bypassrls=true canlogin=true`; a real login as `tokophi_platform` on production reads `stores=14 store_users=13 products=78` — the owner's own numbers; `create table` REFUSED (`permission denied for schema public`, measured on the local probe of the same shape). `docker compose -f docker-compose.coolify.yml config -q` parses clean with the new `:?` guard.
+- **Rollback:** point the three `DATABASE_URL`s back at `postgres://tokophi:${POSTGRES_PASSWORD}@postgres:5432/tokophi`. One variable per service, nothing to undo in the database.
+
 ### [2026-08-22 15:55 UTC] — Stage 4 Task 4.12 · SEC-18 · PRODUCTION PROVISIONING + POST-DEPLOY VERIFICATION
 
 - **Executor:** Main Session (Claude, Opus 5) — the owner-gated half of Task 4.12. No application code changed in this pass; the code is `cb15532` (#310).
