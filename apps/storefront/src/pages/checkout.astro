@@ -818,7 +818,9 @@ if (rToken) {
               <span class="block text-sm font-semibold text-ink">Total</span>
               <span id="summary2-count" class="block text-xs tabular-nums text-[var(--co-muted)]"></span>
             </span>
-            <span id="summary2-total" class="shrink-0 text-base font-semibold tabular-nums text-ink">Rp0</span>
+            {/* text-lg, same as the TOP bar's figure — the reference gives the price the loudest
+                type in the row, and two bars showing one number at two sizes reads as two numbers. */}
+            <span id="summary2-total" class="shrink-0 text-lg font-semibold tabular-nums text-ink">Rp0</span>
             <ChevronDown
               id="summary2-caret"
               class="h-4 w-4 shrink-0 text-[var(--co-muted)] transition-transform"
@@ -1482,12 +1484,19 @@ if (rToken) {
       // the top mobile bar, the bottom mobile bar and the bottom bar's detail — and two totals that
       // can disagree is worse than no total at all: the shopper reads one and is charged the other.
       // recompute() is the single funnel; every ongkir change already runs through it.
-      // ⚠️ NO ONGKIR YET = NO TOTAL YET. Showing goods-only as "Total" is the same lie the "Rp0"
-      // ongkir line was: the shopper reads a number, enters their address, and watches it climb. Say
-      // what is true — the sum is not known until the courier is picked.
+      //
+      // ⚠️ THE TOTAL IS ALWAYS A NUMBER — owner decision 2026-08-23, REVERSING the earlier "no ongkir
+      // yet = no total yet" ruling that rendered "Belum lengkap" here. The reference (Shopify's
+      // mobile bar) shows the running total before shipping is known and lets it grow when the
+      // courier is picked; a bar reading "Belum lengkap" showed NO price at the exact moment a
+      // shopper is deciding whether to continue. What keeps the growing number honest is the ONGKIR
+      // row, not the total: it reads "Dihitung" until a courier is picked (below), so the detail
+      // says exactly which part is still missing. With no courier selectedShipping() is 0, so the
+      // figure is goods + PPN − discounts — the same thing Shopify's pre-shipping total is. Do not
+      // reintroduce a placeholder string here without a new owner decision.
       var priced = !!selectedShippingEl();
       var shipShown = priced ? shipText : "Dihitung";
-      var totalShown = priced ? total : "Belum lengkap";
+      var totalShown = total;
       setText("summary-shipping", shipShown);
       setText("summary-total", totalShown);
       setText("summary-total-bar", totalShown);
