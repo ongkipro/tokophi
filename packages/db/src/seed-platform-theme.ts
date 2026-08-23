@@ -21,20 +21,22 @@
 // chain — a second run is a no-op.
 //   npm run seed:platform-theme -w @tokophi/db
 import { db, client, schema } from "./client";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { PLATFORM_THEME_SLUG, PLATFORM_THEME_STORE_ID } from "@tokophi/lib/platform-theme";
+import { PLATFORM_DEFAULT_TEMPLATES } from "./platform-theme-default";
 
 // The holder needs an `accounts` parent (stores.account_id is NOT NULL). Fixed for the same reason
 // the store id is: idempotency across deploys. Only this file uses it, so it lives here.
 const PLATFORM_THEME_ACCOUNT_ID = "a0000000-0000-4000-8000-000000000000";
 
-// Copy sources, tried ONE AT A TIME in this order — first hit wins. Two slugs, not one: a parallel
-// task renamed the batik store's slug, and this script must find the rows under either name without
-// a re-deploy race. The order is load-bearing in exactly one state — rename refused because a
-// FOREIGN store already holds `batiknusantara` — where the demo store is still on `batik-nusantara`
-// and picking the other slug would copy a merchant's templates as the platform default. In every
-// other state only one slug exists and the order is moot. (Audit 2026-08-12, D1.)
-const SOURCE_SLUGS = ["batik-nusantara", "batiknusantara"];
+// 🔴 THE DEFAULT IS AUTHORED, NOT COPIED (2026-08-23). This script used to copy the demo store's
+// `is_default` rows into the holder, tried across two slugs. The holder shape was right; the CONTENT
+// was one shop's marketing, and with the fallback switched on it reached everybody: measured on
+// production, ELEVEN live stores were publishing the batik store's homepage as their own — including
+// `she-store`, which has zero products and rendered "Batik Modern untuk Hari-Harimu" over a button
+// reading "Lihat Koleksi Dress" that pointed at a collection it does not have.
+// The default now comes from `platform-theme-default.ts`, which is written to fit a shop selling
+// anything. There is no source store any more, so there is no slug order to get wrong either.
 
 const TEMPLATE_TYPES = ["homepage", "category", "product"] as const;
 
@@ -116,58 +118,22 @@ async function main() {
     return;
   }
 
-  // One eq() per candidate, sequentially. This was `inArray(...).limit(1)` — no ORDER BY, so which
-  // row an IN returns is plan-dependent and the "preference order" above was a promise the query
-  // never kept. Still insert-if-absent overall: the loop only READS; a second run of the script
-  // short-circuits on `missing.length === 0` before ever getting here.
-  let source: { id: string; slug: string } | undefined;
-  for (const s of SOURCE_SLUGS) {
-    [source] = await db
-      .select({ id: schema.stores.id, slug: schema.stores.slug })
-      .from(schema.stores)
-      .where(eq(schema.stores.slug, s))
-      .limit(1);
-    if (source) break;
-  }
-  if (!source) {
-    // Not an error: a fresh database seeds the demo store in the same chain, and the next deploy's
-    // run of this script completes the copy. The holder existing without templates is harmless — the
-    // storefront's fallback treats an empty holder as "no default", same as the env being unset.
-    console.log(`seed-platform-theme: no source store (${SOURCE_SLUGS.join("/")}) — holder left without templates.`);
-    await client.end();
-    return;
-  }
-
-  let copied = 0;
+  let written = 0;
   for (const type of missing) {
-    const [row] = await db
-      .select({ name: schema.pageTemplates.name, sections: schema.pageTemplates.sections })
-      .from(schema.pageTemplates)
-      .where(
-        and(
-          eq(schema.pageTemplates.storeId, source.id),
-          eq(schema.pageTemplates.type, type),
-          eq(schema.pageTemplates.isDefault, true),
-        ),
-      )
-      .limit(1);
-    if (!row) {
-      console.log(`seed-platform-theme: source "${source.slug}" has no default ${type} template — skipped.`);
-      continue;
-    }
+    const t = PLATFORM_DEFAULT_TEMPLATES[type];
     await db.insert(schema.pageTemplates).values({
       storeId: holder.id,
       type,
-      name: row.name,
-      sections: row.sections,
+      name: t.name,
+      sections: t.sections,
       isDefault: true,
     });
-    copied++;
+    written++;
   }
 
   console.log(
-    `seed-platform-theme: copied ${copied} template(s) from "${source.slug}" → holder ` +
-      `(missing: ${missing.join(", ") || "none"}).`,
+    `seed-platform-theme: wrote ${written} authored template(s) → holder ` +
+      `(was missing: ${missing.join(", ") || "none"}).`,
   );
   await client.end();
 }
