@@ -333,6 +333,7 @@
 - **Target Files:** `apps/admin/lib/actions/media.ts`, focused upload tests.
 - **Change:** Validate actual content, then either sanitize SVG against a strict allowlist or reject SVG while keeping supported raster formats. Do not trust filename extension or client MIME.
 - **Done when:** Tests reject or neutralize scripts, event handlers, `foreignObject`, remote references, and MIME/extension mismatch; valid supported images still upload and render.
+- **Status:** `[x]` **DONE 2026-08-23** — REJECTS, does not sanitise (a partial strip ships a file believed clean — same ruling as `set:html`). `lib/image-content.ts` is pure: `sniffImageKind` reads magic bytes + an SVG root surviving BOM/prolog/DOCTYPE/comments, `activeSvgConstruct` names the offender. ⚠️ The gate went into **`lib/image-store.ts`**, not the `lib/actions/media.ts` this entry names: `saveImage` has two importers and the other one is the store LOGO (`actions/store-profile.ts`) — gating the named file would have left that path open. 16 tests; full repo 126 files / 1041 tests green. The CSP on `api/uploads/[name]` remains the execution boundary — two layers, keep both. See `specs/docs/tasks/2026-08-23-svg-upload-content-gate.md`.
 
 ### Task 6.6: Split the Two Oversized Release-Critical Modules
 - **Requirement:** `NF-12`

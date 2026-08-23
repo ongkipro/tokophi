@@ -8,6 +8,19 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-23 09:40 UTC] — Task 6.5 / SEC-17 · the upload gate reads the BYTES, and refuses active SVG
+
+- **Executor:** Main Session (Claude, Fable 5). No migration, no schema change, no DB access — pure module + one guard.
+- **The defect:** nothing ever looked at the bytes. `checkFile` gated on `file.type.startsWith("image/")` — a string the CLIENT sends — and `saveImage` branched on the same string, so `Content-Type: image/svg+xml` wrote the body to disk **verbatim, unparsed**, under a `.svg` name we then serve. Any bytes at all could be stored that way. The raster path was accidentally safe (sharp throws on rubbish); the SVG path had no check of any kind.
+- **It REFUSES, it does not sanitise.** A partial strip produces a file everyone then believes is clean — the same ruling this repo already made for `set:html` on landing pages. The merchant is told *which* construct to remove. And it is **not** the execution boundary: `Content-Security-Policy: sandbox; default-src 'none'` + `nosniff` on `app/api/uploads/[name]/route.ts` still is. Two layers; a miss here falls through to the CSP rather than opening a hole, which is exactly what makes a pattern list acceptable here and unacceptable in a sanitiser.
+- **Files:** `apps/admin/lib/image-content.ts` (NEW, pure — no fs, no sharp, no `server-only`, so tests drive every branch with a Buffer), `apps/admin/lib/image-content.test.ts` (NEW), `apps/admin/lib/image-store.ts` (the gate at the top of `saveImage`).
+  ⚠️ **Not `apps/admin/lib/actions/media.ts`, which is the file TASKS.md names.** `saveImage` has two importers and the second is `actions/store-profile.ts` — the store LOGO, which is precisely where an SVG gets uploaded. Gating the named file would have left that path open. One guard in the shared function, per the child-table/class rule this repo keeps re-learning.
+- **Verification:** `apps/admin/lib/image-content.test.ts` **16/16**; full repo `npx vitest run` **126 files / 1041 tests, all passing** (1019 before this branch). Refused: `<script>` incl. `< script >`, `<foreignObject>`, `<iframe>/<embed>/<object>`, `on…=` handlers (whitespace around `=`, newline before the attribute), `javascript:`, remote `href`/`src`, `@import`, remote `url()`. Accepted: an ordinary logo with `version=`, `transform-origin=`, `font-family=`, `font=` and a **local** `use href='#glyph'`.
+- **Two things this cost, so nobody re-learns them:**
+  1. A test asserted `<rect on click='x'/>` is an event handler. **It is not** — that parses as attribute `on` plus attribute `click`, neither of which executes. The pattern was right; **the assertion was fixed, not the code.**
+  2. Mutation M3 — dropping the `[\s<]` prefix from the handler pattern — **stayed green**, making the prefix look like decoration. It is not: `on[a-z]+\s*=` matches the `ont=` inside `font="italic 12px Inter"`, a legitimate presentation attribute, so every logo carrying it would be refused as holding a handler. `font=` was missing from the pass-through fixture; adding it turned M3 red.
+- **Task state:** root `TASKS.md` Task 6.5 → `[x]`. Handoff: `specs/docs/tasks/2026-08-23-svg-upload-content-gate.md`.
+
 ### [2026-08-23 03:05 UTC] — SEC-18 step 2 · the app surfaces stop connecting as the bootstrap superuser
 
 - **Executor:** Main Session (Claude, Opus 5). Owner-authorised. Compose change only — no migration, no schema change, no application code.
