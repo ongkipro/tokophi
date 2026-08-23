@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-23 14:05 UTC] — 🔴 Builder /tema/[id] mati di produksi sejak 15 Agustus — bisect ke `d5bf796`, fix satu ekspresi
+
+- **Executor:** Main Session (Claude, Fable 5). Laporan owner: *"tenant belum bisa edit tema."* Benar, dan lebih buruk dari kedengarannya: **sejak `d5bf796` (2026-08-15) setiap tenant yang membuka builder di build produksi mendapat "Halaman ini gagal dimuat"** — React #185, loop update tak berhingga. Sembilan hari, semua tenant, tanpa satu pun laporan otomatis.
+- **Bisect pada build produksi nyata** (5 build): `e0efd73^` ✅ · `d5bf796^` ✅ · **`d5bf796` ❌** · `a414e4e^` ❌ · `main` ❌. Refactor lint Task 5.11 (`a414e4e`) **dieliminasi** dengan menukar file-nya saja — tetap crash. Dua jalan buntu tercatat di berkas serah-terima: billing `kopi-senja` yang menutupi reproduksi pertama (dipulihkan persis), dan data tema (crash bertahan tanpa prefill, dengan konten sendiri, dengan/tanpa `root` — pekerjaan tema netral hari ini tidak terlibat).
+- **Mekanisme:** `overrides.headerActions` Puck = komponen inline (identitas baru tiap render) ⇒ dialog **remount** ⇒ effect mount `ThemeTokensDialog` memanggil `onPreviewChange` ⇒ `setPreviewTheme(objek baru, nilai sama)` ⇒ re-render ⇒ remount ⇒ ulang. **Fix:** functional setState dengan bail nilai-sama — `prev` dikembalikan saat `font`/`tone` tidak berubah, React bail-out, rantai putus. Satu file, +13 baris (12 komentar).
+- 🔴 **KENAPA TIDAK ADA YANG MELIHAT: `next dev` app ini TIDAK menjalankan klien** (memori repo, diukur ulang — halaman yang sama mulus di dev, crash di `next start`). `d5bf796` diverifikasi browser di build produksi, tapi yang dibuka halaman DAFTAR `/tema`, bukan builder-nya. **Aturan yang dibayar mahal di sini: untuk `apps/admin`, "sudah dicek di browser" = build produksi + `next start` + layar yang persis itu dibuka. Selain itu bukan verifikasi.**
+- **Verifikasi fix (build prod, browser, tenant lokal sungguhan):** builder terbuka (0 error console) · prefill netral render di **iframe** kanvas ("Judul utama toko kamu" + panel warna brand) · **Publish menyimpan** — toast "Template tersimpan", baris DB 27 B/0 seksi → **1680 B/9 seksi** · `tsc -p apps/admin` exit 0. Jejak probe dibersihkan (user + 2 template uji dihapus; billing dipulihkan ke nilai asalnya, dikonfirmasi `returning`).
+- **Jebakan instrumen sesi ini** (empat, semuanya di berkas serah-terima): Publish milik Puck adalah `<span>`, bukan `<button>` · kanvas ada di iframe, `innerText` dokumen luar tidak melihatnya · `EADDRINUSE` dua kali membuat satu putaran menilai build yang salah · `| tail` menelan log kegagalan build. Handoff: `specs/docs/tasks/2026-08-23-tema-builder-loop-bisect.md`.
+
 ### [2026-08-23 09:15 UTC] — PRODUKSI · holder tema platform diperbarui, dan sebelas toko berhenti mengiklankan batik
 
 - **Executor:** Main Session (Claude, Fable 5). Owner-authorised. **Deploy 488** (`ee65660`) selesai — lima container sehat — lalu **satu baris data produksi** diperbarui.

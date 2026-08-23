@@ -81,8 +81,20 @@ export function BuilderClient({
     [previewBrandColor, previewTheme],
   );
 
+  // 🔴 THE VALUE-EQUAL BAIL IS THE FIX FOR AN INFINITE REMOUNT LOOP — React #185, PRODUCTION ONLY,
+  // shipped in d5bf796 (2026-08-15) and bisected to it commit-by-commit on real prod builds. The
+  // chain: Puck's `overrides.headerActions` is an inline component, so its IDENTITY changes on every
+  // render of this component; a new identity is a new component type, so React REMOUNTS the dialogs
+  // inside it; ThemeTokensDialog fires `onPreviewChange` from a mount effect; the naive
+  // `setPreviewTheme(next)` stored a NEW object identity for the SAME font/tone values; new identity
+  // re-rendered this component; which re-created headerActions; which remounted the dialog; which
+  // fired the effect again — forever. Returning `prev` when the VALUES are equal makes React bail
+  // out of the update entirely, which breaks the cycle at its only load-bearing edge.
+  // ⚠️ WHY NOBODY SAW IT IN DEV: `next dev` does not hydrate this app (recorded repo memory, and
+  // re-measured during the bisect) — the crash is a CLIENT loop, and dev never ran the client. Every
+  // "verified in dev" pass over this screen since 2026-08-15 was verifying server HTML.
   const handlePreviewTheme = React.useCallback((next: { font: FontPairingId; tone: NeutralTone }) => {
-    setPreviewTheme(next);
+    setPreviewTheme((prev) => (prev.font === next.font && prev.tone === next.tone ? prev : next));
   }, []);
   
   const handlePublish = (data: Data) => {
