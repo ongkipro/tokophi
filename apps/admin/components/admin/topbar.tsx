@@ -1,6 +1,8 @@
 "use client";
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Menu, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck, Wallet } from "lucide-react";
 import type { SearchItem } from "@/lib/data/search";
 import type { TopbarData } from "@/lib/data/topbar";
@@ -17,7 +19,7 @@ import {
 import { NavLinks, type NavCounts } from "./nav-links";
 import { Brand } from "./brand";
 import { signOut } from "@/lib/actions/auth";
-import { STORES } from "@/lib/nav";
+import { switchStore } from "@/lib/actions/store";
 import { ROLE_LABEL, type Role } from "@/lib/rbac-policy";
 
 /**
@@ -93,6 +95,8 @@ export function Topbar({
   balance,
   notifs = [],
   navCounts,
+  stores = [],
+  currentStoreId,
 }: {
   user?: { name: string; email: string; role?: string };
   storeName?: string;
@@ -103,10 +107,35 @@ export function Topbar({
   notifs?: TopbarData["notifs"];
   /** Live nav badge counts — this is a client component, so the layout fetches and hands them in. */
   navCounts?: NavCounts;
+  /** EVERY live membership of the signed-in user, in contract order (Task 5.9 — `listMemberships`). */
+  stores?: { id: string; name: string }[];
+  /** The session's store — which row of `stores` is the active one. */
+  currentStoreId?: string;
 }) {
   const [mobileMenu, setMobileMenu] = useState(false);
-  // Current store reflects the session (so an impersonated store shows its own name, not a hardcode).
-  const [store, setStore] = useState(storeName ? { id: "current", name: storeName, plan: STORES[0]?.plan ?? "Bisnis" } : STORES[0]);
+  const router = useRouter();
+  const [, startSwitch] = useTransition();
+  // The switcher's rows are the layout's `listMemberships` read — the SESSION user's live
+  // memberships, so an impersonated session shows exactly the one granted store. The mock STORES
+  // list this used to fall back to offered shops the user had no membership in at all.
+  const storeList = stores.length > 0 ? stores : storeName ? [{ id: currentStoreId ?? "current", name: storeName }] : [];
+  const store = storeList.find((s) => s.id === currentStoreId) ?? storeList[0] ?? { id: "current", name: "Toko" };
+  // Picking another store calls the `switchStore` server action, which proves membership in the
+  // target against `store_users` and RE-MINTS the session cookie — the client never carries tenant
+  // context itself. Land on the new store's dashboard: the current URL may name an entity of the
+  // OLD store, which would 404 under the new tenant.
+  const pickStore = (s: { id: string; name: string }) => {
+    if (s.id === store.id) return;
+    startSwitch(async () => {
+      const r = await switchStore(s.id);
+      if (r.ok) {
+        router.push(r.slug ? `/store/${r.slug}` : "/");
+        router.refresh();
+      } else {
+        toast.error(r.error);
+      }
+    });
+  };
   const name = user?.name || "Ongki Pratama";
   const email = user?.email || "owner@tokophi.id";
   const roleLabel = user?.role ? ROLE_LABEL[user.role as Role] ?? user.role : null;
@@ -154,13 +183,13 @@ export function Topbar({
         />
         <DropdownMenuContent align="start" className="w-60">
           <DropdownMenuLabel>Toko aktif</DropdownMenuLabel>
-          {[store].map((s) => (
-            <DropdownMenuItem key={s.id} onClick={() => setStore(s)} className="gap-2">
+          {storeList.map((s) => (
+            <DropdownMenuItem key={s.id} onClick={() => pickStore(s)} className="gap-2">
               <span className="flex size-6 items-center justify-center rounded bg-muted text-[10px] font-bold">
                 {s.name.slice(0, 2).toUpperCase()}
               </span>
               <span className="flex-1">{s.name}</span>
-              {s.id === store.id ? <Check className="size-4 text-primary" /> : <Badge variant="secondary" className="text-[10px]">{s.plan}</Badge>}
+              {s.id === store.id && <Check className="size-4 text-primary" />}
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
