@@ -219,6 +219,7 @@
 - **Target Files:** `apps/admin/components/admin/topbar.tsx`, the existing responsive audit script.
 - **Change:** Fix the shared topbar layout at the component boundary; preserve store identity, balance access, menu access, focus order, and touch targets.
 - **Done when:** The responsive audit reports zero horizontal overflow at 320 px on all 15 seller routes, and browser verification confirms keyboard/touch access to every topbar control.
+- **Status:** `[x]` **DONE 2026-08-24** — audit `24/264 broken` (every seller route @320px, 38px, right topbar cluster) → **`OK — 264 route×width combinations, no horizontal overflow`**, measured against the wide-balance seeded store (batiknusantara, Rp214jt — a Rp0 store passes vacuously); browser pass at 320px confirmed all 7 topbar controls clickable + Tab-reachable in order, 40px hit zones via `::after`; 768/1280 unchanged. See `BUILD-LOG.md` 2026-08-24 and `specs/docs/tasks/2026-08-24-task-5.5-topbar-320.md`.
 
 ### Task 5.6: Make Product Editor Navigation Guards State-Aware
 - **Requirement:** `F-C9`
