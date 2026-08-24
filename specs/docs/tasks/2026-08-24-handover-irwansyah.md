@@ -66,3 +66,29 @@ instruction; do not flip it without a fresh explicit order).
   the `payment-request.test.ts` timeout was the proof the AL-ORDER switch was live.
 - The KA sandbox issues **no waybills promptly** — don't burn time polling; the poller/webhook will
   catch it.
+
+---
+
+## Addendum — sesi berlanjut setelah handover pertama (PR #344–#349, deploy 500–504)
+
+| PR | Deploy | What |
+|---|---|---|
+| #344 | (md-only) | handover pertama + STATUS refresh |
+| #345 | 500 | **PPN OFF = zero caption** di admin tenant (baris aritmetika, row "PPN 11%", suffix widget bayar — semua hilang saat toggle off; caption Riwayat tetap karena membaca `tax_idr` TERSIMPAN) |
+| #346 | 501 | **view `order_seller_entitlements` = rumus ledger** (migrasi `0102`: + PPN barang mode-exclusive − debit ongkir; kolom `sales_tax_added_idr`; test paritas view↔ledger dua mode) — laporan Keuangan/Penghasilan/rekonsiliasi kini melaporkan hak seller yang sama dengan saldo |
+| #347 | 502 | saldo: folder harian + judul ringkas + kolom Jam |
+| #348 | 503 | **Pemasaran presisi**: advanced matching selalu ON (migrasi `0103`, kolom dead record), config progresif (switch master di header), **`value` = nilai barang saja di ketiga platform** (guard `value-is-goods.test.ts`), demo store → penomoran tetap (`1008-1`) |
+| #349 | 504 | saldo ronde-2: folder harian jadi **dropdown** (Mutasi + Penarikan), judul produk di rincian di-clamp 2 baris |
+
+**Deliverable non-repo hari ini:**
+- `~/Downloads/UAT Mas Ongkie X Kiriminaja - FINAL.pdf` + **`.docx`** (format sheet KA persis; DOCX punya placeholder logo untuk ditempel owner) — Test Log terisi status + OID, Action Items 3 butir untuk KA.
+- Md UAT di repo docs kiriminaja **belum di-commit** (repo itu PUBLIC — keputusan publikasi di owner).
+
+**Audit produksi (BUILD-LOG → PROD-AUDIT):** permata-store + batiknusantara sehat menyeluruh (feed number-scheme valid, fee schedule live, 5 cron hijau, ledger backed). Temuan data: tagline permata `mhgjhgjgj` = judul homepage jelek (hubungi merchant); Pelacakan permata belum dikonfigurasi; pembayaran `menunggu` = belanja belum dibayar, bukan callback rusak. Platform: **15 toko** (14 aktif).
+
+**Rulings baru yang MENGIKAT (semuanya juga di AGENTS.md/FINANCE.md):**
+1. PPN toggle OFF ⇒ tanpa keterangan PPN apa pun di tenant admin.
+2. Hak seller = omset + PPN barang − debit ongkir (ledger DAN view — satu rumus).
+3. Advanced matching selalu ON — jangan kembalikan toggle-nya.
+4. Conversion `value` = nilai barang saja (Meta/GA4/TikTok).
+5. Repo tetap **PRIVATE**.
