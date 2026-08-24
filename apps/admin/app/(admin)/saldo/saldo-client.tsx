@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDownToLine, ChevronDown, Clock, Info, Landmark, Loader2, Undo2, Wallet } from "lucide-react";
+import { ArrowDownToLine, CalendarDays, ChevronDown, Clock, Info, Landmark, Loader2, Undo2, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tokophi/ui/card";
@@ -52,6 +52,26 @@ const KIND_LABEL: Record<string, string> = {
   payout: "Penarikan",
   adjustment: "Penyesuaian",
 };
+
+// ── DAILY "FOLDER" GROUPING for the mutasi list (owner request 2026-08-24) ──────────────────────
+// The flat list read as one long unbroken table: a 16-char mono order number inline with the label
+// made rows ragged, and a merchant reconciling "kemarin" had to scan timestamps row by row. Rows on
+// one PAGE are grouped under a day header (WIB — the same day definition every report uses) carrying
+// the count and the day's net, folder-style. Grouping is per page deliberately: the server pages by
+// PAGE_SIZE, and a day that spans a page boundary re-announces its header on the next page rather
+// than pulling unbounded rows to keep a "complete" folder.
+const DAY_WIB = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const dayKeyWib = (d: Date | string | number) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+function groupByDay<T extends { createdAt: Date | string | number; amount: number }>(rows: T[]) {
+  const out: { key: string; label: string; net: number; rows: T[] }[] = [];
+  for (const r of rows) {
+    const key = dayKeyWib(r.createdAt);
+    const last = out[out.length - 1];
+    if (last && last.key === key) { last.rows.push(r); last.net += r.amount; }
+    else out.push({ key, label: DAY_WIB.format(new Date(r.createdAt)), net: r.amount, rows: [r] });
+  }
+  return out;
+}
 
 const PAYOUT_LABEL: Record<string, { label: string; cls: string }> = {
   menunggu: { label: "Menunggu", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
@@ -436,14 +456,32 @@ export function SaldoClient({
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Tanggal</TableHead>
+                          {/* The DAY lives in each folder header now; this column is only the clock. */}
+                          <TableHead>Jam</TableHead>
                           <TableHead>Keterangan</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Jumlah</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {movements.rows.map((m) => {
+                        {groupByDay(movements.rows).map((day) => (
+                          <React.Fragment key={day.key}>
+                            {/* The day "folder": one header per WIB day with the page-local count and
+                                net. Not a button — the rows below it are already the open folder. */}
+                            <TableRow className="hover:bg-transparent">
+                              <TableCell colSpan={4} className="bg-muted/50 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-1.5 text-xs font-semibold">
+                                    <CalendarDays className="size-3.5 text-muted-foreground" /> {day.label}
+                                    <span className="font-normal text-muted-foreground">· {day.rows.length} mutasi</span>
+                                  </span>
+                                  <span className={`text-xs font-medium tabular-nums ${day.net < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                                    {day.net < 0 ? "−" : "+"}{IDR(Math.abs(day.net))}
+                                  </span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                            {day.rows.map((m) => {
                           const s = movementStatus(m);
                           const canExpand = !!m.orderId;
                           const isOpen = expandedOrder === m.orderId;
@@ -454,14 +492,21 @@ export function SaldoClient({
                                 data-state={isOpen ? "selected" : undefined}
                                 onClick={canExpand ? () => toggleRow(m.orderId!) : undefined}
                               >
-                                <TableCell className="py-3.5 text-muted-foreground"><DateTimeCell value={m.createdAt} /></TableCell>
+                                {/* The day lives in the folder header — the row keeps only the clock,
+                                    so the column stays one short tabular token instead of two lines. */}
+                                <TableCell className="py-3.5 text-muted-foreground"><time dateTime={new Date(m.createdAt).toISOString()} className="tabular-nums">{new Date(m.createdAt).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }).replace(".", ":")}</time></TableCell>
                                 <TableCell>
-                                  <span className="font-medium">{KIND_LABEL[m.kind] ?? m.kind}</span>
+                                  {/* Short title: the label alone carries the line; the long mono
+                                      order number drops to its own truncated small line (it used to
+                                      sit inline and made every row as wide as PHI-542364344CTQ). */}
+                                  <span className="flex items-center font-medium">
+                                    {KIND_LABEL[m.kind] ?? m.kind}
+                                    {canExpand && (
+                                      <ChevronDown className={`ml-1.5 inline size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                    )}
+                                  </span>
                                   {m.orderNumber && (
-                                    <span className="ml-2 font-mono text-xs text-muted-foreground">{m.orderNumber}</span>
-                                  )}
-                                  {canExpand && (
-                                    <ChevronDown className={`ml-1.5 inline size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                    <span className="block max-w-[11rem] truncate font-mono text-[11px] leading-4 text-muted-foreground" title={m.orderNumber}>{m.orderNumber}</span>
                                   )}
                                 </TableCell>
                                 <TableCell>
@@ -489,7 +534,9 @@ export function SaldoClient({
                               )}
                             </React.Fragment>
                           );
-                        })}
+                            })}
+                          </React.Fragment>
+                        ))}
                       </TableBody>
                     </Table>
                     <SaldoPager
