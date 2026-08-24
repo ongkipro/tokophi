@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 05:20 UTC] — SALDO-UI-2 + PROD-AUDIT · folder harian jadi dropdown (mutasi & penarikan), judul produk di-clamp; audit produksi permata-store + batiknusantara
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner: pencairan ratusan/hari menumpuk → dropdown/halaman-per-hari; judul produk panjang menutup harga di rincian pesanan.
+- **`/saldo`:** ① header folder harian kini **collapsible** (klik = tutup/buka; chevron; default terbuka — kasus umumnya membaca hari ini) di tab **Mutasi** DAN **Penarikan** (grouping penarikan pada hari REQUEST, header memuat jumlah + total hari) ② rincian "Isi pesanan": judul produk `line-clamp-2 break-words` di sel `flex-1 min-w-0`, varian & qty turun ke baris kecil — judul 100-char gaya marketplace tidak bisa lagi menabrak kolom harga (nama penuh via `title=`).
+- **Verifikasi:** tsc 0 · build produksi 0 · drive browser (batiknusantara, 841 mutasi): collapse hari pertama 24→20 baris ✓, expand row → clamp aktif ✓, folder Penarikan tampil ✓, 0 error JS. Probe dihapus; billing dipulihkan persis (select-confirmed).
+- **PROD-AUDIT (read-only, 2 toko berjalan — permata-store & batiknusantara):**
+  - **Sehat:** storefront/checkout/feed 200 di host kanonik masing-masing (`permata-store.tokophi.id` — subdomain .com 301 ke sana); feed Google/TikTok **well-formed**, semua `g:id` skema penomoran (`\d+-\d+`), availability/price("… IDR")/condition sesuai spec (permata 22 item, batik 86); jadwal biaya checkout tersaji benar (QRIS 0.007 base=omset, VABCA 6500, VA lain 3500, e-wallet 0.024); **kelima cron hijau & segar** (billing/tracking/tracking-events/order-expiry/domains); ledger batik `available` 21.032.562 = angka verified-ledger; permata billing paid s/d 2026-09-12, sender kecamatan set, 22 produk aktif (21 ber-kategori Google), dims sehat (bukan 1×1×1).
+  - **Temuan:** ① `stores.tagline` permata = **"mhgjhgjgj"** → `<title>` homepage junk (DATA merchant — kode benar memakai tagline ≤60 char; tidak ditulis-ulang diam-diam, keputusan owner/CS untuk menghubungi merchant) ② permata belum mengonfigurasi channel Pelacakan satu pun (peluang aktivasi — UI progresif baru dari MKT-01 mempermudah) ③ 3 pembayaran terakhir `menunggu` + 1 `gagal` = shopper belum membayar (volume awal), BUKAN callback rusak — callback `berhasil` terakhir 2026-08-03 adalah era pengujian kami sendiri ④ platform total **15 toko** (14 aktif; 1 suspended `tema-platform` by design).
+
 ### [2026-08-24 05:01 UTC] — MKT-01 · Pemasaran presisi: advanced matching selalu ON, config progresif, value = barang saja, ID katalog demo → penomoran tetap
 
 - **Executor:** Main Session (Claude, Fable 5). Rulings owner 2026-08-24 untuk Pemasaran → Pelacakan (Meta/Google/TikTok).

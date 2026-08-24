@@ -133,13 +133,17 @@ function MovementDetail({ number, detail, loading }: { number: string | null; de
       {/* Isi pesanan */}
       <div className="space-y-2">
         <p className="text-xs font-medium text-muted-foreground">Isi pesanan</p>
+        {/* Each line's left cell is flex-1 + min-w-0 and the TITLE is clamped to 2 lines — a
+            100-char marketplace-style product name used to run into the price column (owner report,
+            2026-08-24). The full name stays reachable via title=. */}
         <ul className="space-y-1.5">
           {detail.lines.map((l) => (
-            <li key={l.id} className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="min-w-0">
-                <span className="font-medium">{l.product}</span>
-                {l.variant && <span className="text-muted-foreground"> · {l.variant}</span>}
-                <span className="text-muted-foreground"> × {l.qty}</span>
+            <li key={l.id} className="flex items-start justify-between gap-3 text-sm">
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-2 break-words font-medium" title={l.product}>{l.product}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {l.variant ? `${l.variant} · ` : ""}× {l.qty}
+                </span>
               </span>
               <span className="shrink-0 tabular-nums text-muted-foreground">{IDR(l.total)}</span>
             </li>
@@ -231,6 +235,8 @@ export function SaldoClient({
   // order detail unfolds in a row right below it; click again to hide. One open at a time. The
   // detail is fetched on first expand and cached per order so re-opening is instant.
   const [expandedOrder, setExpandedOrder] = React.useState<string | null>(null);
+  // Day folders open by default; a collapsed day keeps its header as the summary line (count + net).
+  const [collapsedDays, setCollapsedDays] = React.useState<Record<string, boolean>>({});
   const [rowDetail, setRowDetail] = React.useState<Record<string, InvoiceDetail | null>>({});
   const [rowLoading, setRowLoading] = React.useState<string | null>(null);
   const toggleRow = async (orderId: string) => {
@@ -466,12 +472,18 @@ export function SaldoClient({
                       <TableBody>
                         {groupByDay(movements.rows).map((day) => (
                           <React.Fragment key={day.key}>
-                            {/* The day "folder": one header per WIB day with the page-local count and
-                                net. Not a button — the rows below it are already the open folder. */}
-                            <TableRow className="hover:bg-transparent">
+                            {/* The day "folder" is a DROPDOWN now (owner 2026-08-24): a store doing
+                                hundreds of movements a day buries every other day — collapsing a
+                                day keeps its header (count + net) as the summary line. Open by
+                                default: the common case is reading today, not archiving it. */}
+                            <TableRow
+                              className="cursor-pointer select-none hover:bg-muted/60"
+                              onClick={() => setCollapsedDays((prev) => ({ ...prev, [day.key]: !prev[day.key] }))}
+                            >
                               <TableCell colSpan={4} className="bg-muted/50 py-2">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="flex items-center gap-1.5 text-xs font-semibold">
+                                    <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${collapsedDays[day.key] ? "-rotate-90" : ""}`} />
                                     <CalendarDays className="size-3.5 text-muted-foreground" /> {day.label}
                                     <span className="font-normal text-muted-foreground">· {day.rows.length} mutasi</span>
                                   </span>
@@ -481,7 +493,7 @@ export function SaldoClient({
                                 </div>
                               </TableCell>
                             </TableRow>
-                            {day.rows.map((m) => {
+                            {!collapsedDays[day.key] && day.rows.map((m) => {
                           const s = movementStatus(m);
                           const canExpand = !!m.orderId;
                           const isOpen = expandedOrder === m.orderId;
@@ -664,7 +676,26 @@ export function SaldoClient({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {payouts.rows.map((p) => {
+                        {/* Same day-folder dropdown as Mutasi (owner: hundreds of payouts a day
+                            stack into one wall) — grouped on the REQUEST day, sum = day's total. */}
+                        {groupByDay(payouts.rows.map((p) => ({ ...p, createdAt: p.requestedAt }))).map((day) => (
+                          <React.Fragment key={day.key}>
+                            <TableRow
+                              className="cursor-pointer select-none hover:bg-muted/60"
+                              onClick={() => setCollapsedDays((prev) => ({ ...prev, ["po-" + day.key]: !prev["po-" + day.key] }))}
+                            >
+                              <TableCell colSpan={5} className="bg-muted/50 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-1.5 text-xs font-semibold">
+                                    <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${collapsedDays["po-" + day.key] ? "-rotate-90" : ""}`} />
+                                    <CalendarDays className="size-3.5 text-muted-foreground" /> {day.label}
+                                    <span className="font-normal text-muted-foreground">· {day.rows.length} penarikan</span>
+                                  </span>
+                                  <span className="text-xs font-medium tabular-nums">{IDR(Math.abs(day.net))}</span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                            {!collapsedDays["po-" + day.key] && day.rows.map((p) => {
                           const s = PAYOUT_LABEL[p.status] ?? { label: p.status, cls: "" };
                           return (
                             <TableRow key={p.id}>
@@ -688,7 +719,9 @@ export function SaldoClient({
                               <TableCell className="text-right tabular-nums">{IDR(p.amount)}</TableCell>
                             </TableRow>
                           );
-                        })}
+                            })}
+                          </React.Fragment>
+                        ))}
                       </TableBody>
                     </Table>
                     <SaldoPager
