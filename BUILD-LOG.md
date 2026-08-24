@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 06:27 UTC] — FIN-03 · lengan LEGACY kredit ledger & view = barang saja (laporan owner: penarikan masih membawa ongkir)
+
+- **Executor:** Main Session (Claude, Fable 5). Owner menemukan saldo penarikan masih memuat biaya pengiriman. Audit: jalur order BARU sudah benar (goods via order_financials, FIN-01/0102); yang bocor adalah lengan **LEGACY** — kredit fallback ke `payments.amount_idr` (historis = barang+ongkir) dan view memakai `total − tax`.
+- **Fix satu rumus:** `greatest(orders.subtotal_idr − discount_idr, 0)` di KEDUA sisi — `creditSaleForPayment` (fallback legacy) dan view `order_seller_entitlements` (migrasi **`0104`**, juga kolom goods_proceeds legacy). Diskon lama mungkin memuat diskon ongkir (split tak tercatat) — ekspresi ini konservatif ke arah platform, tidak pernah ke arah seller.
+- **Koreksi data:** `ops/tokophi-legacy-credit-correction.sql` (transaksional, default ROLLBACK seperti orphan-cleanup) — sale legacy → goods, mirror retur → −goods (pasangan tetap net 0; payout `order_id NULL` & adjustment courier-debit tak tersentuh by construction). **Dev DB DIJALANKAN**: 195 sale + 2 retur dikoreksi, total sale legacy 294.512.670 → **290.329.000** (drift ongkir Rp4.183.670 keluar dari saldo). Produksi menyusul setelah deploy (satu-satunya pemegang ledger = demo batiknusantara).
+- **Verifikasi:** ledger-credit suite **28/28** dengan pin dipertajam — payment `amount 165k` (barang 150k + ongkir 15k) dikredit **150k**, persis regresi yang dilaporkan; doc-counts hijau 105/`0104`; tsc 0. Fixture mkOrder kini menyemai `subtotal_idr` (kredit legacy membaca ORDER, bukan payment).
+
 ### [2026-08-24 05:20 UTC] — SALDO-UI-2 + PROD-AUDIT · folder harian jadi dropdown (mutasi & penarikan), judul produk di-clamp; audit produksi permata-store + batiknusantara
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner: pencairan ratusan/hari menumpuk → dropdown/halaman-per-hari; judul produk panjang menutup harga di rincian pesanan.

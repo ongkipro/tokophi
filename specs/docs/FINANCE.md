@@ -95,8 +95,11 @@ base). On VA BCA: flat Rp6.500 whatever the amounts.
 
 - `creditSaleForPayment` books `goods_proceeds_idr + (orders.tax_idr − included_sales_tax_idr)` —
   omset plus the ADDED goods PPN, derived from stored facts, never recomputed. Inclusive stores get
-  no add-back (the expression cancels); legacy orders without `order_financials` keep
-  `payments.amount_idr`.
+  no add-back (the expression cancels). **LEGACY orders (no `order_financials`) credit
+  `greatest(subtotal − discount, 0)` — goods only, from the order's own columns** (0104; the old
+  `payments.amount_idr` fallback contained shipping — owner report 2026-08-24 — and existing rows
+  were corrected by `ops/tokophi-legacy-credit-correction.sql`). The view uses the same legacy
+  expression, so reports and the balance cannot disagree.
 - Claw-backs reverse the **sale entry's own amount** (`−l.amount_idr`), so they stay symmetric with
   whatever formula credited it.
 - Release/payout rules unchanged (`platform_payout.release_on`, CAS payout transitions).
