@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 07:52 UTC] — DEVLOG · Update Log Development super admin += v1.2.0–v1.2.2 (gelombang 2026-08-24)
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner: "update log di super admin" — halaman `/update-log` (data `DEV_LOGS` hardcoded, terakhir v1.1.0 / 22 Agu) mendapat tiga entri hari ini:
+  - **v1.2.0 (major):** Finance Overhaul — toggle PPN global default OFF, jadwal biaya enforced, hak seller = barang saja (termasuk fix lengan legacy + koreksi data produksi), value iklan = barang saja.
+  - **v1.2.1 (logistics_payment):** KiriminAja UAT pack (8/8 booking, webhook hint-only live, temuan validator sandbox) + AutoLaris digital Create Order (`courir_id=1`).
+  - **v1.2.2 (feature):** rasio kartu produk /tema + dialog Galeri Produk landscape + folder harian /saldo.
+- **Verifikasi:** tsc super-admin 0 · suite super-admin 12 file/103 hijau · build produksi 0 · drive browser `/update-log` sebagai operator probe: "Current Engine: v1.2.2", ketiga entri render, 0 error JS. Probe operator dihapus, server dimatikan by PID.
+
 ### [2026-08-24 07:28 UTC] — TEMA-CARD-2 · dialog Galeri Produk jadi LANDSCAPE (potret terpotong layar)
 
 - **Executor:** Main Session (Claude, Fable 5). Laporan owner: pop-up /tema → Galeri Produk terpotong layar — dua baris rasio membuat tumpukan potret lebih tinggi dari viewport laptop dan tombol Simpan jatuh keluar layar.

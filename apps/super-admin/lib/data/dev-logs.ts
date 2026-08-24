@@ -25,6 +25,42 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.2.2-tema-saldo-ux",
+    version: "v1.2.2",
+    date: "2026-08-24",
+    title: "Tema Card Aspect, Landscape Gallery Dialog, And Saldo Day Folders",
+    category: "feature",
+    surfaces: ["Seller Admin", "Storefront"],
+    summary: "The product CARD image ratio (1:1 / 4:5 / 2:3) joins the PDP gallery as a store-level Tema setting; the Galeri Produk dialog went landscape after the extra row pushed Simpan off-screen; and /saldo grew collapsible per-day folders on both the mutasi and penarikan lists, with long product titles clamped so they can no longer run into the price column.",
+    problem: "The card surface had no aspect setup at all — T-10 locked every product image to 1:1 and the /tema dialog only governed the PDP gallery. Adding the second aspect row then made the portrait-stacked dialog taller than a laptop viewport, cutting the Simpan button off. On /saldo, a store doing hundreds of movements a day rendered one unbroken wall of rows, and a 100-character marketplace-style product name in the order detail overlapped the price cell.",
+    solution: "cardAspect lives beside galleryAspect in stores.theme (merge-patch writers, resolveCardAspect degrades jsonb garbage to 1:1) and ProductCard maps it to LITERAL Tailwind classes read from Astro.locals.store — store-level on purpose, no per-template ratio prop, so one call site can never quietly opt out. The product-ratio-locked guard was WIDENED deliberately and mutation-proved red. The dialog body is two columns inside a wide DialogContent with a max-h scroll floor. Saldo day headers are clickable dropdowns carrying the day's count and net (payouts group on the request day), and detail titles are line-clamp-2 inside a flex-1 min-w-0 cell.",
+    verification: "Full vitest 135 files / 1115 tests green; production-build browser drives: cardAspect 4:5 measured 296x370 = 0.800 exactly on the listing, the dialog saved 2:3 with font/tone surviving the merge-patch, the dialog measured 896x557 fully inside a 1366x768 viewport with Simpan visible, and the saldo drive on 841 real movements collapsed a day folder from 24 to 20 rows with zero JS errors. All probe rows deleted and flipped data restored exactly."
+  },
+  {
+    id: "v1.2.1-ka-uat-autolaris-digital",
+    version: "v1.2.1",
+    date: "2026-08-24",
+    title: "KiriminAja UAT Pack, A Hint-Only Webhook, And AutoLaris Digital Create Order",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Payments", "Seller Admin"],
+    summary: "The pre-production-IP UAT KiriminAja asked for is executed and documented: 8/8 booking scenarios green on the sandbox, a webhook receiver live in production, and a measured sandbox defect reported to their team. AutoLaris payment creation moved to /api/h2h/submit with courir_id=1, so every payment appears in their CMS as a digital order.",
+    problem: "KiriminAja's UAT sheet required create-order-to-pickup simulations across non-COD/COD, actual-vs-volumetric weight and insurance, plus a webhook callback URL — and no webhook receiver existed (tracking was poll-only). Probing also surfaced that the sandbox BOOKING validator ignores chargeable-weight scaling: every multi-kg booking at its own quoted price was refused with Ongkir tidak sesuai while the same 2 kg parcel was ACCEPTED at the 1 kg price. On the payments side the owner ruled AutoLaris is a gateway only, and their CMS detects a digital order solely from courir_id = 1 — the old create_payment endpoint could never appear there.",
+    solution: "ops/kiriminaja-uat-sim.ts drives the nine scenarios through the product's own client; the webhook (api/public/kiriminaja/webhook) is HINT-ONLY exactly as the poller's design note prescribes — the unsigned payload only names order ids, and every fact comes from a verified tracking pull — behind a timing-safe fail-closed bearer check. alCreateOrder() implements the probed /api/h2h/submit contract (channel_code required, total = grand_total with the provider fee netting against settlement, payment instruction in payment_info) and all three payment creators switched; the callback accepts both id eras (trx_id and transaction_id).",
+    verification: "8/8 bookings with OIDs recorded for the UAT sheet (filled PDF + DOCX delivered to Downloads); the sandbox defect is evidenced by OID 5758-E1kgprice150 (2 kg accepted at the 1 kg price). The webhook answered 401 to missing and wrong bearers ON PRODUCTION after deploy. A live production-build checkout drive through alCreateOrder produced a real VA on the sukses page with trx id 967290 and zero JS errors; the probe order was neutralized legally (payment failed, stock restored, order cancelled). Cancel scenario 9 waits on the sandbox issuing an AWB — their contract cancels by waybill, never order id."
+  },
+  {
+    id: "v1.2.0-finance-overhaul",
+    version: "v1.2.0",
+    date: "2026-08-24",
+    title: "Finance Overhaul — Global Subscription PPN Toggle, Enforced Fee Schedule, Seller Gets Goods Only",
+    category: "major",
+    surfaces: ["Seller Admin", "Super Admin", "Storefront", "Payments", "Database & RLS"],
+    summary: "The money model is now one document (specs/docs/FINANCE.md) and one implementation: a global subscription-PPN toggle defaulting OFF, checkout fees enforced per the platform schedule, seller entitlement = goods omset + goods PPN only, and the marketing value every ad platform receives is the goods figure alone.",
+    problem: "Subscription PPN was hardwired ON while the launch plan was a flat Rp275rb; payment fees existed only as display copy; and the seller's money leaked in both directions — the reporting view under-paid exclusive-PPN stores by their own tax while the LEGACY ledger arm credited payments.amount_idr, which contained shipping, so withdrawable balances carried the courier's money (the owner caught this on /saldo). Meta and TikTok also received the all-in total as the conversion value, inflating ROAS with shipping and admin fees.",
+    solution: "platform_finance (single row, migration 0101) is the global toggle, read at invoice creation by all three creators and stored as invoices.tax_idr — the faktur renders the STORED tax, and with the toggle OFF the tenant panel shows no PPN caption at all. The fee schedule (COD 3% of omset+ongkir plus PPN on the fee, QRIS 0.7% of omset, VA per-bank flats) is enforced in /api/public/order and mirrored at checkout via each fee's own base field. Entitlement is ONE formula on every side — goods + added PPN − shipping debit for financials orders, greatest(subtotal − discount, 0) for legacy (migrations 0102/0104) — in the ledger credit, the entitlement view, and the analytics that ride it; advanced matching is always on and conversion value is goods-only across Meta, GA4 and TikTok.",
+    verification: "Full suites green at every step (132-135 files, 1098-1115 tests, real Postgres money suites included); checkout fees reconciled to the rupiah per method in a production-build browser drive; the super-admin toggle driven ON and OFF with audit rows both ways and the flat display verified at zero PPN strings; migration 0101 confirmed applied on production with the toggle FALSE. The legacy correction ran against dev (195+2 rows) and production (155+2 rows, Rp3.420.360 of shipping out of the demo balances), and the sharpened ledger pin proves a 165k payment carrying 15k shipping credits exactly 150k."
+  },
+  {
     id: "v1.1.0-restricted-db-identity",
     version: "v1.1.0",
     date: "2026-08-22",
