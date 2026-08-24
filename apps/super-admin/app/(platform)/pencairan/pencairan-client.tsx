@@ -66,6 +66,10 @@ export function PencairanClient({
   const [rejecting, setRejecting] = useState<PayoutRow | null>(null);
   const [reason, setReason] = useState("");
 
+  // mark-paid dialog — collects the (optional) bank-transfer reference before confirming
+  const [paying, setPaying] = useState<PayoutRow | null>(null);
+  const [payRef, setPayRef] = useState("");
+
   // policy form
   const [releaseOn, setReleaseOn] = useState<PayoutPolicy["releaseOn"]>(policy.releaseOn);
   const [minPayout, setMinPayout] = useState(String(policy.minPayoutIdr));
@@ -87,6 +91,22 @@ export function PencairanClient({
         router.refresh();
       } else {
         toast.error(r.error ?? "Gagal.");
+      }
+    });
+  }
+
+  function submitPaid() {
+    const p = paying;
+    if (!p) return;
+    startTransition(async () => {
+      const r = await markPayoutPaid(p.id, payRef);
+      if (r.ok) {
+        toast.success(`Pencairan ${p.storeName} ditandai lunas.`);
+        setPaying(null);
+        setPayRef("");
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Gagal menandai lunas.");
       }
     });
   }
@@ -221,6 +241,11 @@ export function PencairanClient({
                           Alasan: {p.note}
                         </div>
                       )}
+                      {p.status === "selesai" && p.note && (
+                        <div className="mt-0.5 max-w-[26ch] truncate text-xs text-muted-foreground" title={p.note}>
+                          Ref: {p.note}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">{IDR(p.amount)}</TableCell>
                     <TableCell>
@@ -266,7 +291,10 @@ export function PencairanClient({
                               size="sm"
                               className="gap-1.5"
                               disabled={pending}
-                              onClick={() => run(() => markPayoutPaid(p.id), `Pencairan ${p.storeName} ditandai lunas.`)}
+                              onClick={() => {
+                                setPaying(p);
+                                setPayRef("");
+                              }}
                             >
                               <CircleCheck className="size-3.5" /> Tandai lunas
                             </Button>
@@ -368,6 +396,52 @@ export function PencairanClient({
           </div>
         </CardContent>
       </Card>
+
+      {/* MARK-PAID DIALOG — the reference is optional so a rushed operator is never blocked, but
+          asking at the moment of confirmation is the only time the number is at hand (it comes off
+          the banking screen they just left). It lands in payouts.note and shows on the merchant's
+          /saldo row, so both sides can match it against the bank statement later. */}
+      <Dialog open={paying !== null} onOpenChange={(o) => !o && setPaying(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tandai lunas</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">{paying?.storeName}</span>
+                <span className="font-semibold tabular-nums">{IDR(paying?.amount ?? 0)}</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {paying?.bankName ?? "—"} · <span className="tabular-nums">{paying?.bankAccount ?? "—"}</span>
+                {paying?.bankHolder ? <> · a.n. {paying.bankHolder}</> : null}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Konfirmasi bahwa dana <b>sudah ditransfer</b> ke rekening di atas. Merchant akan melihat status{" "}
+                <b>Selesai</b> beserta tanggalnya di halaman Saldo.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="pay-ref">No. referensi transfer (opsional)</Label>
+              <Input
+                id="pay-ref"
+                value={payRef}
+                onChange={(e) => setPayRef(e.target.value)}
+                placeholder="Mis. nomor referensi BI-FAST / berita transfer"
+              />
+              <p className="text-xs text-muted-foreground">
+                Terlihat oleh merchant dan tercatat di audit log — memudahkan pencocokan dengan mutasi rekening bank.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline">Batal</Button>} />
+            <Button disabled={pending} onClick={submitPaid} className="gap-1.5">
+              <CircleCheck className="size-4" /> {pending ? "Memproses…" : "Tandai lunas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* REJECT DIALOG */}
       <Dialog open={rejecting !== null} onOpenChange={(o) => !o && setRejecting(null)}>

@@ -710,6 +710,15 @@ export function SaldoClient({
                                   {p.bankName} · <span className="tabular-nums">{p.bankAccount}</span>
                                 </div>
                                 {p.bankHolder && <div className="text-xs text-muted-foreground">a.n. {p.bankHolder}</div>}
+                                {/* payouts.note is keyed by status: gagal ⇒ why it was refused (the
+                                    money is back in the balance), selesai ⇒ the operator's bank
+                                    transfer reference — the number to match against mutasi rekening. */}
+                                {p.status === "gagal" && p.note && (
+                                  <div className="text-xs text-red-600 dark:text-red-400">Alasan: {p.note}</div>
+                                )}
+                                {p.status === "selesai" && p.note && (
+                                  <div className="text-xs text-muted-foreground">Ref: {p.note}</div>
+                                )}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="secondary" className={`h-5 border-transparent px-1.5 text-[10px] ${s.cls}`}>

@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 16:26 UTC] — PAYOUT-UX · referensi transfer di "Tandai lunas" + alasan/ref tampil di /saldo merchant (BELUM DEPLOY — atas perintah owner)
+
+- **Executor:** Main Session (Claude, Fable 5). Lanjutan audit pencairan manual: dua celah kecil pada rantai konfirmasi super admin → tenant.
+- **①** `markPayoutPaidInTxn` menerima **referensi transfer bank opsional** — ditulis di CAS yang sama (`note = coalesce($ref, note)`), jadi stempel status, `paid_at`, dan referensi adalah SATU write. Makna `payouts.note` di-key oleh status terminal: `gagal` ⇒ alasan penolakan, `selesai` ⇒ referensi transfer — dua penulisnya tidak bisa tabrakan karena tiap status terminal hanya tercapai sekali. Tanpa ref, `coalesce` menjaga catatan lama (dibuktikan test).
+- **②** UI `/pencairan`: "Tandai lunas" kini dialog konfirmasi (rekening tujuan + jumlah + input "No. referensi transfer (opsional)") — angka referensi diminta pada satu-satunya momen ia ada di tangan operator (baru keluar dari layar banking). Row `selesai` menampilkan `Ref: …`. Audit log menyertakan ref.
+- **③** Merchant `/saldo` tab Penarikan: baris `gagal` menampilkan **"Alasan: …"** (merah), baris `selesai` menampilkan **"Ref: …"**; kolom `Keterangan` ikut di Ekspor CSV. Sebelumnya alasan penolakan hanya sampai lewat baris mutasi refund.
+- **Verifikasi:** tsc admin+super 0 · vitest full **135 file / 1116 hijau** (payout-transition 10/10, +1 test baru ref-written/coalesce-keeps) · build admin+super 0 · **drive E2E build produksi**: login operator probe → `/pencairan` → dialog Tandai lunas (rekening+jumlah tampil) → isi `BIFAST-TEST-750` → toast sukses → DB `status='selesai', note='BIFAST-TEST-750', paid_at` satu write → tab Selesai menampilkan Ref → login merchant probe → `/saldo` menampilkan `Ref: BIFAST-TEST-750` DAN `Alasan: rekening perlu verifikasi ulang` pada probe gagal — 0 error JS, screenshot diambil. Probe (2 payout, 1 user, 1 operator) dihapus; billing batik dipulihkan persis `2026-08-04 03:59:23.814+00`; server dimatikan by PID.
+- **Status:** commit di branch `feat/payout-ref-and-reason`, **TIDAK di-merge** — owner: "jangan deploy dulu".
+
 ### [2026-08-24 15:56 UTC] — RBAC-ROLES · role toko baru: Advertiser & Customer Service (+ picker peran berdeskripsi) · audit rekonsiliasi final BERSIH
 
 - **Executor:** Main Session (Claude, Fable 5). Dua permintaan owner: ① konfirmasi rekonsiliasi/saldo sudah sempurna ② tambah role advertiser & customer service di Pengaturan → Pengguna + sempurnakan UI/UX.

@@ -1091,15 +1091,20 @@ export async function processPayout(payoutId: string): Promise<{ ok: boolean; er
  * every source status; this function stays what it should be — the gate, the audit line and the
  * revalidate. Do NOT re-add a status check or a status write here: two writers is two rules.
  */
-export async function markPayoutPaid(payoutId: string): Promise<{ ok: boolean; error?: string; conflict?: PayoutConflict }> {
+export async function markPayoutPaid(payoutId: string, ref?: string): Promise<{ ok: boolean; error?: string; conflict?: PayoutConflict }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  const r = await db.transaction(async (tx) => markPayoutPaidInTxn(tx, payoutId));
+  // Optional bank-transfer reference — trimmed, empty = none (NULL keeps the column untouched).
+  const reference = ref?.trim() || null;
+  const r = await db.transaction(async (tx) => markPayoutPaidInTxn(tx, payoutId, reference));
   // A refusal wrote nothing, so there is nothing to log and nothing to revalidate. `conflict` rides
   // along because "already lunas" and "never processed" are different facts to a caller; the toast
   // still prints `error`.
   if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
-  await logStore(r.storeId, `Pencairan ${rupiah(r.amount)} ditandai LUNAS — dana sudah ditransfer`);
+  await logStore(
+    r.storeId,
+    `Pencairan ${rupiah(r.amount)} ditandai LUNAS — dana sudah ditransfer${reference ? ` (ref: ${reference})` : ""}`,
+  );
   revalidatePath("/pencairan");
   revalidatePath(`/toko/${r.storeId}`);
   return { ok: true };
