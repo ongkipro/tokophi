@@ -3,11 +3,7 @@
 import { schema } from "@tokophi/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import {
-  alCreatePayment,
-  autolarisConfigured,
-  type AlPayment,
-} from "@tokophi/lib/autolaris";
+import { alCreateOrder, autolarisConfigured, type AlPayment } from "@tokophi/lib/autolaris";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
@@ -381,11 +377,13 @@ export async function createOrderPayment(
 
   let providerResult: AlPayment;
   try {
-    providerResult = await alCreatePayment({
+    // AL-ORDER (owner ruling 2026-08-24): create a DIGITAL order (`courir_id=1`) instead of a bare
+    // H2H payment, so it appears in the AutoLaris CMS as an order with AutoLaris acting as gateway
+    // only (all shipping is KiriminAja). Same reff/callback contract; see alCreateOrder's header.
+    providerResult = await alCreateOrder({
       reffId: requestKey,
       channelCode,
       amount: claim.order.total,
-      customerId: claim.order.id,
       customerName: claim.order.name ?? "Pelanggan",
       customerPhone: claim.order.phone ?? "081200000000",
       customerEmail: claim.order.email ?? "order@tokophi.id",

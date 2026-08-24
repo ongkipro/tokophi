@@ -2,6 +2,7 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { applyOrderStatusChange, type OrderStatus } from "./order-status";
+import { kaTrack } from "@tokophi/lib/kiriminaja";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KiriminAja shipment tracking → order state (BACKLOG shipping #1 + #2).
@@ -192,4 +193,38 @@ export async function syncOrderFromKa(
   });
   if (!found) return { ok: false, changed: [], error: `order ${orderNumber} not found` };
   return { ok: true, changed };
+}
+
+// ── WEBHOOK HALF (KA-UAT, 2026-08-24) ────────────────────────────────────────────────────────────
+// KiriminAja's webhook carries NO signature, NO HMAC and NO IP allowlist (their docs, verified) —
+// and in this system a delivery event collects COD cash and credits the ledger. So the webhook is
+// an UNTRUSTED HINT, exactly as the cron/tracking header comment prescribes: the payload names
+// which order to look at, and the FACTS come from a verified pull of the same tracking endpoint
+// the poller uses. Nothing from the webhook body is ever written to the database.
+//
+// ⚠️ The pull → map → sync rules here MIRROR cron/tracking's loop and must move together:
+//   · a waybill is only real if it isn't our own booking ref echoed back (`!== ref`);
+//   · an unmapped status is `null` — it fills the AWB and changes nothing (never forced "shipped");
+//   · syncOrderFromKa is the ONE writer, forward-only, atomic with the money.
+// The cron keeps its richer loop (evidence logging, problem flags, per-store fairness); this is the
+// single-order fast path a webhook tick needs.
+export async function verifyKaHint(kaOrderId: string): Promise<{ known: boolean; changed: string[] }> {
+  const [order] = await db
+    .select({ number: schema.orders.number, awb: schema.orders.awb, status: schema.orders.status })
+    .from(schema.orders)
+    .where(eq(schema.orders.kaOrderId, kaOrderId))
+    .limit(1);
+  // Unknown id: not ours (or a replay for a deleted probe). Report "unknown", write nothing —
+  // the caller answers 200 either way so KiriminAja does not retry-storm over foreign ids.
+  if (!order) return { known: false, changed: [] };
+  if (order.status !== "diproses" && order.status !== "dikirim") return { known: true, changed: [] };
+
+  const r = await kaTrack(kaOrderId);
+  if (!r.ok) return { known: true, changed: [] }; // the poller will catch up on its own tick
+  const data = (r.data ?? {}) as { awb?: string; waybill?: string; status?: string | number };
+  const realAwb = [data.awb, data.waybill].find((x) => !!x && x !== kaOrderId) ?? null;
+  const outcome = outcomeFromTrackingCode(data.status);
+  if (!realAwb && !outcome) return { known: true, changed: [] };
+  const s = await syncOrderFromKa(order.number, outcome, realAwb, null);
+  return { known: true, changed: s.changed };
 }

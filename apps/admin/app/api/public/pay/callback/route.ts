@@ -123,7 +123,7 @@ export async function POST(req: Request) {
   // Capped read — see `lib/public-guard.ts`. A real callback is four scalar fields; nothing bounded
   // what an unauthenticated caller could push through `req.json()` before the secret check even ran.
   // (It runs first now, but the cap costs nothing and this endpoint must not be the exception.)
-  let body: { trx_id?: string; reff_id?: string; status?: string; paid_at?: string; amount?: unknown } = {};
+  let body: { trx_id?: string; transaction_id?: string; reff_id?: string; status?: string; paid_at?: string; amount?: unknown } = {};
   const raw = await readPublicBody(req, {});
   if (raw.res) return raw.res;
   try {
@@ -133,7 +133,11 @@ export async function POST(req: Request) {
   }
   // A trimmed empty string is NOT an identifier. `body.trx_id = ""` used to fall through to `reff`
   // silently; naming it here is what makes the ZERO-IDENTITY branch below reachable and testable.
-  const trx = typeof body.trx_id === "string" ? body.trx_id.trim() : "";
+  // Two eras coexist: create_payment callbacks say `trx_id`; /api/h2h/submit (digital orders,
+  // AL-ORDER 2026-08-24) issues `transaction_id`. Same identifier family, same column — read both,
+  // trx_id first so nothing changes for the era already in production.
+  const trxRaw = typeof body.trx_id === "string" && body.trx_id.trim() ? body.trx_id : (typeof body.transaction_id === "string" ? body.transaction_id : "");
+  const trx = trxRaw.trim();
   const reff = typeof body.reff_id === "string" ? body.reff_id.trim() : "";
   const status = (body.status ?? "").toUpperCase();
 

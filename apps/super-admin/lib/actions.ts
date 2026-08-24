@@ -8,7 +8,7 @@ import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } fro
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
-import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
+import { alTestConnection, alProbeChannels, alCreateOrder } from "@tokophi/lib/autolaris";
 import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
@@ -760,7 +760,8 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
   const amount = charge.total;
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
   const callbackUrl = payCallbackUrl(reffId);
-  const r = await alCreatePayment({ reffId, channelCode: "VABCA", amount, customerId: storeId, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl });
+  // AL-ORDER: digital order (courir_id=1) — same contract as the merchant pay flow; see alCreateOrder.
+  const r = await alCreateOrder({ reffId, channelCode: "VABCA", amount, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl, items: [{ name: "Langganan TokoPhi (manual)", qty: 1, unitPrice: amount }] });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
 
   const number = "SUB-" + Date.now().toString().slice(-9);

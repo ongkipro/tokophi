@@ -23,7 +23,7 @@ import { MAX_BODY_BYTES, MAX_CART_ITEMS, readPublicBody } from "./public-guard";
 // merchants and shoppers; a verbatim pass-through of a third party's unbounded text cannot promise
 // that, whichever strings it happens to emit today.
 
-const ROUTES = ["ongkir", "order", "promo", "pay/callback"] as const;
+const ROUTES = ["ongkir", "order", "promo", "pay/callback", "kiriminaja/webhook"] as const;
 const routeSrc = (name: string) =>
   readFileSync(join(__dirname, "..", "app", "api", "public", name, "route.ts"), "utf8");
 

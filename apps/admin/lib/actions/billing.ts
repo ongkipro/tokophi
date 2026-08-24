@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
 import { quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
 import { getSubscriptionPpnEnabled } from "@/lib/data/platform-finance";
-import { alCreatePayment, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
+import { alCreateOrder, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 // Everything a payment UI needs to show a VA / QRIS for one (unpaid) invoice.
@@ -87,9 +87,12 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
   const amount = charge.total;
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
   const callbackUrl = payCallbackUrl(reffId);
-  const r = await alCreatePayment({
+  // AL-ORDER: digital order via /api/h2h/submit (courir_id=1) — appears in the AutoLaris CMS as an
+  // order; the buyer pays exactly `amount` (their admin fee nets against settlement, measured).
+  const r = await alCreateOrder({
     reffId, channelCode, amount,
-    customerId: store.id, customerName: session.name || "Merchant", customerPhone: "081200000000", customerEmail: session.email, callbackUrl,
+    customerName: session.name || "Merchant", customerPhone: "081200000000", customerEmail: session.email, callbackUrl,
+    items: [{ name: `Langganan TokoPhi (${q.cycle === "annual" ? "tahunan" : "bulanan"})`, qty: 1, unitPrice: amount }],
   });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
 
