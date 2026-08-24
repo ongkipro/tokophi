@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 04:40 UTC] — FIN-02b · view `order_seller_entitlements` disamakan dengan rumus ledger (hak seller = omset + PPN barang)
+
+- **Executor:** Main Session (Claude, Fable 5). Menjawab pertanyaan owner "laporan saldo tenant sudah sesuai?" — audit menemukan: LEDGER sudah benar sejak FIN-01, tapi **view yang dibaca semua layar keuangan tenant** (Keuangan, Penghasilan, rekonsiliasi) masih `goods_proceeds − debit` TANPA PPN barang mode-exclusive → laporan under-report sebesar pajaknya, dan rekonsiliasi akan menandai setiap order ber-PPN sebagai "mismatch" terhadap ledger yang justru benar.
+- **Migrasi `0102_entitlement_carries_added_ppn`** (when=1787544931751 > head): CREATE OR REPLACE view — `seller_entitlement_idr = goods_proceeds + greatest(orders.tax_idr − included_sales_tax_idr, 0) − debit ongkir` (SATU rumus dengan `ledger-credit.ts`); kolom baru `sales_tax_added_idr` di ujung; baris LEGACY (tanpa order_financials) tetap ekspresi historis — tidak mengarang split yang tidak ada. Model potongan TIDAK berubah: ongkir & biaya admin pembayaran (VA/QRIS/COD-fee) memang tidak pernah masuk uang seller — buyer membayarnya DI ATAS harga barang dan langsung jadi uang platform, jadi "actual yang diterima seller" = omset + PPN barang − debit selisih ongkir, persis yang kini dilaporkan ketiga layar.
+- **Verifikasi:** probe SQL rolled-back di dev DB — financials 100k + tax 11k → view **111.000/11.000** (== angka test ledger); test paritas baru di `ledger-credit.test.ts` ("view agrees with the ledger credit in both tax modes", exclusive & inclusive) → suite 28/28; packages/db + lib/data **22 file / 161 test hijau**; doc-counts hijau setelah bump 103/`0102`; tsc admin 0. View sudah di-apply ke dev DB (idempotent — drizzle mengulangnya tanpa efek saat merge).
+
 ### [2026-08-24 04:12 UTC] — FIN-02 · PPN OFF = keterangan PPN hilang total di admin tenant
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner: saat toggle PPN global OFF, JANGAN tampilkan keterangan PPN apa pun di admin tenant — bahkan kalimat "PPN tidak dikenakan" pun adalah caption tentang pajak yang tidak berlaku.
