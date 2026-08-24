@@ -9,7 +9,6 @@ import { cached } from "./cache";
 export type StorePixel = {
   channel: "meta" | "google" | "tiktok";
   pixelId: string;
-  advancedMatching: boolean;
   /**
    * Google Ads conversion destination (`AW-…/label`), `null` when the merchant has not wired Google Ads.
    * PUBLIC by nature — like the pixel id, it ships in the page's JS; it is a destination, not a secret.
@@ -32,7 +31,6 @@ async function loadTrackingPixels(storeId: string): Promise<StorePixel[]> {
     .select({
       channel: schema.storeTrackingChannels.channel,
       pixelId: schema.storeTrackingChannels.pixelId,
-      advancedMatching: schema.storeTrackingChannels.advancedMatching,
       adsSendTo: schema.storeTrackingChannels.adsSendTo,
       enabled: schema.storeTrackingChannels.enabled,
     })
@@ -43,7 +41,6 @@ async function loadTrackingPixels(storeId: string): Promise<StorePixel[]> {
     .map((r) => ({
       channel: r.channel as StorePixel["channel"],
       pixelId: r.pixelId!.trim(),
-      advancedMatching: r.advancedMatching,
       adsSendTo: r.adsSendTo?.trim() || null,
     }));
 }

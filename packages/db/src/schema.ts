@@ -1433,7 +1433,7 @@ export const storeTrackingChannels = pgTable(
     pixelId: text(), // Meta Pixel ID · GA4 Measurement ID (G-XXXX) · TikTok Pixel ID — PUBLIC
     capiEnabled: boolean().notNull().default(false), // server-side events (CAPI / MP / Events API) on
     capiTokenCiphertext: text(), // Meta CAPI · GA4 Measurement Protocol · TikTok Events API token — encrypted
-    advancedMatching: boolean().notNull().default(false), // hash + send email/phone with events
+    advancedMatching: boolean().notNull().default(true), // DEAD RECORD since 2026-08-24 (owner: always on) — written true on save, read nowhere; kept because dropping is destructive
     testEventCode: text(), // optional Meta test_event_code for CAPI debugging
     // Google Ads only, and it is what makes Google Ads actually WORK (migration 0082).
     //

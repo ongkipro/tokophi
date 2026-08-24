@@ -15,7 +15,6 @@ export type TrackingInput = {
   enabled: boolean;
   pixelId: string;
   capiEnabled: boolean;
-  advancedMatching: boolean;
   testEventCode: string;
   /** Google Ads conversion destination, `AW-…/label`. Only meaningful on the `google` channel. */
   adsSendTo?: string;
@@ -74,7 +73,10 @@ export async function setTrackingChannel(input: TrackingInput): Promise<{ ok: bo
     enabled: input.enabled,
     pixelId: pixelId || null,
     capiEnabled: input.capiEnabled,
-    advancedMatching: input.advancedMatching,
+    // Advanced matching is ALWAYS ON (owner ruling 2026-08-24) — the column is written true so old
+    // rows converge, but nothing reads it anymore; the storefront and CAPI attach hashed
+    // identifiers unconditionally.
+    advancedMatching: true,
     testEventCode: testEventCode || null,
     adsSendTo: adsSendTo || null,
     updatedAt: new Date(),
