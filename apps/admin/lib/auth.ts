@@ -58,26 +58,15 @@ export function verifyPassword(pw: string, stored: string | null): boolean {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-export async function findLogin(email: string) {
-  const [row] = await db
-    .select({
-      userId: schema.users.id,
-      email: schema.users.email,
-      name: schema.users.name,
-      passwordHash: schema.users.passwordHash,
-      totpEnabled: schema.users.totpEnabled,
-      totpSecret: schema.users.totpSecret,
-      storeId: schema.storeUsers.storeId,
-      role: schema.storeUsers.role,
-      slug: schema.stores.slug,
-    })
-    .from(schema.users)
-    .innerJoin(schema.storeUsers, eq(schema.storeUsers.userId, schema.users.id))
-    .innerJoin(schema.stores, eq(schema.stores.id, schema.storeUsers.storeId))
-    .where(eq(schema.users.email, email.toLowerCase().trim()))
-    .limit(1);
-  return row ?? null;
-}
+/**
+ * The account + its DEFAULT membership, by the ONE selection contract (Task 5.9 / F-T10):
+ * earliest `invited_at` first, tie-broken by store id — see `lib/store-selection.ts`, which owns
+ * the ORDER BY. This used to be an unordered inner join with `limit(1)`, so a two-store user landed
+ * on whichever membership the query plan surfaced — arbitrary, and measured flipping. It is also a
+ * LEFT join now: membership fields are `null` for an account with no store, and `signIn` turns that
+ * into a clear refusal instead of the "wrong password" lie an inner join forced.
+ */
+export { findLoginRow as findLogin } from "@/lib/store-selection";
 
 /**
  * `issuedAt` overrides the token's `iat`. Exactly one caller passes it — `changePassword`, which has

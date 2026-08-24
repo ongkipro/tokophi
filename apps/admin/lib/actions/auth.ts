@@ -93,6 +93,15 @@ export async function signIn(_prev: SignInState, formData: FormData): Promise<Si
     await noteFailedLogin(email, row?.storeId ?? null);
     return { error: "Email atau kata sandi salah." };
   }
+  // NO MEMBERSHIP IS ITS OWN ANSWER, NOT A WRONG PASSWORD (Task 5.9 / F-T10). `findLogin` is a LEFT
+  // join now, so an account whose every `store_users` row has been revoked still resolves — with
+  // `storeId: null`. The password above just proved the caller owns this account, so naming the real
+  // reason leaks nothing to an attacker and saves the owner from resetting a password that was never
+  // wrong. Checked BEFORE the 2FA round-trip: a second factor for a session we will refuse to mint
+  // is a pointless prompt.
+  if (!row.storeId || !row.role) {
+    return { error: "Akun ini tidak punya akses ke toko mana pun. Minta pemilik toko mengundangmu lagi." };
+  }
   // second factor: if enabled, require a valid TOTP before issuing the session
   if (row.totpEnabled && row.totpSecret) {
     if (!code) return { need2fa: true };

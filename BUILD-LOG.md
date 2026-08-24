@@ -1997,3 +1997,64 @@ protocol exists to prevent.
 **Completed Task:** Epic 2 — *Update Log paginated, detail collapsed, KPI tiles derived*. No numbered
 Stage task is claimed: this is owner-requested UI work on the same screen as the 2026-08-23 backfill,
 so it is recorded as one more Epic 2 line beside its sibling rather than invented as a Stage entry.
+
+---
+
+## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
+
+**Executor:** Lane A (Claude subagent) · branch `feat/task-5.9-store-selection`
+
+**The measured defect (2026-08-23):** a user with memberships in two stores landed on an ARBITRARY
+store at login — `findLogin`'s membership join had no ORDER BY, so the winning row was plan-dependent
+— and the topbar store dropdown never offered the second store (it rendered a mock `STORES` list and
+only ever showed the session store).
+
+**The contract (new, one place):** `apps/admin/lib/store-selection.ts` — the default membership is
+**earliest `invited_at` first (nulls last), tie-broken by ascending store id**, and every reader
+(`findLogin` via `findLoginRow`, `listMemberships` for the switcher) sorts by that one definition
+(`membershipOrder()`). Owner connection, deliberately — same standing exception as `findLogin`.
+
+**Modified files:**
+- `apps/admin/lib/store-selection.ts` (new) — `membershipOrder` / `listMemberships` /
+  `resolveMembership` / `findLoginRow` (LEFT join: a zero-membership account resolves with
+  `storeId: null` instead of masquerading as a wrong password)
+- `apps/admin/lib/auth.ts` — `findLogin` is now a re-export of `findLoginRow`; no second, unordered
+  copy of the membership query. `getSession`'s membership re-read is untouched: deleting a
+  membership still kills the session on the next request.
+- `apps/admin/lib/actions/store.ts` (new) — `switchStore(storeId)`: proves membership in the TARGET
+  store against `store_users` in the same action, then RE-MINTS the session cookie server-side; the
+  role comes from the target row; an impersonated session is refused (the grant was for ONE store);
+  non-UUID input refused before Postgres can 22P02.
+- `apps/admin/lib/actions/auth.ts` — `signIn` refuses a password-valid account with no membership
+  with its own message (before the 2FA round-trip), instead of "Email atau kata sandi salah".
+- `apps/admin/components/admin/topbar.tsx` — switcher renders EVERY live membership (props from the
+  layout), current store checked, picking another calls `switchStore` and lands on the new store's
+  dashboard. Mock fallback removed.
+- `apps/admin/app/(admin)/layout.tsx` — fetches `listMemberships(session.userId)` alongside the
+  other topbar reads; passes `stores` + `currentStoreId`.
+- `apps/admin/lib/nav.ts` — dead mock `STORES` deleted.
+- `apps/admin/lib/store-selection.test.ts` (new) — 11 tests against real PostgreSQL
+  (`TEST_DATABASE_URL`): deterministic pick with 2 memberships, tie-break, NULL `invited_at` sorts
+  last, member/non-member resolution, revocation (row deleted ⇒ null ⇒ login falls back to the
+  surviving store), zero-membership LEFT-join shape; plus `codeOnly` source claims that
+  `switchStore` checks membership BEFORE minting and `signIn` carries the distinct refusal.
+
+**Verification:**
+- Mutation proof: flipping the ORDER BY to `desc nulls first` turned **3 tests red**; restored, all
+  green (the suite cannot pass on an unordered or reversed contract).
+- `npx vitest run` — **128 files / 1076 tests, all passing** (baseline 127/1065 + this suite's 11).
+- `npx tsc --noEmit -p apps/admin` — exit 0.
+- **Driven in a real browser against the PRODUCTION build** (`next build` + `next start :3216`,
+  throwaway user `task59-probe@…` with memberships in kopi-senja [invited 2026-08-01, owner] and
+  hijab-amara [invited 2026-08-02, admin]): login landed on `/store/kopi-senja` (earliest
+  invitation, deterministic); switcher listed BOTH stores (screenshot taken); picking Hijab Amara
+  → `/store/hijab-amara` with the topbar naming it (session re-minted, tenant context changed);
+  `delete from store_users` on the CURRENT store + reload → clean signout to `/login`, **no 5xx
+  anywhere in the whole flow**; re-login landed on the SURVIVING store. Probe user + memberships
+  deleted afterwards; server PID killed; kopi-senja's expired subscription showed the expected
+  read-only banner (reads only — fine for this flow).
+
+**Not verified / boundaries:** the switch flow was not driven under a live impersonated session (the
+refusal is covered by a source claim + the action's session.imp guard, not a browser run); `SESSION_
+MAX_AGE` re-mint on switch restarts the 7-day window by design (the holder already had a live,
+revocation-checked session).

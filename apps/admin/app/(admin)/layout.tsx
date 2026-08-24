@@ -10,6 +10,7 @@ import { StoreProvider } from "@/components/admin/store-context";
 import { getBilling } from "@/lib/data/billing";
 import { getTopbarData } from "@/lib/data/topbar";
 import { getPerluDikirimCount } from "@/lib/data/orders";
+import { listMemberships } from "@/lib/store-selection";
 import { IDR } from "@tokophi/lib/format";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -29,7 +30,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = session ? { name: session.name, email: session.email, role: session.role } : undefined;
   // Fetched ONCE here and handed to both chrome surfaces — the sidebar and the mobile drawer
   // render the same nav, and two copies of this query would be two chances to disagree.
-  const [storeName, storeSlug, searchIndex, bill, topbar, perluDikirim] = session
+  // Memberships feed the topbar's store switcher — EVERY live `store_users` row of this user, in
+  // the selection-contract order (Task 5.9). An impersonated session lists only the granted store,
+  // because the operator's membership row is the merchant's, not their own.
+  const [storeName, storeSlug, searchIndex, bill, topbar, perluDikirim, memberships] = session
     ? await Promise.all([
         getStoreName(session.storeId),
         getStoreSlug(session.storeId),
@@ -37,8 +41,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         getBilling(),
         getTopbarData(),
         getPerluDikirimCount(),
+        listMemberships(session.userId),
       ])
-    : [null, null, [], null, null, 0];
+    : [null, null, [], null, null, 0, []];
   const navCounts = { perluDikirim: perluDikirim ?? 0 };
   // The store's public storefront origin for "Kunjungi storefront" (same helper as the Domain card).
   const storefrontHost = storeSlug ? systemDomainFor(storeSlug) : "";
@@ -108,6 +113,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               balance={topbar?.balance}
               notifs={topbar?.notifs}
               navCounts={navCounts}
+              stores={memberships.map((m) => ({ id: m.storeId, name: m.name }))}
+              currentStoreId={session.storeId}
             />
           }
           banners={
