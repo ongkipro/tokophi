@@ -103,6 +103,11 @@ base). On VA BCA: flat Rp6.500 whatever the amounts.
 - Claw-backs reverse the **sale entry's own amount** (`−l.amount_idr`), so they stay symmetric with
   whatever formula credited it.
 - Release/payout rules unchanged (`platform_payout.release_on`, CAS payout transitions).
+- Payouts are settled **manually by the Super Admin** (Pencairan → Proses → Tandai lunas). The
+  "Tandai lunas" dialog takes an optional **bank-transfer reference**, written in the same CAS
+  statement as the status flip. `payouts.note` is keyed by terminal status: `gagal` ⇒ rejection
+  reason, `selesai` ⇒ transfer reference; both render on the merchant's `/saldo` Penarikan rows
+  (and the CSV export's `Keterangan` column), so both sides can reconcile against the bank statement.
 
 ## 5. Guards
 

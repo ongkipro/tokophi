@@ -134,6 +134,32 @@ suite("markPayoutPaidInTxn — only diproses → selesai (real Postgres)", () =>
     });
   });
 
+  it("writes the transfer reference on completion, and no-reference erases nothing", async () => {
+    await inTxn(async (tx) => {
+      // With a reference: it lands in payouts.note, which /saldo shows the merchant as "Ref: …".
+      const withRef = await fixture(tx, "diproses");
+      const r1 = await markPayoutPaidInTxn(tx, withRef.payoutId, "BIFAST-20260824-001");
+      expect(r1.ok).toBe(true);
+      const [n1] = await rows<{ note: string | null }>(
+        tx,
+        sql`select note from payouts where id = ${withRef.payoutId}`,
+      );
+      expect(n1.note).toBe("BIFAST-20260824-001");
+
+      // Without one: coalesce keeps whatever the column held — a lunas with no reference must
+      // never blank a note somebody already wrote.
+      const noRef = await fixture(tx, "diproses");
+      await tx.execute(sql`update payouts set note = 'catatan lama' where id = ${noRef.payoutId}`);
+      const r2 = await markPayoutPaidInTxn(tx, noRef.payoutId);
+      expect(r2.ok).toBe(true);
+      const [n2] = await rows<{ note: string | null }>(
+        tx,
+        sql`select note from payouts where id = ${noRef.payoutId}`,
+      );
+      expect(n2.note).toBe("catatan lama");
+    });
+  });
+
   it("REFUSES menunggu → selesai — THE DEFECT", async () => {
     await inTxn(async (tx) => {
       const f = await fixture(tx, "menunggu");

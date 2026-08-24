@@ -241,6 +241,9 @@ export type PayoutRow = {
   bankName: string | null;
   bankAccount: string | null;
   bankHolder: string | null;
+  // Meaning is keyed by status: `gagal` ⇒ the operator's rejection reason, `selesai` ⇒ the bank
+  // transfer reference. Both are written by the super-admin payout actions.
+  note: string | null;
   requestedAt: Date;
   paidAt: Date | null;
 };
@@ -252,7 +255,7 @@ export async function getPayouts(f: LedgerFilters = {}): Promise<Paged<PayoutRow
     const rows = (await db.execute(sql`
       select id, amount_idr as "amount", status::text as "status",
              bank_name as "bankName", bank_account as "bankAccount", bank_holder as "bankHolder",
-             requested_at as "requestedAt", paid_at as "paidAt",
+             note, requested_at as "requestedAt", paid_at as "paidAt",
              count(*) over ()::bigint as "total"
       from payouts
       ${where}
@@ -467,11 +470,12 @@ export async function getExportRows(tab: SaldoTab, f: LedgerFilters = {}): Promi
       const rows = (await db.execute(sql`
         select requested_at as "requestedAt", paid_at as "paidAt", status::text as "status",
                bank_name as "bankName", bank_account as "bankAccount", bank_holder as "bankHolder",
-               amount_idr as "amount"
+               note, amount_idr as "amount"
         from payouts ${where} order by requested_at desc limit ${EXPORT_CAP}
       `)) as unknown as {
         requestedAt: string; paidAt: string | null; status: string;
-        bankName: string | null; bankAccount: string | null; bankHolder: string | null; amount: string;
+        bankName: string | null; bankAccount: string | null; bankHolder: string | null;
+        note: string | null; amount: string;
       }[];
       return rows.map((r) => ({
         "Tanggal pengajuan": day(new Date(r.requestedAt)),
@@ -480,6 +484,8 @@ export async function getExportRows(tab: SaldoTab, f: LedgerFilters = {}): Promi
         "No. rekening": r.bankAccount ?? "",
         "Atas nama": r.bankHolder ?? "",
         Status: r.status,
+        // Rejection reason (gagal) or bank-transfer reference (selesai) — same rule as PayoutRow.
+        Keterangan: r.note ?? "",
         Jumlah: Number(r.amount),
       }));
     }

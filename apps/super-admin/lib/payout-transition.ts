@@ -85,6 +85,11 @@ const rows = async <T>(db: PayoutDb, query: SQL): Promise<T[]> =>
 export async function markPayoutPaidInTxn(
   db: PayoutDb,
   payoutId: string,
+  // Bank-transfer reference, optional. `payouts.note`'s meaning is keyed by the terminal status —
+  // `gagal` ⇒ the rejection reason (written by rejectPayout), `selesai` ⇒ this reference — and the
+  // two writers cannot collide because each terminal state is reachable exactly once. NULL keeps
+  // whatever is there (`coalesce`), so a lunas with no reference never erases anything.
+  ref?: string | null,
 ): Promise<MarkPaidResult> {
   // The whole guard, in the statement that writes. `paid_at` is set here (not by the caller) so the
   // stamp and the state change are the same write and cannot disagree.
@@ -92,7 +97,7 @@ export async function markPayoutPaidInTxn(
     db,
     sql`
       update payouts
-         set status = 'selesai', paid_at = now()
+         set status = 'selesai', paid_at = now(), note = coalesce(${ref ?? null}, note)
        where id = ${payoutId} and status = 'diproses'
       returning store_id as "storeId", amount_idr as "amount"
     `,
