@@ -95,6 +95,7 @@
 - **Change:** Remove the embedded default email/password. Require explicit test credentials through environment variables and fail before opening a browser when either value is absent.
 - **Done when:** Running the audit without credentials exits non-zero without attempting login; a focused check confirms no reusable credential literal remains in the script; the audit still authenticates when explicit local test credentials are supplied.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG 2026-08-17 — credential removed, env-required, smoke-run 264 route×width checks; integrated in stage4-p0-wave1)
 ### Task 4.2: Enforce Store Availability in Public Order Creation
 - **Requirement:** `F-T9`
 - **Related requirement:** `F-P4`
@@ -102,12 +103,14 @@
 - **Change:** Resolve the store through the same public-servability contract used by the storefront and reject `pending`, `suspended`, or otherwise blocked stores before cart, inventory, customer, order, payment, or checkout-session writes.
 - **Done when:** Integration tests submit the same valid payload to active and blocked stores; active succeeds, each blocked state returns the accepted 404/403 contract, and blocked attempts leave every affected table unchanged.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG — public-order availability guard; integrated in stage4-p0-wave1)
 ### Task 4.3: Make Payment Request Creation Idempotent
 - **Requirement:** `F-M13`
 - **Target Files:** `apps/admin/lib/actions/payments.ts`, `packages/db/src/schema.ts`, one new numbered migration, payment request tests.
 - **Change:** Introduce one stable idempotency key per order/payment intent, enforce uniqueness in PostgreSQL, and replay the accepted result instead of creating another provider charge. Do not rely on check-then-insert.
 - **Done when:** A concurrent two-request test observes one provider call, one active payment row, and the same accepted payment identity from both callers; retry after a process restart remains deterministic.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG — store-scoped request key claimed before provider I/O, terminal result replayed; integrated in stage4-p0-wave1)
 ### Task 4.4: Replace Fabricated Incoming Inventory with Receipt Facts
 - **Requirement:** `F-C6`
 - **Related requirements:** `SEC-6`, `F-C2`
@@ -115,48 +118,56 @@
 - **Change:** Derive incoming quantities from persisted purchase-order receipt state. If the schema does not contain a receipt fact, show pending/unknown rather than deriving a percentage from ordered quantity.
 - **Done when:** Fixtures for unreceived, partially received, and fully received purchase orders return only stored quantities; no constant percentage or inferred receipt quantity remains in the data path.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG — receipt facts persisted; integrated in stage4-p0-wave1)
 ### Task 4.5: Fix Multi-Variant Quick Stock Updates
 - **Requirement:** `F-C7`
 - **Target Files:** `apps/admin/app/(admin)/produk/inventori/inventori-client.tsx`, `apps/admin/lib/actions/inventory.ts`, focused inventory action tests.
 - **Change:** Send the selected variant id, exact intended quantity, and expected prior value for each edit. Reject stale updates and report which row must be reloaded.
 - **Done when:** A two-variant test edits one variant without changing the other; stale expected stock is rejected; the browser flow reloads and displays the persisted per-variant quantities.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG — per-variant conditional update on expected prior stock, stale rows reloaded with visible conflict; integrated in stage4-p0-wave1)
 ### Task 4.6: Make `Buat PO` Create a Real Purchase Order
 - **Requirement:** `F-C10`
 - **Target Files:** `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`, `apps/admin/lib/actions/purchases.ts`, focused purchase-order tests.
 - **Change:** Connect the product-editor dialog to the existing purchase-order action with validated supplier, variant, quantity, and cost data. Keep the dialog open on failure and remove any success behavior that only closes the UI.
 - **Done when:** The browser flow creates exactly one purchase order and line item for the selected variant; save failure remains visible with no row written; a repeat submission cannot duplicate the accepted request.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG "Completed Task: Stage 4 Task 4.6")
 ### Task 4.7: Persist Navigation Menu Creation
 - **Requirement:** `F-P7`
 - **Target Files:** `apps/admin/app/(admin)/navigasi/navigasi-client.tsx`, `apps/admin/lib/actions/menus.ts`, focused navigation tests.
 - **Change:** Make create-menu insert the menu and initial items in one tenant transaction. Return a typed accepted/error result and show success only after the transaction commits.
 - **Done when:** Create, reload, edit, and delete work against persisted rows; injected item-insert failure rolls back the menu; no success toast appears on rejection.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG "Completed Task: Stage 4 Task 4.7"; the UNIQUE (store_id, handle) debt it recorded was later closed too)
 ### Task 4.8: Make Checkout Order Creation Transactionally Idempotent
 - **Requirement:** `F-O8`
 - **Target Files:** `apps/admin/app/api/public/order/route.ts`, `packages/db/src/schema.ts`, one assigned migration, concurrent public-order tests.
 - **Change:** Claim `(store_id, checkout_session_id)` inside the order transaction with a database uniqueness contract. Replay the accepted order for the same session; never rely on the current preflight read.
 - **Done when:** Two concurrent valid submissions produce one order, one inventory decrement, and one stable response identity; retry after process restart is deterministic.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG "Completed Task: Stage 4 Task 4.8")
 ### Task 4.9: Serialize Purchase-Order Receipt
 - **Requirement:** `F-C11`
 - **Target Files:** `apps/admin/lib/actions/purchases.ts`, purchase receipt tests, schema/migration only if an accepted state constraint is missing.
 - **Change:** Lock or conditionally transition the purchase order and update inventory in the same transaction. A second receipt attempt must observe the committed terminal state and perform no increment.
 - **Done when:** A concurrent two-request DB test records one receipt transition and one inventory increment; replay returns the accepted terminal result without mutation.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG 2026-08-19 — serialized PO receipt, concurrency test)
 ### Task 4.10: Make Paid Subscription Callbacks Monotonic
 - **Requirement:** `F-M14`
 - **Target Files:** `apps/admin/app/api/public/pay/callback/route.ts`, subscription billing actions/helpers, callback tests.
 - **Change:** Lock the invoice, make paid terminal for callbacks, and extend entitlement once only. Reject or safely ignore stale non-paid events after payment.
 - **Done when:** Tests for paid → expired, paid → paid, and paid → expired → paid preserve paid status and extend the period exactly once.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG "Completed Task: Stage 4 Task 4.10")
 ### Task 4.11: Replace URL Impersonation JWTs with One-Time Exchanges
 - **Requirement:** `SEC-10`
 - **Target Files:** `apps/super-admin/lib/actions.ts`, `apps/admin/app/impersonate/route.ts`, session/auth types, one assigned migration/storage primitive if needed, impersonation tests.
 - **Change:** Mint a short-lived opaque one-time exchange, consume it atomically server-side, preserve signed operator context in a bounded merchant session, and provide explicit exit. Never place reusable bearer material in a URL.
 - **Done when:** One exchange succeeds once; replay, tamper, and expiry fail closed; a downstream merchant write identifies both operator and merchant; exit removes operator context.
 
+- **Status:** `[x]` **DONE 2026-08-21** (SEC-10 — one-time impersonation exchange, migration 0098; twelve mutations twelve reds; also recorded in AGENTS.md)
 ### Task 4.12: Prove Restricted Database Identity or Fail Closed
 - **Requirement:** `SEC-18`
 - **Target Files:** `packages/db/src/client.ts`, `docker-compose.coolify.yml`, per-surface startup/runtime probes, restricted-role tests.
@@ -172,6 +183,7 @@
 - **Target Files:** `apps/admin/app/api/public/pay/callback/route.ts`, admin cron routes, `packages/lib/src/pay-callback.ts`, every caller, endpoint tests.
 - **Change:** Resolve exactly one payment identity, reject ambiguous matches, and accept reusable first-party credentials only through headers or verified signatures. Remove secret-bearing query parameters from generated callback and cron URLs.
 - **Done when:** Callback tests reject zero/ambiguous identities and query-only credentials; header/signature paths pass; source and log scans contain no first-party reusable secret in URLs.
+- **Status:** `[x]` **DONE 2026-08-21** (SEC-16 — header-only CRON_SECRET gate + per-payment signed callback binding; also recorded in AGENTS.md)
 
 ## Stage 5: P1 High-Priority Remediation
 
@@ -187,12 +199,14 @@
 - **Change:** Wire sales-channel and tag controls through the existing product update contract and round-trip them, or remove controls that have no accepted product behavior. Do not add speculative schema for display-only toggles.
 - **Done when:** Every retained control changes a persisted field and survives reload; a focused source/contract test proves no rendered submit field is omitted from the update payload.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG "Completed Task: Stage 5 Task 5.2")
 ### Task 5.3: Make Store-User Invitations Retriable and Truthful
 - **Requirement:** `SEC-15`
 - **Target Files:** `apps/admin/lib/actions/users.ts`, `apps/admin/components/admin/pengaturan/pengguna-card.tsx`, invitation integration tests.
 - **Change:** Make the database row authoritative, handle uniqueness races deterministically, and distinguish created, already invited, accepted, and failed states. Never show accepted/success solely because an email operation succeeded.
 - **Done when:** Tests cover duplicate retry, concurrent invite, database failure after mail success, and an already accepted user; each UI message matches durable state and no duplicate membership is created.
 
+- **Status:** `[x]` **DONE 2026-08-22** (SEC-15 — invites retriable + truthful, forced-race tests; CHANGELOG entry + AGENTS.md)
 ### Task 5.4: Distinguish Checkout Search Failure from No Results
 - **Requirement:** `F-F10`
 - **Target Files:** `apps/storefront/src/pages/checkout.astro`, district-search endpoint tests or browser fixtures.
@@ -244,6 +258,7 @@
 - **Change:** Fix source-level lint errors without weakening rules, add one root command covering Admin and Super Admin, and run it in CI.
 - **Done when:** The root lint command exits zero locally and is a required CI step; no ignore or rule-disable is added solely to hide the baseline.
 
+- **Status:** `[x]` **DONE 2026-08-20** (`a414e4e` — admin lint 0 errors; ⚠️ its adjust-during-render refactor was later NOT the builder-crash culprit — see BUILD-LOG 2026-08-23 14:05, bisected to `d5bf796`)
 ### Task 5.12: Build Every Deployable Surface in CI
 - **Requirement:** `NF-14`
 - **Target Files:** root `package.json`, `.github/workflows/ci.yml`, existing workspace build configuration.
@@ -274,6 +289,7 @@
 - **Change:** Initialize the editor from `page.body`, preserve an intentionally empty body, and remove runtime title-derived filler from the edit path.
 - **Done when:** Populated and empty pages open, save, and reload without replacement text or data loss.
 
+- **Status:** `[x]` **DONE** (BUILD-LOG "Completed Task: Stage 5 Task 5.16" — persisted CMS page bodies preserved; supersedes Task 1.1)
 ### Task 5.17: Enforce Platform Roles at Route Entry
 - **Requirement:** `SEC-9`
 - **Target Files:** `apps/super-admin/middleware.ts`, `apps/super-admin/lib/platform-auth.ts`, protected route layouts/pages, focused authorization tests.
