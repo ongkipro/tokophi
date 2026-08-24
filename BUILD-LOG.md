@@ -8,7 +8,7 @@
 
 ## Log History & Execution Entries
 
-### [2026-08-24 05:56 UTC] — FIN-03 · lengan LEGACY kredit ledger & view = barang saja (laporan owner: penarikan masih membawa ongkir)
+### [2026-08-24 06:27 UTC] — FIN-03 · lengan LEGACY kredit ledger & view = barang saja (laporan owner: penarikan masih membawa ongkir)
 
 - **Executor:** Main Session (Claude, Fable 5). Owner menemukan saldo penarikan masih memuat biaya pengiriman. Audit: jalur order BARU sudah benar (goods via order_financials, FIN-01/0102); yang bocor adalah lengan **LEGACY** — kredit fallback ke `payments.amount_idr` (historis = barang+ongkir) dan view memakai `total − tax`.
 - **Fix satu rumus:** `greatest(orders.subtotal_idr − discount_idr, 0)` di KEDUA sisi — `creditSaleForPayment` (fallback legacy) dan view `order_seller_entitlements` (migrasi **`0104`**, juga kolom goods_proceeds legacy). Diskon lama mungkin memuat diskon ongkir (split tak tercatat) — ekspresi ini konservatif ke arah platform, tidak pernah ke arah seller.
