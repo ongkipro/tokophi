@@ -61,10 +61,11 @@ export default async function LanggananPage() {
                   <p className="mt-0.5 font-medium tabular-nums">{IDR(subscriptionCharge(bill.nextAmount, ppnOn).total)}{bill.isPromo && <span className="ml-1 text-xs font-normal text-emerald-600">promo</span>}</p>
                   {/* The line that shows the arithmetic behind the total above it: two amounts,
                       59,66px of ink movement at 1440px, under a total that was already tabular. */}
-                  {ppnOn ? (
+                  {/* OFF shows NOTHING here (owner 2026-08-24): with the toggle off the total IS the
+                      price — any PPN sentence, even a reassuring one, is a caption about a tax that
+                      does not apply. The arithmetic line exists only when there is arithmetic. */}
+                  {ppnOn && (
                     <p className="text-[11px] text-muted-foreground tabular-nums">{IDR(bill.nextAmount)} + PPN 11% ({IDR(subscriptionCharge(bill.nextAmount, true).taxIdr)})</p>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground tabular-nums">Harga flat — PPN tidak dikenakan saat ini.</p>
                   )}
                 </div>
               </div>
@@ -90,13 +91,13 @@ export default async function LanggananPage() {
             <Row label="Bulanan" value={`${IDR(BILLING.MONTHLY_IDR)}/bln`} />
             <Row label="Tahunan (hemat)" value={`${IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln`} accent />
             <div className="border-t pt-3">
-              <Row label="PPN" value="11%" />
+              {ppnOn && <Row label="PPN" value="11%" />}
               <Row label={ppnOn ? "Total bulanan (termasuk PPN)" : "Total bulanan"} value={IDR(subscriptionCharge(BILLING.MONTHLY_IDR, ppnOn).total)} />
             </div>
             {ppnOn ? (
               <p className="text-[11px] text-muted-foreground tabular-nums">Harga di atas belum termasuk PPN 11% — ditambahkan saat pembayaran. Bayar tahunan {IDR(subscriptionCharge(BILLING.ANNUAL_IDR, true).total)} (termasuk PPN) · langsung dari trial dapat 13 bulan (1 gratis).</p>
             ) : (
-              <p className="text-[11px] text-muted-foreground tabular-nums">Harga flat — PPN tidak dikenakan saat ini. Bayar tahunan {IDR(BILLING.ANNUAL_IDR)} · langsung dari trial dapat 13 bulan (1 gratis).</p>
+              <p className="text-[11px] text-muted-foreground tabular-nums">Bayar tahunan {IDR(BILLING.ANNUAL_IDR)} · langsung dari trial dapat 13 bulan (1 gratis).</p>
             )}
             <div className="border-t pt-3 space-y-1.5 text-xs text-muted-foreground">
               {["Semua fitur (produk, order, diskon, CRM, analitik, dll)", "Kurir & pembayaran terintegrasi", "Storefront + custom domain"].map((f) => (

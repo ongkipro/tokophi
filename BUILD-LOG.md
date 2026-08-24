@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 04:12 UTC] — FIN-02 · PPN OFF = keterangan PPN hilang total di admin tenant
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner: saat toggle PPN global OFF, JANGAN tampilkan keterangan PPN apa pun di admin tenant — bahkan kalimat "PPN tidak dikenakan" pun adalah caption tentang pajak yang tidak berlaku.
+- **Files:** `akun/langganan/page.tsx` (baris aritmetika "Tagihan berikutnya" hilang saat OFF; `<Row label="PPN" value="11%">` di kartu paket kini hanya saat ON; kalimat tahunan OFF tanpa frasa PPN) + `pay-subscription.tsx` (suffix kartu siklus kosong saat OFF). Caption "Total dibayar (termasuk PPN Rp…)" di Riwayat SENGAJA tetap — ia membaca `tax_idr` TERSIMPAN dan hanya muncul bila riwayat memang pernah ditagih ber-PPN (fakta historis, bukan keterangan toggle).
+- **Verifikasi:** tsc 0 · vitest apps/admin 64 file/546 hijau · drive build produksi (probe owner batiknusantara): halaman /akun/langganan dengan toggle OFF memuat **0 kata "PPN"** di luar kartu Riwayat, harga flat Rp275.000 tampil, 0 error JS. Billing batik dipulihkan persis, probe dihapus. Juga: PDF laporan UAT KiriminAja dibuat → `~/Downloads/UAT-TokoPhi-KiriminAja-2026-08-24.pdf` (2 halaman: tabel 9 skenario + OID, bukti volumetrik, Callback URL webhook, temuan drift sandbox).
+
 ### [2026-08-24 03:34 UTC] — KA-UAT + AL-ORDER · simulasi UAT KiriminAja 9 skenario, webhook AWB, dan AutoLaris pindah ke Create Order digital
 
 - **Executor:** Main Session (Claude, Fable 5). Plan-md-first (permintaan owner): `specs/docs/tasks/2026-08-24-kiriminaja-uat-autolaris-plan.md`. ⚠️ **Repo tetap PRIVATE** — ruling owner 2026-08-24 menggantikan perintah go-public.

@@ -69,12 +69,12 @@ export function PaySubscription({ firstInvoicePaid, pending, channels, ppnEnable
         <button type="button" onClick={() => setCycle("monthly")} className={cn("rounded-lg border p-3 text-left transition-colors", cycle === "monthly" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
           <div className="flex items-center justify-between"><span className="font-semibold">Bulanan</span>{cycle === "monthly" && <Check className="size-4 text-primary" />}</div>
           <div className="mt-0.5 text-sm tabular-nums">{IDR(m.total)}</div>
-          <div className="text-xs text-muted-foreground">{quote("monthly", firstInvoicePaid).amount === 50_000 ? "promo bulan pertama" : "per bulan"}{ppnEnabled ? " · termasuk PPN 11%" : " · harga flat"}</div>
+          <div className="text-xs text-muted-foreground">{quote("monthly", firstInvoicePaid).amount === 50_000 ? "promo bulan pertama" : "per bulan"}{ppnEnabled ? " · termasuk PPN 11%" : ""}</div>
         </button>
         <button type="button" onClick={() => setCycle("annual")} className={cn("rounded-lg border p-3 text-left transition-colors", cycle === "annual" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
           <div className="flex items-center justify-between"><span className="font-semibold">Tahunan</span>{cycle === "annual" && <Check className="size-4 text-primary" />}</div>
           <div className="mt-0.5 text-sm tabular-nums">{IDR(aTotal.total)}</div>
-          <div className="text-xs text-emerald-600 dark:text-emerald-400">{a.bonusMonth ? `${a.months} bln (1 gratis)` : "hemat 50rb/bln"}{ppnEnabled ? " · termasuk PPN 11%" : " · harga flat"}</div>
+          <div className="text-xs text-emerald-600 dark:text-emerald-400">{a.bonusMonth ? `${a.months} bln (1 gratis)` : "hemat 50rb/bln"}{ppnEnabled ? " · termasuk PPN 11%" : ""}</div>
         </button>
       </div>
 
