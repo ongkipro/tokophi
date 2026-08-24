@@ -2000,6 +2000,59 @@ so it is recorded as one more Epic 2 line beside its sibling rather than invente
 
 ---
 
+<<<<<<< HEAD
+## [2026-08-24 01:30 UTC] — Task 6.9 / F-F7: the per-store public email existed everywhere except the contact page
+
+**Task / Scope:** Task 6.9 (`F-F7`) · branch `feat/task-6.9-store-email` off `origin/main` `64458fe`
+**Executor:** Lane C (Claude subagent)
+**Files:** `apps/storefront/src/pages/kontak.astro` · `apps/admin/lib/actions/store-profile.test.ts`
+(new) · `apps/storefront/src/lib/kontak-email.test.ts` (new) · `TASKS.md` · `BUILD-LOG.md` ·
+`specs/docs/tasks/2026-08-24-task-6.9-store-email.md` (new)
+
+### The task sheet was written against a repo that no longer exists
+
+Verified against `origin/main` BEFORE writing anything: `stores.email` shipped in migration **0070**
+(nullable, `ADD COLUMN IF NOT EXISTS`), with shape-only validation (`emailError`,
+`@tokophi/lib/validate` — no domain whitelist), the tenant-scoped round-trip in
+`apps/admin/lib/actions/store-profile.ts` (`requireCapability("settings:write")` + `withTenant`,
+explicit `where id = storeId` because `stores` has no `store_id`), the "Email publik" field on the
+Pengaturan card, the storefront tenant read (`data/store.ts`) and the footer's conditional render.
+
+- ⚠️ **The coordinator-assigned migration number 0101 is deliberately UNUSED.** A second migration
+  adding a column 0070 already owns is a split source of truth. Journal head stays `0100`;
+  `npm run verify-migrations -w @tokophi/db` green; the shared dev DB's newest applied stamp is
+  `1787302186123` (= 0100) so every environment already has the column. Nothing to apply at merge.
+- ⚠️ The task sheet's `lib/actions/profile.ts` is the USER profile (login credential) — untouched.
+
+### What was genuinely missing
+
+`kontak.astro` still carried the comment "There is no `stores.email` column" (true when written,
+false since 0070) and rendered **no email at all**, even for a store that published one. It now
+derives `email` from the Host-resolved tenant (blank → null) and renders an `Email` row with a plain
+`mailto:` link **only when set** — unset renders nothing, never a placeholder (one container serves
+every merchant, ADR 0009; a fallback here is one merchant's inbox on every store's contact page).
+
+### Verification (exit codes read directly)
+
+- `npx vitest run` → **129 files / 1074 tests** green (baseline 127/1065 + the 2 new files / 9 tests).
+  The new DB-coupled suite runs on the derived `_test` DB under the real GUC +
+  `set local role tokophi_app` shape: two-store isolation, 0058 raw-read invisibility, invalid
+  rejected with the row untouched, clear → NULL survives reload as `""`.
+- `npx tsc --noEmit -p apps/admin` → 0 · `-p packages/db` → 0 ·
+  `npx astro check --root apps/storefront` → 0 errors / 0 warnings / 14 hints (baseline).
+- **Served HTML, prod build, real DB** (`node dist/server/entry.mjs`, port 4485, dev DB read-only,
+  server killed by its own PID): `Host: toko-demo.test` (batiknusantara, email set) → `<dt>Email</dt>`
+  + `mailto:halo@batiknusantara.id` rendered; `Host: kopi-senja.127.0.0.1.sslip.io` (unset) → HTTP
+  200 with **zero** email markup on the whole page. ⚠️ batiknusantara's sslip host 301s to its
+  primary domain `toko-demo.test` — use that Host for local checks on that store.
+- Stated boundary: the section is pure SSR markup (no client script), so served-HTML IS the render;
+  no Playwright layered on top. The admin card is untouched (the field shipped with 0070), so no
+  admin browser pass — its contract is pinned by the new action tests + tsc.
+
+**Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
+`specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
+||||||| 64458fe
+=======
 ## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
 
 **Executor:** Lane A (Claude subagent) · branch `feat/task-5.9-store-selection`
@@ -2058,3 +2111,4 @@ only ever showed the session store).
 refusal is covered by a source claim + the action's session.imp guard, not a browser run); `SESSION_
 MAX_AGE` re-mint on switch restarts the 7-day window by design (the holder already had a live,
 revocation-checked session).
+>>>>>>> origin/main
