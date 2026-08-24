@@ -715,6 +715,13 @@
       "when": 1787388586123,
       "tag": "0101_platform_finance",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1787544931751,
+      "tag": "0102_entitlement_carries_added_ppn",
+      "breakpoints": true
     }
   ]
 }
