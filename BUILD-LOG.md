@@ -2009,7 +2009,6 @@ so it is recorded as one more Epic 2 line beside its sibling rather than invente
 
 ---
 
-<<<<<<< HEAD
 ## [2026-08-24 01:30 UTC] — Task 6.9 / F-F7: the per-store public email existed everywhere except the contact page
 
 **Task / Scope:** Task 6.9 (`F-F7`) · branch `feat/task-6.9-store-email` off `origin/main` `64458fe`
@@ -2061,7 +2060,7 @@ every merchant, ADR 0009; a fallback here is one merchant's inbox on every store
 **Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
 `specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
 ||||||| 64458fe
-=======
+
 ## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
 
 **Executor:** Lane A (Claude subagent) · branch `feat/task-5.9-store-selection`
@@ -2120,4 +2119,3 @@ only ever showed the session store).
 refusal is covered by a source claim + the action's session.imp guard, not a browser run); `SESSION_
 MAX_AGE` re-mint on switch restarts the 7-day window by design (the holder already had a live,
 revocation-checked session).
->>>>>>> origin/main
