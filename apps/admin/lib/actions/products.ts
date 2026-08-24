@@ -3,6 +3,7 @@ import { schema } from "@tokophi/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
+import { productFields } from "@/lib/product-fields";
 import { withTenant } from "@/lib/tenant";
 import { allocateProductNumber, allocateVariantSeq } from "@/lib/catalog-numbering";
 import { defaultInventoryLevelId, defaultLocationId } from "@/lib/inventory-location";
@@ -60,31 +61,37 @@ const comboKey = (o1: string | null, o2: string | null, o3: string | null) => [o
 const comboTitle = (o1: string | null, o2: string | null, o3: string | null) => [o1, o2, o3].filter(Boolean).join(" / ") || "Default";
 const usesVariants = (i: ProductInput) => !!(i.variants && i.variants.length && i.options && i.options.length);
 
-const productFields = (i: ProductInput) => ({
-  title: i.name,
-  handle: i.handle,
-  description: i.description || null,
-  shortDescription: i.shortDescription || null,
-  status: i.status,
-  category: i.category || null,
-  productType: i.productType || null,
-  vendor: i.vendor || null,
-  seoTitle: i.seoTitle || null,
-  seoDesc: i.seoDesc || null,
-  googleCategoryId: i.googleCategoryId ?? null,
-  googleCategoryPath: i.googleCategoryPath || null,
-  gender: i.gender || null,
-  ageGroup: i.ageGroup || null,
-  material: i.material || null,
-  lengthCm: i.lengthCm ?? null,
-  widthCm: i.widthCm ?? null,
-  heightCm: i.heightCm ?? null,
-});
+// productFields moved to @/lib/product-fields — a "use server" module may only export async
+// functions, and the mapper must stay import-testable (same split as platform-rank.ts).
 // The rows to persist: either the real variant matrix, or a single implicit "Default".
 const variantRowsOf = (input: ProductInput): VariantInput[] =>
   usesVariants(input)
     ? input.variants!
     : [{ option1: null, option2: null, option3: null, price: input.price, stock: input.stock, sku: input.sku ?? null, barcode: input.barcode ?? null }];
+
+
+// The auto-suggested google_category_id is an FK into product_taxonomy — GLOBAL reference data that
+// the deploy chain seeds. On an environment where that seed has not run (measured on the shared dev
+// DB: table empty, every product NULL), writing the suggestion turns "Simpan" into a 23503 for the
+// MERCHANT — a save that used to succeed. An auto-fill must degrade, never block: if the id is not
+// in the reference table, both fields fall back to the input's own values (usually null). An
+// EXPLICIT merchant pick comes from searchTaxonomy over real rows, so it is left untouched — if
+// that ever dangles, failing loudly is correct.
+async function taxonomySafe<T extends { googleCategoryId: number | null; googleCategoryPath: string | null }>(
+  db: Parameters<Parameters<typeof withTenant>[1]>[0],
+  fields: T,
+  input: ProductInput,
+): Promise<T> {
+  const auto = fields.googleCategoryId != null && input.googleCategoryId == null;
+  if (!auto) return fields;
+  const [row] = await db
+    .select({ id: schema.productTaxonomy.id })
+    .from(schema.productTaxonomy)
+    .where(eq(schema.productTaxonomy.id, fields.googleCategoryId!))
+    .limit(1);
+  if (row) return fields;
+  return { ...fields, googleCategoryId: input.googleCategoryId ?? null, googleCategoryPath: input.googleCategoryPath || null };
+}
 
 export async function createProduct(input: ProductInput): Promise<{ id: string; number: number }> {
   const { storeId: sid } = await requireCapability("products:write");
@@ -95,7 +102,7 @@ export async function createProduct(input: ProductInput): Promise<{ id: string; 
     const rows = variantRowsOf(input);
     const [p] = await db
       .insert(schema.products)
-      .values({ storeId: sid, hasVariants: usesVariants(input), number, variantSeqNext: rows.length + 1, ...productFields(input) })
+      .values({ storeId: sid, hasVariants: usesVariants(input), number, variantSeqNext: rows.length + 1, ...(await taxonomySafe(db, productFields(input), input)) })
       .returning();
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
     const locId = await defaultLocationId(db, sid);
@@ -140,7 +147,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
     // isn't ours (the pattern duplicateProduct already uses).
     const [owned] = await db.select({ id: schema.products.id, number: schema.products.number }).from(schema.products).where(eq(schema.products.id, id)).limit(1);
     if (!owned) return null;
-    await db.update(schema.products).set({ ...productFields(input), hasVariants: usesVariants(input), updatedAt: new Date() }).where(eq(schema.products.id, id));
+    await db.update(schema.products).set({ ...(await taxonomySafe(db, productFields(input), input)), hasVariants: usesVariants(input), updatedAt: new Date() }).where(eq(schema.products.id, id));
     // Default location, not just any: new inventory rows must land where the merchant actually stocks.
     const locId = await defaultLocationId(db, sid);
 

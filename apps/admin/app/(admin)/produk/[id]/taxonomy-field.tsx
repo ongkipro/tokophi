@@ -22,12 +22,16 @@ export function GoogleCategoryField({
   path,
   title,
   category,
+  description,
   onChange,
 }: {
   value: number | null;
   path: string;
   title: string;
   category: string;
+  /** Same screening inputs as the on-publish auto-fill (actions/products.ts) — the interactive
+      suggestion and the server's must never disagree about the same listing. */
+  description?: string;
   onChange: (id: number | null, path: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -35,7 +39,7 @@ export function GoogleCategoryField({
   const [results, setResults] = React.useState<TaxonomyOption[]>([]);
   const [loading, setLoading] = React.useState(false);
   // Only suggest when nothing is set yet, from the title (+ merchant category as a hint).
-  const suggestion = React.useMemo(() => (value ? null : suggestGoogleCategory(title, category)), [value, title, category]);
+  const suggestion = React.useMemo(() => (value ? null : suggestGoogleCategory(title, category, description)), [value, title, category, description]);
 
   React.useEffect(() => {
     if (!open) return;

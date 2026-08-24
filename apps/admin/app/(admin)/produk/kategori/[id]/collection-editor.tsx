@@ -618,84 +618,6 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
             </CardContent>
           </Card>
 
-          {/* Gambar koleksi */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Gambar koleksi</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {imageUrl ? (
-                <div className="flex flex-col gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- /api/uploads is served by
-                      a route handler, not the image optimizer's allowed loaders. */}
-                  <img
-                    src={imageUrl}
-                    alt=""
-                    className="aspect-[3/2] w-full rounded-lg object-cover ring-1 ring-border"
-                  />
-                  {canWrite && (
-                    <div className="flex gap-2">
-                      <Button type="button" variant="secondary" size="sm" disabled={imgBusy} onClick={() => imgInputRef.current?.click()}>
-                        {imgBusy ? "Mengunggah…" : "Ganti"}
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" className="text-destructive" disabled={imgBusy} onClick={() => setImageUrl("")}>
-                        Hapus
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {isEdit && collection?.emoji && (
-                    <div className="flex size-24 items-center justify-center rounded-xl bg-muted text-5xl ring-1 ring-foreground/10">
-                      {collection.emoji}
-                    </div>
-                  )}
-                  {/* Both halves of the promise are real now: the button opens the hidden file input,
-                      and the wrapper's onDragOver/onDrop take a dropped file (the Files library's
-                      pattern — preventDefault, then read e.dataTransfer.files). */}
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); if (canWrite && !imgBusy) setDrag(true); }}
-                    onDragLeave={() => setDrag(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDrag(false);
-                      if (!canWrite || imgBusy) return;
-                      void pickImage(e.dataTransfer.files?.[0]);
-                    }}
-                    className={cn("rounded-xl transition-colors", drag && "bg-primary/5 ring-2 ring-primary")}
-                  >
-                    <button
-                      type="button"
-                      disabled={!canWrite || imgBusy}
-                      onClick={() => imgInputRef.current?.click()}
-                      className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-10 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <ImageUp className="size-6" />
-                      <span className="text-sm">
-                        {imgBusy ? "Mengunggah…" : "Seret gambar atau klik untuk unggah"}
-                      </span>
-                      {/* The SERVER's number (MAX_BYTES = 2 MB, lib/image-store.ts) — not a nicer-sounding
-                          one. It said 5 MB, which rejects a 4 MB photo after promising it would fit. */}
-                      <span className="text-xs text-muted-foreground">
-                        PNG, JPG, WEBP, atau SVG — maks. 2 MB. Otomatis jadi WebP.
-                      </span>
-                    </button>
-                  </div>
-                </>
-              )}
-              <input
-                ref={imgInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => { void pickImage(e.target.files?.[0]); e.target.value = ""; }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Gambar juga masuk ke Files. Tekan Simpan untuk menerapkannya ke koleksi.
-              </p>
-            </CardContent>
-          </Card>
 
           {/* SEO */}
           <Card>
@@ -789,6 +711,85 @@ export function CollectionEditor({ collection, products }: { collection?: Collec
                   into; the honest fix for a control with no sink is to remove it, not to store a
                   value nothing consults. (Task 5.2 names the sibling file `product-editor.tsx`
                   only — this editor is the caller that list would have missed.) */}
+            </CardContent>
+          </Card>
+
+          {/* Gambar koleksi */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Gambar koleksi</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {imageUrl ? (
+                <div className="flex flex-col gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- /api/uploads is served by
+                      a route handler, not the image optimizer's allowed loaders. */}
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    className="aspect-[3/2] w-full rounded-lg object-cover ring-1 ring-border"
+                  />
+                  {canWrite && (
+                    <div className="flex gap-2">
+                      <Button type="button" variant="secondary" size="sm" disabled={imgBusy} onClick={() => imgInputRef.current?.click()}>
+                        {imgBusy ? "Mengunggah…" : "Ganti"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="text-destructive" disabled={imgBusy} onClick={() => setImageUrl("")}>
+                        Hapus
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {isEdit && collection?.emoji && (
+                    <div className="flex size-24 items-center justify-center rounded-xl bg-muted text-5xl ring-1 ring-foreground/10">
+                      {collection.emoji}
+                    </div>
+                  )}
+                  {/* Both halves of the promise are real now: the button opens the hidden file input,
+                      and the wrapper's onDragOver/onDrop take a dropped file (the Files library's
+                      pattern — preventDefault, then read e.dataTransfer.files). */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); if (canWrite && !imgBusy) setDrag(true); }}
+                    onDragLeave={() => setDrag(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDrag(false);
+                      if (!canWrite || imgBusy) return;
+                      void pickImage(e.dataTransfer.files?.[0]);
+                    }}
+                    className={cn("rounded-xl transition-colors", drag && "bg-primary/5 ring-2 ring-primary")}
+                  >
+                    <button
+                      type="button"
+                      disabled={!canWrite || imgBusy}
+                      onClick={() => imgInputRef.current?.click()}
+                      className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-10 text-center text-muted-foreground transition-colors hover:border-primary hover:bg-muted/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <ImageUp className="size-6" />
+                      <span className="text-sm">
+                        {imgBusy ? "Mengunggah…" : "Seret gambar atau klik untuk unggah"}
+                      </span>
+                      {/* The SERVER's number (MAX_BYTES = 2 MB, lib/image-store.ts) — not a nicer-sounding
+                          one. It said 5 MB, which rejects a 4 MB photo after promising it would fit. */}
+                      <span className="text-xs text-muted-foreground">
+                        PNG, JPG, WEBP, atau SVG — maks. 2 MB. Otomatis jadi WebP.
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { void pickImage(e.target.files?.[0]); e.target.value = ""; }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Gambar juga masuk ke Files. Tekan Simpan untuk menerapkannya ke koleksi.
+              </p>
             </CardContent>
           </Card>
 

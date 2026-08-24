@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 02:55 UTC] — Kategori Google otomatis saat publish + kartu Gambar koleksi ke sidebar
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner 2026-08-24. Tanpa migrasi.
+- **Auto-kategori:** `productFields` (dipindah ke `@/lib/product-fields` — modul "use server" hanya boleh export async, dan mapper harus bisa diimpor test) mengisi `google_category_id/path` via `suggestGoogleCategory(judul, kategori, deskripsi)` HANYA saat `status="active"` dan pilihan eksplisit kosong; draft tak disentuh; pilihan merchant selalu menang. Deskripsi kini juga masuk suggester interaktif (`GoogleCategoryField`) supaya saran UI dan isian server tidak pernah beda pendapat.
+- 🔴 **Penyelamatan yang hanya ketahuan karena di-drive:** id saran adalah FK ke `product_taxonomy` — di lingkungan tanpa seed taxonomy (diukur: DB dev, 0 baris, semua produk NULL) tulisan itu membuat **Simpan merchant gagal 23503**. `taxonomySafe()` kini memverifikasi id ada sebelum menulis; tidak ada → degradasi diam ke NULL. **Fitur bantu tidak boleh memblokir save.** Pilihan eksplisit sengaja TIDAK diverifikasi — datang dari `searchTaxonomy` atas baris nyata, dan kalau itu dangling, gagal keras justru benar.
+- **Sidebar koleksi:** kartu "Gambar koleksi" pindah dari dasar kolom UTAMA ke sidebar kanan di bawah Publikasikan — metadata publish-adjacent, bukan isi; di dasar kolom kiri ia rutin terlewat scroll.
+- **Verifikasi (build produksi, browser, tenant probe):** jalur degradasi — taxonomy kosong → Simpan sukses, field tetap NULL; jalur positif — 1 baris referensi (2271 Dresses) → Simpan → DB `2271 | Apparel & Accessories > Clothing > Dresses`; posisi kartu terukur `imgX == pubX` (kolom sidebar). vitest fokus 5/5; suite penuh 129 file / 1081 hijau; tsc 0. Probe dibersihkan; `current_period_end` batik dipulihkan persis; baris taxonomy 2271 (data referensi global yang benar) dibiarkan.
+- ⚠️ **Insiden alat sesi ini:** EADDRINUSE kelima — satu putaran menilai build lama dan melaporkan "Gagal menyimpan" palsu; kesimpulan baru sah setelah pemilik port dibunuh dan `Ready` terverifikasi di log server BARU.
+
+
 ### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
 
 - **Executor:** Main Session (Claude, Fable 5). Entri docs-only; tidak memicu build (Coolify `watch_paths = '!**/*.md'` — perilaku yang diinginkan, tercatat 2026-08-23 pagi).
