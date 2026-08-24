@@ -145,12 +145,14 @@ async function mkStore(tx: Db): Promise<string> {
   const s = await rows(tx, sql`insert into stores (account_id, name, slug) values (${a[0].id}, 'Daily Stats Store', ${"ds-" + ++seq}) returning id`);
   return s[0].id as string;
 }
-/** An order placed at a WIB wall-clock instant. `total`/`tax` are what the revenue expression uses. */
+/** An order placed at a WIB wall-clock instant. Since 0104 the revenue expression reads the
+ *  entitlement view, whose LEGACY arm (no order_financials) is `greatest(subtotal − discount, 0)` —
+ *  so the fixture seeds `subtotal_idr = total − tax`, the goods figure these tests assert. */
 async function mkOrder(tx: Db, storeId: string, wib: string, total: number, opts: { tax?: number; status?: string } = {}) {
   const inserted = await rows(tx, sql`
-    insert into orders (store_id, number, status, placed_at, total_idr, tax_idr)
+    insert into orders (store_id, number, status, placed_at, total_idr, tax_idr, subtotal_idr)
     values (${storeId}, ${"DS-" + ++seq}, ${opts.status ?? "selesai"}::order_status,
-            timezone('Asia/Jakarta', ${wib}::timestamp), ${total}, ${opts.tax ?? 0})
+            timezone('Asia/Jakarta', ${wib}::timestamp), ${total}, ${opts.tax ?? 0}, ${total - (opts.tax ?? 0)})
     returning id`);
   return inserted[0].id as string;
 }

@@ -1,5 +1,6 @@
 ---
 import { IDR, num } from "@tokophi/lib/format";
+import { resolveCardAspect } from "@tokophi/lib/theme";
 import { ImageOff } from "@lucide/astro";
 import { imageSrcSet, inStock, type Product } from "../data/catalog";
 import Stars from "./Stars.astro";
@@ -13,11 +14,17 @@ interface Props {
   grid?: GridShape;
 }
 
-// Product imagery is LOCKED to 1:1 platform-wide (T-10). The `ratio` prop and the 3:4/4:5 options are
-// GONE, not defaulted — a stored `imageRatio` on an old template must be IGNORED, and a prop that still
-// accepted a ratio would let one call site quietly opt back out. Only the HEIGHT ever changed, so the
-// `sizes`/`srcset` width math above is unaffected by the lock.
-const ASPECT_LOCKED = "aspect-square";
+// CARD ASPECT (owner ruling 2026-08-24 ronde 2, revising T-10 for the CARD surface): the merchant
+// picks 1:1 / 4:5 / 2:3 in /tema → Galeri Produk — a STORE-level theme key, never a per-template
+// prop. The old `ratio` prop stays GONE: a per-call-site prop is how one template quietly opts out
+// of the store's own setting. The map is LITERAL classes (Tailwind cannot see an interpolated
+// `aspect-[${x}]`), unknown values degrade to 1:1 via resolveCardAspect, and only the HEIGHT
+// changes, so the `sizes`/`srcset` width math above is unaffected.
+const CARD_ASPECT_CLASS: Record<ReturnType<typeof resolveCardAspect>, string> = {
+  "1:1": "aspect-square",
+  "4:5": "aspect-[4/5]",
+  "2:3": "aspect-[2/3]",
+};
 
 // The card's title is a heading, and its correct level depends on the page. On a listing page the
 // card sits directly under the page `h1` with nothing between, so a hardcoded `h3` SKIPS h2 on every
@@ -63,7 +70,7 @@ const SIZES: Record<GridShape, string> = {
 
 const { product, level = 3, grid = "2-3-4" } = Astro.props;
 const sizes = SIZES[grid];
-const aspectClass = ASPECT_LOCKED;
+const aspectClass = CARD_ASPECT_CLASS[resolveCardAspect(Astro.locals.store?.theme)];
 const Heading = `h${level}` as "h2" | "h3" | "h4";
 // `undefined` for seeded /products/*.webp and for the no-image case — Astro then omits both
 // attributes and the markup is exactly what it was before.

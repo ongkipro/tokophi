@@ -220,3 +220,16 @@ export function resolveGalleryAspect(theme: unknown): GalleryAspect {
     ? (raw.galleryAspect as GalleryAspect)
     : "1:1";
 }
+
+// Product CARD image aspect (owner request 2026-08-24 — "/tema → card produk belum ada setup rasio").
+// Same value set and the same jsonb/merge-patch/validation contract as galleryAspect above; its own
+// key because the PDP gallery and the catalog cards are different surfaces a merchant tunes
+// separately. "1:1" default = what every card has always rendered (T-10), so an unset key changes
+// nothing for existing stores.
+export function resolveCardAspect(theme: unknown): GalleryAspect {
+  const raw = (theme ?? {}) as Record<string, unknown>;
+  return (GALLERY_ASPECTS as readonly unknown[]).includes(raw.cardAspect)
+    ? (raw.cardAspect as GalleryAspect)
+    : "1:1";
+}
+

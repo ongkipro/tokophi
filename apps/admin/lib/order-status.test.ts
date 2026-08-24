@@ -56,8 +56,8 @@ suite("applyOrderStatusChange", () => {
       );
       const [order] = await rows(
         tx,
-        sql`insert into orders (store_id, number, status)
-            values (${store.id}, 'ORDER-STATUS-1', 'diproses') returning id`,
+        sql`insert into orders (store_id, number, status, subtotal_idr)
+            values (${store.id}, 'ORDER-STATUS-1', 'diproses', 125000) returning id`,
       );
       await tx.execute(sql`
         insert into payments (order_id, store_id, method, amount_idr, total, status)
