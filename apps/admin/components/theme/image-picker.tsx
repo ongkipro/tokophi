@@ -5,8 +5,8 @@
 // category's own photo. Everything it reads is already tenant-scoped server-side.
 import * as React from "react";
 import { toast } from "sonner";
-import { UploadCloud, ImageIcon, X,Check, Link2, LayoutGrid, Package, Tag } from "lucide-react";
-import { getMedia, uploadMedia, type MediaItem } from "@/lib/actions/media";
+import { UploadCloud, ImageIcon, X, Check, Link2, LayoutGrid, Package, Tag, ArrowLeft } from "lucide-react";
+import { getMediaPage, uploadMedia, type MediaItem } from "@/lib/actions/media";
 import { pickerProducts, pickerCategoryImages, type PickerImage } from "@/lib/actions/picker";
 import { useCan } from "@/components/admin/permissions";
 import { cn } from "@tokophi/ui/lib/utils";
@@ -41,12 +41,17 @@ function ImageGrid({
   current,
   onPick,
   emptyLabel,
+  footer,
 }: {
   items: { key: string; url: string; name: string; sub?: string }[];
   loading: boolean;
   current: string;
-  onPick: (url: string) => void;
+  /* Opens the PREVIEW pane (owner request 2026-08-24) — a grid tile is a peek, never a commit. The
+     old behaviour picked+closed on first click, so one mis-tap on a 3-column phone grid published
+     the wrong photo with no look at it. */
+  onPick: (item: { url: string; name: string; sub?: string }) => void;
   emptyLabel: string;
+  footer?: React.ReactNode;
 }) {
   if (loading) return <p className="py-10 text-center text-sm text-muted-foreground">Memuat…</p>;
   if (items.length === 0) return <p className="py-10 text-center text-sm text-muted-foreground">{emptyLabel}</p>;
@@ -56,7 +61,7 @@ function ImageGrid({
         <button
           key={it.key}
           type="button"
-          onClick={() => onPick(it.url)}
+          onClick={() => onPick(it)}
           title={it.name}
           className={cn(
             "group relative aspect-square overflow-hidden rounded-lg border bg-muted text-left transition-all",
@@ -75,6 +80,7 @@ function ImageGrid({
           </span>
         </button>
       ))}
+      {footer}
     </div>
   );
 }
@@ -100,22 +106,50 @@ export function ImagePickerField({
   const [pending, start] = React.useTransition();
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  // ── Galeri is PAGED (owner request 2026-08-24) ─────────────────────────────────────────────────
+  // The picker used to pull the whole library at open. PAGE_SIZE rows per fetch, "Muat lebih banyak"
+  // appends the next page, and search runs SERVER-side (getMediaPage) so it can match rows no page
+  // has loaded yet. Produk/Kategori stay whole-list + client filter: both are bounded by the
+  // catalogue, not by uploads.
+  const PAGE_SIZE = 24;
   const [media, setMedia] = React.useState<MediaItem[] | null>(null);
+  const [mediaTotal, setMediaTotal] = React.useState(0);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [products, setProducts] = React.useState<PickerImage[] | null>(null);
   const [categories, setCategories] = React.useState<PickerImage[] | null>(null);
+  // A tapped tile shows a FULL preview first; picking is the explicit button in that pane.
+  const [preview, setPreview] = React.useState<{ url: string; name: string; sub?: string } | null>(null);
 
-  // Lazy-load each source the first time its tab is opened.
+  const loadGaleri = React.useCallback((offset: number, query: string) => {
+    setLoadingMore(true);
+    getMediaPage({ offset, limit: PAGE_SIZE, q: query })
+      .then((r) => {
+        setMedia((prev) => (offset === 0 ? r.items : [...(prev ?? []), ...r.items]));
+        setMediaTotal(r.total);
+      })
+      .catch(() => { setMedia((prev) => prev ?? []); })
+      .finally(() => setLoadingMore(false));
+  }, []);
+
+  // Lazy-load each source the first time its tab is opened; galeri re-queries on search (debounced —
+  // a keystroke is not a request).
   React.useEffect(() => {
     if (!open) return;
-    if (tab === "galeri" && media === null) getMedia().then(setMedia).catch(() => setMedia([]));
     if (tab === "produk" && products === null) pickerProducts().then(setProducts).catch(() => setProducts([]));
     if (tab === "kategori" && categories === null) pickerCategoryImages().then(setCategories).catch(() => setCategories([]));
-  }, [open, tab, media, products, categories]);
+  }, [open, tab, products, categories]);
+  React.useEffect(() => {
+    if (!open || tab !== "galeri") return;
+    const t = setTimeout(() => { setMedia(null); loadGaleri(0, q); }, media === null ? 0 : 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- q/tab/open drive refetch; media===null only picks the delay
+  }, [open, tab, q, loadGaleri]);
 
   const pick = (url: string) => {
     onChange(url);
     setOpen(false);
     setQ("");
+    setPreview(null);
   };
 
   const doUpload = (files: FileList | null) => {
@@ -178,7 +212,7 @@ export function ImagePickerField({
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPreview(null); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Pilih Gambar</DialogTitle>
@@ -191,7 +225,7 @@ export function ImagePickerField({
               <button
                 key={t.key}
                 type="button"
-                onClick={() => { setTab(t.key); setQ(""); }}
+                onClick={() => { setTab(t.key); setQ(""); setPreview(null); }}
                 className={cn(
                   "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
                   tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
@@ -202,6 +236,32 @@ export function ImagePickerField({
             ))}
           </div>
 
+          {/* ── PREVIEW PANE — a tapped tile lands here, full-size, before anything commits.
+              `object-contain` + eager: the whole point is seeing the real image (its crop, its
+              text, its edges), so it must not be cover-cropped into the same lie the tile told. */}
+          {preview ? (
+            <div className="space-y-3">
+              <div className="relative flex max-h-[52vh] min-h-[16rem] items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview.url} alt={preview.name} className="max-h-[52vh] w-auto max-w-full object-contain" />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{preview.name}</p>
+                  {preview.sub ? <p className="truncate text-xs text-muted-foreground">{preview.sub}</p> : null}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setPreview(null)}>
+                    <ArrowLeft className="size-4" /> Kembali
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => pick(preview.url)}>
+                    <Check className="size-4" /> Pilih Gambar Ini
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Search (galeri/produk/kategori) */}
           {(tab === "galeri" || tab === "produk" || tab === "kategori") && (
             <SearchInput label="Cari gambar" value={q} onValueChange={setQ} placeholder="Cari…" />
@@ -209,11 +269,27 @@ export function ImagePickerField({
 
           {tab === "galeri" && (
             <ImageGrid
-              items={(media ?? []).filter((m) => match(m.filename)).map((m) => ({ key: m.id, url: m.url, name: m.filename }))}
+              items={(media ?? []).map((m) => ({ key: m.id, url: m.url, name: m.filename }))}
               loading={media === null}
               current={value}
-              onPick={pick}
-              emptyLabel="Belum ada gambar di galeri. Unggah lewat tab Upload atau halaman Files."
+              onPick={setPreview}
+              emptyLabel={q.trim() ? "Tidak ada gambar yang cocok." : "Belum ada gambar di galeri. Unggah lewat tab Upload atau halaman Files."}
+              footer={
+                media !== null && media.length < mediaTotal ? (
+                  <div className="col-span-full pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={loadingMore}
+                      onClick={() => loadGaleri(media.length, q)}
+                    >
+                      {loadingMore ? "Memuat…" : `Muat lebih banyak (${mediaTotal - media.length} lagi)`}
+                    </Button>
+                  </div>
+                ) : null
+              }
             />
           )}
 
@@ -253,7 +329,7 @@ export function ImagePickerField({
               items={(products ?? []).filter((p) => match(p.name)).map((p) => ({ key: p.id, url: p.url, name: p.name, sub: p.sub }))}
               loading={products === null}
               current={value}
-              onPick={pick}
+              onPick={setPreview}
               emptyLabel="Belum ada produk dengan foto terunggah."
             />
           )}
@@ -263,9 +339,11 @@ export function ImagePickerField({
               items={(categories ?? []).filter((c) => match(c.name)).map((c) => ({ key: c.id, url: c.url, name: c.name }))}
               loading={categories === null}
               current={value}
-              onPick={pick}
+              onPick={setPreview}
               emptyLabel="Belum ada kategori berisi produk berfoto."
             />
+          )}
+            </>
           )}
         </DialogContent>
       </Dialog>

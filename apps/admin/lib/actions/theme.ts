@@ -8,7 +8,7 @@ import { withTenant } from "@/lib/tenant";
 import type { TemplateType } from "@/lib/data/theme";
 import { SECTION_TYPES, type SectionType } from "@tokophi/sections";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
-import { FONT_PAIRINGS, NEUTRAL_TONES } from "@tokophi/lib/theme";
+import { FONT_PAIRINGS, GALLERY_ASPECTS, NEUTRAL_TONES } from "@tokophi/lib/theme";
 
 // ADR 0009 — Store Builder.
 //
@@ -301,14 +301,24 @@ export async function saveStoreTheme(input: { font?: string; tone?: string }): P
     return { ok: false, error: "Pilihan font tidak dikenal" };
   if (input.tone !== undefined && !NEUTRAL_TONES.some((t) => t.id === input.tone))
     return { ok: false, error: "Pilihan nuansa warna tidak dikenal" };
-  const theme: Record<string, string> = {};
-  if (input.font !== undefined) theme.font = input.font;
-  if (input.tone !== undefined) theme.tone = input.tone;
+  const patch: Record<string, string> = {};
+  if (input.font !== undefined) patch.font = input.font;
+  if (input.tone !== undefined) patch.tone = input.tone;
   try {
     await withTenant(storeId, async (db) => {
+      // ⚠️ MERGE-PATCH, NEVER OVERWRITE. `stores.theme` now carries more than font/tone
+      // (galleryAspect — see @tokophi/lib/theme). The wholesale `{font, tone}` write this used to do
+      // would silently wipe every other key on each "Tampilan" save. Read-modify-write inside the
+      // same tenant txn; empty result stays null so an untouched store keeps its NULL column.
+      const [row] = await db
+        .select({ theme: schema.stores.theme })
+        .from(schema.stores)
+        .where(eq(schema.stores.id, storeId))
+        .limit(1);
+      const merged = { ...((row?.theme ?? {}) as Record<string, unknown>), ...patch };
       await db
         .update(schema.stores)
-        .set({ theme: Object.keys(theme).length ? theme : null })
+        .set({ theme: Object.keys(merged).length ? merged : null })
         .where(eq(schema.stores.id, storeId));
     });
   } catch (e) {
@@ -320,6 +330,30 @@ export async function saveStoreTheme(input: { font?: string; tone?: string }): P
 
 // Product-page gallery layout (Tema panel) — also lives on `stores`, not `page_templates`. The list +
 // type are in a client-safe module (a "use server" file can only export async functions).
+// Main-image aspect for the PDP gallery (owner request 2026-08-24). Stored beside font/tone in the
+// `stores.theme` jsonb — no migration, and the storefront already ships that column to the PDP.
+// Same merge-patch rule as saveStoreTheme above, and for the same reason.
+export async function saveProductGalleryAspect(aspect: string): Promise<ThemeResult> {
+  const { storeId } = await requireCapability("theme:write");
+  if (!(GALLERY_ASPECTS as readonly string[]).includes(aspect))
+    return { ok: false, error: "Rasio galeri tidak dikenal" };
+  try {
+    await withTenant(storeId, async (db) => {
+      const [row] = await db
+        .select({ theme: schema.stores.theme })
+        .from(schema.stores)
+        .where(eq(schema.stores.id, storeId))
+        .limit(1);
+      const merged = { ...((row?.theme ?? {}) as Record<string, unknown>), galleryAspect: aspect };
+      await db.update(schema.stores).set({ theme: merged }).where(eq(schema.stores.id, storeId));
+    });
+  } catch (e) {
+    return fail(e);
+  }
+  revalidatePath("/tema");
+  return { ok: true };
+}
+
 export async function saveProductGalleryLayout(layout: string): Promise<ThemeResult> {
   const { storeId } = await requireCapability("theme:write");
   if (!GALLERY_LAYOUTS.includes(layout as GalleryLayout)) return { ok: false, error: "Layout galeri tidak dikenal" };

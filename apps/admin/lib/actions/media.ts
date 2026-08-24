@@ -1,6 +1,7 @@
 "use server";
 import { db, schema } from "@tokophi/db";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, sql } from "drizzle-orm";
+import { likeContains } from "@tokophi/lib/like";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
@@ -76,6 +77,31 @@ export async function getMedia(): Promise<MediaItem[]> {
   const session = await getSession();
   if (!session) return [];
   return db.select().from(schema.media).where(eq(schema.media.storeId, session.storeId)).orderBy(desc(schema.media.createdAt));
+}
+
+// Paged read for the Store Builder image picker (owner request 2026-08-24): the picker used to pull
+// the WHOLE library at open — fine on the demo, one long stall on a store with hundreds of uploads.
+// A NEW action rather than a new getMedia() signature: Files and both editors legitimately want the
+// full list and keep the old call unchanged. Search runs server-side so it sees rows the current
+// page has not loaded — through likeContains, because `%`/`_` are wildcards and this is a typed box
+// (the same rule every merchant search field follows).
+export async function getMediaPage(opts: { offset: number; limit: number; q?: string }): Promise<{
+  items: MediaItem[];
+  total: number;
+}> {
+  const session = await getSession();
+  if (!session) return { items: [], total: 0 };
+  const limit = Math.min(Math.max(1, opts.limit), 60);
+  const offset = Math.max(0, opts.offset);
+  const q = opts.q?.trim();
+  const where = q
+    ? and(eq(schema.media.storeId, session.storeId), ilike(schema.media.filename, likeContains(q)))
+    : eq(schema.media.storeId, session.storeId);
+  const [items, [{ n }]] = await Promise.all([
+    db.select().from(schema.media).where(where).orderBy(desc(schema.media.createdAt)).limit(limit).offset(offset),
+    db.select({ n: count() }).from(schema.media).where(where),
+  ]);
+  return { items, total: Number(n) };
 }
 
 export async function uploadMedia(formData: FormData): Promise<{ ok: boolean; url?: string; error?: string }> {

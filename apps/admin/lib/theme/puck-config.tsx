@@ -341,6 +341,19 @@ const fullConfig: Config<SectionConfigMap> = {
     "category-nav": {
       label: "Navigasi Kategori",
       fields: {
+        // Rasio kartu (owner request 2026-08-24) — a select over NAV_ASPECTS; the storefront maps
+        // the value to a literal Tailwind class and falls back to 4:5 on anything unknown.
+        aspect: {
+          type: "select",
+          label: "Rasio Gambar",
+          options: [
+            { label: "4:5 — Potret (bawaan)", value: "4:5" },
+            { label: "1:1 — Persegi", value: "1:1" },
+            { label: "2:3 — Potret tinggi", value: "2:3" },
+            { label: "3:2 — Lanskap", value: "3:2" },
+            { label: "5:4 — Lanskap lebar", value: "5:4" },
+          ],
+        },
         items: {
           type: "array",
           label: "Kategori",
