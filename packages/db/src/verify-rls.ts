@@ -168,7 +168,10 @@ async function main() {
   // Platform/global tables: no tenant to scope to, absence of store_id is correct by design.
   const GLOBAL_TABLES = [
     "plans", "platform_admins", "platform_cod", "platform_couriers", "platform_payment_channels",
-    "platform_payment_gateways", "platform_payout", "shipping_aggregator", "kiriminaja_areas",
+    "platform_payment_gateways", "platform_payout",
+    // platform_finance (0101): single-row global config (subscription PPN toggle) — no store_id by
+    // design; written only by super-admin setSubscriptionPpn behind platformGate, read owner-side.
+    "platform_finance", "shipping_aggregator", "kiriminaja_areas",
     "kelurahan", "accounts", "users", "stores",
     // Google Product Taxonomy (0072, ADR 0011): global reference data, same class as kiriminaja_areas.
     "product_taxonomy",

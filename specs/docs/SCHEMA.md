@@ -27,7 +27,7 @@
 | Di antaranya ber-RLS | **53** | keluaran verifikator yang sama |
 | `store_id` tanpa RLS | **1** — `platform_activity` | disengaja: log audit platform, lintas tenant |
 | Tabel anak tanpa `store_id` & tanpa RLS | **12**, semuanya sudah ditinjau | verifikator mencetak daftarnya; `AGENTS.md` memuat aturannya |
-| Migrasi | **101** (`0000` … `0100`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0095_payment_request_idempotency` mengunci permintaan tagihan agar idempoten; `0096_order_line_items_order_idx` memasang index yang selama ini hilang di setiap database; `0097_orders_checkout_session` membuat satu checkout hanya bisa membeli sekali; `0098_impersonation_grants` menambah pertukaran sekali-pakai untuk impersonasi (RLS aktif TANPA policy — baris control-plane, hanya jalur owner) |
+| Migrasi | **102** (`0000` … `0101`) | `_journal.json` + jumlah berkas `.sql`, keduanya cocok — `0095_payment_request_idempotency` mengunci permintaan tagihan agar idempoten; `0096_order_line_items_order_idx` memasang index yang selama ini hilang di setiap database; `0097_orders_checkout_session` membuat satu checkout hanya bisa membeli sekali; `0098_impersonation_grants` menambah pertukaran sekali-pakai untuk impersonasi (RLS aktif TANPA policy — baris control-plane, hanya jalur owner); `0101_platform_finance` menambah tabel platform_finance (toggle PPN langganan global, baris tunggal id=1) + kolom `invoices.tax_idr` (PPN yang benar-benar ditagih, tersimpan — bukan diturunkan) |
 | DB roles | `tokophi` (owner, bypasses RLS) · `tokophi_app` (non-owner, policies enforce) | `pg_roles` |
 | Enums | **46** | `grep -c 'pgEnum(' packages/db/src/schema.ts` |
 | Money representation | `bigint`, whole rupiah, column suffix `_idr` | catalog |

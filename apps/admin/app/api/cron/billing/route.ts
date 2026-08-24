@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
-import { computeBilling, quote, withPpn } from "@tokophi/lib/billing";
+import { computeBilling, quote, subscriptionCharge } from "@tokophi/lib/billing";
+import { getSubscriptionPpnEnabled } from "@/lib/data/platform-finance";
 import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
@@ -76,7 +77,10 @@ export async function GET(req: NextRequest) {
 
         if (!pending) {
           const q = quote("monthly", s.firstInvoicePaid);
-          const totalWithPpn = withPpn(q.amount).total;
+          // Platform PPN toggle (0101, owner ruling 2026-08-24): OFF → flat DPP, zero tax. Applied
+          // at CREATION; issued invoices are never rewritten.
+          const charge = subscriptionCharge(q.amount, await getSubscriptionPpnEnabled());
+          const totalWithPpn = charge.total;
           const reffId = `SUB-${s.slug.slice(0, 8)}-${Date.now()}`;
           const number = "SUB-" + Date.now().toString().slice(-9);
           const callbackUrl = payCallbackUrl(reffId);
@@ -98,6 +102,7 @@ export async function GET(req: NextRequest) {
               kind: "subscription",
               planKey: "bisnis",
               amountIdr: totalWithPpn,
+              taxIdr: charge.taxIdr,
               cycle: q.cycle,
               periodMonths: q.months,
               reffId,

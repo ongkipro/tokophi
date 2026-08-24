@@ -31,9 +31,14 @@ export type Db = typeof rootDb;
 /**
  * Book the `sale` for ONE collected payment.
  *
- * New orders credit the immutable `order_financials.goods_proceeds_idr`: merchandise after its own
- * discount and included tax, never shipping, gateway fee, COD fee, or fee VAT. Legacy orders have
- * no trustworthy goods/shipping discount split, so their historical `payments.amount_idr` behavior
+ * New orders credit the immutable `order_financials.goods_proceeds_idr` PLUS the goods PPN that was
+ * ADDED on top (owner ruling 2026-08-24: the seller receives goods omset + goods PPN — they remit
+ * the tax; shipping and payment-admin fees are platform money). The added tax is derived from
+ * stored facts, never recomputed: `orders.tax_idr` is the liability, `included_sales_tax_idr` the
+ * portion already inside the sticker price, so `tax_idr − included` is exactly the exclusive-mode
+ * PPN line the buyer paid on top. Inclusive-mode stores need no add-back — their proceeds already
+ * carry the tax. Never shipping, gateway fee, COD fee, or fee VAT. Legacy orders have no
+ * trustworthy goods/shipping discount split, so their historical `payments.amount_idr` behavior
  * remains unchanged rather than fabricating a backfill.
  *
  * Status follows the release rule (`platform_payout.release_on = 'selesai'`): the credit lands
@@ -49,7 +54,7 @@ export async function creditSaleForPayment(
     insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, available_at)
     select coalesce(p.store_id, o.store_id), o.id, p.id, 'sale',
            case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
-           coalesce(f.goods_proceeds_idr, p.amount_idr),
+           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), p.amount_idr),
            'Penjualan ' || o.number,
            case when o.status in ('selesai', 'retur') then now() end
       from payments p

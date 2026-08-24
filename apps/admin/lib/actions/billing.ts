@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
-import { quote, withPpn, type Cycle } from "@tokophi/lib/billing";
+import { quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
+import { getSubscriptionPpnEnabled } from "@/lib/data/platform-finance";
 import { alCreatePayment, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
@@ -81,7 +82,9 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
   if (!store) return { ok: false, error: "Toko tidak ditemukan." };
 
   const q = quote(cycle, store.firstInvoicePaid);
-  const amount = withPpn(q.amount).total; // base + 11% PPN
+  // Platform PPN toggle (0101): OFF → flat DPP. Same gate the cron and Super Admin use.
+  const charge = subscriptionCharge(q.amount, await getSubscriptionPpnEnabled());
+  const amount = charge.total;
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
   const callbackUrl = payCallbackUrl(reffId);
   const r = await alCreatePayment({
@@ -92,7 +95,7 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
 
   const number = "SUB-" + Date.now().toString().slice(-9);
   await db.insert(schema.invoices).values({
-    number, accountId: store.accountId, storeId: store.id, planKey: "bisnis", amountIdr: amount, status: "menunggu",
+    number, accountId: store.accountId, storeId: store.id, planKey: "bisnis", amountIdr: amount, taxIdr: charge.taxIdr, status: "menunggu",
     kind: "subscription", cycle: q.cycle, periodMonths: q.months, reffId, trxId: r.trxId,
     channel: channelCode, virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null,
   });

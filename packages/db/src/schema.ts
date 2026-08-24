@@ -8,6 +8,7 @@ import {
   text,
   boolean,
   integer,
+  smallint,
   bigint,
   real,
   date,
@@ -1785,6 +1786,15 @@ export const platformCouriers = pgTable("platform_couriers", {
 
 // AutoLaris payment channels the platform offers (like platform_couriers). enabled = shown at
 // checkout. `active` = last live-probe result (whether AutoLaris actually accepts the channel).
+// Single-row platform finance settings (0101). `subscriptionPpnEnabled` DEFAULT FALSE is the
+// owner's launch ruling (2026-08-24): subscription invoices bill flat DPP until Super Admin turns
+// PPN on. Enforced at INVOICE CREATION — issued invoices are never rewritten.
+export const platformFinance = pgTable("platform_finance", {
+  id: smallint().primaryKey().default(1),
+  subscriptionPpnEnabled: boolean().notNull().default(false),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
 export const platformPaymentChannels = pgTable("platform_payment_channels", {
   id: pk(),
   channel: text().notNull(),
@@ -1868,6 +1878,10 @@ export const invoices = pgTable("invoices", {
   storeId: uuid().references(() => stores.id),
   planKey: planKey().notNull(),
   amountIdr: money().notNull().default(0),
+  // PPN carried by THIS invoice, stored at creation (0101) — the faktur renders the stored value,
+  // never a derivation: since the platform PPN toggle exists, "total / 1.11" would invent tax on a
+  // toggle-off invoice. Backfilled for historical rows, which were all PPN-inclusive.
+  taxIdr: money().notNull().default(0),
   status: invoiceStatus().notNull().default("menunggu"),
   // subscription payment (AutoLaris VA) matching + kind
   kind: text(), // "subscription" for merchant subscription invoices

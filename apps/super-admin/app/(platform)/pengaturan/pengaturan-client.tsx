@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import type { CourierRow } from "@/lib/data";
 
@@ -37,7 +37,7 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
-import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, saveCodAllowed, syncCouriersFromKiriminaja } from "@/lib/actions";
+import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, saveCodAllowed, syncCouriersFromKiriminaja, setSubscriptionPpn } from "@/lib/actions";
 import { resetPlatformAdminPassword } from "@/lib/actions";
 import { refused } from "@/lib/refused";
 import type { PaymentChannelRow } from "@/lib/data";
@@ -58,10 +58,11 @@ const ROLE_CLASS: Record<string, string> = {
 const roleLabel = (r: string) => r.charAt(0).toUpperCase() + r.slice(1);
 const ROLE_OPTIONS = ["admin", "support", "owner"];
 
-type SectionId = "pembayaran" | "kurir" | "tim";
+type SectionId = "pembayaran" | "kurir" | "keuangan" | "tim";
 const SECTIONS: { id: SectionId; label: string; desc: string; icon: ReactNode }[] = [
   { id: "pembayaran", label: "Pembayaran", desc: "AutoLaris & COD", icon: <CreditCard /> },
   { id: "kurir", label: "Kurir", desc: "Agregator KiriminAja", icon: <Truck /> },
+  { id: "keuangan", label: "Keuangan", desc: "PPN langganan", icon: <Receipt /> },
   { id: "tim", label: "Tim Platform", desc: "Operator", icon: <Users /> },
 ];
 
@@ -80,6 +81,7 @@ export function PengaturanClient({
   channels: initChannels,
   aggregator,
   team,
+  finance,
   me,
 }: {
   gateways: Toggle[];
@@ -87,6 +89,7 @@ export function PengaturanClient({
   channels: PaymentChannelRow[];
   aggregator: { provider: string; enabled: boolean; env: string };
   team: TeamMember[];
+  finance: { subscriptionPpnEnabled: boolean };
   me: { adminId: string; role: string };
 }) {
   const router = useRouter();
@@ -95,6 +98,18 @@ export function PengaturanClient({
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
   const [channels, setChannels] = useState(initChannels);
+  // PPN toggle is saved on flip (no separate Simpan): one boolean, and a half-saved pair cannot
+  // exist. On failure the switch is rolled back so the screen never shows a state the DB refused.
+  const [ppnOn, setPpnOn] = useState(finance.subscriptionPpnEnabled);
+  const [ppnSaving, startPpn] = useTransition();
+  const flipPpn = (v: boolean) => {
+    setPpnOn(v);
+    startPpn(async () => {
+      const r = await setSubscriptionPpn(v);
+      if (r.ok) { toast.success(v ? "PPN 11% langganan diaktifkan — berlaku untuk tagihan berikutnya." : "PPN langganan dinonaktifkan — tagihan berikutnya tanpa PPN."); router.refresh(); }
+      else { setPpnOn(!v); toast.error(r.error ?? "Gagal menyimpan."); }
+    });
+  };
   const autoGateway = gateways.find((g) => g.key === "autolaris");
   const codGateway = gateways.find((g) => g.key === "cod");
   const activeChannels = channels.filter((c) => c.active).length;
@@ -474,6 +489,32 @@ export function PengaturanClient({
                     <Save className="size-4" /> Simpan
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "keuangan" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="size-4 text-muted-foreground" /> Keuangan
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+                  <div className="space-y-1">
+                    <label htmlFor="fin-ppn" className="text-sm font-medium">PPN 11% biaya berlangganan</label>
+                    <p className="text-xs text-muted-foreground">
+                      Global untuk SEMUA toko — bukan per-tenant. Saat aktif, tagihan langganan <span className="font-medium">berikutnya</span> (toko
+                      baru maupun berjalan) ditagih DPP + PPN 11%; saat nonaktif, seller membayar harga flat tanpa PPN. Tagihan yang sudah terbit
+                      tidak pernah diubah — faktur selalu menampilkan PPN yang tersimpan saat tagihan dibuat.
+                    </p>
+                  </div>
+                  <Switch id="fin-ppn" checked={ppnOn} disabled={ppnSaving} onCheckedChange={flipPpn} />
+                </div>
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  Harga langganan: Rp275.000/bln (DPP). {ppnOn ? "Dengan PPN: Rp305.250/bln." : "Saat ini seller membayar flat Rp275.000/bln."}
+                </p>
               </CardContent>
             </Card>
           )}

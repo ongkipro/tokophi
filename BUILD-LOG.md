@@ -2119,3 +2119,43 @@ only ever showed the session store).
 refusal is covered by a source claim + the action's session.imp guard, not a browser run); `SESSION_
 MAX_AGE` re-mint on switch restarts the 7-day window by design (the holder already had a live,
 revocation-checked session).
+
+---
+
+## 2026-08-24 03:02 UTC — Main Session — FIN-01 · Finance overhaul: subscription PPN toggle + order fee schedule (owner rulings 2026-08-24)
+
+**Scope:** global subscription-PPN toggle (default OFF at launch — merchants pay the flat Rp275rb DPP;
+Super Admin → Pengaturan → Keuangan flips it for the NEXT invoice of every store) · COD fee = 3% of
+(goods omset + shipping) + PPN 11% on the fee (gross-up dead) · QRIS 0,7% of OMSET · VA per-bank flats
+(BCA Rp6.500 / others Rp3.500) · seller reconciliation = goods omset + goods PPN only, and the added
+goods PPN now reaches the seller's LEDGER · no tax-on-tax anywhere. Summary map: `specs/docs/FINANCE.md`.
+
+**Files:** `0101_platform_finance.sql` (+journal, when=1787388586123 > dev head) · `schema.ts`
+(platform_finance, invoices.tax_idr) · `billing.ts` `subscriptionCharge` · three invoice creators
+(cron billing / createSubscriptionPayment / createManualInvoice) store `tax_idr` · `data/billing.ts`
++ faktur page render STORED tax · `akun/langganan/page.tsx` + `pay-subscription.tsx` gated display
+("harga flat" copy when off; "Total dibayar" caption reads summed stored tax) · super-admin
+`setSubscriptionPpn` action (platformGate, audit → platform_activity) + `getPlatformFinance` +
+Keuangan card/Switch · `payment-fees.ts` (FeeBase, CHANNEL_FEE_OVERRIDES, channelFeeValue,
+paymentFee) · `order-finance.ts` (COD base, sellerEntitlement carries goods PPN) ·
+`api/public/order/route.ts` (both bases + channel code) · `checkout.astro` (per-bank fee attrs,
+data-fee-base, codCharges 3%+VAT mirror) · `ledger-credit.ts` (sale credit = goods_proceeds +
+(orders.tax_idr − included_sales_tax_idr)) · `verify-rls.ts` (platform_finance classified GLOBAL) ·
+docs: FINANCE.md (new), AGENTS.md ×3, SCHEMA/CODE_MAP/STATUS counts → 102 migrations / head 0101.
+
+**Verification:** full `npm test` **132 files / 1098 tests green** (includes `astro check` 0 errors);
+`verify-migrations` ✓; `verify-rls` ✓; `tsc` admin + super-admin exit 0. New/updated guards:
+`payment-fees.test.ts` (5), `order-finance.test.ts` (COD pin 3.600/396/3.996 on 100k+20k; both tax
+modes land seller at 111.000; COD base excludes added PPN), `billing.test.ts` `subscriptionCharge`
+(±PPN), `ledger-credit.test.ts` +2 (added-PPN credit 111.000; inclusive no-double-credit) against
+real Postgres. **Browser-driven on production builds:** checkout (tenant batiknusantara via
+toko-demo.test, admin API on :3210) — VABCA Rp6.500 / VA lain Rp3.500 / QRIS Rp770 = 0,7%×110.000
+(omset, NOT payable=878) / COD Rp3.762 = 3%×125.400 + PPN Rp414, every total reconciled to the
+rupiah, 0 JS errors (one 404 = gitignored logo upload absent in a fresh worktree — environmental);
+admin `/akun/langganan` OFF shows flat copy + Rp275.000 and NO "termasuk PPN 11%"; super-admin
+Keuangan Switch flipped ON (langganan shows Rp305.250 + PPN copy; audit row "DIAKTIFKAN oleh …")
+then OFF (audit "DINONAKTIFKAN"; flat copy restored). DB left honest: toggle FALSE (the launch
+default), batiknusantara `current_period_end` restored to `2026-08-04 03:59:23.814+00` exactly,
+probe rows (users/store_users/platform_admins `e9999999-…`) deleted. Migration 0101 applied to the
+shared dev DB as raw idempotent SQL (journal stamp NOT recorded — drizzle re-runs it harmlessly on
+merge).

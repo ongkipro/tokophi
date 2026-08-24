@@ -182,3 +182,15 @@ function subscriptionState(s: StoreBillingRow, now: Date): SubscriptionState {
   }
   return { status: "suspended", label: "Ditangguhkan", daysLeft: 0, nextAmount, isPromo, dueDate: dueBase, readOnly: true, firstInvoicePaid: s.firstInvoicePaid, comped: false };
 }
+
+/**
+ * The charge for ONE subscription invoice under the platform PPN toggle (owner ruling 2026-08-24,
+ * default OFF at launch). ON → the historical shape, base + 11% PPN; OFF → the flat DPP, zero tax.
+ * Callers store BOTH numbers on the invoice (`amount_idr`, `tax_idr`) so the faktur renders what was
+ * actually billed instead of deriving tax that may never have existed.
+ */
+export function subscriptionCharge(base: number, ppnEnabled: boolean): { total: number; taxIdr: number } {
+  if (!ppnEnabled) return { total: base, taxIdr: 0 };
+  const b = withPpn(base);
+  return { total: b.total, taxIdr: b.ppn };
+}
