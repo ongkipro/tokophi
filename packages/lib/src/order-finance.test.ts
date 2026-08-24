@@ -31,19 +31,26 @@ describe("calculateOrderFinance", () => {
     expect(money.sellerEntitlementIdr).toBe(70_000);
   });
 
-  it("pins the self-inclusive COD fee and fee VAT rounding", () => {
+  // Owner ruling 2026-08-24: COD fee = 3% of (goods after discount + shipping charged), then PPN 11%
+  // ON THE FEE. Straight percentage — NOT the old gross-up (× 0.03 / 0.97), and NOT on the payable
+  // (that would tax the goods PPN and the fee itself).
+  it("pins the COD fee: 3% of (omset + ongkir), + PPN 11% on the fee", () => {
     const money = calculateOrderFinance({
       subtotalIdr: 100_000,
       shippingListIdr: 20_000,
       paymentKind: "cod",
     });
-    expect(money.codFeeBeforeVatIdr).toBe(3_711);
-    expect(money.codFeeVatIdr).toBe(408);
-    expect(money.codFeeFinalIdr).toBe(4_119);
-    expect(money.buyerPayableIdr).toBe(124_119);
+    expect(money.codFeeBeforeVatIdr).toBe(3_600); // 120_000 × 3%
+    expect(money.codFeeVatIdr).toBe(396); // 3_600 × 11%
+    expect(money.codFeeFinalIdr).toBe(3_996);
+    expect(money.buyerPayableIdr).toBe(123_996);
   });
 
-  it("excludes inclusive and exclusive sales-tax liabilities from seller proceeds", () => {
+  // Owner ruling 2026-08-24: the seller receives GOODS OMSET + GOODS PPN (they remit the tax);
+  // shipping and payment-admin fees are platform money. So inclusive tax is NOT stripped from
+  // proceeds and exclusive (added) tax IS credited to the seller — both tax modes land the seller
+  // on the same all-in goods figure.
+  it("seller entitlement carries the goods PPN in both tax modes", () => {
     const inclusive = calculateOrderFinance({
       subtotalIdr: 111_000,
       shippingListIdr: 0,
@@ -56,10 +63,28 @@ describe("calculateOrderFinance", () => {
       salesTaxLiabilityIdr: 11_000,
       salesTaxAddedIdr: 11_000,
     });
-    expect(inclusive.goodsProceedsIdr).toBe(100_000);
+    expect(inclusive.goodsProceedsIdr).toBe(111_000); // sticker price IS the goods payment
     expect(exclusive.goodsProceedsIdr).toBe(100_000);
+    expect(inclusive.sellerEntitlementIdr).toBe(111_000);
+    expect(exclusive.sellerEntitlementIdr).toBe(111_000); // 100k omset + 11k added PPN
     expect(inclusive.orderPayableIdr).toBe(111_000);
     expect(exclusive.orderPayableIdr).toBe(111_000);
+  });
+
+  // NO TAX-ON-TAX: with exclusive goods PPN active, the COD base stays (goods after discount +
+  // shipping) — the added PPN line is NOT part of any admin-fee base. The PPN belongs to the seller
+  // (for remittance); charging 3% over it would silently fee the state's money.
+  it("excludes the added goods PPN from the COD fee base", () => {
+    const money = calculateOrderFinance({
+      subtotalIdr: 100_000,
+      shippingListIdr: 20_000,
+      salesTaxLiabilityIdr: 11_000,
+      salesTaxAddedIdr: 11_000,
+      paymentKind: "cod",
+    });
+    expect(money.codFeeBeforeVatIdr).toBe(3_600); // (100k + 20k) × 3% — the 11k PPN is outside
+    expect(money.sellerEntitlementIdr).toBe(111_000);
+    expect(money.orderPayableIdr).toBe(100_000 + 11_000 + 20_000 + 3_996);
   });
 
   it("adds the authoritative gateway fee only to buyer payable", () => {

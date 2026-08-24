@@ -5,7 +5,7 @@ import CheckoutLayout from "../layouts/CheckoutLayout.astro";
 import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip } from "../data/catalog";
 import { noVariantChoice } from "../lib/cart-variant";
 import { db, schema } from "@tokophi/db";
-import { PAYMENT_FEES, type FeeKind } from "@tokophi/lib/payment-fees";
+import { PAYMENT_FEES, channelFeeValue, type FeeKind } from "@tokophi/lib/payment-fees";
 import { and, eq } from "drizzle-orm";
 import { verifyRecoveryToken } from "../lib/recovery";
 
@@ -47,7 +47,12 @@ const PAYMENTS = (await enabledPaymentChannels()).map((c) => {
     kind: c.kind,
     desc: payDesc(c.kind, c.label),
     feeType: fee?.type ?? "flat",
-    feeValue: fee?.value ?? 0,
+    // Per-CHANNEL value (owner ruling 2026-08-24): VABCA Rp6.500, other VAs Rp3.500 — the override
+    // table in payment-fees.ts, so the radio each bank renders carries ITS OWN price.
+    feeValue: fee ? channelFeeValue(fee.kind, c.code) : 0,
+    // Which number a pct fee multiplies. QRIS = "omset" (goods after discount), not the payable —
+    // the client mirror reads this attribute instead of assuming a base.
+    feeBase: fee?.base ?? "payable",
   };
 });
 
@@ -687,6 +692,7 @@ if (rToken) {
                       data-kind={group.items[0].kind}
                       data-fee-type={group.items[0].feeType}
                       data-fee-value={group.items[0].feeValue}
+                      data-fee-base={group.items[0].feeBase}
                       class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                     />
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/[0.04] text-[var(--co-muted)] ring-1 ring-[var(--co-line)] transition-colors group-has-[:checked]:bg-[var(--co-accent-weak)] group-has-[:checked]:text-[var(--co-accent)] group-has-[:checked]:ring-[var(--co-accent-ring)]">
@@ -747,6 +753,7 @@ if (rToken) {
                             data-kind={pm.kind}
                             data-fee-type={pm.feeType}
                             data-fee-value={pm.feeValue}
+                            data-fee-base={pm.feeBase}
                             class="h-4 w-4 shrink-0 accent-[var(--co-accent)]"
                           />
                           <span class="min-w-0 flex-1 text-sm font-medium text-ink">{pm.short}</span>
@@ -1318,8 +1325,15 @@ if (rToken) {
       return payment;
     }
 
-    function codCharges(base) {
-      var beforeVat = Math.round(base * 0.03 / 0.97);
+    // Owner ruling 2026-08-24. COD = 3% of (goods omset + shipping) — NOT the old gross-up
+    // `× 0.03 / 0.97`, and NOT on the payable (that would tax the goods PPN) — plus PPN 11% on the
+    // fee itself. This mirrors calculateOrderFinance; /api/public/order recomputes and is the
+    // boundary, as always.
+    function omset() {
+      return Math.max(0, subtotal - voucherPriceOff);
+    }
+    function codCharges() {
+      var beforeVat = Math.round((omset() + selectedShipping()) * 0.03);
       var vat = Math.round(beforeVat * 0.11);
       return { fee: beforeVat, vat: vat, label: "Biaya COD" };
     }
@@ -1327,10 +1341,14 @@ if (rToken) {
     function paymentCharges(base) {
       var payment = selectedPaymentEl();
       if (!payment) return { fee: 0, vat: 0, label: "Biaya pembayaran" };
-      if (payment.getAttribute("data-kind") === "cod") return codCharges(base);
+      if (payment.getAttribute("data-kind") === "cod") return codCharges();
       var type = payment.getAttribute("data-fee-type");
       var value = Number(payment.getAttribute("data-fee-value") || 0);
-      var fee = type === "pct" ? Math.round(base * value) : Math.round(value);
+      // A pct fee declares its own denominator (data-fee-base): QRIS multiplies the OMSET, an
+      // e-wallet the payable. Assuming one base for all pct fees is exactly the drift the schedule's
+      // `base` field exists to stop.
+      var pctBase = payment.getAttribute("data-fee-base") === "omset" ? omset() : base;
+      var fee = type === "pct" ? Math.round(pctBase * value) : Math.round(value);
       return { fee: Math.max(0, fee), vat: 0, label: "Biaya pembayaran" };
     }
 

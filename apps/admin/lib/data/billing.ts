@@ -38,7 +38,7 @@ export async function getBilling(): Promise<BillingState | null> {
 // The store's own subscription invoices (payment history). Read on the owner connection but
 // scoped explicitly to the session's store — a merchant only ever sees their own.
 export type MyInvoice = {
-  number: string; amount: number; status: "dibayar" | "menunggu" | "gagal";
+  number: string; amount: number; taxIdr: number; status: "dibayar" | "menunggu" | "gagal";
   cycle: string | null; kind: string | null; issuedAt: Date; paidAt: Date | null; virtualAccount: string | null;
 };
 export async function getMyInvoices(): Promise<MyInvoice[]> {
@@ -46,7 +46,7 @@ export async function getMyInvoices(): Promise<MyInvoice[]> {
   if (!session) return [];
   const rows = await db
     .select({
-      number: schema.invoices.number, amount: schema.invoices.amountIdr, status: schema.invoices.status,
+      number: schema.invoices.number, amount: schema.invoices.amountIdr, taxIdr: schema.invoices.taxIdr, status: schema.invoices.status,
       cycle: schema.invoices.cycle, kind: schema.invoices.kind, issuedAt: schema.invoices.issuedAt,
       paidAt: schema.invoices.paidAt, virtualAccount: schema.invoices.virtualAccount,
     })
@@ -67,7 +67,7 @@ export async function getFaktur(number: string): Promise<FakturData | null> {
   if (!session) return null;
   const [inv] = await db
     .select({
-      number: schema.invoices.number, amount: schema.invoices.amountIdr, status: schema.invoices.status,
+      number: schema.invoices.number, amount: schema.invoices.amountIdr, taxIdr: schema.invoices.taxIdr, status: schema.invoices.status,
       cycle: schema.invoices.cycle, kind: schema.invoices.kind, issuedAt: schema.invoices.issuedAt,
       paidAt: schema.invoices.paidAt, virtualAccount: schema.invoices.virtualAccount, storeId: schema.invoices.storeId,
     })

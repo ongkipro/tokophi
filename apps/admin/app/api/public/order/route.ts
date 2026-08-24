@@ -735,9 +735,16 @@ async function handle(req: Request) {
     paymentKind,
   });
   const gatewayKind = payChannel?.kind as FeeKind | undefined;
+  // Fee base per the schedule's own `base` field (owner ruling 2026-08-24): QRIS is 0,7% of the
+  // GOODS OMSET; VA is flat PER BANK (the channel code carries the bank — VABCA Rp6.500, others
+  // Rp3.500). Both candidate bases are handed over; payment-fees.ts decides which one it reads.
   const expectedGatewayFee =
     !isCod && gatewayKind && gatewayKind in PAYMENT_FEES
-      ? paymentFee(gatewayKind, baseFinance.orderPayableIdr)
+      ? paymentFee(
+          gatewayKind,
+          { omsetIdr: subtotal - voucherPriceOff, payableIdr: baseFinance.orderPayableIdr },
+          payChannel?.code,
+        )
       : 0;
   const finance = calculateOrderFinance({
     subtotalIdr: subtotal,

@@ -794,6 +794,13 @@ export async function getAggregator(): Promise<{ provider: string; enabled: bool
   return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", enabled: agg?.enabled ?? false, env: kaEnvName() };
 }
 
+// Single-row platform finance config (0101). Missing row = the migration default: PPN OFF —
+// the same fallback the three invoice creators use, so the toggle can never SHOW a state it does not BILL.
+export async function getPlatformFinance(): Promise<{ subscriptionPpnEnabled: boolean }> {
+  const [row] = await db.select({ on: schema.platformFinance.subscriptionPpnEnabled }).from(schema.platformFinance).where(eq(schema.platformFinance.id, 1)).limit(1);
+  return { subscriptionPpnEnabled: row?.on ?? false };
+}
+
 // ---- per-store control-plane detail (invoices, users, audit) ----
 export type StoreInvoiceRow = { number: string; amount: number; status: "dibayar" | "menunggu" | "gagal"; kind: string | null; cycle: string | null; daysAgo: number };
 export async function getStoreInvoices(storeId: string): Promise<StoreInvoiceRow[]> {

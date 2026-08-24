@@ -9,7 +9,7 @@ import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
 import { alTestConnection, alProbeChannels, alCreatePayment } from "@tokophi/lib/autolaris";
-import { BILLING, addMonths, quote, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
+import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
@@ -753,7 +753,11 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
     .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.role, "owner"))).limit(1);
 
   const q = quote(cycle, store.firstInvoicePaid);
-  const amount = withPpn(q.amount).total;
+  // Platform PPN toggle (0101, owner ruling 2026-08-24) — same gate as the cron and the merchant's
+  // own pay flow, read from platform_finance so all three creators can never disagree.
+  const [finRow] = await db.select({ on: schema.platformFinance.subscriptionPpnEnabled }).from(schema.platformFinance).where(eq(schema.platformFinance.id, 1)).limit(1);
+  const charge = subscriptionCharge(q.amount, finRow?.on ?? false);
+  const amount = charge.total;
   const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
   const callbackUrl = payCallbackUrl(reffId);
   const r = await alCreatePayment({ reffId, channelCode: "VABCA", amount, customerId: storeId, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl });
@@ -761,7 +765,7 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
 
   const number = "SUB-" + Date.now().toString().slice(-9);
   await db.insert(schema.invoices).values({
-    number, accountId: store.accountId, storeId, planKey: "bisnis", amountIdr: amount, status: "menunggu",
+    number, accountId: store.accountId, storeId, planKey: "bisnis", amountIdr: amount, taxIdr: charge.taxIdr, status: "menunggu",
     kind: "subscription", cycle: q.cycle, periodMonths: q.months, reffId, trxId: r.trxId, channel: "VABCA",
     virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null,
   });
@@ -1169,6 +1173,28 @@ export async function rejectPayout(payoutId: string, reason: string): Promise<{ 
  * Kept as a setting rather than a constant so it can be loosened without a deploy — but it defaults
  * to the safe end on purpose, and the UI says so out loud.
  */
+// Global subscription-PPN toggle (owner ruling 2026-08-24): OFF at launch so every tenant pays the
+// flat DPP; flipping it ON makes the NEXT invoice of every store — new or existing — bill base+PPN 11%.
+// It never rewrites an issued invoice: the three creators (billing cron, merchant pay flow, manual
+// invoice) each read platform_finance at creation time, and the faktur renders the STORED taxIdr.
+export async function setSubscriptionPpn(enabled: boolean): Promise<{ ok: boolean; error?: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const on = enabled === true; // never trust a truthy object over the wire
+  // Single-row table (id=1 CHECK, seeded by migration 0101) — upsert rather than assume, same as platform_payout.
+  const [existing] = await db.select({ id: schema.platformFinance.id }).from(schema.platformFinance).where(eq(schema.platformFinance.id, 1)).limit(1);
+  if (existing) {
+    await db.update(schema.platformFinance).set({ subscriptionPpnEnabled: on }).where(eq(schema.platformFinance.id, 1));
+  } else {
+    await db.insert(schema.platformFinance).values({ id: 1, subscriptionPpnEnabled: on });
+  }
+  await logPlatform(
+    `PPN 11% langganan ${on ? "DIAKTIFKAN" : "DINONAKTIFKAN"} oleh ${gate.admin.email} — berlaku untuk tagihan berikutnya semua toko (tagihan terbit tidak berubah)`,
+  );
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
 export async function savePayoutPolicy(input: { releaseOn: "selesai" | "dikirim"; minPayoutIdr: number }): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;

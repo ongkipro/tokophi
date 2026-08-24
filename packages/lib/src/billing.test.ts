@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BILLING, withPpn, baseFromTotal, quote, storeSegment, computeBilling, type StoreBillingRow } from "./billing";
+import { BILLING, withPpn, baseFromTotal, quote, storeSegment, computeBilling, type StoreBillingRow, subscriptionCharge } from "./billing";
 
 // The subscription money math. Plan prices are the DPP (ex-tax); the merchant pays base + 11% PPN, and
 // invoices store the PPN-inclusive total — so withPpn/baseFromTotal must round-trip. quote() encodes
@@ -205,5 +205,18 @@ describe("pending approval is distinguishable from a suspension for cause", () =
     expect(s.pendingApproval).toBe(false);
     expect(s.status).toBe("trial");
     expect(s.readOnly).toBe(false);
+  });
+});
+
+// Platform subscription-PPN toggle (owner ruling 2026-08-24): OFF at launch = flat DPP, no tax row;
+// ON = the historical base + PPN 11%. Both numbers are stored on the invoice, never re-derived.
+describe("subscriptionCharge", () => {
+  it("OFF bills the flat DPP with zero tax", () => {
+    expect(subscriptionCharge(275_000, false)).toEqual({ total: 275_000, taxIdr: 0 });
+    expect(subscriptionCharge(50_000, false)).toEqual({ total: 50_000, taxIdr: 0 });
+  });
+  it("ON bills base + PPN 11% and reports the tax it added", () => {
+    expect(subscriptionCharge(275_000, true)).toEqual({ total: 305_250, taxIdr: 30_250 });
+    expect(subscriptionCharge(2_700_000, true)).toEqual({ total: 2_997_000, taxIdr: 297_000 });
   });
 });

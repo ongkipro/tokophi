@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 import { getFaktur } from "@/lib/data/billing";
 import { getInvoicePayment } from "@/lib/actions/billing";
 import { IDR } from "@tokophi/lib/format";
-import { BILLING, baseFromTotal } from "@tokophi/lib/billing";
+import { BILLING } from "@tokophi/lib/billing";
 import { PrintButton } from "./print-button";
 import { PaymentView } from "@/components/admin/pengaturan/pay-subscription";
 
@@ -22,7 +22,11 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
   if (!data) notFound();
   const { invoice: inv, store, owner } = data;
   const paid = inv.status === "dibayar";
-  const { base, ppn, total } = baseFromTotal(inv.amount); // inv.amount is PPN-inclusive
+  // STORED breakdown (0101), never a derivation: since the platform PPN toggle exists, dividing by
+  // 1,11 would invent tax on an invoice that billed none. Historical rows were backfilled by 0101.
+  const ppn = inv.taxIdr;
+  const base = inv.amount - ppn;
+  const total = inv.amount;
   const payment = inv.status === "menunggu" ? await getInvoicePayment(number) : null;
 
   return (
@@ -106,7 +110,11 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
           <div className="flex justify-end pt-4">
             <div className="w-full max-w-[260px] space-y-2 text-sm">
               <div className="flex justify-between text-muted-foreground"><span>Subtotal (DPP)</span><span className="tabular-nums">{IDR(base)}</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>PPN 11%</span><span className="tabular-nums">{IDR(ppn)}</span></div>
+              {/* An invoice created with the toggle OFF carries no tax — a "PPN 11% Rp0" line on a
+                  fiscal document reads as a rate that was applied to nothing. Row absent instead. */}
+              {ppn > 0 ? (
+                <div className="flex justify-between text-muted-foreground"><span>PPN 11%</span><span className="tabular-nums">{IDR(ppn)}</span></div>
+              ) : null}
               <div className="flex justify-between border-t pt-2 text-base font-bold"><span>Total</span><span className="tabular-nums">{IDR(total)}</span></div>
             </div>
           </div>

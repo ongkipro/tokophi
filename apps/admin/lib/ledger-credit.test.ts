@@ -168,6 +168,54 @@ suite(
       });
     });
 
+    // Owner ruling 2026-08-24: the seller receives goods omset + goods PPN (they remit the tax).
+    // Exclusive-mode stores charge the PPN as a separate line ON TOP of the sticker price, so it is
+    // not inside goods_proceeds — the credit must add back `orders.tax_idr − included_sales_tax_idr`
+    // (the stored facts, never a recompute) or the seller can never remit tax the buyer paid.
+    it("credits the ADDED goods PPN to the seller (exclusive-tax store), not just proceeds", async () => {
+      await inTxn(async (tx) => {
+        const storeId = await mkStore(tx);
+        const orderId = await mkOrder(tx, storeId, "baru");
+        await tx.execute(sql`update orders set tax_idr = 11000 where id = ${orderId}`);
+        const payId = await mkPayment(tx, {
+          orderId,
+          storeId,
+          amount: 131_000, // goods 100k + PPN 11k + shipping 20k
+          status: "berhasil",
+        });
+        await tx.execute(sql`
+        insert into order_financials
+          (store_id, order_id, goods_proceeds_idr, included_sales_tax_idr, shipping_charged_idr,
+           order_payable_idr, expected_gateway_fee_idr)
+        values (${storeId}, ${orderId}, 100000, 0, 20000, 131000, 0)`);
+        await creditSaleForPayment(tx, payId);
+        const ledger = await ledgerOf(tx, orderId);
+        expect(ledger).toHaveLength(1);
+        expect(Number(ledger[0].amount)).toBe(111_000); // omset + added PPN; shipping stays platform money
+      });
+    });
+
+    // Inclusive-mode: the sticker price already contains the PPN, so goods_proceeds carries it and
+    // the add-back must be ZERO — `tax_idr − included` cancels. Adding the liability again here
+    // would pay the seller the same tax twice.
+    it("does NOT double-credit an inclusive store's PPN (add-back cancels against included)", async () => {
+      await inTxn(async (tx) => {
+        const storeId = await mkStore(tx);
+        const orderId = await mkOrder(tx, storeId, "baru");
+        await tx.execute(sql`update orders set tax_idr = 11000 where id = ${orderId}`);
+        const payId = await mkPayment(tx, { orderId, storeId, amount: 111_000, status: "berhasil" });
+        await tx.execute(sql`
+        insert into order_financials
+          (store_id, order_id, goods_proceeds_idr, included_sales_tax_idr, shipping_charged_idr,
+           order_payable_idr, expected_gateway_fee_idr)
+        values (${storeId}, ${orderId}, 111000, 11000, 0, 111000, 0)`);
+        await creditSaleForPayment(tx, payId);
+        const ledger = await ledgerOf(tx, orderId);
+        expect(ledger).toHaveLength(1);
+        expect(Number(ledger[0].amount)).toBe(111_000);
+      });
+    });
+
     it("books the sale as AVAILABLE straight away when the order is already selesai", async () => {
       await inTxn(async (tx) => {
         const storeId = await mkStore(tx);
