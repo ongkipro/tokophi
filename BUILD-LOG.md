@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 04:27 UTC] — SALDO-UI · mutasi jadi folder harian, judul ringkas, pagination bernomor dipertahankan
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner: judul list saldo over-panjang (nomor order mono 16-char inline membuat baris tidak presisi), laporan dibuat format harian "per-folder", list dibatasi + page navigation shadcn.
+- **Yang berubah (`saldo-client.tsx`, tab Mutasi saja):** ① baris dalam SATU halaman dikelompokkan per hari WIB — header folder (ikon kalender + "Senin, 3 Agustus 2026 · n mutasi" + **net harian** hijau/merah); pengelompokan per halaman SENGAJA (server tetap paging PAGE_SIZE=20; hari yang terpotong halaman mengulang headernya di halaman berikut, bukan menarik baris tak terbatas) ② judul ringkas: label jenis ("Penjualan") sendirian di baris utama, nomor order turun jadi baris kecil mono `truncate max-w-[11rem]` + `title` penuh ③ kolom tanggal → **"Jam"** saja (hari sudah di header folder) ④ pagination TIDAK dibangun ulang — `SaldoPager` sudah shadcn `Pagination` bernomor (URL-backed); batas list = PAGE_SIZE 20 yang sudah ada.
+- **Verifikasi:** tsc 0 · build produksi 0 · **drive browser** (probe owner batiknusantara, 841 mutasi riil): 4 header folder di halaman-1 dengan hitungan + net benar (+Rp1.571.028 utk 4 mutasi 3 Agu), 20/20 nomor order truncated, 0 overflow horizontal dokumen, pager bernomor tampil, 0 error JS; screenshot layout dicek. Probe dihapus; `current_period_end` batik dipulihkan persis (dikonfirmasi select).
+
 ### [2026-08-24 04:12 UTC] — FIN-02 · PPN OFF = keterangan PPN hilang total di admin tenant
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner: saat toggle PPN global OFF, JANGAN tampilkan keterangan PPN apa pun di admin tenant — bahkan kalimat "PPN tidak dikenakan" pun adalah caption tentang pajak yang tidak berlaku.
