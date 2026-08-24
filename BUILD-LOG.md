@@ -8,7 +8,6 @@
 
 ## Log History & Execution Entries
 
-<<<<<<< HEAD
 ### [2026-08-24 01:50 UTC] — Stage 5 Task 5.5 · F-F11 (NF-7) · The Shared 320 px Seller Topbar Overflow Is Gone
 
 - **Executor:** Lane B (Claude subagent) — branch `fix/task-5.5-topbar-320`, off `origin/main` `64458fe`.
@@ -29,6 +28,7 @@
 - **Completed Task:** Stage 5 Task 5.5.
 ||||||| 64458fe
 =======
+
 ### [2026-08-24 01:47 UTC] — /tema kontrol gambar: rasio galeri PDP, rasio kartu nav, picker berhalaman + preview
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner. **Tanpa migrasi** — rasio galeri tinggal di `stores.theme` jsonb (`galleryAspect`, divalidasi `resolveGalleryAspect` @tokophi/lib/theme, asing⇒1:1); rasio nav adalah prop section (`CategoryNavConfig.aspect`, default 4:5 = rasio historis, template tersimpan tak berubah).
@@ -37,7 +37,6 @@
 - ⚠️ **Guard `product-ratio-locked.test.ts` DIPERSEMPIT SECARA SADAR** (ruling owner membalik T-10 hanya untuk galeri PDP): Card+Grid tetap terkunci 1:1; PDP non-persegi hanya lewat panggilan `resolveGalleryAspect(` + peta literal, tiap rasio tepat sekali. Dua mutasi dua merah — dan M2 semula hijau karena **token import mati** memuaskan cek nama; diperketat ke bentuk panggilan.
 - **Verifikasi:** vitest **127/1067** hijau · tsc admin 0 · astro check 0 error · rasio diukur piksel (PDP 492×615=0.800; nav 296×197=1.500) · data yang dibalik dipulihkan terverifikasi hash · probe + 30 media pad dihapus. Handoff: `specs/docs/tasks/2026-08-24-tema-image-controls.md`.
 
->>>>>>> origin/main
 
 ### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
 
@@ -2031,7 +2030,6 @@ so it is recorded as one more Epic 2 line beside its sibling rather than invente
 
 ---
 
-<<<<<<< HEAD
 ## [2026-08-24 01:30 UTC] — Task 6.9 / F-F7: the per-store public email existed everywhere except the contact page
 
 **Task / Scope:** Task 6.9 (`F-F7`) · branch `feat/task-6.9-store-email` off `origin/main` `64458fe`
@@ -2083,7 +2081,7 @@ every merchant, ADR 0009; a fallback here is one merchant's inbox on every store
 **Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
 `specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
 ||||||| 64458fe
-=======
+
 ## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
 
 **Executor:** Lane A (Claude subagent) · branch `feat/task-5.9-store-selection`
@@ -2142,4 +2140,3 @@ only ever showed the session store).
 refusal is covered by a source claim + the action's session.imp guard, not a browser run); `SESSION_
 MAX_AGE` re-mint on switch restarts the 7-day window by design (the holder already had a live,
 revocation-checked session).
->>>>>>> origin/main
