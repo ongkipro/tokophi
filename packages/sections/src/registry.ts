@@ -176,8 +176,21 @@ export interface CategoryNavItem {
   href: string;
 }
 
+/**
+ * Card-image aspect for the category rail (owner request 2026-08-24). Wider than the gallery's set
+ * because a NAV card is editorial, not a product photo: landscape (3:2, 5:4) is a legitimate banner
+ * shape here. "4:5" is the default — it is the hard-coded ratio the section has always rendered, so
+ * an unset prop changes nothing for saved templates. ⚠️ The storefront maps these to LITERAL
+ * Tailwind classes (CategoryNav.astro) — a value added here without a class there falls back to the
+ * default at render, never to a broken layout.
+ */
+export const NAV_ASPECTS = ["1:1", "4:5", "2:3", "3:2", "5:4"] as const;
+export type NavAspect = (typeof NAV_ASPECTS)[number];
+
 export interface CategoryNavConfig {
   items: CategoryNavItem[];
+  /** Optional; unset = "4:5" (the section's historical ratio). */
+  aspect?: NavAspect;
 }
 
 /**
@@ -539,6 +552,7 @@ export const SECTION_DEFAULTS: SectionConfigMap = {
     // the same thing CollectionBento has always done — so the section is useful out of the box and
     // cannot point anywhere the store does not have.
     items: [],
+    aspect: "4:5",
   },
   blog: {
     // Safe to ship as FINISHED copy, unlike every prompt above — and the reason is worth stating,

@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 01:47 UTC] — /tema kontrol gambar: rasio galeri PDP, rasio kartu nav, picker berhalaman + preview
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner. **Tanpa migrasi** — rasio galeri tinggal di `stores.theme` jsonb (`galleryAspect`, divalidasi `resolveGalleryAspect` @tokophi/lib/theme, asing⇒1:1); rasio nav adalah prop section (`CategoryNavConfig.aspect`, default 4:5 = rasio historis, template tersimpan tak berubah).
+- 🔴 **Merge-patch pada SEMUA penulis `stores.theme`** — `saveStoreTheme` dulu menimpa `{font,tone}` utuh; dengan `galleryAspect` di jsonb yang sama itu jadi data-loss tiap save Tampilan. Dibuktikan end-to-end di build produksi: simpan rasio → simpan Tampilan → DB `{"font":…,"tone":…,"galleryAspect":"4:5"}` (selamat).
+- **Picker:** klik tile = preview penuh dulu ("Pilih Gambar Ini"/"Kembali"), bukan commit langsung; galeri berhalaman via aksi baru `getMediaPage` (24/halaman, search server-side via `likeContains`, debounce) — `getMedia()` lama utuh (Files + 2 editor memang butuh daftar penuh). Terbukti: 24 → "Muat lebih banyak (31 lagi)" → 48 → preview → commit, 0 error JS.
+- ⚠️ **Guard `product-ratio-locked.test.ts` DIPERSEMPIT SECARA SADAR** (ruling owner membalik T-10 hanya untuk galeri PDP): Card+Grid tetap terkunci 1:1; PDP non-persegi hanya lewat panggilan `resolveGalleryAspect(` + peta literal, tiap rasio tepat sekali. Dua mutasi dua merah — dan M2 semula hijau karena **token import mati** memuaskan cek nama; diperketat ke bentuk panggilan.
+- **Verifikasi:** vitest **127/1067** hijau · tsc admin 0 · astro check 0 error · rasio diukur piksel (PDP 492×615=0.800; nav 296×197=1.500) · data yang dibalik dipulihkan terverifikasi hash · probe + 30 media pad dihapus. Handoff: `specs/docs/tasks/2026-08-24-tema-image-controls.md`.
+
+
 ### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
 
 - **Executor:** Main Session (Claude, Fable 5). Entri docs-only; tidak memicu build (Coolify `watch_paths = '!**/*.md'` — perilaku yang diinginkan, tercatat 2026-08-23 pagi).
