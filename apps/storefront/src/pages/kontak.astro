@@ -1,5 +1,5 @@
 ---
-import { MessageCircle } from "@lucide/astro";
+import { Mail, MessageCircle } from "@lucide/astro";
 import PageHeader from "../components/PageHeader.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../lib/breadcrumb";
 import Layout from "../layouts/Layout.astro";
@@ -9,10 +9,12 @@ const store = Astro.locals.store;
 // trust, and the merchant never finds out.
 const waHref = store.whatsapp ? `https://wa.me/${store.whatsapp}` : null;
 
-// REMOVED: `const email = "halo@batiknusantara.id"`. One container serves EVERY merchant (ADR 0009),
-// so that line put Batik Nusantara's inbox on the contact page of every store on the platform. There
-// is no `stores.email` column and no mailer, so there is nothing honest to put here — the row is gone.
-// If a store email is ever wanted it needs a column, and it must render nothing when unset.
+// THIS store's PUBLIC email (`stores.email`, migration 0070, set at Pengaturan → Profil) — the same
+// per-tenant value the footer renders. null/blank = the merchant has not published one → render NO
+// email row at all. Never a fallback address of any kind: one container serves EVERY merchant
+// (ADR 0009), so a hardcoded address here once put ONE merchant's inbox on the contact page of every
+// store on the platform. An unset email is an honest empty state, not a gap to paper over.
+const email = (store.email ?? "").trim() || null;
 
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
@@ -66,6 +68,19 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
                 <dd class="text-muted">Sabtu 09.00–14.00 WIB</dd>
               </div>
             </div>
+            {email && (
+              <div class="flex items-start gap-3">
+                {/* Same rule as the footer: `mailto:` and nothing else — no obfuscation. A merchant
+                    who typed this field wants to be written to. */}
+                <Mail class="mt-0.5 h-5 w-5 shrink-0 stroke-brand-500" stroke-width={1.8} aria-hidden="true" />
+                <div>
+                  <dt class="font-medium text-ink">Email</dt>
+                  <dd class="text-muted">
+                    <a href={`mailto:${email}`} class="break-all transition-colors hover:text-brand-700">{email}</a>
+                  </dd>
+                </div>
+              </div>
+            )}
           </dl>
 
           {waHref && (

@@ -2006,3 +2006,118 @@ protocol exists to prevent.
 **Completed Task:** Epic 2 — *Update Log paginated, detail collapsed, KPI tiles derived*. No numbered
 Stage task is claimed: this is owner-requested UI work on the same screen as the 2026-08-23 backfill,
 so it is recorded as one more Epic 2 line beside its sibling rather than invented as a Stage entry.
+
+---
+
+<<<<<<< HEAD
+## [2026-08-24 01:30 UTC] — Task 6.9 / F-F7: the per-store public email existed everywhere except the contact page
+
+**Task / Scope:** Task 6.9 (`F-F7`) · branch `feat/task-6.9-store-email` off `origin/main` `64458fe`
+**Executor:** Lane C (Claude subagent)
+**Files:** `apps/storefront/src/pages/kontak.astro` · `apps/admin/lib/actions/store-profile.test.ts`
+(new) · `apps/storefront/src/lib/kontak-email.test.ts` (new) · `TASKS.md` · `BUILD-LOG.md` ·
+`specs/docs/tasks/2026-08-24-task-6.9-store-email.md` (new)
+
+### The task sheet was written against a repo that no longer exists
+
+Verified against `origin/main` BEFORE writing anything: `stores.email` shipped in migration **0070**
+(nullable, `ADD COLUMN IF NOT EXISTS`), with shape-only validation (`emailError`,
+`@tokophi/lib/validate` — no domain whitelist), the tenant-scoped round-trip in
+`apps/admin/lib/actions/store-profile.ts` (`requireCapability("settings:write")` + `withTenant`,
+explicit `where id = storeId` because `stores` has no `store_id`), the "Email publik" field on the
+Pengaturan card, the storefront tenant read (`data/store.ts`) and the footer's conditional render.
+
+- ⚠️ **The coordinator-assigned migration number 0101 is deliberately UNUSED.** A second migration
+  adding a column 0070 already owns is a split source of truth. Journal head stays `0100`;
+  `npm run verify-migrations -w @tokophi/db` green; the shared dev DB's newest applied stamp is
+  `1787302186123` (= 0100) so every environment already has the column. Nothing to apply at merge.
+- ⚠️ The task sheet's `lib/actions/profile.ts` is the USER profile (login credential) — untouched.
+
+### What was genuinely missing
+
+`kontak.astro` still carried the comment "There is no `stores.email` column" (true when written,
+false since 0070) and rendered **no email at all**, even for a store that published one. It now
+derives `email` from the Host-resolved tenant (blank → null) and renders an `Email` row with a plain
+`mailto:` link **only when set** — unset renders nothing, never a placeholder (one container serves
+every merchant, ADR 0009; a fallback here is one merchant's inbox on every store's contact page).
+
+### Verification (exit codes read directly)
+
+- `npx vitest run` → **129 files / 1074 tests** green (baseline 127/1065 + the 2 new files / 9 tests).
+  The new DB-coupled suite runs on the derived `_test` DB under the real GUC +
+  `set local role tokophi_app` shape: two-store isolation, 0058 raw-read invisibility, invalid
+  rejected with the row untouched, clear → NULL survives reload as `""`.
+- `npx tsc --noEmit -p apps/admin` → 0 · `-p packages/db` → 0 ·
+  `npx astro check --root apps/storefront` → 0 errors / 0 warnings / 14 hints (baseline).
+- **Served HTML, prod build, real DB** (`node dist/server/entry.mjs`, port 4485, dev DB read-only,
+  server killed by its own PID): `Host: toko-demo.test` (batiknusantara, email set) → `<dt>Email</dt>`
+  + `mailto:halo@batiknusantara.id` rendered; `Host: kopi-senja.127.0.0.1.sslip.io` (unset) → HTTP
+  200 with **zero** email markup on the whole page. ⚠️ batiknusantara's sslip host 301s to its
+  primary domain `toko-demo.test` — use that Host for local checks on that store.
+- Stated boundary: the section is pure SSR markup (no client script), so served-HTML IS the render;
+  no Playwright layered on top. The admin card is untouched (the field shipped with 0070), so no
+  admin browser pass — its contract is pinned by the new action tests + tsc.
+
+**Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
+`specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
+||||||| 64458fe
+=======
+## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
+
+**Executor:** Lane A (Claude subagent) · branch `feat/task-5.9-store-selection`
+
+**The measured defect (2026-08-23):** a user with memberships in two stores landed on an ARBITRARY
+store at login — `findLogin`'s membership join had no ORDER BY, so the winning row was plan-dependent
+— and the topbar store dropdown never offered the second store (it rendered a mock `STORES` list and
+only ever showed the session store).
+
+**The contract (new, one place):** `apps/admin/lib/store-selection.ts` — the default membership is
+**earliest `invited_at` first (nulls last), tie-broken by ascending store id**, and every reader
+(`findLogin` via `findLoginRow`, `listMemberships` for the switcher) sorts by that one definition
+(`membershipOrder()`). Owner connection, deliberately — same standing exception as `findLogin`.
+
+**Modified files:**
+- `apps/admin/lib/store-selection.ts` (new) — `membershipOrder` / `listMemberships` /
+  `resolveMembership` / `findLoginRow` (LEFT join: a zero-membership account resolves with
+  `storeId: null` instead of masquerading as a wrong password)
+- `apps/admin/lib/auth.ts` — `findLogin` is now a re-export of `findLoginRow`; no second, unordered
+  copy of the membership query. `getSession`'s membership re-read is untouched: deleting a
+  membership still kills the session on the next request.
+- `apps/admin/lib/actions/store.ts` (new) — `switchStore(storeId)`: proves membership in the TARGET
+  store against `store_users` in the same action, then RE-MINTS the session cookie server-side; the
+  role comes from the target row; an impersonated session is refused (the grant was for ONE store);
+  non-UUID input refused before Postgres can 22P02.
+- `apps/admin/lib/actions/auth.ts` — `signIn` refuses a password-valid account with no membership
+  with its own message (before the 2FA round-trip), instead of "Email atau kata sandi salah".
+- `apps/admin/components/admin/topbar.tsx` — switcher renders EVERY live membership (props from the
+  layout), current store checked, picking another calls `switchStore` and lands on the new store's
+  dashboard. Mock fallback removed.
+- `apps/admin/app/(admin)/layout.tsx` — fetches `listMemberships(session.userId)` alongside the
+  other topbar reads; passes `stores` + `currentStoreId`.
+- `apps/admin/lib/nav.ts` — dead mock `STORES` deleted.
+- `apps/admin/lib/store-selection.test.ts` (new) — 11 tests against real PostgreSQL
+  (`TEST_DATABASE_URL`): deterministic pick with 2 memberships, tie-break, NULL `invited_at` sorts
+  last, member/non-member resolution, revocation (row deleted ⇒ null ⇒ login falls back to the
+  surviving store), zero-membership LEFT-join shape; plus `codeOnly` source claims that
+  `switchStore` checks membership BEFORE minting and `signIn` carries the distinct refusal.
+
+**Verification:**
+- Mutation proof: flipping the ORDER BY to `desc nulls first` turned **3 tests red**; restored, all
+  green (the suite cannot pass on an unordered or reversed contract).
+- `npx vitest run` — **128 files / 1076 tests, all passing** (baseline 127/1065 + this suite's 11).
+- `npx tsc --noEmit -p apps/admin` — exit 0.
+- **Driven in a real browser against the PRODUCTION build** (`next build` + `next start :3216`,
+  throwaway user `task59-probe@…` with memberships in kopi-senja [invited 2026-08-01, owner] and
+  hijab-amara [invited 2026-08-02, admin]): login landed on `/store/kopi-senja` (earliest
+  invitation, deterministic); switcher listed BOTH stores (screenshot taken); picking Hijab Amara
+  → `/store/hijab-amara` with the topbar naming it (session re-minted, tenant context changed);
+  `delete from store_users` on the CURRENT store + reload → clean signout to `/login`, **no 5xx
+  anywhere in the whole flow**; re-login landed on the SURVIVING store. Probe user + memberships
+  deleted afterwards; server PID killed; kopi-senja's expired subscription showed the expected
+  read-only banner (reads only — fine for this flow).
+
+**Not verified / boundaries:** the switch flow was not driven under a live impersonated session (the
+refusal is covered by a source claim + the action's session.imp guard, not a browser run); `SESSION_
+MAX_AGE` re-mint on switch restarts the 7-day window by design (the holder already had a live,
+revocation-checked session).
+>>>>>>> origin/main
