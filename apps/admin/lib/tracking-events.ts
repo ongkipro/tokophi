@@ -81,9 +81,9 @@ export type PurchaseFacts = {
   eventId: string;
   contentIds: string[];
   numItems: number;
-  /** What the shopper paid, all in. Meta's and TikTok's `value`. */
+  /** What the shopper paid, all in. Kept as the audit figure; since 2026-08-24 NO platform receives it as `value` (owner: value = goods only). */
   value: number;
-  /** Goods only — price × quantity, no ongkir, no PPN. GA4 defines its `value` on THIS. */
+  /** Goods only — price × quantity, no ongkir, no PPN. THE conversion `value` for Meta, GA4 AND TikTok (owner ruling 2026-08-24). */
   goods: number;
   shipping: number;
   tax: number;

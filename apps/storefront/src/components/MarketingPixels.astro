@@ -396,9 +396,13 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // see NOTE-7 in the frontmatter above
         var perItemQty = ids.length === 1 ? qty : null;
         var val = typeof data.value === "number" && data.value > 0 ? data.value : null;
-        // The GOODS money — price × quantity, no ongkir, no PPN. Only a Purchase can differ from
-        // `value`; on every browsing event `value` already IS the goods total, so it stands in.
+        // The GOODS money — price × quantity, no ongkir, no PPN. Owner ruling 2026-08-24: this IS
+        // the conversion `value` for ALL THREE platforms now ("real value barang yang dibeli") —
+        // shipping and payment-admin money never inflate ROAS. On browsing events `value` already
+        // is the goods total, so it stands in.
         var goods = typeof data.goods === "number" && data.goods > 0 ? data.goods : evt !== "Purchase" && val !== null ? val : null;
+        // The Purchase amount every platform receives: goods when known, else the total (legacy rows).
+        var purchaseVal = goods !== null ? goods : (data.value || 0);
         var cur = data.currency || "IDR";
         if (META && !data.googleOnly) safe(function () {
           var opts = data.eventId ? { eventID: data.eventId } : undefined;
@@ -407,7 +411,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           var d = { content_ids: ids, content_type: ctype };
           if (val !== null) { d.value = val; d.currency = cur; }
           if (evt === "InitiateCheckout") d.num_items = qty;
-          if (evt === "Purchase") { d = { value: data.value || 0, currency: cur, content_ids: ids, content_type: "product", order_id: data.orderId }; }
+          if (evt === "Purchase") { d = { value: purchaseVal, currency: cur, content_ids: ids, content_type: "product", order_id: data.orderId }; }
           if (opts) window.fbq("track", evt, d, opts);
           else window.fbq("track", evt, d);
         });
@@ -435,8 +439,8 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           };
           // see NOTE-11 in the frontmatter above
           if (ids.length === 1) props.content_id = ids[0];
-          if (val !== null) props.value = val;
-          else if (evt === "Purchase") props.value = data.value || 0;
+          if (evt === "Purchase") props.value = purchaseVal;
+          else if (val !== null) props.value = val;
           // see NOTE-12 in the frontmatter above
           if (data.eventId) window.ttq.track(name, props, { event_id: data.eventId });
           else window.ttq.track(name, props);
@@ -643,21 +647,21 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
             var data = { value: Number(order.total || 0), currency: "IDR", contentIds: ids, numItems: qty || items.length, orderId: key, eventId: tr.eventId || null,
               goods: goods, shipping: shipCost, tax: taxAmt, lineItems: lineItems, googleOnly: googleOnly };
 
-            // Advanced matching (opt-in per channel): hash email/phone, attach, THEN fire Purchase.
+            // Advanced matching — ALWAYS ON (owner ruling 2026-08-24). It used to be an opt-in
+            // toggle defaulting OFF, so most merchants lost match quality for want of a switch they
+            // never found; the server-side CAPI has always attached hashed identifiers regardless.
+            // Hash email/phone, attach, THEN fire Purchase.
             var email = order.contact && order.contact.email ? String(order.contact.email).trim().toLowerCase() : "";
             var phone = order.shippingAddress && order.shippingAddress.whatsapp ? digits(order.shippingAddress.whatsapp) : "";
             var phoneE164 = order.shippingAddress && order.shippingAddress.whatsapp ? e164(order.shippingAddress.whatsapp) : "";
-            var wantAM = googleOnly
-              ? GOOGLE && GOOGLE.advancedMatching
-              : (META && META.advancedMatching) || (TIKTOK && TIKTOK.advancedMatching) || (GOOGLE && GOOGLE.advancedMatching);
-            if (wantAM && (email || phone)) {
+            if (email || phone) {
               // THREE hashes, not two: Meta's phone and TikTok's differ by one character, and one
               // digest cannot serve both. Google takes the raw values (gtag hashes them itself).
               Promise.all([email ? sha256(email) : null, phone ? sha256(phone) : null, phoneE164 ? sha256(phoneE164) : null]).then(function (h) {
                 var em = h[0], ph = h[1], phPlus = h[2];
                 // see NOTE-24 in the frontmatter above
-                if (!googleOnly && META && META.advancedMatching && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
-                if (!googleOnly && TIKTOK && TIKTOK.advancedMatching && (em || phPlus)) safe(function () { var id = {}; if (em) id.email = em; if (phPlus) id.phone_number = phPlus; window.ttq.identify(id); });
+                if (!googleOnly && META && (em || ph)) safe(function () { var am = {}; if (em) am.em = em; if (ph) am.ph = ph; window.fbq("init", META.pixelId, am); });
+                if (!googleOnly && TIKTOK && (em || phPlus)) safe(function () { var id = {}; if (em) id.email = em; if (phPlus) id.phone_number = phPlus; window.ttq.identify(id); });
                 // see NOTE-25 in the frontmatter above
                 // Gated on the ADS destination, not on the pixel field. The Seller UI tells the merchant
                 // to put GA4's `G-…` in "ID Pixel/Tag" and the `AW-…/label` in the separate Ads field —
@@ -665,7 +669,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
                 // for every merchant who wired it the way we documented.
                 // `adsSendTo` OR a legacy `AW-` in the pixel field. Gating on `adsSendTo` alone fixed the
                 // documented wiring and silently broke the undocumented one that used to work.
-                if (GOOGLE && GOOGLE.advancedMatching && (GOOGLE.adsSendTo || String(GOOGLE.pixelId).slice(0, 3) === "AW-")) safe(function () {
+                if (GOOGLE && (GOOGLE.adsSendTo || String(GOOGLE.pixelId).slice(0, 3) === "AW-")) safe(function () {
                   var ud = {}; if (email) ud.email = email; if (phoneE164) ud.phone_number = phoneE164;
                   window.gtag("set", "user_data", ud);
                 });

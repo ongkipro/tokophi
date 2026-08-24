@@ -17,7 +17,6 @@ export type TrackingConfig = {
   capiEnabled: boolean;
   /** true = a CAPI token is stored (its value is never sent to the client). */
   capiConfigured: boolean;
-  advancedMatching: boolean;
   testEventCode: string;
   /** Google Ads conversion destination, `AW-123456789/AbC-D_efGh`. Empty = Google Ads not wired. */
   adsSendTo: string;
@@ -29,7 +28,7 @@ const KEYS: TrackingChannelKey[] = ["meta", "google", "tiktok"];
 export const emptyTrackingConfig = (): TrackingConfig[] => KEYS.map(empty);
 
 function empty(channel: TrackingChannelKey): TrackingConfig {
-  return { channel, enabled: false, pixelId: "", capiEnabled: false, capiConfigured: false, advancedMatching: false, testEventCode: "", adsSendTo: "" };
+  return { channel, enabled: false, pixelId: "", capiEnabled: false, capiConfigured: false, testEventCode: "", adsSendTo: "" };
 }
 
 /**
@@ -81,7 +80,6 @@ export async function getTrackingConfig(): Promise<TrackingConfig[]> {
         pixelId: schema.storeTrackingChannels.pixelId,
         capiEnabled: schema.storeTrackingChannels.capiEnabled,
         cipher: schema.storeTrackingChannels.capiTokenCiphertext,
-        advancedMatching: schema.storeTrackingChannels.advancedMatching,
         testEventCode: schema.storeTrackingChannels.testEventCode,
         adsSendTo: schema.storeTrackingChannels.adsSendTo,
       })
@@ -100,7 +98,6 @@ export async function getTrackingConfig(): Promise<TrackingConfig[]> {
         // there and no longer readable, and the UI would keep saying "Token sudah tersimpan" while
         // every conversion dead-letters as `not_configured`. Ask whether it can actually be DECRYPTED.
         capiConfigured: !!r.cipher && decryptSecret(r.cipher, secretScope(storeId, k)) !== null,
-        advancedMatching: r.advancedMatching,
         testEventCode: r.testEventCode ?? "",
         adsSendTo: r.adsSendTo ?? "",
       };

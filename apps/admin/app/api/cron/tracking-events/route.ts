@@ -250,7 +250,7 @@ export async function GET(req: NextRequest) {
   let dead = 0;
 
   // Channel config is per store; cache it for this tick so 50 orders from one shop are one read.
-  const cfgCache = new Map<string, { pixelId: string | null; token: string | null; advancedMatching: boolean; testEventCode: string | null } | null>();
+  const cfgCache = new Map<string, { pixelId: string | null; token: string | null; testEventCode: string | null } | null>();
   const originCache = new Map<string, string>();
   async function config(storeId: string, channel: "meta" | "google" | "tiktok") {
     const key = `${storeId}:${channel}`;
@@ -260,7 +260,6 @@ export async function GET(req: NextRequest) {
         pixelId: schema.storeTrackingChannels.pixelId,
         cipher: schema.storeTrackingChannels.capiTokenCiphertext,
         capiEnabled: schema.storeTrackingChannels.capiEnabled,
-        advancedMatching: schema.storeTrackingChannels.advancedMatching,
         testEventCode: schema.storeTrackingChannels.testEventCode,
       })
       .from(schema.storeTrackingChannels)
@@ -270,7 +269,7 @@ export async function GET(req: NextRequest) {
     // A merchant who switched CAPI off (or disconnected) must stop receiving deliveries (§17.3).
     const value =
       row && row.capiEnabled
-        ? { pixelId: row.pixelId, token: decryptSecret(row.cipher, secretScope(storeId, channel)), advancedMatching: row.advancedMatching, testEventCode: row.testEventCode }
+        ? { pixelId: row.pixelId, token: decryptSecret(row.cipher, secretScope(storeId, channel)), testEventCode: row.testEventCode }
         : null;
     cfgCache.set(key, value);
     return value;

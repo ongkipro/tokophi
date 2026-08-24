@@ -394,7 +394,6 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
   const meta = CH_META[cfg.channel];
   const [enabled, setEnabled] = React.useState(cfg.enabled);
   const [pixelId, setPixelId] = React.useState(cfg.pixelId);
-  const [advanced, setAdvanced] = React.useState(cfg.advancedMatching);
   const [capiEnabled, setCapiEnabled] = React.useState(cfg.capiEnabled);
   const [capiToken, setCapiToken] = React.useState(""); // blank = leave stored token unchanged
   const [testCode, setTestCode] = React.useState(cfg.testEventCode);
@@ -443,7 +442,6 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
         enabled,
         pixelId,
         capiEnabled,
-        advancedMatching: advanced,
         testEventCode: testCode,
         adsSendTo: cfg.channel === "google" ? adsSendTo : undefined,
         capiToken: capiToken.trim() ? capiToken.trim() : undefined,
@@ -464,25 +462,30 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
               <p className="text-xs text-muted-foreground">Dari {meta.where}</p>
             </div>
           </div>
-          {live ? (
-            <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Aktif</Badge>
-          ) : (
-            <NotConnectedBadge />
-          )}
+          <div className="flex items-center gap-3">
+            {live ? (
+              <Badge className="gap-1 bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="size-3.5" /> Aktif</Badge>
+            ) : (
+              <NotConnectedBadge />
+            )}
+            {/* The MASTER switch lives in the header (owner 2026-08-24): flip it and the whole
+                configuration — Pixel ID, CAPI, uji — reveals underneath. A disabled channel shows
+                one quiet row instead of a full form nobody filled in. */}
+            <Switch aria-label={`Aktifkan ${meta.name}`} checked={enabled} onCheckedChange={setEnabled} disabled={!canWrite} />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor={`${cfg.channel}-pixel`}>{meta.pixelLabel}</Label>
-            <Input id={`${cfg.channel}-pixel`} value={pixelId} onChange={(e) => setPixelId(e.target.value.trim())} placeholder={meta.pixelHint} disabled={!canWrite} />
-          </div>
-          <div className="flex items-end">
-            <div className="flex w-full items-center justify-between rounded-lg border px-3 py-2">
-              <Label htmlFor={`${cfg.channel}-active`} className="cursor-pointer">Aktifkan pelacakan</Label>
-              <Switch id={`${cfg.channel}-active`} checked={enabled} onCheckedChange={setEnabled} disabled={!canWrite} />
-            </div>
-          </div>
+        {!enabled && (
+          <p className="text-sm text-muted-foreground">
+            Aktifkan untuk memasang {meta.name} di toko Anda — Pixel ID, {meta.capiName}, dan uji
+            koneksi muncul di sini setelah diaktifkan.
+          </p>
+        )}
+        {enabled && (<>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${cfg.channel}-pixel`}>{meta.pixelLabel}</Label>
+          <Input id={`${cfg.channel}-pixel`} value={pixelId} onChange={(e) => setPixelId(e.target.value.trim())} placeholder={meta.pixelHint} disabled={!canWrite} />
         </div>
 
         {/* Google Ads is a SEPARATE destination from GA4 — different id, and a per-action conversion
@@ -502,17 +505,16 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
           </div>
         )}
 
-        {/* Advanced matching */}
-        <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
-          <div className="min-w-0">
-            <label htmlFor={`${cfg.channel}-advanced`} className="flex items-center gap-1.5 text-sm font-medium"><ShieldCheck className="size-4 text-muted-foreground" /> Advanced matching (browser)</label>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Kirim email/telepon pembeli (di-hash) dari browser agar konversi lebih akurat. Event sisi
-              server selalu menyertakannya — tanpa itu {meta.name} tidak bisa mencocokkan konversi sama sekali.
-            </p>
-          </div>
-          <Switch id={`${cfg.channel}-advanced`} checked={advanced} onCheckedChange={setAdvanced} disabled={!canWrite} />
-        </div>
+        {/* Advanced matching is ALWAYS ON (owner ruling 2026-08-24) — deliberately NO toggle: it
+            defaulted OFF and most merchants never found the switch, losing match quality for
+            nothing. Identifiers are SHA-256-hashed before leaving the browser, per all three
+            platforms' rules; the server-side CAPI has always attached them. */}
+        <p className="flex items-start gap-1.5 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+          <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+          <span><span className="font-medium text-foreground">Advanced matching aktif otomatis.</span> Email/telepon
+          pembeli dikirim dalam bentuk hash bersama setiap event agar {meta.name} mencocokkan konversi
+          dengan akurat — tidak perlu pengaturan apa pun.</span>
+        </p>
 
         {/* CAPI / server-side */}
         <div className="space-y-3 rounded-lg border p-3">
@@ -608,6 +610,19 @@ function TrackingCard({ cfg, health }: { cfg: TrackingConfig; health?: TrackingH
             </div>
           )}
         </div>
+        </>)}
+
+        {/* A channel switched OFF keeps its delivery diagnostics visible — switching off is the
+            first thing a merchant tries when something looks broken, and hiding the numbers at that
+            exact moment turns a fixable problem into a support ticket. Compact: counts only. */}
+        {!enabled && health && (health.succeeded + health.queued + health.failed + health.deadLetter) > 0 && (
+          <div className="rounded-lg bg-muted/40 p-3 text-xs">
+            <span className="font-medium">7 hari terakhir:</span>{" "}
+            <span className="text-emerald-600">{num(health.succeeded)} terkirim</span>
+            {health.failed > 0 && <span className="text-amber-600"> · {num(health.failed)} dicoba ulang</span>}
+            {health.deadLetter > 0 && <span className="text-destructive"> · {num(health.deadLetter)} gagal</span>}
+          </div>
+        )}
 
         {canWrite && (
           <div className="flex justify-end">
