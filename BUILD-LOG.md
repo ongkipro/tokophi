@@ -8,7 +8,7 @@
 
 ## Log History & Execution Entries
 
-### [2026-08-24 02:55 UTC] — Kategori Google otomatis saat publish + kartu Gambar koleksi ke sidebar
+### [2026-08-24 02:26 UTC] — Kategori Google otomatis saat publish + kartu Gambar koleksi ke sidebar
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner 2026-08-24. Tanpa migrasi.
 - **Auto-kategori:** `productFields` (dipindah ke `@/lib/product-fields` — modul "use server" hanya boleh export async, dan mapper harus bisa diimpor test) mengisi `google_category_id/path` via `suggestGoogleCategory(judul, kategori, deskripsi)` HANYA saat `status="active"` dan pilihan eksplisit kosong; draft tak disentuh; pilihan merchant selalu menang. Deskripsi kini juga masuk suggester interaktif (`GoogleCategoryField`) supaya saran UI dan isian server tidak pernah beda pendapat.
