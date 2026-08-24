@@ -19,8 +19,8 @@ import { withCurrentTenant } from "@/lib/tenant";
 // through withCurrentTenant so RLS scopes the team list (store_users has store_id; billing.ts joins
 // users under the same wrapper).
 
-export type StoreRole = "owner" | "admin" | "staff" | "gudang";
-export type ManageableRole = "admin" | "staff" | "gudang";
+export type StoreRole = "owner" | "admin" | "staff" | "gudang" | "advertiser" | "cs";
+export type ManageableRole = "admin" | "staff" | "gudang" | "advertiser" | "cs";
 export type StoreUserRow = {
   userId: string;
   name: string;
@@ -67,7 +67,7 @@ export type InviteResult =
   | { outcome: "already_accepted"; email: string; role: StoreRole; password: null }
   | { outcome: "failed"; error: string; password: null };
 
-const MANAGEABLE: ManageableRole[] = ["admin", "staff", "gudang"];
+const MANAGEABLE: ManageableRole[] = ["admin", "staff", "gudang", "advertiser", "cs"];
 
 const fail = (error: string): InviteResult => ({ outcome: "failed", error, password: null });
 

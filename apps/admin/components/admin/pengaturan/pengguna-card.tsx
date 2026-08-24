@@ -24,13 +24,19 @@ import {
 const ROLE_LABEL: Record<string, string> = { owner: "Pemilik", admin: "Admin", staff: "Staf", gudang: "Staf Gudang" };
 const ROLE_BADGE: Record<string, "default" | "secondary" | "outline"> = {
   owner: "default", admin: "secondary", staff: "outline", gudang: "outline",
+  advertiser: "outline", cs: "outline",
 };
 const fmtTanggal = (iso: string) =>
   new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-const MANAGEABLE: { role: ManageableRole; label: string }[] = [
-  { role: "admin", label: "Admin" },
-  { role: "staff", label: "Staf" },
-  { role: "gudang", label: "Staf Gudang" },
+// One line per role saying what the role can DO — pickers that only show a name make the seller
+// guess, and a wrong guess here hands out real capabilities (owner request 2026-08-24: +Advertiser,
+// +Customer Service, "sempurnakan ui/ux"). Keep in step with ROLE_CAPS in lib/rbac-policy.ts.
+const MANAGEABLE: { role: ManageableRole; label: string; desc: string }[] = [
+  { role: "admin", label: "Admin", desc: "Semua operasional — kecuali pengaturan toko & kredensial iklan." },
+  { role: "staff", label: "Staf", desc: "Menjalankan toko: produk, pesanan, pelanggan, konten, chat." },
+  { role: "gudang", label: "Staf Gudang", desc: "Hanya stok & pembelian (purchase order)." },
+  { role: "advertiser", label: "Advertiser", desc: "Pemasaran: pixel/CAPI & feed iklan, promo, konten, media." },
+  { role: "cs", label: "Customer Service", desc: "Layanan pembeli: pesanan, pelanggan, CRM, chat." },
 ];
 
 export function PenggunaCard() {
@@ -225,12 +231,27 @@ function InviteDialog({ onOpenChange, onDone }: { onOpenChange: (o: boolean) => 
             </div>
             <div className="grid gap-2">
               <Label>Peran</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {MANAGEABLE.map((r) => (
-                  <Button key={r.role} type="button" size="sm" variant={r.role === role ? "secondary" : "outline"} onClick={() => setRole(r.role)}>
-                    {r.label}
-                  </Button>
-                ))}
+              {/* Five roles now — pill buttons wrapped into an unreadable cloud and said nothing
+                  about what each grants. Rows: name + what the role can do, selected state ringed. */}
+              <div className="grid gap-1.5">
+                {MANAGEABLE.map((r) => {
+                  const selected = r.role === role;
+                  return (
+                    <button
+                      key={r.role}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setRole(r.role)}
+                      className={
+                        "flex items-baseline justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors " +
+                        (selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-input hover:bg-muted/50")
+                      }
+                    >
+                      <span className="shrink-0 text-sm font-medium">{r.label}</span>
+                      <span className="min-w-0 text-right text-xs text-muted-foreground">{r.desc}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

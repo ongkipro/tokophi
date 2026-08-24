@@ -78,7 +78,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   const [addOpen, setAddOpen] = useState(false);
   const [auName, setAuName] = useState("");
   const [auEmail, setAuEmail] = useState("");
-  const [auRole, setAuRole] = useState<"admin" | "staff" | "gudang">("staff");
+  const [auRole, setAuRole] = useState<"admin" | "staff" | "gudang" | "advertiser" | "cs">("staff");
 
   // ⚠️ RESPECT A REFUSAL. This used to `await fn()` and then announce success unconditionally, so any
   // action that returns `{ ok: false, error }` — a guard doing its job — was reported to the operator
@@ -322,7 +322,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
                     <div className="flex flex-col gap-2">
                       <Label>Peran</Label>
                       <div className="flex gap-2">
-                        {(["admin", "staff", "gudang"] as const).map((r) => (
+                        {(["admin", "staff", "gudang", "advertiser", "cs"] as const).map((r) => (
                           <Button key={r} type="button" variant={auRole === r ? "default" : "outline"} size="sm" onClick={() => setAuRole(r)}>{ROLE_LABEL[r]}</Button>
                         ))}
                       </div>
@@ -355,7 +355,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
                         <DropdownMenu>
                           <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="gap-1">{ROLE_LABEL[u.role] ?? u.role}</Button>} />
                           <DropdownMenuContent align="end">
-                            {(["admin", "staff", "gudang"] as const).map((r) => (
+                            {(["admin", "staff", "gudang", "advertiser", "cs"] as const).map((r) => (
                               <DropdownMenuItem key={r} disabled={r === u.role} onClick={() => run(() => setStoreUserRole(store.id, u.id, r), "Peran diperbarui.")}>{ROLE_LABEL[r]}</DropdownMenuItem>
                             ))}
                           </DropdownMenuContent>

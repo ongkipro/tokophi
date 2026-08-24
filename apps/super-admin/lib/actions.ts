@@ -951,7 +951,7 @@ export async function resetStoreUserPassword(storeId: string, userId: string): P
   return { ok: true, password: pw, email: target.email };
 }
 
-export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang"): Promise<{ ok: boolean; error?: string }> {
+export async function setStoreUserRole(storeId: string, storeUserId: string, role: "owner" | "admin" | "staff" | "gudang" | "advertiser" | "cs"): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
   // ⚠️ AN AUDIT LINE FOR A PRIVILEGE CHANGE THAT MAY NOT HAVE HAPPENED IS WORSE THAN NO AUDIT LINE.
@@ -1012,7 +1012,7 @@ export async function removeStoreUser(storeId: string, storeUserId: string): Pro
  * `password == null`, because "no password" and "no password was NEEDED" read identically at a call
  * site and only one of them is good news.
  */
-export async function addStoreUser(storeId: string, input: { name: string; email: string; role: "admin" | "staff" | "gudang" }): Promise<{ ok: boolean; password?: string | null; outcome?: "created" | "linked"; error?: string }> {
+export async function addStoreUser(storeId: string, input: { name: string; email: string; role: "admin" | "staff" | "gudang" | "advertiser" | "cs" }): Promise<{ ok: boolean; password?: string | null; outcome?: "created" | "linked"; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
   const email = input.email?.trim().toLowerCase();
