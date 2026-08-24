@@ -37,9 +37,14 @@ export type Db = typeof rootDb;
  * stored facts, never recomputed: `orders.tax_idr` is the liability, `included_sales_tax_idr` the
  * portion already inside the sticker price, so `tax_idr − included` is exactly the exclusive-mode
  * PPN line the buyer paid on top. Inclusive-mode stores need no add-back — their proceeds already
- * carry the tax. Never shipping, gateway fee, COD fee, or fee VAT. Legacy orders have no
- * trustworthy goods/shipping discount split, so their historical `payments.amount_idr` behavior
- * remains unchanged rather than fabricating a backfill.
+ * carry the tax. Never shipping, gateway fee, COD fee, or fee VAT.
+ *
+ * LEGACY orders (no order_financials) credit `greatest(orders.subtotal_idr − discount_idr, 0)` —
+ * goods only, from the order's own columns. The old fallback was `payments.amount_idr`, which
+ * historically CONTAINED the shipping (owner report 2026-08-24: "penarikan masih membawa biaya
+ * pengiriman") — so every legacy sale credited the courier's money as withdrawable. The discount
+ * column may include a shipping discount on some old rows (the split is not recorded), which makes
+ * this expression conservative in the platform's favour, never the seller's.
  *
  * Status follows the release rule (`platform_payout.release_on = 'selesai'`): the credit lands
  * `pending` and is released to `available` by `setOrderStatus` when the order reaches `selesai`.
@@ -54,7 +59,7 @@ export async function creditSaleForPayment(
     insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, available_at)
     select coalesce(p.store_id, o.store_id), o.id, p.id, 'sale',
            case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
-           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), p.amount_idr),
+           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0)),
            'Penjualan ' || o.number,
            case when o.status in ('selesai', 'retur') then now() end
       from payments p

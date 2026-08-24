@@ -90,10 +90,14 @@ async function mkOrder(
   tx: Db,
   storeId: string,
   status = "baru",
+  /** Legacy credit (no order_financials) reads GOODS from the ORDER — `greatest(subtotal − discount, 0)`
+   *  since 0104 — so fixtures that assert a credited amount must seed the subtotal that amount
+   *  comes from. 0 means "an order with no goods value", which credits 0 by design. */
+  subtotal = 0,
 ): Promise<string> {
   const o = await rows(
     tx,
-    sql`insert into orders (store_id, number, status) values (${storeId}, ${"T-" + ++seq}, ${status}::order_status) returning id`,
+    sql`insert into orders (store_id, number, status, subtotal_idr) values (${storeId}, ${"T-" + ++seq}, ${status}::order_status, ${subtotal}) returning id`,
   );
   return o[0].id as string;
 }
@@ -125,15 +129,18 @@ const ledgerOf = (tx: Db, orderId: string) =>
 suite(
   "creditSaleForPayment — a sale is booked only for money actually collected",
   () => {
-    it("books ONE pending sale for a berhasil payment, amount = amount_idr (never total)", async () => {
+    it("books ONE pending sale for a berhasil payment, amount = the ORDER's goods (never the payment total)", async () => {
       await inTxn(async (tx) => {
         const storeId = await mkStore(tx);
-        const orderId = await mkOrder(tx, storeId, "baru");
+        // goods 150k; the payment's amount (165k = goods + 15k ongkir) and total (fee-inclusive)
+        // must NOT be what is credited — the 2026-08-24 owner report was exactly this: legacy sales
+        // fell back to payments.amount_idr and withdrew the courier's money.
+        const orderId = await mkOrder(tx, storeId, "baru", 150_000);
         const payId = await mkPayment(tx, {
           orderId,
           storeId,
-          amount: 150_000,
-          total: 155_000,
+          amount: 165_000,
+          total: 171_500,
           status: "berhasil",
         });
         await creditSaleForPayment(tx, payId);
@@ -355,7 +362,7 @@ suite("settleOrderLedger — the book moves with the order status", () => {
   it("selesai on a COD order: collects the cash AND books the sale available", async () => {
     await inTxn(async (tx) => {
       const storeId = await mkStore(tx);
-      const orderId = await mkOrder(tx, storeId, "selesai"); // seller marked delivered
+      const orderId = await mkOrder(tx, storeId, "selesai", 200_000); // seller marked delivered
       await mkPayment(tx, {
         orderId,
         storeId,
@@ -434,7 +441,7 @@ suite("settleOrderLedger — the book moves with the order status", () => {
   it("retur claws the credit back as an OPPOSING entry that nets the balance to zero", async () => {
     await inTxn(async (tx) => {
       const storeId = await mkStore(tx);
-      const orderId = await mkOrder(tx, storeId, "selesai");
+      const orderId = await mkOrder(tx, storeId, "selesai", 100_000);
       await creditSaleForPayment(
         tx,
         await mkPayment(tx, {
@@ -592,7 +599,7 @@ suite("settleOrderLedger — the book moves with the order status", () => {
   it("retur is idempotent — a second settle cannot double-refund (ledger_one_retur_per_order)", async () => {
     await inTxn(async (tx) => {
       const storeId = await mkStore(tx);
-      const orderId = await mkOrder(tx, storeId, "selesai");
+      const orderId = await mkOrder(tx, storeId, "selesai", 100_000);
       await creditSaleForPayment(
         tx,
         await mkPayment(tx, {
@@ -628,7 +635,7 @@ suite("settleOrderLedger — the book moves with the order status", () => {
   it("batal reverses a PREPAID sale — cancelling after payment claws the credit back (not just retur)", async () => {
     await inTxn(async (tx) => {
       const storeId = await mkStore(tx);
-      const orderId = await mkOrder(tx, storeId, "diproses"); // prepaid, credited pending, not yet shipped
+      const orderId = await mkOrder(tx, storeId, "diproses", 100_000); // prepaid, credited pending, not yet shipped
       await creditSaleForPayment(
         tx,
         await mkPayment(tx, {
