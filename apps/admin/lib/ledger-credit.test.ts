@@ -195,6 +195,29 @@ suite(
       });
     });
 
+    // 0102: the VIEW every finance screen reads and the LEDGER credit must be ONE formula — a view
+    // that forgets the added PPN makes Keuangan under-report by the tax and turns every correct
+    // ledger row into a reconciliation "mismatch". Both modes pinned against the same fixtures.
+    it("order_seller_entitlements agrees with the ledger credit in both tax modes", async () => {
+      await inTxn(async (tx) => {
+        const storeId = await mkStore(tx);
+        // exclusive: goods 100k, added tax 11k → 111k
+        const excl = await mkOrder(tx, storeId, "baru");
+        await tx.execute(sql`update orders set tax_idr = 11000 where id = ${excl}`);
+        await tx.execute(sql`insert into order_financials (store_id, order_id, goods_proceeds_idr, included_sales_tax_idr, shipping_charged_idr, order_payable_idr) values (${storeId}, ${excl}, 100000, 0, 20000, 131000)`);
+        // inclusive: sticker 111k already carries the 11k → no add-back
+        const incl = await mkOrder(tx, storeId, "baru");
+        await tx.execute(sql`update orders set tax_idr = 11000 where id = ${incl}`);
+        await tx.execute(sql`insert into order_financials (store_id, order_id, goods_proceeds_idr, included_sales_tax_idr, shipping_charged_idr, order_payable_idr) values (${storeId}, ${incl}, 111000, 11000, 0, 111000)`);
+        const vrows = await rows(tx, sql`select order_id, seller_entitlement_idr::bigint as ent, sales_tax_added_idr::bigint as added from order_seller_entitlements where order_id in (${excl}, ${incl})`);
+        const byId = Object.fromEntries(vrows.map((r) => [String(r.order_id), r] as const));
+        expect(Number(byId[excl].ent)).toBe(111_000);
+        expect(Number(byId[excl].added)).toBe(11_000);
+        expect(Number(byId[incl].ent)).toBe(111_000);
+        expect(Number(byId[incl].added)).toBe(0);
+      });
+    });
+
     // Inclusive-mode: the sticker price already contains the PPN, so goods_proceeds carries it and
     // the add-back must be ZERO — `tax_idr − included` cancels. Adding the liability again here
     // would pay the seller the same tax twice.
