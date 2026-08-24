@@ -36,7 +36,10 @@ vi.mock("@/lib/tenant", () => ({
 }));
 vi.mock("@tokophi/lib/autolaris", () => ({
   autolarisConfigured: () => true,
+  // AL-ORDER 2026-08-24: the action calls alCreateOrder (digital order via /api/h2h/submit) now.
+  // Both names route to the same harness so the suite keeps proving request identity, not the wire.
   alCreatePayment: (input: unknown) => h.provider(input),
+  alCreateOrder: (input: unknown) => h.provider(input),
 }));
 vi.mock("@tokophi/lib/pay-callback", () => ({
   payCallbackUrl: () => "https://example.test/pay/callback",

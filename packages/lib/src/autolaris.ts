@@ -135,6 +135,63 @@ export async function alCreatePayment(input: {
 }
 
 /**
+ * Create a DIGITAL order via `/api/h2h/submit` — the shape the owner ruled for 2026-08-24 (AL-ORDER):
+ * AutoLaris is a PAYMENT GATEWAY only (all shipping is KiriminAja), and their CMS detects a digital
+ * order from **`courir_id: 1`**. Contract PROBED live 2026-08-24 against the real endpoint:
+ *   · `channel_code` IS required — omitting it answers rc=01 "Invalid parameter" (measured), so the
+ *     shopper's picked channel keeps flowing through exactly as with create_payment;
+ *   · `origin`/`destination`/dims are required even for a digital order — dummy area ids + "1"s are
+ *     accepted; `biaya_kirim` comes back 0;
+ *   · the payment instruction arrives in `payment_info` (`va` / `qr` / `url` per channel) plus
+ *     `transaction_id` — the SAME identifier family the callback reports as `trx_id`;
+ *   · **`total` = `grand_total`** — unlike create_payment (total = amount + admin), the provider's
+ *     admin fee (`biaya_admin`, e.g. VABCA 6.500 / QRIS 0,7%) is NOT added to what the buyer pays;
+ *     it nets against settlement. The buyer therefore pays exactly the number WE computed — which
+ *     already carries the platform fee schedule (specs/docs/FINANCE.md).
+ * ⚠️ The vendor's field really is spelled `courir_id`. Do not "fix" the typo; the API owns it.
+ */
+export async function alCreateOrder(input: {
+  reffId: string; channelCode: string; amount: number;
+  customerName: string; customerPhone: string; customerEmail: string;
+  callbackUrl: string;
+  /** line items shown in the AutoLaris CMS; defaults to one line carrying the whole amount */
+  items?: { name: string; qty: number; unitPrice: number }[];
+}): Promise<AlPayment> {
+  const items = input.items?.length ? input.items : [{ name: "Pesanan", qty: 1, unitPrice: input.amount }];
+  const r = await al<{ rc: string; ket?: string; data?: {
+    transaction_id?: string; channel_code?: string; total?: number; biaya_admin?: number; diskon?: number;
+    payment_info?: { expired?: string; va?: string; qr?: string; url?: string };
+  } }>("/api/h2h/submit", {
+    reff_id: input.reffId,
+    channel_code: input.channelCode,
+    // 1 = digital order in the AutoLaris CMS — the whole reason this endpoint is used.
+    courir_id: 1,
+    // Required by their validator even when nothing ships; fixed dummy area ids from their own
+    // sample (Sumobito / Sawahan) + 1-unit dims. biaya_kirim is 0 on every probed response.
+    origin: 3517100, destination: 3518010,
+    weight: "1", length: "1", width: "1", height: "1",
+    shipper_name: "TokoPhi", shipper_phone: "081227168633", shipper_email: "billing@tokophi.id", shipper_address: "Pesanan digital TokoPhi",
+    receiver_name: input.customerName, receiver_phone: input.customerPhone, receiver_email: input.customerEmail, receiver_address: "Pesanan digital",
+    callback_url: input.callbackUrl,
+    grand_total: String(input.amount), cod_value: "0",
+    longitude: "", latitude: "",
+    remark: `TokoPhi ${input.reffId}`,
+    order_details: items.map((i) => ({ name: i.name, qty: String(i.qty), unit_price: String(i.unitPrice) })),
+  });
+  if (r.rc !== AUTOLARIS_RC_OK || !r.data) return { ok: false, error: r.ket ?? `Gagal (rc=${r.rc})` };
+  const d = r.data;
+  return {
+    ok: true,
+    trxId: d.transaction_id,
+    virtualAccount: d.payment_info?.va || undefined,
+    qr: d.payment_info?.qr || undefined,
+    url: d.payment_info?.url || undefined,
+    amount: input.amount, admin: d.biaya_admin, total: d.total,
+    expiresAt: d.payment_info?.expired,
+  };
+}
+
+/**
  * Ask AutoLaris for the gateway's current view of a transaction instead of trusting a callback body.
  * `ok` means the inquiry itself succeeded; callers must still require `status === "PAID"` and compare
  * the returned amount with their own payment row before settling money.
