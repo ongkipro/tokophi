@@ -199,3 +199,24 @@ export function resolveTheme(store: { brandColor?: string | null; theme?: unknow
     toneChosen,
   };
 }
+
+// ── Product-gallery MAIN-image aspect (owner request 2026-08-24) ─────────────────────────────────
+//
+// Lives in the same `stores.theme` jsonb as font/tone — a jsonb key needs no migration, and the
+// storefront already ships `store.theme` raw to the PDP. ⚠️ CONSEQUENCE FOR WRITERS: every writer of
+// `stores.theme` must MERGE-PATCH, never overwrite — `saveStoreTheme` used to write `{font, tone}`
+// wholesale, which would have silently wiped this key on every "Tampilan" save (fixed in the same
+// change that added this).
+//
+// Validated exactly like font/tone: jsonb is untrusted, an unknown value degrades to the default and
+// never crashes a shopper-facing page. "1:1" is the default because it is what the PDP has always
+// rendered — an unset key changes nothing for existing stores.
+export const GALLERY_ASPECTS = ["1:1", "4:5", "2:3"] as const;
+export type GalleryAspect = (typeof GALLERY_ASPECTS)[number];
+
+export function resolveGalleryAspect(theme: unknown): GalleryAspect {
+  const raw = (theme ?? {}) as Record<string, unknown>;
+  return (GALLERY_ASPECTS as readonly unknown[]).includes(raw.galleryAspect)
+    ? (raw.galleryAspect as GalleryAspect)
+    : "1:1";
+}

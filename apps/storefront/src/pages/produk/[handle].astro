@@ -11,6 +11,7 @@ import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import { itemGroupId, retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
+import { resolveGalleryAspect } from "@tokophi/lib/theme";
 
 // SSR: tenant from the Host header (src/middleware.ts), product from the handle param.
 const { store, catalog } = Astro.locals;
@@ -60,6 +61,16 @@ const gallery = productImages(product);
 const galleryLayout = store.productGalleryLayout;
 const galleryIsGrid = galleryLayout === "grid";
 const thumbsBeside = galleryLayout === "thumbnail-left"; // vertical rail on sm+ vs. a row underneath
+// MAIN-image aspect (owner request 2026-08-24) — a Tema setting in `stores.theme` jsonb, validated
+// by resolveGalleryAspect (unknown ⇒ "1:1", the historical shape). LITERAL classes only: Tailwind
+// cannot see an interpolated `aspect-[${x}]`. Thumbnails stay square deliberately — the rail is a
+// picker, not a display, and square keeps 4+ of them on one row at every width.
+const GALLERY_ASPECT_CLASS: Record<string, string> = {
+  "1:1": "aspect-square",
+  "4:5": "aspect-[4/5]",
+  "2:3": "aspect-[2/3]",
+};
+const galleryAspectClass = GALLERY_ASPECT_CLASS[resolveGalleryAspect(store.theme)] ?? "aspect-square";
 
 // Specifications — built ONLY from attributes the merchant actually filled in, so the table never
 // shows a blank row. Kategori is always known; the rest are optional. `sizes` is deliberately NOT
@@ -313,7 +324,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <div class="order-1 grid grid-cols-2 gap-3 md:order-none">
           {gallery.length > 0 ? (
             gallery.map((src, i) => (
-              <div class="relative aspect-square overflow-hidden rounded-lg bg-brand-50">
+              <div class:list={["relative overflow-hidden rounded-lg bg-brand-50", galleryAspectClass]}>
                 <img
                   src={src}
                   srcset={imageSrcSet(src)}
@@ -342,7 +353,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       ) : (
         <div class:list={["order-1 flex flex-col gap-4 md:order-none", thumbsBeside && "sm:flex-row-reverse"]}>
           <!-- Main image -->
-          <div class="relative aspect-square flex-1 overflow-hidden rounded-lg bg-brand-50">
+          <div class:list={["relative flex-1 overflow-hidden rounded-lg bg-brand-50", galleryAspectClass]}>
             {/* This is the LCP element of the most important page in the shop and it had no priority
                 hint at all — while the thumbnails BELOW it were `loading="lazy"`, i.e. backwards.
                 `width`/`height` describe the intrinsic ratio; the `aspect-square` wrapper does the

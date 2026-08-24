@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { saveProductGalleryLayout } from "@/lib/actions/theme";
+import { saveProductGalleryAspect, saveProductGalleryLayout } from "@/lib/actions/theme";
+import { GALLERY_ASPECTS, type GalleryAspect } from "@tokophi/lib/theme";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
 import { useCan } from "@/components/admin/permissions";
 import { cn } from "@tokophi/ui/lib/utils";
@@ -74,12 +75,26 @@ const LABEL: Record<string, string> = {
   grid: "Grid 2 kolom",
 };
 
-export function GalleryLayoutDialog({ initialLayout }: { initialLayout: string }) {
+// Aspect previews: a fixed-height box with a centred rectangle whose width/height ratio IS the
+// option — the shape is the label, the text under it is only the number.
+const ASPECT_OPTIONS: { value: GalleryAspect; label: string; desc: string }[] = [
+  { value: "1:1", label: "1:1", desc: "Persegi — bawaan" },
+  { value: "4:5", label: "4:5", desc: "Potret" },
+  { value: "2:3", label: "2:3", desc: "Potret tinggi" },
+];
+const ASPECT_PREVIEW: Record<GalleryAspect, string> = {
+  "1:1": "aspect-square h-12",
+  "4:5": "aspect-[4/5] h-14",
+  "2:3": "aspect-[2/3] h-16",
+};
+
+export function GalleryLayoutDialog({ initialLayout, initialAspect }: { initialLayout: string; initialAspect: GalleryAspect }) {
   const canWrite = useCan("theme:write");
   const start = (GALLERY_LAYOUTS as readonly string[]).includes(initialLayout)
     ? (initialLayout as GalleryLayout)
     : "thumbnail-left";
   const [layout, setLayout] = React.useState<GalleryLayout>(start);
+  const [aspect, setAspect] = React.useState<GalleryAspect>(initialAspect);
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
@@ -90,8 +105,12 @@ export function GalleryLayoutDialog({ initialLayout }: { initialLayout: string }
     }
     startTransition(async () => {
       try {
+        // Two settings, two actions, ONE outcome report: the second failing after the first saved
+        // must say so, or the merchant re-saves believing nothing stuck.
         const res = await saveProductGalleryLayout(layout);
         if (!res.ok) { toast.error(res.error); return; }
+        const res2 = await saveProductGalleryAspect(aspect);
+        if (!res2.ok) { toast.error(`Layout tersimpan, tapi rasio gagal: ${res2.error}`); return; }
         toast.success("Layout galeri tersimpan");
         setOpen(false);
       } catch {
@@ -142,6 +161,37 @@ export function GalleryLayoutDialog({ initialLayout }: { initialLayout: string }
               </button>
             );
           })}
+        </div>
+
+        {/* ── Rasio gambar utama (owner request 2026-08-24) ── */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Rasio thumbnail utama</p>
+          <div className="flex gap-3">
+            {ASPECT_OPTIONS.map((opt) => {
+              const selected = aspect === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setAspect(opt.value)}
+                  aria-pressed={selected}
+                  className={cn(
+                    "flex flex-1 flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors",
+                    selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-input hover:bg-muted/50",
+                  )}
+                >
+                  <span className="flex h-16 items-center justify-center">
+                    <span className={cn("rounded-[4px] bg-muted-foreground/25", ASPECT_PREVIEW[opt.value])} />
+                  </span>
+                  <span className="text-sm font-medium">{opt.label}</span>
+                  <span className="text-xs text-muted-foreground">{opt.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Berlaku untuk gambar utama galeri produk. Thumbnail kecil tetap persegi.
+          </p>
         </div>
 
         <DialogFooter>
