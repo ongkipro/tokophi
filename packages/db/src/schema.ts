@@ -42,6 +42,10 @@ export const storeUserRole = pgEnum("store_user_role", [
   "admin",
   "staff",
   "gudang",
+  // 2026-08-24 (owner request): two specialist roles. `advertiser` runs the marketing surface
+  // (pixels/CAPI/feeds/promo/content); `cs` runs the service desk (orders/customers/CRM/chat).
+  "advertiser",
+  "cs",
 ]);
 export const productStatus = pgEnum("product_status", [
   "active",

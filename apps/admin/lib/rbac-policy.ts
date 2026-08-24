@@ -1,9 +1,9 @@
 // Client-safe RBAC policy: the role→capability matrix + can(). No server-only
 // imports, so both the server guard (lib/rbac.ts) and client UI (usePermissions)
 // share ONE source of truth. Keep the roles in sync with the `store_user_role`
-// enum in packages/db (owner | admin | staff | gudang).
+// enum in packages/db (owner | admin | staff | gudang | advertiser | cs).
 
-export type Role = "owner" | "admin" | "staff" | "gudang";
+export type Role = "owner" | "admin" | "staff" | "gudang" | "advertiser" | "cs";
 
 export type Capability =
   | "products:write"
@@ -87,6 +87,27 @@ export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
     "chat:write",
   ],
   gudang: ["inventory:write", "purchases:write", "support:write"],
+  // Advertiser (2026-08-24): the marketing hire. `integrations:write` is DELIBERATE — configuring
+  // pixels/CAPI/feeds IS this role's job, so the owner-only stance on that capability becomes
+  // "owner and the role hired for it". No settings, no orders, no landing:html (the raw-markup
+  // escalation stays owner-only), no product writes — campaigns, not catalog.
+  advertiser: [
+    "discounts:write",
+    "content:write",
+    "media:write",
+    "integrations:write",
+    "support:write",
+  ],
+  // Customer service (2026-08-24): the service desk. Orders (status moves), customers, CRM
+  // follow-ups, and the shopper chat — and nothing that changes what the shop sells or charges.
+  cs: [
+    "orders:write",
+    "customers:write",
+    "crm:write",
+    "chat:read",
+    "chat:write",
+    "support:write",
+  ],
 };
 
 export function can(role: Role | string | undefined, cap: Capability): boolean {
@@ -99,4 +120,6 @@ export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   staff: "Staf",
   gudang: "Gudang",
+  advertiser: "Advertiser",
+  cs: "Customer Service",
 };

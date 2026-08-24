@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 15:56 UTC] — RBAC-ROLES · role toko baru: Advertiser & Customer Service (+ picker peran berdeskripsi) · audit rekonsiliasi final BERSIH
+
+- **Executor:** Main Session (Claude, Fable 5). Dua permintaan owner: ① konfirmasi rekonsiliasi/saldo sudah sempurna ② tambah role advertiser & customer service di Pengaturan → Pengguna + sempurnakan UI/UX.
+- **① Audit rekonsiliasi (dev DAN produksi, SQL langsung):** 0 mismatch sale↔view (`ledger_entries.sale` == `seller_entitlement + shipping_debit` untuk SEMUA baris, kedua era), 0 pasangan retur yang tidak netto, 0 sale melebihi barang+PPN era financials, payout utuh (2 baris, −23.5jt seperti terukur sejak lama). **Jawaban: sempurna — satu rumus di ledger, view, laporan, dan analitik.**
+- **② Role baru:** enum `store_user_role` += `advertiser`, `cs` (migrasi **`0105`**, ADD VALUE IF NOT EXISTS). `rbac-policy.ts`: **advertiser** = discounts/content/media/`integrations:write`/support — kredensial pixel/CAPI memang pekerjaannya, jadi sikap owner-only kapabilitas itu menjadi "owner + role yang direkrut untuknya"; tanpa settings, tanpa orders, tanpa `landing:html` (eskalasi markup mentah tetap owner-only). **cs** = orders/customers/crm/chat/support — meja layanan, tanpa apa pun yang mengubah dagangan atau harga. Gate tab Pelacakan sudah capability-based sehingga otomatis terbuka bagi advertiser.
+- **UI/UX picker:** pill kabur 5 role diganti baris ber-deskripsi ("Pemasaran: pixel/CAPI & feed iklan, promo…", "Layanan pembeli: pesanan…") — pemilih yang hanya menampilkan nama membuat seller menebak, dan tebakan salah membagikan kapabilitas nyata. Allow-list server `MANAGEABLE` ikut melebar (drive pertama menangkap "Peran tidak valid" — validator server tertinggal dari UI, diperbaiki sebelum apa pun di-ship). Dropdown ganti-peran super-admin + `addStoreUser`/`setStoreUserRole` ikut.
+- **Verifikasi:** tsc admin+super+db 0 · suite penuh **135 file / 1115 hijau** · doc-counts 106/`0105` · build 0 · **drive end-to-end build produksi**: dialog Undang menampilkan 5 role ber-deskripsi → pilih Advertiser → Undang → dialog kredensial sekali-tampil + row DB `role='advertiser'` → **login sebagai advertiser tersebut** → tab Pelacakan terbuka penuh (kartu Meta Pixel tampil, tanpa refusal "hanya Pemilik"), 0 error JS. Probe (2 user) dihapus, billing batik dipulihkan persis.
+
 ### [2026-08-24 07:52 UTC] — DEVLOG · Update Log Development super admin += v1.2.0–v1.2.2 (gelombang 2026-08-24)
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner: "update log di super admin" — halaman `/update-log` (data `DEV_LOGS` hardcoded, terakhir v1.1.0 / 22 Agu) mendapat tiga entri hari ini:

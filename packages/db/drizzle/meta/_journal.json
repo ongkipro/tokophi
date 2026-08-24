@@ -736,6 +736,13 @@
       "when": 1787545051751,
       "tag": "0104_legacy_entitlement_goods_only",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1787545111751,
+      "tag": "0105_roles_advertiser_cs",
+      "breakpoints": true
     }
   ]
 }
