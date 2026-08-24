@@ -8,7 +8,6 @@
 
 ## Log History & Execution Entries
 
-<<<<<<< HEAD
 ### [2026-08-24 02:26 UTC] — Kategori Google otomatis saat publish + kartu Gambar koleksi ke sidebar
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner 2026-08-24. Tanpa migrasi.
@@ -17,8 +16,8 @@
 - **Sidebar koleksi:** kartu "Gambar koleksi" pindah dari dasar kolom UTAMA ke sidebar kanan di bawah Publikasikan — metadata publish-adjacent, bukan isi; di dasar kolom kiri ia rutin terlewat scroll.
 - **Verifikasi (build produksi, browser, tenant probe):** jalur degradasi — taxonomy kosong → Simpan sukses, field tetap NULL; jalur positif — 1 baris referensi (2271 Dresses) → Simpan → DB `2271 | Apparel & Accessories > Clothing > Dresses`; posisi kartu terukur `imgX == pubX` (kolom sidebar). vitest fokus 5/5; suite penuh 129 file / 1081 hijau; tsc 0. Probe dibersihkan; `current_period_end` batik dipulihkan persis; baris taxonomy 2271 (data referensi global yang benar) dibiarkan.
 - ⚠️ **Insiden alat sesi ini:** EADDRINUSE kelima — satu putaran menilai build lama dan melaporkan "Gagal menyimpan" palsu; kesimpulan baru sah setelah pemilik port dibunuh dan `Ready` terverifikasi di log server BARU.
-||||||| 8f05539
-=======
+
+
 ### [2026-08-24 01:50 UTC] — Stage 5 Task 5.5 · F-F11 (NF-7) · The Shared 320 px Seller Topbar Overflow Is Gone
 
 - **Executor:** Lane B (Claude subagent) — branch `fix/task-5.5-topbar-320`, off `origin/main` `64458fe`.
@@ -37,8 +36,6 @@
   - ⚠️ Stated boundary: 360 px measures a pre-existing 1 px `scrollWidth` rounding delta (within the audit's own ≤1 px tolerance, present before this change); the audit itself passes all widths.
 - **Shared-DB procedure (additive, restored):** throwaway owner `e9999999-0000-4000-8000-000000000003` with a membership on `batiknusantara`; its expired `current_period_end` (**`2026-08-04 03:59:23.814+00`**, recorded first) temporarily extended to `2026-09-30` and **restored via `returning`** to the exact prior value; both probe rows then deleted via `returning`. Server PIDs killed individually (no `pkill`); port 3215 confirmed free.
 - **Completed Task:** Stage 5 Task 5.5.
-||||||| 64458fe
-=======
 
 ### [2026-08-24 01:47 UTC] — /tema kontrol gambar: rasio galeri PDP, rasio kartu nav, picker berhalaman + preview
 
@@ -47,7 +44,6 @@
 - **Picker:** klik tile = preview penuh dulu ("Pilih Gambar Ini"/"Kembali"), bukan commit langsung; galeri berhalaman via aksi baru `getMediaPage` (24/halaman, search server-side via `likeContains`, debounce) — `getMedia()` lama utuh (Files + 2 editor memang butuh daftar penuh). Terbukti: 24 → "Muat lebih banyak (31 lagi)" → 48 → preview → commit, 0 error JS.
 - ⚠️ **Guard `product-ratio-locked.test.ts` DIPERSEMPIT SECARA SADAR** (ruling owner membalik T-10 hanya untuk galeri PDP): Card+Grid tetap terkunci 1:1; PDP non-persegi hanya lewat panggilan `resolveGalleryAspect(` + peta literal, tiap rasio tepat sekali. Dua mutasi dua merah — dan M2 semula hijau karena **token import mati** memuaskan cek nama; diperketat ke bentuk panggilan.
 - **Verifikasi:** vitest **127/1067** hijau · tsc admin 0 · astro check 0 error · rasio diukur piksel (PDP 492×615=0.800; nav 296×197=1.500) · data yang dibalik dipulihkan terverifikasi hash · probe + 30 media pad dihapus. Handoff: `specs/docs/tasks/2026-08-24-tema-image-controls.md`.
->>>>>>> origin/main
 
 
 ### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
@@ -2092,7 +2088,6 @@ every merchant, ADR 0009; a fallback here is one merchant's inbox on every store
 
 **Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
 `specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
-||||||| 64458fe
 
 ## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
 
