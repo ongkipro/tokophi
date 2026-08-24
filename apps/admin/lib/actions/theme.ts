@@ -354,6 +354,29 @@ export async function saveProductGalleryAspect(aspect: string): Promise<ThemeRes
   return { ok: true };
 }
 
+// Card-image aspect for the catalog cards (owner request 2026-08-24) — same jsonb home and the same
+// merge-patch rule; a writer that overwrites {font, tone} wholesale wipes this key silently.
+export async function saveProductCardAspect(aspect: string): Promise<ThemeResult> {
+  const { storeId } = await requireCapability("theme:write");
+  if (!(GALLERY_ASPECTS as readonly string[]).includes(aspect))
+    return { ok: false, error: "Rasio kartu tidak dikenal" };
+  try {
+    await withTenant(storeId, async (db) => {
+      const [row] = await db
+        .select({ theme: schema.stores.theme })
+        .from(schema.stores)
+        .where(eq(schema.stores.id, storeId))
+        .limit(1);
+      const merged = { ...((row?.theme ?? {}) as Record<string, unknown>), cardAspect: aspect };
+      await db.update(schema.stores).set({ theme: merged }).where(eq(schema.stores.id, storeId));
+    });
+  } catch (e) {
+    return fail(e);
+  }
+  revalidatePath("/tema");
+  return { ok: true };
+}
+
 export async function saveProductGalleryLayout(layout: string): Promise<ThemeResult> {
   const { storeId } = await requireCapability("theme:write");
   if (!GALLERY_LAYOUTS.includes(layout as GalleryLayout)) return { ok: false, error: "Layout galeri tidak dikenal" };

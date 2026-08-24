@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
 import { ThemeTokensDialog } from "@/components/theme/theme-tokens-dialog";
 import { GalleryLayoutDialog } from "@/components/theme/gallery-layout-dialog";
-import { resolveGalleryAspect } from "@tokophi/lib/theme";
+import { resolveCardAspect, resolveGalleryAspect } from "@tokophi/lib/theme";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -120,7 +120,7 @@ export function TemaClient({ templates, collections, products, brandColor, galle
       >
         <ThemeTokensDialog initialTheme={storeTheme} brandColor={brandColor} />
         <BrandColorDialog initialColor={brandColor} />
-        <GalleryLayoutDialog initialLayout={galleryLayout} initialAspect={resolveGalleryAspect(storeTheme)} />
+        <GalleryLayoutDialog initialLayout={galleryLayout} initialAspect={resolveGalleryAspect(storeTheme)} initialCardAspect={resolveCardAspect(storeTheme)} />
         <Can capability="theme:write">
           <CreateTemplateDialog
             type={tab}

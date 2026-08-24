@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { saveProductGalleryAspect, saveProductGalleryLayout } from "@/lib/actions/theme";
+import { saveProductCardAspect, saveProductGalleryAspect, saveProductGalleryLayout } from "@/lib/actions/theme";
 import { GALLERY_ASPECTS, type GalleryAspect } from "@tokophi/lib/theme";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
 import { useCan } from "@/components/admin/permissions";
@@ -88,13 +88,14 @@ const ASPECT_PREVIEW: Record<GalleryAspect, string> = {
   "2:3": "aspect-[2/3] h-16",
 };
 
-export function GalleryLayoutDialog({ initialLayout, initialAspect }: { initialLayout: string; initialAspect: GalleryAspect }) {
+export function GalleryLayoutDialog({ initialLayout, initialAspect, initialCardAspect }: { initialLayout: string; initialAspect: GalleryAspect; initialCardAspect: GalleryAspect }) {
   const canWrite = useCan("theme:write");
   const start = (GALLERY_LAYOUTS as readonly string[]).includes(initialLayout)
     ? (initialLayout as GalleryLayout)
     : "thumbnail-left";
   const [layout, setLayout] = React.useState<GalleryLayout>(start);
   const [aspect, setAspect] = React.useState<GalleryAspect>(initialAspect);
+  const [cardAspect, setCardAspect] = React.useState<GalleryAspect>(initialCardAspect);
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
@@ -110,7 +111,9 @@ export function GalleryLayoutDialog({ initialLayout, initialAspect }: { initialL
         const res = await saveProductGalleryLayout(layout);
         if (!res.ok) { toast.error(res.error); return; }
         const res2 = await saveProductGalleryAspect(aspect);
-        if (!res2.ok) { toast.error(`Layout tersimpan, tapi rasio gagal: ${res2.error}`); return; }
+        if (!res2.ok) { toast.error(`Layout tersimpan, tapi rasio galeri gagal: ${res2.error}`); return; }
+        const res3 = await saveProductCardAspect(cardAspect);
+        if (!res3.ok) { toast.error(`Galeri tersimpan, tapi rasio kartu gagal: ${res3.error}`); return; }
         toast.success("Layout galeri tersimpan");
         setOpen(false);
       } catch {
@@ -191,6 +194,38 @@ export function GalleryLayoutDialog({ initialLayout, initialAspect }: { initialL
           </div>
           <p className="text-xs text-muted-foreground">
             Berlaku untuk gambar utama galeri produk. Thumbnail kecil tetap persegi.
+          </p>
+        </div>
+
+        {/* ── Rasio gambar KARTU produk (owner request 2026-08-24 ronde 2) — kartu katalog di
+            beranda/kategori/grid; surface yang berbeda dari galeri PDP, jadi kunci sendiri. ── */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Rasio gambar kartu produk</p>
+          <div className="flex gap-3">
+            {ASPECT_OPTIONS.map((opt) => {
+              const selected = cardAspect === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setCardAspect(opt.value)}
+                  aria-pressed={selected}
+                  className={cn(
+                    "flex flex-1 flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors",
+                    selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-input hover:bg-muted/50",
+                  )}
+                >
+                  <span className="flex h-16 items-center justify-center">
+                    <span className={cn("rounded-[4px] bg-muted-foreground/25", ASPECT_PREVIEW[opt.value])} />
+                  </span>
+                  <span className="text-sm font-medium">{opt.label}</span>
+                  <span className="text-xs text-muted-foreground">{opt.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Berlaku untuk kartu produk di beranda, kategori, dan grid produk.
           </p>
         </div>
 

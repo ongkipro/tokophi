@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 06:40 UTC] — TEMA-CARD + FIN-03-PROD · rasio gambar kartu produk (1:1/4:5/2:3) + koreksi ledger legacy DIJALANKAN di produksi
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner: "/tema → card produk untuk image ukuran rasio 1:1, 2:3, 4:5 — belum ada setupnya".
+- **Rasio kartu produk:** kunci baru `cardAspect` di `stores.theme` jsonb (pola persis `galleryAspect`: tanpa migrasi, merge-patch wajib, `resolveCardAspect` mendegradasi nilai asing ke 1:1). Aksi `saveProductCardAspect`; dialog "Galeri Produk" di /tema mendapat baris kedua "Rasio gambar kartu produk" (simpan 3 aksi berurutan, laporan gagal-parsial eksplisit). `ProductCard.astro`: peta kelas LITERAL `CARD_ASPECT_CLASS`, dibaca dari `Astro.locals.store.theme` — level TOKO, bukan prop per-template (prop `ratio` tetap TIDAK ADA: satu call-site bisa diam-diam keluar dari setelan toko). ProductGrid otomatis mengikuti (merender ProductCard).
+- **Guard `product-ratio-locked.test.ts` DILEBARKAN SECARA SADAR** (ruling ronde-2 merevisi T-10 untuk permukaan KARTU): kartu non-persegi hanya lewat panggilan `resolveCardAspect(` + peta literal (tiap rasio tepat sekali); Grid tetap tanpa markup rasio sendiri; prop `ratio`/`imageRatio` tetap terlarang; 3:4 terlarang di mana pun. **Mutasi dibuktikan merah** (hardcode `aspect-[4/5]` menggantikan resolver → guard gagal) lalu hijau kembali.
+- **Verifikasi:** tsc 0 · build admin+storefront 0 · vitest penuh **135 file / 1115 hijau** (fixture order-status + daily-stats kini menyemai `subtotal_idr` — sejak 0104 lengan legacy membaca ORDER; analytics memang membaca view) · **drive build produksi**: set `cardAspect 4:5` → kartu listing terukur **296×370 = 0.800 persis**; dialog admin di-drive → pilih 2:3 → Simpan → DB `{"font","tone","cardAspect":"2:3","galleryAspect":"1:1"}` (merge-patch selamat), 0 error JS. Theme batik dipulihkan byte-identik, probe dihapus, billing dipulihkan persis.
+- **FIN-03 di PRODUKSI (data):** `ops/tokophi-legacy-credit-correction.sql` dijalankan (COMMIT setelah dry-run ROLLBACK dibaca): **155 sale + 2 retur** dikoreksi; total sale legacy 68.580.360 → **65.160.000** (ongkir Rp3.420.360 keluar dari saldo demo); balance batik kini pending 22.511.000 / available 18.561.000 — barang saja, sesuai ruling.
+
 ### [2026-08-24 06:27 UTC] — FIN-03 · lengan LEGACY kredit ledger & view = barang saja (laporan owner: penarikan masih membawa ongkir)
 
 - **Executor:** Main Session (Claude, Fable 5). Owner menemukan saldo penarikan masih memuat biaya pengiriman. Audit: jalur order BARU sudah benar (goods via order_financials, FIN-01/0102); yang bocor adalah lengan **LEGACY** — kredit fallback ke `payments.amount_idr` (historis = barang+ongkir) dan view memakai `total − tax`.
