@@ -396,9 +396,13 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         // see NOTE-7 in the frontmatter above
         var perItemQty = ids.length === 1 ? qty : null;
         var val = typeof data.value === "number" && data.value > 0 ? data.value : null;
-        // The GOODS money — price × quantity, no ongkir, no PPN. Only a Purchase can differ from
-        // `value`; on every browsing event `value` already IS the goods total, so it stands in.
+        // The GOODS money — price × quantity, no ongkir, no PPN. Owner ruling 2026-08-24: this IS
+        // the conversion `value` for ALL THREE platforms now ("real value barang yang dibeli") —
+        // shipping and payment-admin money never inflate ROAS. On browsing events `value` already
+        // is the goods total, so it stands in.
         var goods = typeof data.goods === "number" && data.goods > 0 ? data.goods : evt !== "Purchase" && val !== null ? val : null;
+        // The Purchase amount every platform receives: goods when known, else the total (legacy rows).
+        var purchaseVal = goods !== null ? goods : (data.value || 0);
         var cur = data.currency || "IDR";
         if (META && !data.googleOnly) safe(function () {
           var opts = data.eventId ? { eventID: data.eventId } : undefined;
@@ -407,7 +411,7 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           var d = { content_ids: ids, content_type: ctype };
           if (val !== null) { d.value = val; d.currency = cur; }
           if (evt === "InitiateCheckout") d.num_items = qty;
-          if (evt === "Purchase") { d = { value: data.value || 0, currency: cur, content_ids: ids, content_type: "product", order_id: data.orderId }; }
+          if (evt === "Purchase") { d = { value: purchaseVal, currency: cur, content_ids: ids, content_type: "product", order_id: data.orderId }; }
           if (opts) window.fbq("track", evt, d, opts);
           else window.fbq("track", evt, d);
         });
@@ -435,8 +439,8 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           };
           // see NOTE-11 in the frontmatter above
           if (ids.length === 1) props.content_id = ids[0];
-          if (val !== null) props.value = val;
-          else if (evt === "Purchase") props.value = data.value || 0;
+          if (evt === "Purchase") props.value = purchaseVal;
+          else if (val !== null) props.value = val;
           // see NOTE-12 in the frontmatter above
           if (data.eventId) window.ttq.track(name, props, { event_id: data.eventId });
           else window.ttq.track(name, props);

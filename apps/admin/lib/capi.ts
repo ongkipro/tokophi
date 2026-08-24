@@ -192,7 +192,9 @@ export async function sendMetaPurchase(args: {
         event_source_url: event.sourceUrl || event.fallbackUrl || "",
         user_data,
         custom_data: {
-          value: event.value,
+          // Owner ruling 2026-08-24: `value` = GOODS only (no ongkir, no admin fee) on every
+          // platform — same expression the GA4 mapper below has always used.
+          value: typeof event.goods === "number" && event.goods > 0 ? event.goods : event.value,
           currency: event.currency,
           content_ids: event.contentIds,
           content_type: "product",
@@ -490,7 +492,8 @@ export async function sendTiktokPurchase(args: {
         page: { url: event.sourceUrl || event.fallbackUrl || "" },
         properties: {
           currency: event.currency,
-          value: event.value,
+          // Owner ruling 2026-08-24: goods only — see the Meta mapper's note.
+          value: typeof event.goods === "number" && event.goods > 0 ? event.goods : event.value,
           contents: event.contentIds.map((id) => ({ content_id: id, content_type: "product" })),
         },
       },
