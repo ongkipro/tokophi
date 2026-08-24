@@ -8,7 +8,7 @@
 
 ## Log History & Execution Entries
 
-### [2026-08-24 05:18 UTC] — MKT-01 · Pemasaran presisi: advanced matching selalu ON, config progresif, value = barang saja, ID katalog demo → penomoran tetap
+### [2026-08-24 05:01 UTC] — MKT-01 · Pemasaran presisi: advanced matching selalu ON, config progresif, value = barang saja, ID katalog demo → penomoran tetap
 
 - **Executor:** Main Session (Claude, Fable 5). Rulings owner 2026-08-24 untuk Pemasaran → Pelacakan (Meta/Google/TikTok).
 - **Advanced matching SELALU ON:** toggle per-channel DIHAPUS (default lama FALSE = mayoritas merchant kehilangan match quality tanpa sadar). Storefront kini hash + lampirkan email/telepon tanpa syarat saat tersedia (SHA-256 di browser; Google menerima nilai mentah via `gtag user_data`, tetap ter-gate tujuan Ads); CAPI memang selalu melampirkannya. Kolom `advanced_matching` jadi dead record (ditulis true saat simpan, tidak dibaca siapa pun); **migrasi `0103`** flip default + konvergensi baris lama (kolom dipertahankan — drop itu destruktif).
