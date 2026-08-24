@@ -8,6 +8,25 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 01:50 UTC] — Stage 5 Task 5.5 · F-F11 (NF-7) · The Shared 320 px Seller Topbar Overflow Is Gone
+
+- **Executor:** Lane B (Claude subagent) — branch `fix/task-5.5-topbar-320`, off `origin/main` `64458fe`.
+- **Files Modified:** `apps/admin/components/admin/topbar.tsx`, `apps/admin/components/admin/command-palette.tsx` (the topbar's own search trigger — still the component boundary, no per-route change anywhere).
+- **The defect, measured:** `audit-responsive.mjs` against a prod build (`next build` + `next start`, port 3215) reported **24/264 broken — every seller route, only at 320 px, overflowing by 38 px**, culprit `div.ml-auto` (the topbar's right cluster, w=232). The width is the balance chip rendering a real balance ("Rp214 jt").
+- **⚠️ The trap that almost hid the baseline:** the first audit ran as a probe user on `tas-rajut-handmade`, whose ledger sums to **Rp0** — the chip renders "Rp0", nothing overflows, and the audit reports a vacuous `OK — 264`. **The overflow only reproduces against a store with a wide balance.** Audit this bar as `batiknusantara` (Rp214.283.232) or any store whose compact IDR is ≥ 2 digits + unit.
+- **The fix (component boundary, nothing hidden):**
+  - Below 360 px the balance chip drops its **amount text only** (`max-[359px]:hidden`): the wallet icon keeps its place, the link to `/saldo` keeps working, and the `aria-label` always carries the full amount — collapse, not removal. Deliberately NOT truncation: a clipped "Rp214…" reads as a different balance.
+  - Below 360 px the store switcher drops its decorative chevron; the 2-letter store badge (identity) stays at every width.
+  - Every topbar control gains a **40×40 px touch target without spending width**: `HIT = "relative after:absolute after:-inset-1"` extends the hit area of the 32 px controls via a `::after` overlay (verified in the browser: `position:absolute; inset:-4px` on the pseudo-element). A wider *box* would have been the 320 px overflow coming back.
+- **Verification Executed (exit codes read directly):**
+  - **Before:** `AUDIT_EMAIL/PASSWORD node apps/admin/scripts/audit-responsive.mjs http://localhost:3215` → exit 1, **`24/264 broken`**, all `@320px … overflows by 38px`.
+  - **After** (rebuild + restart, same store, same credentials): exit 0, **`OK — 264 route×width combinations, no horizontal overflow`**.
+  - `npx tsc --noEmit -p apps/admin` → **0 errors**. `npx vitest run` → **127 files, 1065 tests, all passed** (the pre-change baseline figure exactly).
+  - **Browser pass at 320 px (prod build, Playwright):** document overflow 0 px; all 7 controls (menu, switcher, search, saldo, theme, bell, avatar) visible and clickable — drawer opens, "Toko aktif" menu opens, palette opens, notifications open, account menu opens, theme toggles, saldo navigates to `/saldo`; **Tab order** = menu → switcher → search → saldo → theme → bell → avatar → page content, and Enter activates from the keyboard. Screenshots at 320 / 360 / 768 / 1280 px: the amount and chevron are back at 360 px, wider layouts unchanged.
+  - ⚠️ Stated boundary: 360 px measures a pre-existing 1 px `scrollWidth` rounding delta (within the audit's own ≤1 px tolerance, present before this change); the audit itself passes all widths.
+- **Shared-DB procedure (additive, restored):** throwaway owner `e9999999-0000-4000-8000-000000000003` with a membership on `batiknusantara`; its expired `current_period_end` (**`2026-08-04 03:59:23.814+00`**, recorded first) temporarily extended to `2026-09-30` and **restored via `returning`** to the exact prior value; both probe rows then deleted via `returning`. Server PIDs killed individually (no `pkill`); port 3215 confirmed free.
+- **Completed Task:** Stage 5 Task 5.5.
+
 ### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
 
 - **Executor:** Main Session (Claude, Fable 5). Entri docs-only; tidak memicu build (Coolify `watch_paths = '!**/*.md'` — perilaku yang diinginkan, tercatat 2026-08-23 pagi).

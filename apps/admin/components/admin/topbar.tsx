@@ -26,6 +26,14 @@ import { ROLE_LABEL, type Role } from "@/lib/rbac-policy";
  * every mount, which the react-hooks lint rightly flags as a cascading render. Subscribe to the DOM
  * instead: no duplicate source of truth, and the SSR snapshot is `false` so hydration stays quiet.
  */
+/**
+ * 40px touch target on a 32px control: extend the HIT AREA, not the box (F-F11 / NF-7).
+ * Width is the scarce resource this bar fights for — at 320px every visible pixel counts, so the
+ * controls keep their 32px boxes and the ::after overlay carries the tap zone to 40×40. A wider
+ * BOX here is the 320px overflow coming straight back.
+ */
+const HIT = "relative after:absolute after:-inset-1";
+
 function useIsDark() {
   return useSyncExternalStore(
     (onChange) => {
@@ -46,7 +54,7 @@ function ThemeToggle() {
     try { localStorage.setItem("theme", next ? "dark" : "light"); } catch {}
   };
   return (
-    <Button variant="ghost" size="icon" onClick={toggle} aria-label="Ganti tema">
+    <Button variant="ghost" size="icon" onClick={toggle} aria-label="Ganti tema" className={HIT}>
       {dark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
     </Button>
   );
@@ -76,11 +84,17 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
       variant="ghost"
       nativeButton={false}
       render={<Link href="/saldo" />}
-      className="flex shrink-0 gap-1.5 px-2 font-medium tabular-nums sm:gap-2"
+      className={`${HIT} flex shrink-0 gap-1.5 px-2 font-medium tabular-nums sm:gap-2`}
       aria-label={`Saldo tersedia ${IDR(balance.available)} — buka rincian saldo`}
     >
       <Wallet className="size-[18px] text-muted-foreground" />
-      <span className="text-sm">{IDR(balance.available, { compact: true })}</span>
+      {/* Below 360px the AMOUNT gives way, never the access: a real balance ("Rp214 jt", seeded
+          batiknusantara) is ~70px this bar does not have at 320px — it was the single overflow the
+          responsive audit flagged on all 24 seller routes. The chip stays (wallet icon → /saldo)
+          and the aria-label always carries the full amount, so nothing is hidden from a screen
+          reader or out of reach — the number itself is one tap away. NEVER truncate money instead:
+          a clipped "Rp214…" reads as a different balance. */}
+      <span className="text-sm max-[359px]:hidden">{IDR(balance.available, { compact: true })}</span>
     </Button>
   );
 }
@@ -119,7 +133,7 @@ export function Topbar({
       <Sheet open={mobileMenu} onOpenChange={setMobileMenu}>
         <SheetTrigger
           render={
-            <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Menu">
+            <Button variant="ghost" size="icon" className={`${HIT} lg:hidden`} aria-label="Menu">
               <Menu className="size-5" />
             </Button>
           }
@@ -137,7 +151,7 @@ export function Topbar({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" className="min-w-0 shrink gap-2 font-medium">
+            <Button variant="outline" className={`${HIT} min-w-0 shrink gap-2 font-medium`}>
               <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/15 text-[10px] font-bold text-primary">
                 {store.name.slice(0, 2).toUpperCase()}
               </span>
@@ -148,7 +162,10 @@ export function Topbar({
                   dropdown, and in the sidebar. The 2-letter badge keeps the store identifiable.
                   `min-w-0` lets it truncate before it pushes, instead of pushing. */}
               <span className="hidden max-w-[140px] truncate sm:inline">{store.name}</span>
-              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+              {/* The chevron is decoration on a 320px phone — the 2-letter badge is already an
+                  obviously-tappable button, and those 24px (icon + gap) are part of what pushed the
+                  bar past the viewport. It returns at 360px with the room. */}
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground max-[359px]:hidden" />
             </Button>
           }
         />
@@ -190,7 +207,7 @@ export function Topbar({
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative"
+                className={HIT}
                 // ⚠️ The dot below was the ONLY signal that anything is waiting — a bare coloured
                 // circle with no text, and the label said "Notifikasi" either way, so nothing about
                 // "there is something new" reached a screen reader or anyone who cannot see the
@@ -226,7 +243,7 @@ export function Topbar({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" className="gap-2 pl-1.5 pr-2">
+              <Button variant="ghost" className={`${HIT} gap-2 pl-1.5 pr-2`}>
                 <Avatar className="size-7"><AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">{initials}</AvatarFallback></Avatar>
                 <span className="hidden text-sm font-medium sm:inline">{name.split(" ")[0]}</span>
               </Button>

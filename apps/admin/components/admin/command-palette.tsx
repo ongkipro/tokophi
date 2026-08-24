@@ -6,6 +6,10 @@ import { Search, CornerDownLeft, ArrowUp, ArrowDown, FileText, Package, Shopping
 import type { SearchItem } from "@/lib/data/search";
 import { NAV_GROUPS } from "@/lib/nav";
 import { useStoreHref } from "@/components/admin/store-context";
+
+// Same rule as `HIT` in topbar.tsx (not imported — topbar imports this file, and a constant is not
+// worth a cycle): a 40px tap zone over a 32px control, paid for with a ::after overlay, never width.
+const HIT = "relative after:absolute after:-inset-1";
 import { Dialog, DialogContent, DialogTitle } from "@tokophi/ui/dialog";
 import { Button } from "@tokophi/ui/button";
 import { cn } from "@tokophi/ui/lib/utils";
@@ -118,8 +122,9 @@ export function CommandPalette({ index }: { index: SearchItem[] }) {
         <span className="flex-1 text-left">Cari…</span>
         <kbd className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums">⌘K</kbd>
       </button>
-      {/* mobile: an icon (the inline dropdown used to vanish below md — no search on a phone) */}
-      <Button variant="ghost" size="icon" className="md:hidden" aria-label="Cari" onClick={() => setOpen(true)}>
+      {/* mobile: an icon (the inline dropdown used to vanish below md — no search on a phone).
+          HIT extends the 32px box to a 40px tap zone without spending topbar width (F-F11). */}
+      <Button variant="ghost" size="icon" className={`${HIT} md:hidden`} aria-label="Cari" onClick={() => setOpen(true)}>
         <Search className="size-[18px]" />
       </Button>
 
