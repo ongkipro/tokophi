@@ -132,7 +132,10 @@ export function GalleryLayoutDialog({ initialLayout, initialAspect, initialCardA
           </Button>
         }
       />
-      <DialogContent>
+      {/* LANDSCAPE, not portrait (owner 2026-08-24): with two aspect rows the stacked layout grew
+          taller than a laptop viewport and Simpan fell off-screen. Wide dialog, layout picker on
+          the left, both aspect rows on the right; max-h + scroll as the floor for short screens. */}
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl lg:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Layout Galeri Produk</DialogTitle>
           <DialogDescription>
@@ -140,7 +143,9 @@ export function GalleryLayoutDialog({ initialLayout, initialAspect, initialCardA
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3">
+        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid content-start gap-3">
+          <p className="text-sm font-medium">Susunan galeri</p>
           {OPTIONS.map((opt) => {
             const selected = layout === opt.value;
             return (
@@ -166,6 +171,7 @@ export function GalleryLayoutDialog({ initialLayout, initialAspect, initialCardA
           })}
         </div>
 
+        <div className="grid content-start gap-5">
         {/* ── Rasio gambar utama (owner request 2026-08-24) ── */}
         <div className="space-y-2">
           <p className="text-sm font-medium">Rasio thumbnail utama</p>
@@ -227,6 +233,8 @@ export function GalleryLayoutDialog({ initialLayout, initialAspect, initialCardA
           <p className="text-xs text-muted-foreground">
             Berlaku untuk kartu produk di beranda, kategori, dan grid produk.
           </p>
+        </div>
+        </div>
         </div>
 
         <DialogFooter>

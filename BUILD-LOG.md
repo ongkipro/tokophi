@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 07:28 UTC] — TEMA-CARD-2 · dialog Galeri Produk jadi LANDSCAPE (potret terpotong layar)
+
+- **Executor:** Main Session (Claude, Fable 5). Laporan owner: pop-up /tema → Galeri Produk terpotong layar — dua baris rasio membuat tumpukan potret lebih tinggi dari viewport laptop dan tombol Simpan jatuh keluar layar.
+- **Fix (`gallery-layout-dialog.tsx`):** DialogContent melebar (`sm:max-w-3xl lg:max-w-4xl`) dengan body **dua kolom** — kiri "Susunan galeri" (3 pilihan layout), kanan kedua baris rasio (galeri PDP + kartu produk); `max-h-[90vh] overflow-y-auto` sebagai lantai untuk layar pendek.
+- **Verifikasi (build produksi, viewport 1366×768 — bentuk yang dilaporkan):** dialog terukur **896×557 (landscape)**, seluruhnya di dalam viewport, **Simpan terlihat tanpa scroll**, keempat seksi tampil (Susunan galeri, Rasio thumbnail utama, Rasio gambar kartu produk), 0 error JS; screenshot dicek. tsc 0, build 0. Probe dihapus; theme & billing batik dipulihkan persis (select-confirmed).
+
 ### [2026-08-24 06:40 UTC] — TEMA-CARD + FIN-03-PROD · rasio gambar kartu produk (1:1/4:5/2:3) + koreksi ledger legacy DIJALANKAN di produksi
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner: "/tema → card produk untuk image ukuran rasio 1:1, 2:3, 4:5 — belum ada setupnya".
