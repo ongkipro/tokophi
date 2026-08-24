@@ -8,6 +8,7 @@
 
 ## Log History & Execution Entries
 
+<<<<<<< HEAD
 ### [2026-08-24 02:26 UTC] — Kategori Google otomatis saat publish + kartu Gambar koleksi ke sidebar
 
 - **Executor:** Main Session (Claude, Fable 5). Permintaan owner 2026-08-24. Tanpa migrasi.
@@ -16,6 +17,37 @@
 - **Sidebar koleksi:** kartu "Gambar koleksi" pindah dari dasar kolom UTAMA ke sidebar kanan di bawah Publikasikan — metadata publish-adjacent, bukan isi; di dasar kolom kiri ia rutin terlewat scroll.
 - **Verifikasi (build produksi, browser, tenant probe):** jalur degradasi — taxonomy kosong → Simpan sukses, field tetap NULL; jalur positif — 1 baris referensi (2271 Dresses) → Simpan → DB `2271 | Apparel & Accessories > Clothing > Dresses`; posisi kartu terukur `imgX == pubX` (kolom sidebar). vitest fokus 5/5; suite penuh 129 file / 1081 hijau; tsc 0. Probe dibersihkan; `current_period_end` batik dipulihkan persis; baris taxonomy 2271 (data referensi global yang benar) dibiarkan.
 - ⚠️ **Insiden alat sesi ini:** EADDRINUSE kelima — satu putaran menilai build lama dan melaporkan "Gagal menyimpan" palsu; kesimpulan baru sah setelah pemilik port dibunuh dan `Ready` terverifikasi di log server BARU.
+||||||| 8f05539
+=======
+### [2026-08-24 01:50 UTC] — Stage 5 Task 5.5 · F-F11 (NF-7) · The Shared 320 px Seller Topbar Overflow Is Gone
+
+- **Executor:** Lane B (Claude subagent) — branch `fix/task-5.5-topbar-320`, off `origin/main` `64458fe`.
+- **Files Modified:** `apps/admin/components/admin/topbar.tsx`, `apps/admin/components/admin/command-palette.tsx` (the topbar's own search trigger — still the component boundary, no per-route change anywhere).
+- **The defect, measured:** `audit-responsive.mjs` against a prod build (`next build` + `next start`, port 3215) reported **24/264 broken — every seller route, only at 320 px, overflowing by 38 px**, culprit `div.ml-auto` (the topbar's right cluster, w=232). The width is the balance chip rendering a real balance ("Rp214 jt").
+- **⚠️ The trap that almost hid the baseline:** the first audit ran as a probe user on `tas-rajut-handmade`, whose ledger sums to **Rp0** — the chip renders "Rp0", nothing overflows, and the audit reports a vacuous `OK — 264`. **The overflow only reproduces against a store with a wide balance.** Audit this bar as `batiknusantara` (Rp214.283.232) or any store whose compact IDR is ≥ 2 digits + unit.
+- **The fix (component boundary, nothing hidden):**
+  - Below 360 px the balance chip drops its **amount text only** (`max-[359px]:hidden`): the wallet icon keeps its place, the link to `/saldo` keeps working, and the `aria-label` always carries the full amount — collapse, not removal. Deliberately NOT truncation: a clipped "Rp214…" reads as a different balance.
+  - Below 360 px the store switcher drops its decorative chevron; the 2-letter store badge (identity) stays at every width.
+  - Every topbar control gains a **40×40 px touch target without spending width**: `HIT = "relative after:absolute after:-inset-1"` extends the hit area of the 32 px controls via a `::after` overlay (verified in the browser: `position:absolute; inset:-4px` on the pseudo-element). A wider *box* would have been the 320 px overflow coming back.
+- **Verification Executed (exit codes read directly):**
+  - **Before:** `AUDIT_EMAIL/PASSWORD node apps/admin/scripts/audit-responsive.mjs http://localhost:3215` → exit 1, **`24/264 broken`**, all `@320px … overflows by 38px`.
+  - **After** (rebuild + restart, same store, same credentials): exit 0, **`OK — 264 route×width combinations, no horizontal overflow`**.
+  - `npx tsc --noEmit -p apps/admin` → **0 errors**. `npx vitest run` → **127 files, 1065 tests, all passed** (the pre-change baseline figure exactly).
+  - **Browser pass at 320 px (prod build, Playwright):** document overflow 0 px; all 7 controls (menu, switcher, search, saldo, theme, bell, avatar) visible and clickable — drawer opens, "Toko aktif" menu opens, palette opens, notifications open, account menu opens, theme toggles, saldo navigates to `/saldo`; **Tab order** = menu → switcher → search → saldo → theme → bell → avatar → page content, and Enter activates from the keyboard. Screenshots at 320 / 360 / 768 / 1280 px: the amount and chevron are back at 360 px, wider layouts unchanged.
+  - ⚠️ Stated boundary: 360 px measures a pre-existing 1 px `scrollWidth` rounding delta (within the audit's own ≤1 px tolerance, present before this change); the audit itself passes all widths.
+- **Shared-DB procedure (additive, restored):** throwaway owner `e9999999-0000-4000-8000-000000000003` with a membership on `batiknusantara`; its expired `current_period_end` (**`2026-08-04 03:59:23.814+00`**, recorded first) temporarily extended to `2026-09-30` and **restored via `returning`** to the exact prior value; both probe rows then deleted via `returning`. Server PIDs killed individually (no `pkill`); port 3215 confirmed free.
+- **Completed Task:** Stage 5 Task 5.5.
+||||||| 64458fe
+=======
+
+### [2026-08-24 01:47 UTC] — /tema kontrol gambar: rasio galeri PDP, rasio kartu nav, picker berhalaman + preview
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner. **Tanpa migrasi** — rasio galeri tinggal di `stores.theme` jsonb (`galleryAspect`, divalidasi `resolveGalleryAspect` @tokophi/lib/theme, asing⇒1:1); rasio nav adalah prop section (`CategoryNavConfig.aspect`, default 4:5 = rasio historis, template tersimpan tak berubah).
+- 🔴 **Merge-patch pada SEMUA penulis `stores.theme`** — `saveStoreTheme` dulu menimpa `{font,tone}` utuh; dengan `galleryAspect` di jsonb yang sama itu jadi data-loss tiap save Tampilan. Dibuktikan end-to-end di build produksi: simpan rasio → simpan Tampilan → DB `{"font":…,"tone":…,"galleryAspect":"4:5"}` (selamat).
+- **Picker:** klik tile = preview penuh dulu ("Pilih Gambar Ini"/"Kembali"), bukan commit langsung; galeri berhalaman via aksi baru `getMediaPage` (24/halaman, search server-side via `likeContains`, debounce) — `getMedia()` lama utuh (Files + 2 editor memang butuh daftar penuh). Terbukti: 24 → "Muat lebih banyak (31 lagi)" → 48 → preview → commit, 0 error JS.
+- ⚠️ **Guard `product-ratio-locked.test.ts` DIPERSEMPIT SECARA SADAR** (ruling owner membalik T-10 hanya untuk galeri PDP): Card+Grid tetap terkunci 1:1; PDP non-persegi hanya lewat panggilan `resolveGalleryAspect(` + peta literal, tiap rasio tepat sekali. Dua mutasi dua merah — dan M2 semula hijau karena **token import mati** memuaskan cek nama; diperketat ke bentuk panggilan.
+- **Verifikasi:** vitest **127/1067** hijau · tsc admin 0 · astro check 0 error · rasio diukur piksel (PDP 492×615=0.800; nav 296×197=1.500) · data yang dibalik dipulihkan terverifikasi hash · probe + 30 media pad dihapus. Handoff: `specs/docs/tasks/2026-08-24-tema-image-controls.md`.
+>>>>>>> origin/main
 
 
 ### [2026-08-23 16:20 UTC] — PENUTUP HARI · verifikasi pasca-deploy 490 + 491, dan rekap yang mendarat hari ini
@@ -2009,6 +2041,58 @@ Stage task is claimed: this is owner-requested UI work on the same screen as the
 so it is recorded as one more Epic 2 line beside its sibling rather than invented as a Stage entry.
 
 ---
+
+## [2026-08-24 01:30 UTC] — Task 6.9 / F-F7: the per-store public email existed everywhere except the contact page
+
+**Task / Scope:** Task 6.9 (`F-F7`) · branch `feat/task-6.9-store-email` off `origin/main` `64458fe`
+**Executor:** Lane C (Claude subagent)
+**Files:** `apps/storefront/src/pages/kontak.astro` · `apps/admin/lib/actions/store-profile.test.ts`
+(new) · `apps/storefront/src/lib/kontak-email.test.ts` (new) · `TASKS.md` · `BUILD-LOG.md` ·
+`specs/docs/tasks/2026-08-24-task-6.9-store-email.md` (new)
+
+### The task sheet was written against a repo that no longer exists
+
+Verified against `origin/main` BEFORE writing anything: `stores.email` shipped in migration **0070**
+(nullable, `ADD COLUMN IF NOT EXISTS`), with shape-only validation (`emailError`,
+`@tokophi/lib/validate` — no domain whitelist), the tenant-scoped round-trip in
+`apps/admin/lib/actions/store-profile.ts` (`requireCapability("settings:write")` + `withTenant`,
+explicit `where id = storeId` because `stores` has no `store_id`), the "Email publik" field on the
+Pengaturan card, the storefront tenant read (`data/store.ts`) and the footer's conditional render.
+
+- ⚠️ **The coordinator-assigned migration number 0101 is deliberately UNUSED.** A second migration
+  adding a column 0070 already owns is a split source of truth. Journal head stays `0100`;
+  `npm run verify-migrations -w @tokophi/db` green; the shared dev DB's newest applied stamp is
+  `1787302186123` (= 0100) so every environment already has the column. Nothing to apply at merge.
+- ⚠️ The task sheet's `lib/actions/profile.ts` is the USER profile (login credential) — untouched.
+
+### What was genuinely missing
+
+`kontak.astro` still carried the comment "There is no `stores.email` column" (true when written,
+false since 0070) and rendered **no email at all**, even for a store that published one. It now
+derives `email` from the Host-resolved tenant (blank → null) and renders an `Email` row with a plain
+`mailto:` link **only when set** — unset renders nothing, never a placeholder (one container serves
+every merchant, ADR 0009; a fallback here is one merchant's inbox on every store's contact page).
+
+### Verification (exit codes read directly)
+
+- `npx vitest run` → **129 files / 1074 tests** green (baseline 127/1065 + the 2 new files / 9 tests).
+  The new DB-coupled suite runs on the derived `_test` DB under the real GUC +
+  `set local role tokophi_app` shape: two-store isolation, 0058 raw-read invisibility, invalid
+  rejected with the row untouched, clear → NULL survives reload as `""`.
+- `npx tsc --noEmit -p apps/admin` → 0 · `-p packages/db` → 0 ·
+  `npx astro check --root apps/storefront` → 0 errors / 0 warnings / 14 hints (baseline).
+- **Served HTML, prod build, real DB** (`node dist/server/entry.mjs`, port 4485, dev DB read-only,
+  server killed by its own PID): `Host: toko-demo.test` (batiknusantara, email set) → `<dt>Email</dt>`
+  + `mailto:halo@batiknusantara.id` rendered; `Host: kopi-senja.127.0.0.1.sslip.io` (unset) → HTTP
+  200 with **zero** email markup on the whole page. ⚠️ batiknusantara's sslip host 301s to its
+  primary domain `toko-demo.test` — use that Host for local checks on that store.
+- Stated boundary: the section is pure SSR markup (no client script), so served-HTML IS the render;
+  no Playwright layered on top. The admin card is untouched (the field shipped with 0070), so no
+  admin browser pass — its contract is pinned by the new action tests + tsc.
+
+**Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
+`specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
+||||||| 64458fe
 
 ## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
 

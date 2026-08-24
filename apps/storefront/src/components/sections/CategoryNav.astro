@@ -29,6 +29,18 @@ const configured = Astro.props.items ?? [];
 // default is empty and this fills it from live data — the same thing CollectionBento does, and the
 // same reason: a section that cannot name a category the store does not have cannot ship a dead link.
 // An explicit list still wins, so a merchant who curated one keeps it.
+// Aspect → LITERAL Tailwind class, never string interpolation — Tailwind only emits classes it can
+// see at build time, so `aspect-[${x}]` would silently produce nothing. An unknown value (an older
+// deploy, a hand-edited row) falls back to the historical 4:5.
+const ASPECT_CLASS: Record<string, string> = {
+  "1:1": "aspect-square",
+  "4:5": "aspect-[4/5]",
+  "2:3": "aspect-[2/3]",
+  "3:2": "aspect-[3/2]",
+  "5:4": "aspect-[5/4]",
+};
+const aspectClass = ASPECT_CLASS[Astro.props.aspect ?? "4:5"] ?? "aspect-[4/5]";
+
 const catalog = Astro.locals.catalog;
 const items = configured.length
   ? configured
@@ -90,7 +102,10 @@ const SIZES = "(min-width: 768px) 200px, 33vw";
             <li class="w-[82%] shrink-0 snap-start xs:w-[70%] sm:w-[calc(50%-0.5rem)] lg:w-[calc(25%-0.75rem)]">
               <a
                 href={safeHref(item.href)}
-                class="group relative block aspect-[4/5] overflow-hidden rounded-md bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                class:list={[
+                  "group relative block overflow-hidden rounded-md bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+                  aspectClass,
+                ]}
               >
                 {item.imageUrl ? (
                   <img

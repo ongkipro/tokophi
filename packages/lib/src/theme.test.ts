@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { hexToHSL } from "./colors";
-import { generateNeutrals, resolveTheme, DEFAULT_THEME, FONT_PAIRINGS } from "./theme";
+import { generateNeutrals, resolveGalleryAspect, resolveTheme, DEFAULT_THEME, FONT_PAIRINGS } from "./theme";
 
 // WCAG relative-luminance contrast — the muted/cream pair must stay AA in EVERY tone × brand hue,
 // because the #8a7f82 → #736669 fix closed 182 violations and a derived palette that reopens them
@@ -98,5 +98,20 @@ describe("resolveTheme", () => {
       if (p.id === "bawaan") continue;
       expect(p.displayFile).toMatch(/^\/fonts\/[a-z0-9-]+-latin\.woff2$/);
     }
+  });
+});
+
+describe("resolveGalleryAspect — jsonb is untrusted, unknown degrades to 1:1", () => {
+  it("returns a valid stored aspect", () => {
+    expect(resolveGalleryAspect({ galleryAspect: "4:5" })).toBe("4:5");
+    expect(resolveGalleryAspect({ font: "bawaan", galleryAspect: "2:3" })).toBe("2:3");
+  });
+  it("defaults on null/missing/garbage — a bad row must never crash a PDP", () => {
+    expect(resolveGalleryAspect(null)).toBe("1:1");
+    expect(resolveGalleryAspect(undefined)).toBe("1:1");
+    expect(resolveGalleryAspect({})).toBe("1:1");
+    expect(resolveGalleryAspect({ galleryAspect: "16:9" })).toBe("1:1");
+    expect(resolveGalleryAspect({ galleryAspect: 45 })).toBe("1:1");
+    expect(resolveGalleryAspect("4:5")).toBe("1:1");
   });
 });

@@ -219,6 +219,7 @@
 - **Target Files:** `apps/admin/components/admin/topbar.tsx`, the existing responsive audit script.
 - **Change:** Fix the shared topbar layout at the component boundary; preserve store identity, balance access, menu access, focus order, and touch targets.
 - **Done when:** The responsive audit reports zero horizontal overflow at 320 px on all 15 seller routes, and browser verification confirms keyboard/touch access to every topbar control.
+- **Status:** `[x]` **DONE 2026-08-24** — audit `24/264 broken` (every seller route @320px, 38px, right topbar cluster) → **`OK — 264 route×width combinations, no horizontal overflow`**, measured against the wide-balance seeded store (batiknusantara, Rp214jt — a Rp0 store passes vacuously); browser pass at 320px confirmed all 7 topbar controls clickable + Tab-reachable in order, 40px hit zones via `::after`; 768/1280 unchanged. See `BUILD-LOG.md` 2026-08-24 and `specs/docs/tasks/2026-08-24-task-5.5-topbar-320.md`.
 
 ### Task 5.6: Make Product Editor Navigation Guards State-Aware
 - **Requirement:** `F-C9`
@@ -376,6 +377,7 @@
 - **Target Files:** `packages/db/src/schema.ts`, one new numbered migration, `apps/admin/lib/actions/profile.ts`, `apps/admin/components/admin/pengaturan/store-profile-card.tsx`, `apps/storefront/src/pages/kontak.astro`, focused tenant/action and browser tests.
 - **Change:** Add one nullable, validated public contact email owned by the store profile; round-trip it through the existing tenant-scoped profile action and render it only for that store. Remove any shared email fallback; an unset email is an honest empty state.
 - **Done when:** Two-store tests persist and render different emails without cross-tenant access; invalid addresses are rejected; clearing the field survives reload and does not expose a shared placeholder.
+- **Status:** `[x]` **DONE 2026-08-24** — ⚠️ **Most of F-F7 predated this task**: `stores.email` landed in migration **0070** (nullable, idempotent) with shape-only validation (`emailError`, `@tokophi/lib/validate`), the tenant-scoped round-trip in **`apps/admin/lib/actions/store-profile.ts`** (NOT `lib/actions/profile.ts`, which is the USER profile), the Pengaturan card field, and the footer render. **The assigned migration number 0101 is deliberately UNUSED** — re-adding a column 0070 already owns would be a split source of truth; journal head stays 0100 and there is nothing to apply at merge. What this task delivered: `kontak.astro` now renders THIS store's email conditionally (its comment still claimed the column did not exist, and the page rendered no email even when set) + `apps/admin/lib/actions/store-profile.test.ts` (real Postgres: two-store isolation, 0058 raw-read invisibility, invalid rejected, clear → NULL survives reload) + `apps/storefront/src/lib/kontak-email.test.ts` (no email-shaped literal in emitted text, conditional render, mutation self-checks). Verified: vitest 129 files / 1074 tests, `astro check` 0 errors / 14 hints, tsc admin+db 0, served HTML per tenant (email set → rendered; unset → 200 with zero email markup). See `specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
 
 ## Parallel Execution Contract
 
