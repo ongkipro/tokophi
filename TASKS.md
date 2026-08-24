@@ -244,6 +244,7 @@
 - **Target Files:** `apps/admin/lib/auth.ts`, session/store-context actions, `apps/admin/components/admin/topbar.tsx`, auth and browser tests.
 - **Change:** Replace unordered first-membership selection with an explicit authorized store context, persist the choice safely, and populate the switcher from every live membership.
 - **Done when:** Two-membership tests select deterministically, switching changes tenant context, revocation invalidates the old choice, and no-membership login fails clearly.
+- **Status:** `[x]` **DONE 2026-08-24** — selection contract (earliest `invited_at`, tie-break store id) in `apps/admin/lib/store-selection.ts`; `switchStore` re-mints the session after a `store_users` proof; topbar switcher lists every live membership; `store-selection.test.ts` 11 tests vs real PostgreSQL (mutation proved 3 reds); driven in a production build (login → deterministic store, switch, SQL revocation → clean signout, no 5xx). See `BUILD-LOG.md` 2026-08-24.
 
 ### Task 5.10: Enforce Payout State Transitions in the Mutation
 - **Requirement:** `F-M15`
