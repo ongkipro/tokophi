@@ -1261,6 +1261,7 @@ export function ProductEditor({ product }: { product?: Product }) {
                 path={gcatPath}
                 title={name}
                 category={category}
+                description={description}
                 onChange={(id, p) => { setGcatId(id); setGcatPath(p); }}
               />
 

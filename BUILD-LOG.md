@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-24 02:26 UTC] — Kategori Google otomatis saat publish + kartu Gambar koleksi ke sidebar
+
+- **Executor:** Main Session (Claude, Fable 5). Permintaan owner 2026-08-24. Tanpa migrasi.
+- **Auto-kategori:** `productFields` (dipindah ke `@/lib/product-fields` — modul "use server" hanya boleh export async, dan mapper harus bisa diimpor test) mengisi `google_category_id/path` via `suggestGoogleCategory(judul, kategori, deskripsi)` HANYA saat `status="active"` dan pilihan eksplisit kosong; draft tak disentuh; pilihan merchant selalu menang. Deskripsi kini juga masuk suggester interaktif (`GoogleCategoryField`) supaya saran UI dan isian server tidak pernah beda pendapat.
+- 🔴 **Penyelamatan yang hanya ketahuan karena di-drive:** id saran adalah FK ke `product_taxonomy` — di lingkungan tanpa seed taxonomy (diukur: DB dev, 0 baris, semua produk NULL) tulisan itu membuat **Simpan merchant gagal 23503**. `taxonomySafe()` kini memverifikasi id ada sebelum menulis; tidak ada → degradasi diam ke NULL. **Fitur bantu tidak boleh memblokir save.** Pilihan eksplisit sengaja TIDAK diverifikasi — datang dari `searchTaxonomy` atas baris nyata, dan kalau itu dangling, gagal keras justru benar.
+- **Sidebar koleksi:** kartu "Gambar koleksi" pindah dari dasar kolom UTAMA ke sidebar kanan di bawah Publikasikan — metadata publish-adjacent, bukan isi; di dasar kolom kiri ia rutin terlewat scroll.
+- **Verifikasi (build produksi, browser, tenant probe):** jalur degradasi — taxonomy kosong → Simpan sukses, field tetap NULL; jalur positif — 1 baris referensi (2271 Dresses) → Simpan → DB `2271 | Apparel & Accessories > Clothing > Dresses`; posisi kartu terukur `imgX == pubX` (kolom sidebar). vitest fokus 5/5; suite penuh 129 file / 1081 hijau; tsc 0. Probe dibersihkan; `current_period_end` batik dipulihkan persis; baris taxonomy 2271 (data referensi global yang benar) dibiarkan.
+- ⚠️ **Insiden alat sesi ini:** EADDRINUSE kelima — satu putaran menilai build lama dan melaporkan "Gagal menyimpan" palsu; kesimpulan baru sah setelah pemilik port dibunuh dan `Ready` terverifikasi di log server BARU.
+
+
 ### [2026-08-24 01:50 UTC] — Stage 5 Task 5.5 · F-F11 (NF-7) · The Shared 320 px Seller Topbar Overflow Is Gone
 
 - **Executor:** Lane B (Claude subagent) — branch `fix/task-5.5-topbar-320`, off `origin/main` `64458fe`.
@@ -26,8 +36,6 @@
   - ⚠️ Stated boundary: 360 px measures a pre-existing 1 px `scrollWidth` rounding delta (within the audit's own ≤1 px tolerance, present before this change); the audit itself passes all widths.
 - **Shared-DB procedure (additive, restored):** throwaway owner `e9999999-0000-4000-8000-000000000003` with a membership on `batiknusantara`; its expired `current_period_end` (**`2026-08-04 03:59:23.814+00`**, recorded first) temporarily extended to `2026-09-30` and **restored via `returning`** to the exact prior value; both probe rows then deleted via `returning`. Server PIDs killed individually (no `pkill`); port 3215 confirmed free.
 - **Completed Task:** Stage 5 Task 5.5.
-||||||| 64458fe
-=======
 
 ### [2026-08-24 01:47 UTC] — /tema kontrol gambar: rasio galeri PDP, rasio kartu nav, picker berhalaman + preview
 
@@ -2080,7 +2088,6 @@ every merchant, ADR 0009; a fallback here is one merchant's inbox on every store
 
 **Completed Task:** Task 6.9 / F-F7 — marked `[x]` in `TASKS.md`; handoff in
 `specs/docs/tasks/2026-08-24-task-6.9-store-email.md`.
-||||||| 64458fe
 
 ## 2026-08-24 01:35 UTC — Task 5.9 / F-T10: multi-store selection made explicit and deterministic
 
