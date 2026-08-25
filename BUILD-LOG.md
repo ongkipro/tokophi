@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-25 03:17 UTC] — STOREFRONT-UX · card produk: bocor baris ke-3 judul FIXED + cluster rating+harga rata-bawah
+
+- **Executor:** Main Session (Claude, Fable 5). Laporan owner: judul panjang menyisakan sliver teks di atas rating; judul pendek menyisakan baris kosong menempel di bawah judul.
+- **Akar masalah, terukur:** `min-h-[2.75rem]` (44px) pada judul `line-clamp-2 text-sm leading-snug` — dua baris = 2×19,25 = **38,5px**, sedangkan clip `line-clamp` terjadi di tepi BOX (44px), menyisakan jendela **5,5px** tempat puncak baris ke-3 ikut ter-render. `min-h` yang dimaksudkan menjaga kesejajaran justru sumber bocornya.
+- **Fix (`ProductCard.astro`):** ① `min-h` di judul DIHAPUS — box clamp = tinggi teks persis, tak ada yang bisa bocor; ② rating + harga menjadi **satu cluster `mt-auto`** rata-bawah — kesejajaran antar-card sekarang tugas cluster, bukan baris kosong reservasi: judul 1-baris menyisakan slack tak terlihat di tengah, bukan blank line menempel di judul.
+- **Verifikasi (build produksi, drive browser):** semua card `/produk` → `leakPx = 0` (box = persis baris×19,25px, 1-baris dan 2-baris); baris grid campuran (2×judul-2-baris + 2×judul-1-baris): `ratingY` identik **2499** dan `priceY` identik **2521** untuk keempat card. Screenshot desktop + mobile 2-up (375px, lebar tempat bocornya terparah) bersih, 0 error JS. `astro check` 0 error · suite storefront **112 hijau** (`checks-registered`, `product-ratio-locked`, dst tak tersentuh).
+
 ### [2026-08-24 16:26 UTC] — PAYOUT-UX · referensi transfer di "Tandai lunas" + alasan/ref tampil di /saldo merchant (BELUM DEPLOY — atas perintah owner)
 
 - **Executor:** Main Session (Claude, Fable 5). Lanjutan audit pencairan manual: dua celah kecil pada rantai konfirmasi super admin → tenant.
