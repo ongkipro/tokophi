@@ -180,20 +180,29 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
     </div>
     {/* `line-clamp-2`, not `truncate`. At 360px in a 2-up grid the title box is ~124px, and Indonesian
         product names are long AND front-loaded with the same words — so `truncate` clipped adjacent
-        cards to the IDENTICAL string ("Dress Batik Par…", "Dress Batik Par…"). Capped at TWO lines and
-        `min-h` reserves both, so a 1-line title and a 2-line title still align their prices in a row. */}
-    <Heading class="mt-1 line-clamp-2 min-h-[2.75rem] text-sm font-medium leading-snug text-ink transition-colors group-hover:text-brand-700">
+        cards to the IDENTICAL string ("Dress Batik Par…", "Dress Batik Par…").
+        ⚠️ NO `min-h` here — it is what leaked line 3. `line-clamp`'s overflow:hidden clips at the BOX
+        edge, and a `min-h-[2.75rem]` (44px) box over two 19,25px lines (38,5px) leaves a 5,5px window
+        in which the top of the third line renders, right above the rating (measured on production,
+        2026-08-25). Without a min-height the clamp box IS the text, so there is nothing to leak — and
+        row alignment is the bottom cluster's job now, not a reserved empty line's. */}
+    <Heading class="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink transition-colors group-hover:text-brand-700">
       {product.name}
     </Heading>
-    {/* RATING — the full five-star row a marketplace shopper reads at a glance (★★★★★ 4.8 (3)),
+    {/* RATING + PRICE are ONE bottom-anchored cluster (`mt-auto`): every card in a row shows its
+        rating on one shared line and its price on another, whether the title above took one line or
+        two — a short title's slack falls invisibly between title and cluster instead of rendering as
+        a reserved blank line glued under the title.
+        RATING — the full five-star row a marketplace shopper reads at a glance (★★★★★ 4.8 (3)),
         with a fractional fill for the partial star. No published reviews → NO rating at all (never an
-        invented 4.5, never "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather than a new one). */}
-    {rating && <Stars value={rating.value} count={rating.count} size="sm" class="mt-1.5" />}
-    {/* PRICE — the current price leads in ink; a compare-at follows, smaller and struck. `flex-wrap` so
+        invented 4.5, never "0 ulasan · ☆☆☆☆☆", which reads as a bad product rather than a new one).
+        PRICE — the current price leads in ink; a compare-at follows, smaller and struck. `flex-wrap` so
         a two-price row never clips on a 2-up phone grid (it did, `nowrap`, on every phone: the struck
         price ran past the 124px column). `gap-y-0.5` keeps a wrapped second line tight. Unpriced → a
         phrase, no figure, no struck price beside it. */}
-    <div class="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-2">
+    <div class="mt-auto pt-2">
+      {rating && <Stars value={rating.value} count={rating.count} size="sm" class="mb-1.5" />}
+      <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "text-[0.95rem] tabular-nums"]}>
         {unpriced ? "Hubungi untuk harga" : IDR(product.price)}
       </span>
@@ -205,6 +214,7 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
           <span class="text-xs text-muted line-through tabular-nums">{IDR(product.compareAt)}</span>
         )
       }
+      </div>
     </div>
   </div>
 </a>
