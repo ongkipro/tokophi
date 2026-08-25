@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-25 04:50 UTC] — STOREFRONT-UX · ritme jarak card produk dirapikan (internal + antar-baris grid)
+
+- **Executor:** Main Session (Claude, Fable 5). Owner mengirim perbandingan: referensi vs punya kita — "rapikan jarak ukuran dan spacenya".
+- **Terukur sebelum:** gambar→kategori 14px · kategori→judul 6px · judul→harga 10px · **jarak antar-baris grid 16px** (`gap-4`), sehingga harga satu baris nyaris menempel foto baris berikutnya. Judul 14px/500.
+- **Sesudah:** gambar→kategori **20px** · kategori→judul **8px** · judul→harga **12px** · antar-baris **40px (mobile) / 56px (sm+)** · judul **15px/600 `leading-[1.45]`** — tiga fakta butuh tiga jarak berbeda, kalau sama semua terbaca satu blok abu-abu.
+- **Konsistensi:** delapan grid produk memakai `gap-4` polos (index ×2, promo ×2, keranjang, 404, PDP produk-serupa, ProductGrid section) sementara ProductListing punya ritmenya sendiri — semuanya kini `gap-x-4 gap-y-10 sm:gap-y-14`. Grid KATEGORI (`kategori/index.astro`) sengaja tidak disentuh: itu bukan card produk.
+- 🔴 **`gap-x` TIDAK diubah, dan itu disengaja:** aritmetika `sizes` di `ProductCard.astro` diturunkan dari gap KOLOM — melebarkannya akan membuat keempat string `sizes` salah secara diam-diam. Row gap tidak pernah menyentuh lebar, jadi udara bisa ditambah tanpa menurunkan ulang satu pun `sizes`. Catatan itu ditulis di file-nya.
+- **Verifikasi (build produksi, drive browser 1280 & 375):** jarak terukur persis 20/8/12, `titleFont 15px/600 lh 21.75`, `leakPx 0` (dua baris = 43,5px, tetap kelipatan bersih), rowGap 56 desktop / 40 mobile, 0 error JS. `astro check` 0 error. ⚠️ Pengukuran pertama sempat membaca build LAMA — port 4321 masih dipegang server sebelumnya (EADDRINUSE, jebakan yang sudah tercatat di AGENTS.md); PID asli dicek via `ss -ltnp` lalu dimatikan sebelum diukur ulang.
+
 ### [2026-08-25 04:27 UTC] — STOREFRONT-UX · card produk disederhanakan: rating keluar dari grid, harga rata-bawah secara struktural
 
 - **Executor:** Main Session (Claude, Fable 5). Owner mengirim referensi desain (Threadheads) — "simple gini aja tanpa rating".

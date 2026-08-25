@@ -104,7 +104,7 @@ const picks = catalog?.bestsellers?.().slice(0, 4) ?? [];
             title="Produk paling dicari"
             align="center"
           />
-          <div class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div class="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-y-14 sm:grid-cols-3 lg:grid-cols-4">
             {picks.map((p) => (
               <ProductCard product={p} />
             ))}

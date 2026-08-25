@@ -36,8 +36,11 @@ const CARD_ASPECT_CLASS: Record<ReturnType<typeof resolveCardAspect>, string> = 
 // from it before layout exists. Too big and every phone downloads the 1200w; too small and a wide
 // card renders a blurry 200w. So this is arithmetic on the real Tailwind classes, not a vibe.
 //
-// Every product grid in the shop lives in `mx-auto max-w-7xl px-4 sm:px-6` with `gap-4`, and always
-// starts at `grid-cols-2` on phones. Constants: gap-4 = 16px, px-4 = 32px total, px-6 = 48px total,
+// Every product grid in the shop lives in `mx-auto max-w-7xl px-4 sm:px-6` with `gap-x-4`, and always
+// starts at `grid-cols-2` on phones. ⚠️ Only the COLUMN gap enters this arithmetic — the row gap
+// (`gap-y-10 sm:gap-y-14`, widened 2026-08-25) never touches a width, which is why it could be
+// widened for air without re-deriving a single `sizes` string. Changing `gap-x` is the one that
+// invalidates all four. Constants: gap-x-4 = 16px, px-4 = 32px total, px-6 = 48px total,
 // max-w-7xl = 1280px. Column width = (container - padding - gaps) / cols.
 //
 // The four shapes that actually exist, named by their column counts at base/sm/lg:
@@ -171,8 +174,19 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
       grid stretches every card in a row to one height, this block takes the slack, and `mt-auto` on
       the price sits it on the floor. It replaced a `min-h-[7.5rem]` guess that had to be re-tuned by
       hand whenever a line was added or removed — and left dead space the moment the block got
-      shorter (which is exactly what dropping the rating did). */}
-  <div class="mt-3 flex flex-1 flex-col">
+      shorter (which is exactly what dropping the rating did).
+
+      SPACING RHYTHM (owner, 2026-08-25 — measured against the reference he sent). Three facts need
+      three distinct distances, or they read as one grey block: image → kategori **20px**, kategori →
+      judul **8px** (they belong together — the label names what the title is), judul → harga
+      **12px** — the proportions of the reference the owner sent, scaled to our smaller type. Title is 15px/600 at `leading-[1.45]`, up from 14px/500 at `leading-snug`: at 15px a
+      two-line title is 43,5px, still a clean multiple with no clamp window (see the note below).
+      ⚠️ The vertical air BETWEEN rows is the grid's `gap-y`, not this block's — every product grid in
+      the shop is `gap-y-10 sm:gap-y-14` now (they used to be `gap-4`, i.e. 16px, which is why a
+      price sat almost touching the next row's photo). **`gap-x` stays 4/5/6 exactly as it was** —
+      the `sizes` arithmetic at the top of this file is derived from those column gaps, so widening
+      one silently makes every `sizes` claim wrong. */}
+  <div class="mt-5 flex flex-1 flex-col">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
       <p class="text-[0.65rem] font-medium uppercase tracking-widest text-muted">{product.category}</p>
       {soldLabel && (
@@ -189,7 +203,7 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
         in which the top of the third line renders, right above the rating (measured on production,
         2026-08-25). Without a min-height the clamp box IS the text, so there is nothing to leak — and
         row alignment is the bottom cluster's job now, not a reserved empty line's. */}
-    <Heading class="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink transition-colors group-hover:text-brand-700">
+    <Heading class="mt-2 line-clamp-2 text-[0.9375rem] font-semibold leading-[1.45] text-ink transition-colors group-hover:text-brand-700">
       {product.name}
     </Heading>
     {/* NO RATING ON THE CARD (owner, 2026-08-25). The grid is now kategori → judul → harga, and
@@ -204,7 +218,7 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
         a two-price row never clips on a 2-up phone grid (it did, `nowrap`, on every phone: the struck
         price ran past the 124px column). `gap-y-0.5` keeps a wrapped second line tight. Unpriced → a
         phrase, no figure, no struck price beside it. `mt-auto` floors it — see the block comment above. */}
-    <div class="mt-auto pt-2">
+    <div class="mt-auto pt-3">
       <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "text-[0.95rem] tabular-nums"]}>
         {unpriced ? "Hubungi untuk harga" : IDR(product.price)}
