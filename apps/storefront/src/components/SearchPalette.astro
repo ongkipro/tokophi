@@ -157,47 +157,74 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       });
     }
 
-    // The thumbnail box is `h-14 w-[2.625rem]` and `shrink-0` inside a flex row, so its width is
-    // 2.625rem = 42 CSS px at EVERY viewport — no breakpoint, no cap that only binds above some
-    // width, no flex share to guess at (AGENTS.md: a `max-w-*` is only a `sizes` if you can name the
-    // viewport at which it starts binding; here there is no cap at all, the width is the width).
-    // Arithmetic, not an estimate — and the browser trusts it completely, which is why it is a named
-    // constant beside the class it is derived from rather than a literal inside the string builder.
-    var THUMB_SIZES = "42px";
+    // ── `sizes` FOR A CARD, DERIVED FROM THE PALETTE'S OWN GRID (owner, 2026-08-25) ────────────────
+    // The results used to be list rows with a 42px thumbnail — one fixed number at every viewport,
+    // which made `sizes` trivial. They are CARDS now (see below), so the box is a grid column and
+    // the arithmetic has to be done properly, exactly as `ProductCard.astro` does it for the shop's
+    // grids. The column lives in `mx-auto w-full max-w-2xl` (672px) with `px-3 sm:px-5` and `gap-3`:
+    //   <640px   2 cols: (100vw - 24 - 12)/2      = 50vw - 18px       (412px → 188px ✓)
+    //   >=640px  3 cols: capped by max-w-2xl at   = (672 - 40 - 24)/3 = 202,7px
+    // …and then MINUS the card's own `p-1.5` (12px), because the box the browser fills is the IMAGE,
+    // not the column: 50vw - 30px and 196px. Measured in a browser: 176px image inside a 188px card
+    // at 412px, 191px inside 203px at 1280px. Claiming the column would over-ask by 12px on every
+    // card — small, but it is the exact class of error `sizes` exists to avoid.
+    // The `sm` figure is the CAP, reached at 672px of viewport and held from there up; between 640
+    // and 672 the real column is a few px narrower, which is the direction `sizes` is allowed to err
+    // (the browser picks the next rung up, never a blurry one). Named constant beside the classes it
+    // is derived from — never a literal buried in the string builder.
+    var CARD_SIZES = "(min-width: 640px) 196px, calc(50vw - 30px)";
 
-    // A PRODUCT ROW, in the shop's own language: a 3:4 portrait thumbnail, because a garment is
-    // recognised by its silhouette and a square crops the silhouette away. Same aspect as
-    // ProductCard, so the palette reads as a miniature of the grid rather than a list of commands.
+    // A PRODUCT CARD, in the shop's own language: the SAME shape as the grid the shopper just came
+    // from — 3:4 portrait image, name, price — because a garment is recognised by its silhouette and
+    // a 42px sliver of one is not a picture, it is a bullet point. Two up on a phone, three from
+    // `sm`, so the photo does the work the list row asked type to do.
     //
-    // ⚠️ THE THUMBNAIL CARRIES A SRCSET, AND IT COMES FROM THE SERVER (`api/search.ts`), NOT FROM A
+    // ⚠️ THE IMAGE CARRIES A SRCSET, AND IT COMES FROM THE SERVER (`api/search.ts`), NOT FROM A
     // MANIFEST IN THIS FILE. Without it the browser had exactly one file to fetch — the full-size
-    // original — for a 42px box: measured 91 178 B for six rows on the seeded store, 7,1x oversize
+    // original — measured 91 178 B for six thumbnails on the seeded store, 7,1x oversize
     // (`scripts/check-search-srcset.mjs`). It was invisible to every static check and to the browser
-    // checks alike, because this <img> does not exist until somebody presses ⌘K.
-    // `p.srcset` is absent for a product whose image has no ladder; then both attributes are omitted
-    // and the row renders exactly as it did before. Both go through `esc` — this is string
-    // concatenation into `innerHTML`, so an unescaped URL is an injection vector, not just a bug.
-    function productRow(p) {
-      var srcset = p.srcset ? ' srcset="' + esc(p.srcset) + '" sizes="' + esc(THUMB_SIZES) + '"' : "";
+    // checks alike, because this <img> does not exist until somebody presses ⌘K. The cards are
+    // bigger boxes than the old 42px rows, so they pick a HIGHER rung off the same ladder — the
+    // guard measures the real box and the picked candidate, so it keeps this honest either way.
+    // `p.srcset` is absent for a product whose image has no ladder; then both attributes are omitted.
+    // Both go through `esc` — this is string concatenation into `innerHTML`, so an unescaped URL is
+    // an injection vector, not just a bug.
+    function productCard(p) {
+      var srcset = p.srcset ? ' srcset="' + esc(p.srcset) + '" sizes="' + esc(CARD_SIZES) + '"' : "";
       var thumb = p.image
         ? '<img src="' + esc(p.image) + '"' + srcset + ' alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
         : '<span class="flex h-full w-full items-center justify-center">' + iconProduct + "</span>";
       var price = p.soldOut
         ? '<span class="text-xs font-medium text-muted">Stok habis</span>'
         : p.price > 0
-          ? '<span class="text-sm font-semibold tabular-nums text-ink">' + esc(IDR.format(p.price)) + "</span>"
+          ? '<span class="text-[0.95rem] font-semibold tabular-nums text-ink">' + esc(IDR.format(p.price)) + "</span>"
           : '<span class="text-xs font-medium text-muted">Tanya harga</span>';
+      // `aria-selected` + the ↑↓ ring live on the <a>, so the keyboard walk is unchanged by the
+      // switch to a grid — `setActive` still toggles `bg-brand-50` on whatever is at `items[n]`.
       return (
         '<a href="/produk/' + esc(p.handle) + '" role="option" aria-selected="false" ' +
-        'class="mx-auto flex w-full max-w-2xl items-center gap-3 rounded-xl p-2 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
+        'class="group flex flex-col rounded-xl p-1.5 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
         (p.soldOut ? " opacity-60" : "") + '">' +
-          '<span class="h-14 w-[2.625rem] shrink-0 overflow-hidden rounded-lg bg-brand-50">' + thumb + "</span>" +
-          '<span class="min-w-0 flex-1">' +
-            '<span class="block truncate text-[0.95rem] font-medium leading-snug text-ink">' + esc(p.name) + "</span>" +
-            '<span class="mt-0.5 block truncate text-xs text-muted">' + esc(p.category || "") + "</span>" +
-          "</span>" +
-          '<span class="shrink-0 pl-2 text-right">' + price + "</span>" +
+          '<span class="block aspect-[3/4] w-full overflow-hidden rounded-lg bg-brand-50">' + thumb + "</span>" +
+          // The kategori label rides ABOVE the name here, same as `ProductCard.astro` — the palette
+          // is meant to read as a miniature of the grid, and the field is already on the payload.
+          (p.category
+            ? '<span class="mt-2 block truncate text-[0.65rem] font-medium uppercase tracking-widest text-muted">' + esc(p.category) + "</span>"
+            : "") +
+          '<span class="' + (p.category ? "mt-1" : "mt-2") + ' line-clamp-2 text-sm font-medium leading-snug text-ink">' + esc(p.name) + "</span>" +
+          '<span class="mt-1.5 block">' + price + "</span>" +
         "</a>"
+      );
+    }
+
+    // The grid wrapper. `role="option"` elements must stay DIRECT children of something inside the
+    // listbox for the ↑↓ walk to find them — `render()` collects them with a descendant query, so a
+    // wrapper is fine; what matters is that no wrapper carries a competing role.
+    function productGrid(list) {
+      return (
+        '<div class="mx-auto grid w-full max-w-2xl grid-cols-2 gap-3 px-3 pb-2 sm:grid-cols-3 sm:px-5">' +
+        list.map(productCard).join("") +
+        "</div>"
       );
     }
 
@@ -247,7 +274,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       if (data.categories && data.categories.length) html += categoryPills(data.categories);
       if (data.products && data.products.length) {
         html += heading(q ? "Produk" : "Paling dicari", q ? data.products.length : 0);
-        html += data.products.map(productRow).join("");
+        html += productGrid(data.products);
       }
       if (q) html += seeAllRow(q);
 
