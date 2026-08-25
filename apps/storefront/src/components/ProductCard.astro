@@ -100,7 +100,7 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
      image easing up in scale and the title warming to brand — nothing lifts or casts a shadow (that was
      the framed look this replaces). The focus ring hugs the rounded IMAGE, where the eye already is,
      offset against the cream page so it reads on the shop's most-used control. -->
-<a href={`/produk/${product.handle}`} class="group flex h-full select-none flex-col focus-visible:outline-none">
+<a href={`/produk/${product.handle}`} class="group block select-none focus-visible:outline-none">
   {/* The image is the card's ONE surface now that there is no outer box, so it carries the radius and
       the clip (badges, the discount pill and the sold-out scrim all ride inside this rounded frame). */}
   <div class:list={["relative overflow-hidden rounded-md bg-brand-50 group-focus-visible:ring-2 group-focus-visible:ring-brand-400 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-cream", aspectClass]}>
@@ -170,23 +170,16 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
         control's clothes. */}
   </div>
 
-  {/* `flex-1` + the card's own `h-full flex-col` is what lines the prices up across a grid row: the
-      grid stretches every card in a row to one height, this block takes the slack, and `mt-auto` on
-      the price sits it on the floor. It replaced a `min-h-[7.5rem]` guess that had to be re-tuned by
-      hand whenever a line was added or removed — and left dead space the moment the block got
-      shorter (which is exactly what dropping the rating did).
-
-      SPACING RHYTHM (owner, 2026-08-25 — measured against the reference he sent). Three facts need
-      three distinct distances, or they read as one grey block: image → kategori **20px**, kategori →
-      judul **8px** (they belong together — the label names what the title is), judul → harga
-      **12px** — the proportions of the reference the owner sent, scaled to our smaller type. Title is 15px/600 at `leading-[1.45]`, up from 14px/500 at `leading-snug`: at 15px a
-      two-line title is 43,5px, still a clean multiple with no clamp window (see the note below).
-      ⚠️ The vertical air BETWEEN rows is the grid's `gap-y`, not this block's — every product grid in
-      the shop is `gap-y-10 sm:gap-y-14` now (they used to be `gap-4`, i.e. 16px, which is why a
-      price sat almost touching the next row's photo). **`gap-x` stays 4/5/6 exactly as it was** —
-      the `sizes` arithmetic at the top of this file is derived from those column gaps, so widening
-      one silently makes every `sizes` claim wrong. */}
-  <div class="mt-5 flex flex-1 flex-col">
+  {/* THE TEXT FLOWS — kategori, judul, harga, each a fixed distance from the one before, exactly like
+      the reference the owner sent (2026-08-25). The price is deliberately NOT floored to the card's
+      bottom: an `mt-auto` price under a one-line title leaves a hole in the middle of the card that
+      reads as a mistake (his words: "janggal"), and the reference itself lets prices sit at natural
+      heights across a row. One rhythm, every card, every surface: image → kategori 20px, kategori →
+      judul 8px, judul → harga 10px.
+      ⚠️ The vertical air BETWEEN rows is the grid's `gap-y` (`gap-y-10 sm:gap-y-14` everywhere), and
+      **`gap-x` stays 4/5/6 exactly as it was** — the `sizes` arithmetic at the top of this file is
+      derived from those column gaps, so widening one silently makes every `sizes` claim wrong. */}
+  <div class="mt-5">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
       <p class="text-[0.65rem] font-medium uppercase tracking-widest text-muted">{product.category}</p>
       {soldLabel && (
@@ -217,8 +210,8 @@ const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : 
         PRICE — the current price leads in ink; a compare-at follows, smaller and struck. `flex-wrap` so
         a two-price row never clips on a 2-up phone grid (it did, `nowrap`, on every phone: the struck
         price ran past the 124px column). `gap-y-0.5` keeps a wrapped second line tight. Unpriced → a
-        phrase, no figure, no struck price beside it. `mt-auto` floors it — see the block comment above. */}
-    <div class="mt-auto pt-3">
+        phrase, no figure, no struck price beside it. Flows after the title — see the block comment above. */}
+    <div class="mt-2.5">
       <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span class:list={["font-semibold text-ink", unpriced ? "text-sm" : "text-[0.95rem] tabular-nums"]}>
         {unpriced ? "Hubungi untuk harga" : IDR(product.price)}
