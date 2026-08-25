@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-25 05:09 UTC] — STOREFRONT-UX · hasil ⌘K jadi GRID CARD (2 kolom mobile / 3 kolom sm+), bukan list
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "untuk search tampilnya kan list + thumbnail, buat card aja gimana termasuk di mobile".
+- **Perubahan (`SearchPalette.astro`):** `productRow` (baris flex + thumbnail 42px) → `productCard` + `productGrid` — gambar 3:4 penuh lebar kolom, kategori, judul 2 baris, harga. Bentuknya kini miniatur grid toko: sepotong 42px dari sebuah gaun bukan gambar, itu bullet point.
+- **Navigasi keyboard tetap utuh:** `role="option"` tetap di `<a>`, `render()` mengumpulkannya lewat query keturunan sehingga wrapper grid tidak mengganggu — ↑↓ terbukti masih memindahkan seleksi (drive: `activeAfterArrowDown = 1`).
+- 🔴 **DUA BUG TERTANGKAP KARENA DI-DRIVE, bukan dibaca:** ① `class="… block line-clamp-2 …"` — keduanya menyetel `display`, dan yang menang di CSS adalah `block`, jadi clamp **diam-diam mati**: judul terukur **5 baris** di kotak 2 baris. `block` dibuang → terukur 2. ② `sizes` awalnya memakai lebar KOLOM, padahal kotak yang diisi browser adalah GAMBAR — card punya `p-1.5`, jadi gambar 12px lebih sempit (176px di dalam card 188px). Diperbaiki jadi `(min-width: 640px) 196px, calc(50vw - 30px)`.
+- **Verifikasi:** guard resmi repo **`check-search-srcset.mjs` PASS** — 6 thumbnail, semua punya srcset+sizes, kotak 176px mengambil rung **400w (1,14× DPR2)**, total **28.920 B**; 0 oversize. Drive 412px & 1280px: 2 kolom / 3 kolom, judul 2 baris, tanpa overflow horizontal, 0 error JS; screenshot kedua lebar. `astro check` 0 · vitest penuh **135 file / 1116 hijau**.
+
 ### [2026-08-25 04:50 UTC] — STOREFRONT-UX · ritme jarak card produk dirapikan (internal + antar-baris grid)
 
 - **Executor:** Main Session (Claude, Fable 5). Owner mengirim perbandingan: referensi vs punya kita — "rapikan jarak ukuran dan spacenya".
