@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-25 05:45 UTC] — STOREFRONT-UX · card satu kesatuan di semua permukaan + lebar /promo = default + MEGA MENU gaya referensi
+
+- **Executor:** Main Session (Claude, Fable 5). Tiga permintaan owner dalam satu pesan (referensi Threadheads).
+- **① Card "1 kesatuan":** audit — semua permukaan (home, kategori, related PDP, promo, 404, keranjang, blog) memang sudah render `ProductCard` yang sama (ikut rasio tema via `resolveCardAspect`); yang janggal adalah **harga yang dipatok ke dasar card** — judul 1 baris menyisakan lubang di tengah (card "Dress Midi" di /promo, kata owner: "janggal"). Referensinya sendiri membiarkan harga mengalir alami. `mt-auto` flooring DIBUANG: kategori → judul → harga jarak tetap (20/8/10px), sama di setiap card. Terukur: `titleToPrice = 10px` pada card yang tadinya bolong.
+- **② Lebar /promo:** container `max-w-6xl px-4` → **`max-w-7xl px-4 sm:px-6`** (= default semua halaman katalog). Efek ganda: card promo kini 296px — **persis** klaim `sizes` "2-3-4" yang aritmetikanya mengasumsikan container 7xl.
+- **③ Mega menu:** panel "Shop" di-redesign ke bentuk referensi — **kolom link teks polos** (baris thumbnail 44px dibuang; di panel selebar ini mereka terbaca seperti hasil pencarian kedua) + **dua TILE gambar besar** berlabel tebal + jumlah produk ("Dress · 2 produk"), kurasi otomatis = dua kategori pertama di menu merchant yang punya foto — merchant mengkurasi lewat urutan menunya sendiri. Latar panel di-solidkan (`bg-cream/95 backdrop-blur` → `bg-cream`; teks halaman membayang tembus). `sizes` tile = **248px BY CONSTRUCTION**: kolom tile `md:grid-cols-[1fr_32rem]` fixed 512px, (512−16)/2 — fixed supaya angkanya tidak ikut bergeser dengan kolom link. Konstanta mati `MEGA_THUMB_SIZES`/`FEATURED_SIZES` + `featured` ikut dibuang.
+- **Verifikasi (build produksi, drive):** panel terbuka — 6 link teks + 2 tile @ **248px terukur persis**, srcset+sizes lengkap, 0 row thumbnail lama; /promo container **1280px**, card 296px, `titleToPrice 10px`; 0 error JS; screenshot mega-solid + promo. `astro check` 0 · vitest penuh dijalankan sebelum merge.
+
 ### [2026-08-25 05:09 UTC] — STOREFRONT-UX · hasil ⌘K jadi GRID CARD (2 kolom mobile / 3 kolom sm+), bukan list
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "untuk search tampilnya kan list + thumbnail, buat card aja gimana termasuk di mobile".

@@ -55,9 +55,10 @@ const categoryMeta = (href: string) => {
   return { count: items.length, image: items[0]?.image };
 };
 
-// The one product the panel promotes. Bestseller, not random: the menu is prime real estate and a
-// shopper opening it is browsing, not committed — show them the thing most likely to convert.
-const featured = catalog.bestsellers()[0];
+// The two collection TILES on the panel's right (owner reference, 2026-08-25 — the Threadheads
+// shape: text-link columns left, two big image tiles right). The first two menu categories that can
+// show a photo; a menu with fewer than two photographed categories simply renders fewer tiles.
+// `MAIN_NAV` is the merchant's own menu, so the merchant curates these by ordering their menu.
 
 // ── THE DRAWER IS SPLIT, NOT LOOPED ──────────────────────────────────────────────────────────────
 // A shop's mobile menu answers one question first: WHAT DO YOU SELL. Rendering the merchant's tree in
@@ -84,19 +85,10 @@ const DRAWER_FEATURED = catalog.bestsellers().slice(0, 2);
 // ⚠️ Each `sizes` is derived from ITS OWN box, because the browser trusts `sizes` completely when it
 // picks a candidate — a wrong one is worse than no srcset at all. Three sites, three derivations:
 //
-//   MEGA_THUMB — `h-11 w-11 shrink-0` on the wrapper, `h-full w-full` on the img. A fixed 44 px, no
-//     responsive variant and no flex growth, at every width the panel exists at (the nav is
-//     `xl:flex`, so ≥1280 only). Measured 44 px at 1440.
-//
-//   FEATURED — a fixed ~406 px, not a fraction, and the arithmetic is worth writing down:
-//     panel   `inset-x-6` inside the header's `mx-auto max-w-7xl` → min(100vw, 1280) − 48
-//     card    `border` on the panel + `p-5` on the grid            → − 2 − 40
-//     column  `md:grid-cols-[1.7fr_1fr]` with `gap-6`              → (content − 24) × 1/2.7
-//     tile    the `<a>`'s own `border` + `p-3`                     → − 2 − 24
-//     At any viewport ≥1280 the `max-w-7xl` container is pinned at 1280, so this is a CONSTANT:
-//     (1280 − 48 − 2 − 40 − 24)/2.7 − 26 = 406 px. Measured 406 px at 1440. Below 1280 the nav is
-//     `display:none`, so no other branch is reachable. It over-claims by ≤6 px in the 1265–1280
-//     sliver where a scrollbar narrows the container — upward, which is the direction to err.
+//   TILE — a fixed 248 px, and it is fixed BY CONSTRUCTION: the tile column is `md:grid-cols-[1fr_32rem]`
+//     — a hard 512 px, not a fraction, precisely so this number cannot drift with the link column —
+//     holding two tiles in `grid-cols-2 gap-4`: (512 − 16) / 2 = 248 px. The panel only exists where
+//     the nav does (`xl:flex`, ≥1280), where `max-w-7xl` is pinned, so there is no other branch.
 //
 //   DRAWER — `(min-width: 416px) 186px, calc((100vw - 44px) / 2)`:
 //     drawer  `w-full max-w-[26rem]`  → min(100vw, 416)
@@ -106,8 +98,7 @@ const DRAWER_FEATURED = catalog.bestsellers().slice(0, 2);
 //     and cost a whole rung — the cap binds deterministically: the drawer is `w-full` against the
 //     viewport, so above 416 px the tile really is exactly 186 px. A `max-w` is only a `sizes` when
 //     you can say at which viewport it starts binding.
-const MEGA_THUMB_SIZES = "44px";
-const FEATURED_SIZES = "406px";
+const TILE_SIZES = "248px";
 const DRAWER_TILE_SIZES = "(min-width: 416px) 186px, calc((100vw - 44px) / 2)";
 
 // Contact for the drawer's foot. Read straight off the store — no second copy of the footer's
@@ -204,104 +195,73 @@ const drawerEmail = (store.email ?? "").trim() || null;
       class="dropdown-panel invisible absolute inset-x-4 top-full z-50 translate-y-1 pt-3 opacity-0 transition-all duration-200 sm:inset-x-6"
       >
       <div
-      class="overflow-hidden rounded-2xl border border-line bg-cream/95 shadow-xl backdrop-blur"
+      class="overflow-hidden rounded-2xl border border-line bg-cream shadow-xl"
       >
-      <div class="grid gap-6 p-5 md:grid-cols-[1.7fr_1fr]">
-      <!-- Categories -->
-      <div>
-      <div class="flex items-center justify-between px-1 pb-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">
-      Kategori
-      </p>
-      <a
-      href="/produk"
-      class="rounded-sm text-xs font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-      Lihat semua
-      <ArrowRight class="ml-1 inline h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
-      </a>
-      </div>
-
-      <div class="grid gap-1 sm:grid-cols-2">
-      {item.children.map((child) => {
-      const meta = categoryMeta(child.href);
-      return (
+      <div class="grid gap-8 p-6 md:grid-cols-[1fr_32rem] lg:p-7">
+      <!-- LINK COLUMNS — plain text, the Threadheads shape. The 44px thumbnail rows are gone:
+      in a panel this wide they read as a second search-results list, and the two TILES to the
+      right now carry all the photography this surface needs. -->
+      <div class="flex min-w-0 flex-col">
+      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Kategori</p>
+      <div class="mt-4 grid gap-x-8 gap-y-0.5 sm:grid-cols-2">
+      {item.children.map((child) => (
       <a
       href={child.href}
       aria-current={isActive(child.href) ? "page" : undefined}
       class:list={[
-      "group/cat flex items-center gap-3 rounded-xl p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-      isActive(child.href) ? "bg-brand-50" : "hover:bg-brand-50/70",
-      ]}
-      >
-      {/* Thumbnail = the category's first product. No product → a Lucide
-      glyph, never an empty or broken frame. */}
-      <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
-      {meta?.image ? (
-      <img
-      src={meta.image}
-      srcset={imageSrcSet(meta.image)}
-      sizes={imageSrcSet(meta.image) ? MEGA_THUMB_SIZES : undefined}
-      alt=""
-      loading="lazy"
-      class="h-full w-full object-cover transition-transform duration-300 group-hover/cat:scale-105"
-      />
-      ) : (
-      <ShoppingBag class="h-5 w-5 text-brand-400" stroke-width={1.75} aria-hidden="true" />
-      )}
-      </span>
-      <span class="min-w-0">
-      <span
-      class:list={[
-      "block truncate text-sm transition-colors",
-      isActive(child.href)
-      ? "font-medium text-brand-700"
-      : "text-ink group-hover/cat:text-brand-700",
+      "block rounded-md px-1.5 py-1.5 text-[0.95rem] leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
+      isActive(child.href) ? "font-medium text-brand-700" : "text-ink hover:text-brand-700",
       ]}
       >
       {child.label}
-      </span>
-      <span class="block text-xs text-muted tabular-nums">
-      {meta
-      ? meta.count > 0
-      ? `${meta.count} produk`
-      : "Segera hadir"
-      : "Lihat koleksi"}
-      </span>
-      </span>
       </a>
-      );
-      })}
+      ))}
       </div>
+      <a
+      href="/produk"
+      class="mt-auto inline-flex items-center gap-1 self-start rounded-sm px-1.5 pt-5 text-sm font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      >
+      Lihat semua produk
+      <ArrowRight class="h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
+      </a>
       </div>
 
-      <!-- Featured product. The menu is prime real estate; a column of links wastes it. -->
-      {featured && (
+      <!-- TWO TILES — big photo, bold name under it, like the reference's "Shop Essentials" /
+      "Heavyweight". The merchant curates them by ordering their menu: first two categories
+      with a photo win. -->
+      {(() => {
+      const tiles = item.children
+      .map((child) => ({ child, meta: categoryMeta(child.href) }))
+      .filter((t) => t.meta?.image)
+      .slice(0, 2);
+      return tiles.length > 0 ? (
+      <div class="grid grid-cols-2 gap-4">
+      {tiles.map(({ child, meta }) => (
       <a
-      href={`/produk/${featured.handle}`}
-      class="group/feat flex flex-col rounded-xl border border-line bg-white p-3 transition-all hover:border-brand-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      href={child.href}
+      class="group/tile flex flex-col rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
-      <span class="aspect-[4/3] w-full overflow-hidden rounded-lg bg-brand-50">
+      <span class="block aspect-[4/3] w-full overflow-hidden rounded-xl bg-brand-50">
       <img
-      src={featured.image}
-      srcset={imageSrcSet(featured.image)}
-      sizes={imageSrcSet(featured.image) ? FEATURED_SIZES : undefined}
+      src={meta.image}
+      srcset={imageSrcSet(meta.image)}
+      sizes={imageSrcSet(meta.image) ? TILE_SIZES : undefined}
       alt=""
       loading="lazy"
-      class="h-full w-full object-cover transition-transform duration-500 group-hover/feat:scale-105"
+      class="h-full w-full object-cover transition-transform duration-500 group-hover/tile:scale-105 motion-reduce:transition-none motion-reduce:group-hover/tile:scale-100"
       />
       </span>
-      <span class="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">
-      Terlaris
+      <span class="mt-2.5 block text-center text-[0.95rem] font-semibold text-ink transition-colors group-hover/tile:text-brand-700">
+      {child.label}
       </span>
-      <span class="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink transition-colors group-hover/feat:text-brand-700">
-      {featured.name}
-      </span>
-      <span class="mt-1 text-sm font-semibold text-ink tabular-nums">
-      {IDR(featured.price)}
+      <span class="block text-center text-xs text-muted tabular-nums">
+      {meta.count > 0 ? `${meta.count} produk` : "Segera hadir"}
       </span>
       </a>
-      )}
+      ))}
+      </div>
+      ) : null;
+      })()}
       </div>
 
       <!-- Utility bar: a shortcut to this store's own bestseller collection, shown only when it
