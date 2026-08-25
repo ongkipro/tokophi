@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-25 04:27 UTC] — STOREFRONT-UX · card produk disederhanakan: rating keluar dari grid, harga rata-bawah secara struktural
+
+- **Executor:** Main Session (Claude, Fable 5). Owner mengirim referensi desain (Threadheads) — "simple gini aja tanpa rating".
+- **Rating dihapus dari card** (`ProductCard.astro`): grid kini **kategori → judul → harga**, tiga fakta, satu per baris. Bintang di grid adalah bentuk terlemah dari angka itu: setiap card memuat 4,6–4,9 sehingga barisnya jadi noise, sementara pertanyaan asli pembeli ("ini yang saya cari?") dijawab foto, nama, dan harga. **Rating TIDAK hilang** — `Stars` tetap jalan di PDP di samping ulasan yang menghasilkannya; `catalog.productRating` tetap dipakai PDP/promo. Import `Stars` + const `rating` yang jadi mati ikut dibuang, bukan ditinggal.
+- **`min-h-[7.5rem]` diganti struktur:** card jadi `flex h-full flex-col` dan blok teks `flex-1`, jadi grid yang meregangkan tiap card satu baris + `mt-auto` pada harga yang meratakan. min-h itu tebakan yang harus di-tune ulang tiap kali satu baris ditambah/dihapus — dan menyisakan ruang mati begitu bloknya memendek (persis yang terjadi saat rating dicabut).
+- **Verifikasi (build produksi, drive browser):** `starsInGrid = 0` · `maxLeak = 0` di semua card · **tiap baris grid punya SATU `priceY`**, termasuk baris campuran judul (2,2,1,1 baris → semua harga di y=2428) — kesejajaran bertahan tanpa min-h. Screenshot desktop + mobile 2-up bersih, 0 error JS. `astro check` 0 error · vitest penuh **135 file / 1116 hijau** (`product-ratio-locked` tetap hijau).
+
 ### [2026-08-25 03:17 UTC] — STOREFRONT-UX · card produk: bocor baris ke-3 judul FIXED + cluster rating+harga rata-bawah
 
 - **Executor:** Main Session (Claude, Fable 5). Laporan owner: judul panjang menyisakan sliver teks di atas rating; judul pendek menyisakan baris kosong menempel di bawah judul.
