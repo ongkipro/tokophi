@@ -25,6 +25,15 @@
 - **Trigger CAPI dari thanks page — jalurnya diverifikasi ada dan hidup:** COD di-enqueue saat order dibuat (thanks page = konversinya), prepaid HELD → `releasePurchase` di callback pembayaran → cron `tracking-events` mengirim via `sendMetaPurchase` (user_data: em/ph/UA/IP/fbp/fbc, `event_source_url` wajib, `action_source: website`, dedup `event_id` = `purchase:{orderNumber}` — sama dengan `eventID` browser).
 - **Bersih:** 2 channel probe dihapus, server dimatikan by PID (jebakan EADDRINUSE tertangkap SEKALI LAGI — verifikasi pertama membaca build lama). `astro check` 0 · vitest penuh **135 file / 1117 hijau**.
 
+### [2026-08-26 17:57 UTC] — STOREFRONT-THEME · default background PUTIH (tone `netral`), bukan cream — LOKAL DULU, belum di-deploy
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "public frontend default theme background white bukan cream. audit dan sempurnakan, jalankan local dulu."
+- **Desain yang sudah ada menyediakan jalannya:** tone `netral` ("Putih bersih") sudah ditawarkan di /tema — perubahan yang benar adalah menjadikannya DEFAULT tanpa-pilihan, di TIGA sisi yang harus tetap sinkron: ① `DEFAULT_THEME.tone` `hangat`→`netral` (`packages/lib/src/theme.ts`), ② nilai no-choice `global.css` → derivasi netral persis (`#fafafa/#262223/#6f676a/#e6e6e6`, dihitung dari `generateNeutrals(DEFAULT_BRAND_COLOR,"netral")` — bukan ditebak), ③ `theme.test.ts` round-trip mengikuti (+2 fallback `?? "hangat"` di builder-client tema ikut dibetulkan).
+- **Kontrak per-toko UTUH:** hanya toko yang TIDAK pernah memilih tone yang berubah — `toneChosen` menjaga pilihan eksplisit. Dibuktikan: toko default (`gadget-murah-id`) render `rgb(250,250,250)` sementara batik (seed memilih `hangat` eksplisit) tetap `rgb(250,246,242)`. Merchant yang mau cream tinggal satu klik "Hangat" di Tema.
+- **Audit permukaan putih-di-putih:** checkout memakai palet `--co-*` netral sendiri (tak terpengaruh); footer gelap `bg-ink` (`text-cream` kini putih — lebih bersih); card grid dibatasi frame `bg-brand-50` + `border-line` — grid batik di-preview pada netral (flip tone via SQL → screenshot → **restore `hangat` persis**) dan terbaca rapi. AA aman: `muted` netral l=42 dijaga test kontras ≥4.5 lintas tone×hue.
+- **Verifikasi:** theme.test.ts 11/11 · `astro check` 0 · build 0 · screenshot home/produk/mobile default-store + katalog · 0 error JS · vitest penuh **135 file / 1116 hijau**. **Branch `feat/storefront-white-bg` di-push, TIDAK di-merge** — menunggu perintah deploy owner.
+
+
 ### [2026-08-26 16:18 UTC] — STOREFRONT-PAY · thanks page: VA copy button, QR downloadable, tutorial per metode — diverifikasi E2E dengan pembayaran AutoLaris SUNGGUHAN
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: pastikan VA/QRIS/etc aktif & jalan; sempurnakan UI/UX thanks page — QR (gambar + bisa diunduh), VA tampil + tombol salin, plus tutorialnya.

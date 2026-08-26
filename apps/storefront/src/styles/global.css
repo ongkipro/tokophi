@@ -151,20 +151,23 @@
      that never picked stays on Inter and gets zero extra font bytes. */
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --color-cream: #faf6f2;
-  --color-ink: #2b2326;
+  --color-cream: #fafafa;
+  --color-ink: #262223;
   /* WCAG AA needs 4.5:1. The old #8a7f82 measured 3.59:1 on cream, 3.86:1 on white, 3.53:1 on brand-50
      — it FAILED on every background, and it is the entire secondary text layer of the shop: product
      categories, breadcrumbs, nav links, "/ item" prices, cart line prices, blog dek, footer. 182 of the
      182 contrast violations in the storefront came from this one line.
      #736669 keeps the same warm grey and measures 5.09:1 / 5.48:1 / 5.01:1 — passes on all three.
      (#7a6f72 hits exactly 4.50 on cream but 4.42 on brand-50, so it is NOT enough.) */
-  --color-muted: #736669;
-  --color-line: #ece3dd;
+  --color-muted: #6f676a;
+  --color-line: #e6e6e6;
   /* ↑ These four neutrals are ALSO per-store now: a merchant who picked a tone in Tema gets them
      overridden by ThemeTokens.astro with values derived from brand hue × tone
      (@tokophi/lib/theme generateNeutrals — muted keeps this AA lightness in every tone). The
-     values above stay the no-choice default and must keep matching the `hangat` derivation. */
+     values above stay the no-choice default and must keep matching the `netral` derivation
+     (owner 2026-08-27: default background is WHITE — tone "netral", generateNeutrals with
+     DEFAULT_BRAND_COLOR; theme.test.ts pins the round-trip). "Hangat" (the old cream) is still
+     one Tema click away for any merchant who wants the warm look back. */
 
   --color-brand-50: #fdf2f5;
   --color-brand-100: #fbe6ec;

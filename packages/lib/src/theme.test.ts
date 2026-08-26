@@ -21,10 +21,10 @@ const contrast = (a: string, b: string) => {
 // The default theme must reproduce the palette shipping in global.css today — every live store
 // renders through resolveTheme() after this change, so "no choice" has to mean "no change".
 describe("generateNeutrals", () => {
-  const CURRENT = { cream: "#faf6f2", ink: "#2b2326", muted: "#736669", line: "#ece3dd" };
+  const CURRENT = { cream: "#fafafa", ink: "#262223", muted: "#6f676a", line: "#e6e6e6" };
 
-  it("hangat + default brand ≈ the current global.css palette (≤1/255 per channel)", () => {
-    const n = generateNeutrals("#a85572", "hangat");
+  it("netral (the default tone) + default brand ≈ the current global.css palette (≤1/255 per channel)", () => {
+    const n = generateNeutrals("#a85572", "netral");
     for (const key of ["cream", "ink", "muted", "line"] as const) {
       const got = n[key].replace("#", "");
       const want = CURRENT[key].replace("#", "");
@@ -75,7 +75,7 @@ describe("resolveTheme", () => {
   it("garbage jsonb degrades to defaults, never throws — and never counts as chosen", () => {
     const t = resolveTheme({ brandColor: "#a85572", theme: { font: "comic-sans", tone: 42 } });
     expect(t.font.id).toBe("bawaan");
-    expect(t.tone).toBe("hangat");
+    expect(t.tone).toBe("netral");
     expect(t.fontChosen).toBe(false);
     expect(t.toneChosen).toBe(false);
   });
