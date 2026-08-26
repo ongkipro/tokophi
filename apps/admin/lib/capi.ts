@@ -461,8 +461,10 @@ export async function sendTiktokPurchase(args: {
   // `code: 0`, we record "delivered", and the merchant sees zero attributed conversions with nothing
   // anywhere saying why. ip + user_agent are match keys in their own right, so they always travel.
   // ⚠️ TikTok specifies E.164, so the phone is hashed WITH the leading `+` — a different digest from
-  // Meta's. The field name `user.phone` (vs the Pixel SDK's `phone_number`) could not be confirmed
-  // against an official page; verify it in Events Manager → Test Events at launch.
+  // Meta's. `user.phone` CONFIRMED 2026-08-27 against TikTok's own v1.3 references (the official
+  // Postman collection and Amplitude's event-stream integration both post `user: { …, phone: sha256 }`
+  // to `/open_api/v1.3/event/track/`) — the Pixel SDK's `phone_number` spelling belongs to
+  // `ttq.identify` in the BROWSER only. The two halves are different contracts on purpose.
   const user: Record<string, string> = {};
   const em = hashEmail(event.identity?.email);
   const ph = hashPhone(event.identity?.phone, { e164: true });
