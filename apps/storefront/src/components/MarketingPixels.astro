@@ -488,9 +488,14 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
           // `view_item`.
           window.gtag("event", name === "purchase" ? "purchase" : name === "add_to_cart" ? "add_to_cart" : "view_item", rmk);
           if (evt === "Purchase") {
+            // ⚠️ GOODS here too (caught 2026-08-27 by reading the buffered dataLayer): this call was
+            // still sending `data.value` — the ORDER TOTAL — while every other destination on this
+            // page had moved to goods under the 2026-08-24 ruling. One order then reported two
+            // different revenues to Google alone (280.000 to GA4/remarketing, 295.600 to the Ads
+            // conversion), and Ads tROAS optimised on ongkir + admin fee it never earns.
             window.gtag("event", "conversion", {
               send_to: GOOGLE.adsSendTo,
-              value: data.value || 0,
+              value: purchaseVal,
               currency: cur,
               transaction_id: data.orderId,
             });

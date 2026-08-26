@@ -29,4 +29,16 @@ describe("conversion value = goods only (owner ruling 2026-08-24)", () => {
     // neither pixel's Purchase arm may reach for the all-in total again
     expect(/Purchase"\s*\)\s*\{\s*d\s*=\s*\{\s*value:\s*data\s*\.\s*value/.test(src)).toBe(false);
   });
+
+  it("the Google Ads `conversion` call sends goods too — it was the LAST holdout (found 2026-08-27)", () => {
+    // ⚠️ Anchored on the OBJECT SHAPE, not on the "conversion" string — codeOnly() inerts every
+    // literal's contents (that is its contract), so a pattern containing the event name can never
+    // match. `send_to: GOOGLE.adsSendTo` appears in exactly one call in the file: this one.
+    const src = pixels();
+    // The conversion call's value must be the goods-derived purchaseVal…
+    expect(/send_to\s*:\s*GOOGLE\s*\.\s*adsSendTo\s*,\s*value\s*:\s*purchaseVal/.test(src)).toBe(true);
+    // …and never the all-in `data.value` again. Caught live: one order reported 280.000 to
+    // GA4/remarketing and 295.600 to the Ads conversion — two revenues for one sale, to one vendor.
+    expect(/send_to\s*:\s*GOOGLE\s*\.\s*adsSendTo\s*,\s*value\s*:\s*data\s*\.\s*value/.test(src)).toBe(false);
+  });
 });
