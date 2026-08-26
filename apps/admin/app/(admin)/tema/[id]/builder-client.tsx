@@ -48,7 +48,7 @@ export function BuilderClient({
   const [previewBrandColor, setPreviewBrandColor] = React.useState(initialBrandColor);
   const [previewTheme, setPreviewTheme] = React.useState<{ font: FontPairingId; tone: NeutralTone }>(() => {
     const theme = (initialStoreTheme ?? {}) as { font?: FontPairingId; tone?: NeutralTone };
-    return { font: theme.font ?? "bawaan", tone: theme.tone ?? "hangat" };
+    return { font: theme.font ?? "bawaan", tone: theme.tone ?? "netral" };
   });
   // Only the sections that belong on THIS page type. Memoised because Puck re-mounts on a new config
   // object, which would drop the merchant's in-progress edits on every render.
@@ -69,7 +69,7 @@ export function BuilderClient({
 
   const incomingTheme = (initialStoreTheme ?? {}) as { font?: FontPairingId; tone?: NeutralTone };
   const incomingFont = incomingTheme.font ?? "bawaan";
-  const incomingTone = incomingTheme.tone ?? "hangat";
+  const incomingTone = incomingTheme.tone ?? "netral";
   const [prevTheme, setPrevTheme] = React.useState({ font: incomingFont, tone: incomingTone });
   if (prevTheme.font !== incomingFont || prevTheme.tone !== incomingTone) {
     setPrevTheme({ font: incomingFont, tone: incomingTone });

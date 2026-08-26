@@ -12,7 +12,7 @@
 //   - CONTRAST is not negotiable      → `muted` keeps the lightness of the WCAG-AA fix
 //     (#736669, ≥4.5:1 on cream) in every tone; theme.test.ts asserts it across brand hues.
 //
-// Defaults (`bawaan` + `hangat`) reproduce the current global.css values byte-for-byte-ish
+// Defaults (`bawaan` + `netral`) reproduce the current global.css values byte-for-byte-ish
 // (±1/255 from HSL rounding), so every existing live store renders unchanged until its owner
 // actually picks something.
 import { hexToHSL, hslToHex, DEFAULT_BRAND_COLOR, generateBrandShades } from "./colors";
@@ -56,8 +56,8 @@ export type Neutrals = {
   line: string;
 };
 
-// h omitted = use the brand hue. "hangat" is the HSL of the palette shipping in global.css today
-// (#faf6f2 / #2b2326 / #736669 / #ece3dd) so the default round-trips visually identical.
+// h omitted = use the brand hue. "netral" is the DEFAULT since 2026-08-27 and matches global.css
+// (#fafafa / #262223 / #6f676a / #e6e6e6); "hangat" is the old cream default, still offered.
 // ⚠️ muted lightness ~42.5 is the AA floor from the #8a7f82 → #736669 contrast fix — a lighter
 // muted re-breaks all 182 violations that fix closed. Don't raise it without re-measuring.
 type Step = { h?: number; s: number; l: number };
@@ -176,7 +176,11 @@ export type ResolvedTheme = {
   toneChosen: boolean;
 };
 
-export const DEFAULT_THEME: Required<StoreTheme> = { font: "bawaan", tone: "hangat" };
+// ⚠️ `tone: "netral"` since 2026-08-27 (owner: the default storefront background is WHITE, not
+// cream). A store whose merchant explicitly picked a tone is untouched (`toneChosen` gates the
+// override); a store that never chose renders global.css, whose values must equal
+// generateNeutrals(DEFAULT_BRAND_COLOR, "netral") — theme.test.ts pins that round-trip.
+export const DEFAULT_THEME: Required<StoreTheme> = { font: "bawaan", tone: "netral" };
 
 const isTone = (v: unknown): v is NeutralTone => typeof v === "string" && v in TONES;
 const isFont = (v: unknown): v is FontPairingId => typeof v === "string" && v in FONT_PAIRINGS;
