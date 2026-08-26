@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-27 18:17 UTC] — DEVX-FIX · `npm run dev` storefront mati: literal `<script>` di komentar skrip inline MarketingPixels
+
+- **Executor:** Main Session (Claude, Fable 5). Ditemukan saat owner minta "run dev": storefront dev GAGAL start — Vite dependency-scan error "Expected ';' but found 'more'", chunk skrip kedua mulai di tengah kalimat komentar.
+- **Akar:** komentar `// What is deferred is ONLY the vendor <script>.` — token buka-script literal di dalam komentar JS memotong skrip inline bagi scanner dev; sisanya diparsing sebagai kode. **`astro build` LOLOS** (jalur compile berbeda), jadi produksi tak pernah terpengaruh dan bug ini tak terlihat sampai seseorang menjalankan dev — kelas yang sama dengan jebakan `*/`-dalam-komentar yang sudah tercatat di AGENTS.md (deskripsikan dengan kata-kata, jangan tulis tokennya).
+- **Fix:** komentar diubah ke "vendor script tag" + catatan sebab-akibatnya. **Sweep kelas:** 0 kemunculan lain di seluruh `.astro`.
+- **Verifikasi:** `npm run dev` storefront kini start bersih (port 4327, scan 0 error) · `astro check` 0 · build 0 · suite storefront + value-is-goods 116 hijau.
+
 ### [2026-08-26 18:06 UTC] — ADS-PRECISION · validasi Meta/Google/TikTok terhadap dok platform + AM terbukti + 1 bug nyata (Ads conversion masih total)
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: sempurnakan config pixel/content_ids/advanced matching Meta+Google+TikTok, validasi terhadap dok tiap platform, pastikan thanks page men-trigger Purchase CAPI Meta.

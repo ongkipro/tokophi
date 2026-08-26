@@ -275,7 +275,9 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
       // never the problem — all three were already `async`. The cost is PARSE + EXECUTE of three
       // third-party bundles on the main thread, during the same window the browser is trying to paint.
       //
-      // What is deferred is ONLY the vendor <script>. Every stub, queue and `init` below still runs
+      // What is deferred is ONLY the vendor script tag (a literal open-script token here would end
+      // this inline script for Vite's dev scanner — measured 2026-08-27, `npm run dev` died at scan
+      // while `astro build` passed). Every stub, queue and `init` below still runs
       // synchronously, so an `fbq()` / `gtag()` / `ttq.track()` fired anywhere on this page — including
       // by a shopper who converts in the first second — is buffered and replayed IN ORDER the moment
       // the vendor script arrives. That buffering is the vendors' own documented design (`fbq.queue`,
