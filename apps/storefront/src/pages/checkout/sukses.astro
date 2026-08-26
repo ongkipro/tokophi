@@ -214,20 +214,48 @@ const store = Astro.locals.store;
         "accent",
       );
     } else if (payBox && pay) {
+      // A NUMBER THE SHOPPER MUST ACT ON GETS A CONTROL, NOT JUST A GLYPH ROW (owner, 2026-08-26):
+      // the VA number gets a big mono box + a "Salin" button (typing 16 digits into m-banking from
+      // a phone screen is exactly where a digit dies), the QR gets a "Simpan gambar QR" download —
+      // because paying a QRIS from the SAME phone that shows it means screenshotting or uploading
+      // the saved image into the payment app; scanning your own screen is impossible.
       var lines = "";
-      if (pay.virtualAccount) lines += kv("Nomor Virtual Account", esc(pay.virtualAccount), true);
-      if (pay.paymentCode) lines += kv("Kode Pembayaran", esc(pay.paymentCode), true);
+      /** A big copyable value: label, mono box, and a Salin button wired below by [data-copy]. */
+      function copyRow(label, value, copyKey) {
+        return (
+          '<div class="py-2"><p class="text-sm text-[var(--co-muted)]">' + label + "</p>" +
+          '<div class="mt-1.5 flex items-stretch gap-2">' +
+          '<span class="min-w-0 flex-1 select-all break-all rounded-lg border border-[var(--co-line)] bg-[var(--co-panel)] px-3 py-2.5 font-mono text-lg font-bold tracking-wider text-ink tabular-nums">' +
+          esc(value) + "</span>" +
+          '<button type="button" data-copy="' + copyKey + '" data-copy-value="' + esc(value) +
+          '" class="shrink-0 rounded-lg bg-[var(--co-accent)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]">Salin</button>' +
+          "</div></div>"
+        );
+      }
+      if (pay.virtualAccount) lines += copyRow("Nomor Virtual Account" + (pay.channel && pay.channel.kind === "va" ? " " + esc(pay.channel.label).replace("Virtual Account ", "") : ""), pay.virtualAccount, "va");
+      if (pay.paymentCode) lines += copyRow("Kode Pembayaran", pay.paymentCode, "code");
       if (pay.qr) {
-        var qrImage = typeof pay.qrImage === "string" && pay.qrImage.indexOf("data:image/png;base64,") === 0
+        var hasQrImage = typeof pay.qrImage === "string" && pay.qrImage.indexOf("data:image/png;base64,") === 0;
+        var qrImage = hasQrImage
           ? '<img src="' + esc(pay.qrImage) + '" alt="Kode QRIS untuk pembayaran pesanan ' + esc(order.number || "") + '" width="320" height="320" class="mx-auto h-auto w-full max-w-[320px] bg-white" />'
           : '<p class="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800">Gambar QR tidak tersedia. Salin payload QRIS di bawah ke aplikasi pembayaran.</p>';
         lines +=
           '<div class="py-2"><p class="text-sm font-medium text-ink">Scan QRIS</p>' +
-          '<div class="mt-2 rounded-lg bg-white p-4">' + qrImage + "</div>" +
-          '<label class="mt-3 block text-xs text-[var(--co-muted)]" for="qris-payload">Payload QRIS (fallback)</label>' +
-          '<textarea id="qris-payload" readonly rows="3" class="mt-1 w-full resize-none break-all rounded border border-[var(--co-line)] bg-[var(--co-panel)] p-2 font-mono text-xs text-ink">' +
-          esc(pay.qr) + "</textarea>" +
-          '<button type="button" data-copy-qr class="mt-2 rounded-lg border border-[var(--co-line)] px-3 py-2 text-xs font-medium text-ink">Salin payload QRIS</button></div>';
+          '<div class="mt-2 rounded-lg border border-[var(--co-line)] bg-white p-4">' + qrImage + "</div>" +
+          '<div class="mt-3 flex flex-wrap gap-2">' +
+          // `download` on a data: URI saves without any server round-trip. Named after the order so
+          // a gallery full of screenshots still says which QR pays which order.
+          (hasQrImage
+            ? '<a href="' + esc(pay.qrImage) + '" download="QRIS-' + esc(order.number || "pesanan") + '.png" class="inline-flex items-center gap-1.5 rounded-lg bg-[var(--co-accent)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]">' +
+              '<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+              "Simpan gambar QR</a>"
+            : "") +
+          '<button type="button" data-copy="qr" data-copy-value="' + esc(pay.qr) + '" class="rounded-lg border border-[var(--co-line)] px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-[var(--co-panel)]">Salin payload QRIS</button>' +
+          "</div>" +
+          (hasQrImage
+            ? '<p class="mt-2 text-xs text-[var(--co-muted)]">Bayar dari HP yang sama? Simpan gambar QR, lalu di aplikasi pembayaran pilih <span class="font-medium text-ink">upload/pilih dari galeri</span>.</p>'
+            : "") +
+          "</div>";
       }
       // ⚠️ THE GATEWAY'S ADMIN FEE IS ADDED AFTER THE SHOPPER AGREED TO THE TOTAL, and both numbers
       // sit on this one screen: the summary above says `order.total`, this box says `pay.total`, which
@@ -261,6 +289,70 @@ const store = Astro.locals.store;
           '<a href="' + esc(pay.url) +
           '" class="mt-3 block rounded-lg bg-[var(--co-accent)] px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]">Buka aplikasi pembayaran</a>';
       }
+
+      // ── CARA BAYAR — the tutorial, per method (owner, 2026-08-26) ─────────────────────────────
+      // Native <details>: no JS to break, keyboard + screen-reader behaviour for free, and closed
+      // by default so the instruction (the number/QR above) stays the loudest thing in the panel.
+      // The steps are GENERIC per rail on purpose — bank apps rename their menus every year, so we
+      // teach the shape ("cari menu Virtual Account") rather than pretend to know this month's menu.
+      function tutorial(title, steps) {
+        return (
+          '<details class="group border-t border-[var(--co-line)] py-1">' +
+          '<summary class="flex cursor-pointer list-none items-center justify-between gap-2 py-2 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">' +
+          title +
+          '<svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0 fill-none stroke-[var(--co-muted)] transition-transform group-open:rotate-180" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+          "</summary>" +
+          '<ol class="mb-2 list-decimal space-y-1 pl-5 text-sm text-[var(--co-muted)]">' +
+          steps.map(function (s) { return "<li>" + s + "</li>"; }).join("") +
+          "</ol></details>"
+        );
+      }
+      var kind = pay.channel ? pay.channel.kind : pay.virtualAccount ? "va" : pay.qr ? "qris" : pay.url ? "ewallet" : "";
+      var exact = '<span class="font-medium text-ink">persis sejumlah Total bayar</span>';
+      var tut = "";
+      if (kind === "va") {
+        var bank = pay.channel ? esc(pay.channel.label).replace("Virtual Account ", "") : "bank";
+        tut =
+          tutorial("Cara bayar lewat m-banking " + bank, [
+            "Buka aplikasi m-banking " + bank + ", pilih menu <span class=\"font-medium text-ink\">Transfer &rarr; Virtual Account</span>.",
+            "Salin lalu tempel nomor Virtual Account di atas (tombol <span class=\"font-medium text-ink\">Salin</span>).",
+            "Periksa nama penerima dan pastikan jumlahnya " + exact + ".",
+            "Konfirmasi. Pembayaran terverifikasi otomatis — halaman ini tidak perlu dibuka lagi.",
+          ]) +
+          tutorial("Cara bayar lewat ATM " + bank, [
+            "Masukkan kartu, pilih <span class=\"font-medium text-ink\">Transaksi Lainnya &rarr; Transfer &rarr; Virtual Account</span>.",
+            "Ketik nomor Virtual Account di atas, lalu periksa nama dan jumlah di layar konfirmasi.",
+            "Selesaikan dan simpan struk sampai status pesanan terkonfirmasi.",
+          ]) +
+          tutorial("Bayar dari bank lain", [
+            "Bisa — pilih <span class=\"font-medium text-ink\">Transfer antar bank / Virtual Account</span> di aplikasi bank kamu, tujuan bank " + bank + ".",
+            "Masukkan nomor Virtual Account di atas sebagai rekening tujuan; jumlah harus " + exact + ".",
+          ]);
+      } else if (kind === "qris") {
+        tut =
+          tutorial("Cara bayar dengan QRIS", [
+            "Buka aplikasi pembayaran apa pun yang mendukung QRIS — GoPay, OVO, DANA, ShopeePay, LinkAja, atau m-banking (BCA, Livin', BRImo, dll).",
+            "Pilih <span class=\"font-medium text-ink\">Scan QR</span>, lalu arahkan kamera ke kode di atas.",
+            "Dari HP yang sama? <span class=\"font-medium text-ink\">Simpan gambar QR</span> dulu, lalu pakai opsi <span class=\"font-medium text-ink\">upload dari galeri</span> di aplikasi pembayaran.",
+            "Periksa nama merchant dan jumlahnya " + exact + ", lalu konfirmasi.",
+          ]);
+      } else if (kind === "ewallet") {
+        tut =
+          tutorial("Cara bayar dengan " + (pay.channel ? esc(pay.channel.label) : "e-wallet"), [
+            'Ketuk tombol <span class="font-medium text-ink">Buka aplikasi pembayaran</span> di atas.',
+            "Masuk ke akun kamu dan periksa jumlah tagihan " + exact + ".",
+            "Konfirmasi pembayaran di aplikasi — status pesanan terverifikasi otomatis.",
+          ]);
+      } else if (kind === "retail") {
+        tut =
+          tutorial("Cara bayar di gerai " + (pay.channel ? esc(pay.channel.label) : "retail"), [
+            "Datang ke kasir dan bilang mau <span class=\"font-medium text-ink\">bayar tagihan</span>.",
+            "Tunjukkan atau sebutkan Kode Pembayaran di atas.",
+            "Bayar tunai " + exact + " dan simpan struknya.",
+          ]);
+      }
+      if (tut) lines += '<div class="mt-4">' + '<p class="pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--co-muted)]">Panduan pembayaran</p>' + tut + "</div>";
+
       payBox.classList.remove("hidden");
       payBox.innerHTML = panel(
         "Selesaikan Pembayaran" + (pay.channel ? " — " + esc(pay.channel.label) : ""),
@@ -268,17 +360,36 @@ const store = Astro.locals.store;
         lines,
         "accent",
       );
-      var copyQr = payBox.querySelector("[data-copy-qr]");
-      if (copyQr) {
-        copyQr.addEventListener("click", function () {
-          navigator.clipboard.writeText(String(pay.qr || "")).then(function () {
-            copyQr.textContent = "Payload tersalin";
-          }).catch(function () {
-            var payload = document.getElementById("qris-payload");
-            if (payload) { payload.focus(); payload.select(); }
-          });
+      // ONE copy handler for every [data-copy] control (VA, payment code, QRIS payload). Clipboard
+      // API first; refused (http, ancient WebView) → a hidden textarea + execCommand fallback, so
+      // the button never silently does nothing. The label flips to "Tersalin ✓" for 2s — feedback
+      // on the button itself, where the thumb already is.
+      Array.prototype.forEach.call(payBox.querySelectorAll("[data-copy]"), function (btn) {
+        var original = btn.textContent;
+        btn.addEventListener("click", function () {
+          var value = String(btn.getAttribute("data-copy-value") || "");
+          var done = function () {
+            btn.textContent = "Tersalin ✓";
+            setTimeout(function () { btn.textContent = original; }, 2000);
+          };
+          var fallback = function () {
+            var ta = document.createElement("textarea");
+            ta.value = value;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand("copy"); done(); } catch (e) {}
+            document.body.removeChild(ta);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(done).catch(fallback);
+          } else {
+            fallback();
+          }
         });
-      }
+      });
     }
 
     var noteEl = document.getElementById("order-note");

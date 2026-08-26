@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-26 16:18 UTC] — STOREFRONT-PAY · thanks page: VA copy button, QR downloadable, tutorial per metode — diverifikasi E2E dengan pembayaran AutoLaris SUNGGUHAN
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: pastikan VA/QRIS/etc aktif & jalan; sempurnakan UI/UX thanks page — QR (gambar + bisa diunduh), VA tampil + tombol salin, plus tutorialnya.
+- **Status channel diverifikasi dulu:** produksi ON = QRIS, OVO, VA BCA/BNI/BRI/Mandiri/Permata (`platform_payment_channels`); dev serupa minus OVO.
+- **UI (`checkout/sukses.astro`):** ① `copyRow()` — nomor VA & kode pembayaran jadi box mono besar + tombol **Salin** (label flip "Tersalin ✓" 2 dtk; Clipboard API → fallback textarea+execCommand, terbukti jalan bahkan di konteks http tanpa Clipboard API sama sekali). ② QR: tombol **"Simpan gambar QR"** — `download` pada data-URI, nama file `QRIS-<no.pesanan>.png` — plus hint "bayar dari HP yang sama? upload dari galeri" (alasan tombol ini ada: HP tak bisa scan layarnya sendiri); payload fallback tetap. ③ **Panduan pembayaran** per rel via `<details>` native (tanpa JS): VA → m-banking bank ybs / ATM / dari bank lain; QRIS → scan/upload; e-wallet → buka aplikasi; retail → kasir. Langkah generik per rel by design — menu aplikasi bank berganti nama tiap tahun.
+- **Verifikasi E2E, pembayaran SUNGGUHAN (bukan mock):** drive checkout penuh (cart → alamat → ongkir SPX → bayar) dua kali di build produksi lokal → AutoLaris create_payment live: **QRIS** order `PHI-760912892PPL` (QR base64 ter-render, unduhan `QRIS-PHI-760912892PPL.png`, fee **Rp2.168 = 0,7% × 309.600** — jadwal fee terbukti live), **VA BCA** order `PHI-761019151DD5` (VA 16 digit `1551…` tampil + Salin, fee **flat Rp6.500** sesuai jadwal, expiry tampil, 3 accordion tutorial). 0 error JS keduanya, screenshot 412px. Interaksi: Salin flip label + accordion terbuka (drive terpisah). Kedua tagihan dibiarkan kedaluwarsa sendiri di AutoLaris (tak dibayar); order test tinggal di dev DB sebagai jejak, ledger tak tersentuh (belum dibayar = tak ada kredit).
+- **Checks:** `astro check` 0 · vitest penuh **135 file / 1116 hijau**.
+
 ### [2026-08-25 05:45 UTC] — STOREFRONT-UX · card satu kesatuan di semua permukaan + lebar /promo = default + MEGA MENU gaya referensi
 
 - **Executor:** Main Session (Claude, Fable 5). Tiga permintaan owner dalam satu pesan (referensi Threadheads).
