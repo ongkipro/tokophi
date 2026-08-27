@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-27 10:10 UTC] — CI-LIVE · GitHub Actions hidup lagi (efek repo public) dan run pertamanya LANGSUNG menangkap bug nyata
+
+- **Executor:** Main Session (Claude, Fable 5). Repo public → Actions gratis → `ci.yml` (yang mati sejak billing lapse) dieksekusi sungguhan untuk pertama kali; kegagalan 3-detik sebelumnya adalah blok billing, bukan hasil.
+- **Run pertama = MERAH, dan itu berita bagus:** `astro check` di CI menangkap `Header.astro:246–258 ts(18047) 'meta' is possibly 'null'` — tile mega menu (#361) memakai `.map().filter(t => t.meta?.image)`, dan predikat `.filter()` TIDAK menyempitkan tipe elemen. Fix: `flatMap` dengan guard `meta && meta.image` di dalam badan fungsi — penyempitan terjadi di cabang, objek yang dikembalikan bertipe `meta` non-null.
+- 🔴 **Kenapa lolos "verifikasi" lokal — cacat pengukuran, dicatat supaya tidak terulang:** cek dijalankan sebagai `npm run check:storefront 2>&1 | tail -3 && …` — exit code pipeline = milik `tail` (selalu 0), dan `tail -3` hanya menampilkan baris warnings/hints, MEMOTONG baris errors. Jadi "astro check 0" yang diklaim untuk lane #361–#365 sebenarnya tidak terukur. Aturan mulai sekarang: **jangan pernah menge-gate lewat pipe — jalankan cek apa adanya, baca exit code-nya, baru lihat lognya.** CI adalah penangkap kelas ini, dan menangkapnya pada run pertama.
+- **Verifikasi (dengan exit code kali ini):** `astro check` exit 0 · 0 errors · build 0 · suite storefront 112 hijau · verdict CI penuh diserahkan ke check PR ini sendiri — itulah gunanya.
+
 ### [2026-08-27 09:55 UTC] — DOCS · handover Irwansyah 2026-08-27 (kereta #350–#366 / deploy 505–519) + memori proyek diperbarui
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "update memori tokophi + handover irwansyah".
