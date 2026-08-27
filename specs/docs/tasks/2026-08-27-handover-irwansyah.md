@@ -74,3 +74,19 @@ dokumen ini menyambungnya, bukan menggantikannya.
    yang memilih OVO mati di langkah terakhir checkout. Sebelum mengandalkan channel e-wallet mana
    pun: probe `create_payment` channel itu langsung ke AutoLaris — toggle DB tidak membuktikan sisi
    PSP. (QRIS + 5 VA terbukti hidup 2026-08-26 dengan pembayaran sungguhan.)
+
+---
+
+## Addendum 2026-08-28 — visibilitas & CI
+
+- **Repo PRIVATE lagi** (perintah owner 2026-08-28, setelah public ~1 hari sejak 2026-08-27).
+  Ruling standing kembali: **jangan flip visibility tanpa perintah eksplisit baru.**
+- Selama jendela public, `ci.yml` hidup GRATIS dan terbukti bekerja: run sungguhan pertamanya
+  menangkap `ts(18047)` di tile mega menu (fix #368, deploy 520), lalu **hijau di PR #368 dan di
+  `main` (3m14s)**. ⚠️ **Dengan repo private, Actions kembali butuh billing (lapse) — CI mati lagi.**
+  Memulihkan billing = CI hidup kembali tanpa perubahan apa pun; workflow-nya sudah terbukti jalan.
+- Pelajaran pengukuran dari insiden itu (tercatat di BUILD-LOG 2026-08-27 10:10): **jangan
+  menge-gate cek lewat pipe** (`… | tail` menelan exit code dan memotong baris errors) — jalankan
+  telanjang, baca exit code, baru lognya.
+- Anggap isi repo selama jendela public **terindeks** (termasuk IP VPS di docs & BUILD-LOG) —
+  mitigasi opsional: allowlist firewall port SSH, placeholder IP untuk commit ke depan.

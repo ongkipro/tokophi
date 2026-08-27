@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-28 — EOD] — OPS · repo PRIVATE lagi (perintah owner) · konsekuensi: CI mati bersamanya · md + memori disinkronkan
+
+- **Executor:** Main Session (Claude, Fable 5). Urutan: owner memerintahkan private → flip dilakukan → md + memori proyek diperbarui.
+- Jendela public ≈ 1 hari (2026-08-27 → 28). Selama itu: Actions gratis menghidupkan `ci.yml`, run sungguhan pertama menangkap bug nyata (`ts(18047)` mega menu → #368/deploy 520), CI hijau di PR dan `main`. **Private ⇒ Actions butuh billing (lapse) ⇒ CI mati lagi** — bukan regresi kode; pulihkan billing dan gerbang yang sama hidup kembali.
+- Handover 2026-08-27 diberi addendum (visibilitas, status CI, pelajaran "jangan gate lewat pipe", asumsi konten terindeks); memori proyek dotfiles diperbarui + di-push.
+
 ### [2026-08-27 10:10 UTC] — CI-LIVE · GitHub Actions hidup lagi (efek repo public) dan run pertamanya LANGSUNG menangkap bug nyata
 
 - **Executor:** Main Session (Claude, Fable 5). Repo public → Actions gratis → `ci.yml` (yang mati sejak billing lapse) dieksekusi sungguhan untuk pertama kali; kegagalan 3-detik sebelumnya adalah blok billing, bukan hasil.
