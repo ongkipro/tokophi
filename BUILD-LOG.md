@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-27 09:37 UTC] — DOCS · `PRICING.md` (kartu harga) baru + STATUS boundary 2026-08-27 + cross-link FINANCE
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "update md + pricing admin md yang meliputi admin pembayaran etc" sebelum commit-push.
+- **`specs/docs/PRICING.md` (BARU)** — kartu harga merchant/ops-facing: langganan (trial 3 hari → 50rb → 275rb/bln → 2,7jt/tahun, PPN toggle default OFF), tabel biaya admin pembayaran per metode (COD 3%+PPN fee · QRIS 0,7% omset · VA BCA 6.500 / bank lain 3.500 · e-wallet 2,4% · retail 4.000) dengan basis perhitungannya, pembagian uang satu pesanan, dan aturan pencairan (min 50rb, rilis saat Selesai, review manual + referensi transfer). **Bukan dokumen saingan FINANCE.md**: header-nya menyatakan FINANCE.md + kode = kebenaran; §5 memetakan tiap angka ke kode yang meng-enforce + guard-nya, dan FINANCE.md diberi cross-link balik — dua dokumen, satu sumber angka (kode), drift terdeteksi lewat guard.
+- **STATUS.md** — boundary tereksekusi baru per 2026-08-27: kereta PR #355–#365 / deploy 509–519 (roles, referensi payout, overhaul card storefront, search cards, thanks-page payment UX, presisi ads, dev-scan fix, default tone `netral` putih), vitest 135/1117, migrasi 106/`0105`.
+- md-only → merge tidak memicu build Coolify (`watch_paths` mengecualikan `*.md`).
+
 ### [2026-08-27 18:17 UTC] — DEVX-FIX · `npm run dev` storefront mati: literal `<script>` di komentar skrip inline MarketingPixels
 
 - **Executor:** Main Session (Claude, Fable 5). Ditemukan saat owner minta "run dev": storefront dev GAGAL start — Vite dependency-scan error "Expected ';' but found 'more'", chunk skrip kedua mulai di tengah kalimat komentar.
