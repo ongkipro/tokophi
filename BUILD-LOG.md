@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-27 09:55 UTC] — DOCS · handover Irwansyah 2026-08-27 (kereta #350–#366 / deploy 505–519) + memori proyek diperbarui
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "update memori tokophi + handover irwansyah".
+- **`specs/docs/tasks/2026-08-27-handover-irwansyah.md` (BARU)** — menyambung handover 2026-08-24: tabel 17 PR (#350–#366) dengan deploy-nya, 5 kontrak wajib-paham (uang/PRICING, value=goods incl. Ads conversion, gap-x vs `sizes`, tone default `netral`, RBAC 6 role + allow-list server), jebakan terbayar minggu ini (EADDRINUSE ×3, token literal dalam komentar, `block` vs `line-clamp`, `sizes`=kotak-gambar, kontrak `codeOnly`), dan daftar terbuka/eksternal.
+- **Temuan saat update memori:** catatan lama "e-wallet DEAD (rc=07)" **bertentangan dengan disk produksi** — OVO kini enabled di `platform_payment_channels`. Aturan "disk menang, perbaiki memorinya" dijalankan: memori proyek (dotfiles) direvisi jadi "probe ulang per-channel, toggle DB tidak membuktikan sisi PSP", dan handover diberi item terbuka №5: **verifikasi acceptance OVO di AutoLaris sebelum diandalkan** (QRIS + 5 VA terbukti hidup 2026-08-26 dengan pembayaran sungguhan; OVO belum). Memori juga ketambahan trick preview `sslip.io` + port dev 4327 + disiplin PID-port.
+- md-only → tanpa build.
+
 ### [2026-08-27 09:37 UTC] — DOCS · `PRICING.md` (kartu harga) baru + STATUS boundary 2026-08-27 + cross-link FINANCE
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "update md + pricing admin md yang meliputi admin pembayaran etc" sebelum commit-push.
