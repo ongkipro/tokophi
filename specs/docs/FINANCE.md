@@ -1,6 +1,9 @@
 # FINANCE — the one map of TokoΦ money
 
 > Owner rulings 2026-08-24. This file is the summary; the CODE and its tests are the truth.
+> The human-readable **price card** (langganan, tabel biaya admin, aturan pencairan) is
+> [`PRICING.md`](./PRICING.md) — same numbers, merchant/ops-facing; change prices in code+tests
+> first, then both documents follow.
 > Engines: `packages/lib/src/billing.ts` (subscription) · `packages/lib/src/payment-fees.ts`
 > (gateway fee schedule) · `packages/lib/src/order-finance.ts` (order money) ·
 > `apps/admin/lib/ledger-credit.ts` (what the seller can withdraw).
