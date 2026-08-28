@@ -279,15 +279,12 @@ services:
       - traefik.http.routers.tokophi-stores.priority=1
       - traefik.http.routers.tokophi-stores.entryPoints=https
       - traefik.http.routers.tokophi-stores.tls=true
-      # `tokophi-retry` + gzip: during a deploy the old container leaves Traefik's pool before the
-      # new one is healthy (compose recreates in place — Coolify has no rolling update for compose
-      # apps). With start_interval above that gap is ~2–4 s; retry makes Traefik re-attempt the
-      # request against the pool instead of answering 503 on the first miss, so most requests that
-      # land inside the gap succeed on a later attempt rather than failing. 5 attempts, exponential
-      # from 500ms ≈ up to ~7.5 s of cover — past the measured gap, cheap when healthy.
-      - traefik.http.middlewares.tokophi-retry.retry.attempts=5
-      - traefik.http.middlewares.tokophi-retry.retry.initialinterval=500ms
-      - traefik.http.routers.tokophi-stores.middlewares=tokophi-retry,gzip
+      # Deploy-swap retry lives at the https ENTRYPOINT now (`retry-global@file`, proxy static
+      # config + /data/coolify/proxy/dynamic/tokophi-retry-global.yaml, 2026-08-28) so it covers the
+      # Coolify-generated routers (app./rich./toko.) too. The router-level copy that briefly lived
+      # here is gone ON PURPOSE: stacking both nests the retries (6 × 5 dials ≈ 40 s hold on a dead
+      # backend). One layer, at the entrypoint, owns the swap bridge.
+      - traefik.http.routers.tokophi-stores.middlewares=gzip
       - traefik.http.routers.tokophi-stores.service=tokophi-stores
       - traefik.http.services.tokophi-stores.loadbalancer.server.port=4327
     healthcheck:
