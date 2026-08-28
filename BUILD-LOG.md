@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-28 — ZERO-DOWNTIME⑤/FINAL] — OPS · hasil akhir terukur: **81–115 dtk → 7,0–8,3 dtk** (−93%)
+
+- **Executor:** Main Session (Claude, Fable 5). Deploy 524 diukur (probe 300ms): jendela utama `app` 8,3 dtk · `rich` 7,0 dtk · `toko` 7,3 dtk (+blip kecil <2 dtk; 13×500 singkat di storefront saat swap tetangganya). Persis target 5–8 dtk.
+- **Kurva lengkap, semua terukur:** 521 baseline **81–115 dtk** (teardown penuh) → 522 nama-konsisten **~13 dtk** (postgres/cron selamat) → 523 **17–20 dtk** (retry entrypoint TERBUKTI bukan obatnya — pool kosong = 503 instan tanpa dial) → 524 gate `migrate` dilepas **7–8 dtk**.
+- **Komposisi sisa ~7 dtk** = stop app lama + create + boot Next + heal (start_interval 2 dtk) + refresh provider Traefik — lantai praktis untuk compose recreate in-place.
+- **Menuju nol mutlak = keputusan struktural owner, bukan tuning lagi:** ① lepas health-gating Traefik pada app yang dirutekan (container masuk pool saat start; dial gagal selama boot ~1–3 dtk DIJEMBATANI retry-global yang sudah terpasang → efektif ~nol; trade: app hang-tapi-listening tidak di-eject) ATAU ② pecah surface jadi app Dockerfile-type Coolify (rolling update didukung penuh) ATAU ③ blue-green 2 replika manual. Ketiganya dicatat; tidak dieksekusi tanpa perintah.
+- Probe dihentikan; semua branch ops (zero-downtime 1–3) merged (#370–#373); setting Coolify yang diubah: `is_consistent_container_name_enabled=true`; file proxy: `dynamic/tokophi-retry-global.yaml` + arg entrypoint; backup pra-edit tersimpan di `proxy/backups/`.
+
 ### [2026-08-28 — ZERO-DOWNTIME④] — OPS · koreksi terukur: retry TIDAK menjembatani pool kosong → gate `migrate` dilepas dari app yang dirutekan
 
 - **Executor:** Main Session (Claude, Fable 5). Deploy 523 diukur: `app` 19,6 dtk · `rich` 17,5 dtk · `toko` 3,4+19,6 dtk — retry-global TIDAK memperbaiki jendela, dan alasannya kini dipahami: **saat pool health-gated kosong, Traefik menjawab 503 SEKETIKA tanpa dial**, dan middleware retry hanya mengulang **dial yang gagal**, bukan respons 503. Ekspektasi di entry ③ salah; dikoreksi di sini dengan angka. (retry-global tetap dipasang — ia tetap benar untuk kelas dial-failure, cuma bukan obat jendela swap.)
