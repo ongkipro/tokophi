@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-28 — ZERO-DOWNTIME③] — OPS · hasil terukur: 81–115 dtk → ~13 dtk → retry-global menjembatani sisanya · +1 insiden proxy (4 mnt, ulah sendiri, pelajaran dicatat)
+
+- **Executor:** Main Session (Claude, Fable 5).
+- **Deploy 522 diukur (probe 300ms):** `app` 13,9 dtk · `rich` 12,9 dtk · `toko` 7,8+12,9 dtk — dari 81–115 dtk. Nama-konsisten bekerja: postgres/cron TIDAK ikut mati; sisa jendela = swap in-place ketiga app (image Next tidak reproducible → ketiganya selalu berganti image walau kode tak berubah; hanya-storefront tidak tercapai karena itu).
+- **`retry-global` di entrypoint https** (file dynamic `tokophi-retry-global.yaml` + arg statis `--entrypoints.https.http.middlewares=retry-global@file`): 6 attempts eksponensial dari 700ms ≈ ~22 dtk cover — melampaui jendela swap, dan menjangkau router generated Coolify (app./rich./toko.) yang tak bisa diberi label dari repo. Retry di dial yang gagal tidak mengirim byte apa pun → tidak bisa double-submit POST. Retry level-router `tokophi-stores` DIHAPUS di commit ini — dua lapis = nested (6×5 dial ≈ 40 dtk hold); satu lapis di entrypoint yang memilikinya.
+- 🔴 **INSIDEN (jujur): recreate `coolify-proxy` memutus attachment network runtime buatan Coolify** — proxy hidup hanya di network `coolify`, semua backend app di network resource → pool kosong → ketiga host menggantung ±4 menit (05:00–05:04 UTC) sampai `docker network connect l7r4qaqcml4zigw1dc7iptun coolify-proxy`. Backup compose proxy dibuat SEBELUM edit (`backups/docker-compose.yml.pre-retry-*`). **Runbook:** setiap kali proxy di-recreate manual, sambungkan ulang network resource — atau restart proxy lewat UI Coolify yang mengurusnya sendiri.
+- **Deploy perubahan ini (523) = pengukuran final** dengan seluruh konfigurasi terpasang; angka di entry berikut.
+
 ### [2026-08-28 — ZERO-DOWNTIME②] — OPS · akar 503 yang SEBENARNYA: teardown penuh Coolify → `is_consistent_container_name_enabled`
 
 - **Executor:** Main Session (Claude, Fable 5). Probe 300ms selama deploy 521 memberi angka jujur: **jendela 81–115 dtk** — bukan aritmetika healthcheck.
