@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-28 — ZERO-DOWNTIME①] — OPS · jendela 503 deploy dikecilkan: `start_interval: 2s` + retry Traefik di router wildcard toko
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "lanjut healthcheck + rolling coolify biar zero-downtime".
+- **Diagnosa (diukur dari konfigurasi, bukan tebakan):** healthcheck SUDAH ada di keempat surface — jendela 503 datang dari mekanika recreate compose: Traefik 3 hanya me-rutekan container **HEALTHY**, dan cek pertama baru jalan setelah `interval: 15s`. Jendela ≈ boot + ≤15 dtk. **Rolling sejati tidak tersedia**: Coolify tidak mendukung rolling update untuk app berbasis compose (recreate in place); itu batas platform, dicatat di file.
+- **Fix ①:** `start_interval: 2s` (Docker ≥25; VPS = 29.6.1 ✓, Compose 5.3.1 ✓) pada healthcheck admin/super-admin/storefront/landing — selama `start_period`, cek jalan tiap 2 dtk → healthy ~2–4 dtk setelah boot. Cron/backup sengaja tak diubah (tidak ada rute ke sana).
+- **Fix ②:** middleware `tokophi-retry` (5 attempts, exponential dari 500ms ≈ tutup ~7,5 dtk) dipasang di router `tokophi-stores` — **wildcard `<slug>.tokophi.com`, permukaan yang dihantam pembeli** dan satu-satunya router yang label-nya milik repo (router app./rich./toko. digenerate Coolify). Request yang mendarat di celah di-retry sampai pool terisi, bukan langsung 503.
+- **Validasi:** `docker compose config` VALID (dengan env dummy; error interpolasi lokal = variabel rahasia yang memang tak ada di dev). **Pengukuran sebenarnya menyusul pada deploy perubahan ini sendiri**: probe 300ms ke tiga host selama deploy — angka jendela before/after dilaporkan di entry berikutnya.
+- **Sisa menuju zero mutlak (keputusan owner, bukan to-do):** pecah app per-Dockerfile di Coolify (rolling didukung) ATAU dua replika + blue-green manual. Dicatat di handover.
+
 ### [2026-08-28 — EOD] — OPS · repo PRIVATE lagi (perintah owner) · konsekuensi: CI mati bersamanya · md + memori disinkronkan
 
 - **Executor:** Main Session (Claude, Fable 5). Urutan: owner memerintahkan private → flip dilakukan → md + memori proyek diperbarui.
