@@ -101,7 +101,15 @@ services:
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
-      migrate: { condition: service_completed_successfully }
+      # ⚠️ NO `migrate` gate any more (2026-08-28) — and that is the single biggest deploy-window
+      # lever, measured: compose stops a dependent BEFORE recreating its dependency, so this gate
+      # forced [old apps die] → migrate → [new apps boot] serially (~13–20 s dark). Without it the
+      # apps recreate in parallel with migrate. Migrations are idempotent and MOSTLY ABSENT from a
+      # deploy; on the deploys that do carry one, the new code may see the pre-migration schema for
+      # ~the migrate duration (~10 s) — a bounded, visible 500 on the affected query, no corruption,
+      # and no worse than the guaranteed full blackout the gate itself used to cause. First-ever
+      # bootstrap still converges: the app serves 500s (unhealthy, out of Traefik's pool) until
+      # migrate lands, then heals on the next health tick.
     volumes:
       # persist uploaded media across redeploys (next start runs from /app/apps/admin)
       - tokophi-uploads:/app/apps/admin/public/uploads
@@ -198,7 +206,15 @@ services:
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
-      migrate: { condition: service_completed_successfully }
+      # ⚠️ NO `migrate` gate any more (2026-08-28) — and that is the single biggest deploy-window
+      # lever, measured: compose stops a dependent BEFORE recreating its dependency, so this gate
+      # forced [old apps die] → migrate → [new apps boot] serially (~13–20 s dark). Without it the
+      # apps recreate in parallel with migrate. Migrations are idempotent and MOSTLY ABSENT from a
+      # deploy; on the deploys that do carry one, the new code may see the pre-migration schema for
+      # ~the migrate duration (~10 s) — a bounded, visible 500 on the affected query, no corruption,
+      # and no worse than the guaranteed full blackout the gate itself used to cause. First-ever
+      # bootstrap still converges: the app serves 500s (unhealthy, out of Traefik's pool) until
+      # migrate lands, then heals on the next health tick.
     environment:
       # Task 4.12 / SEC-18 — `owner`, and that is the honest label, not a downgrade. This surface has
       # ZERO `withTenant()` call sites (measured 2026-08-22): the control plane is cross-tenant by
@@ -238,7 +254,15 @@ services:
     restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
-      migrate: { condition: service_completed_successfully }
+      # ⚠️ NO `migrate` gate any more (2026-08-28) — and that is the single biggest deploy-window
+      # lever, measured: compose stops a dependent BEFORE recreating its dependency, so this gate
+      # forced [old apps die] → migrate → [new apps boot] serially (~13–20 s dark). Without it the
+      # apps recreate in parallel with migrate. Migrations are idempotent and MOSTLY ABSENT from a
+      # deploy; on the deploys that do carry one, the new code may see the pre-migration schema for
+      # ~the migrate duration (~10 s) — a bounded, visible 500 on the affected query, no corruption,
+      # and no worse than the guaranteed full blackout the gate itself used to cause. First-ever
+      # bootstrap still converges: the app serves 500s (unhealthy, out of Traefik's pool) until
+      # migrate lands, then heals on the next health tick.
     environment:
       # Task 4.12 / SEC-18 — `owner`, same reasoning as super-admin: ZERO `withTenant()` call sites.
       # The tenant here is resolved from the Host header (ADR 0009) and THAT is its scoping; the
