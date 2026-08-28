@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-28 — ZERO-DOWNTIME④] — OPS · koreksi terukur: retry TIDAK menjembatani pool kosong → gate `migrate` dilepas dari app yang dirutekan
+
+- **Executor:** Main Session (Claude, Fable 5). Deploy 523 diukur: `app` 19,6 dtk · `rich` 17,5 dtk · `toko` 3,4+19,6 dtk — retry-global TIDAK memperbaiki jendela, dan alasannya kini dipahami: **saat pool health-gated kosong, Traefik menjawab 503 SEKETIKA tanpa dial**, dan middleware retry hanya mengulang **dial yang gagal**, bukan respons 503. Ekspektasi di entry ③ salah; dikoreksi di sini dengan angka. (retry-global tetap dipasang — ia tetap benar untuk kelas dial-failure, cuma bukan obat jendela swap.)
+- **Lever yang benar (dari forensik 521):** `depends_on: migrate: service_completed_successfully` di admin/super-admin/storefront — compose menghentikan dependent SEBELUM me-recreate dependency, jadi gate itu MEMAKSA urutan [app lama mati] → migrate → [app baru boot], ~13–20 dtk gelap di TIAP deploy. Gate dilepas: app re-create paralel dengan migrate.
+- **Trade yang diambil, dinyatakan gamblang:** deploy yang MEMBAWA migrasi bisa membuat kode baru membaca skema pra-migrasi selama ±durasi migrate (~10 dtk) — 500 terbatas pada query terdampak, tanpa korupsi, dan tidak lebih buruk dari blackout total yang justru dijamin oleh gate lama. Mayoritas deploy tidak membawa migrasi. Bootstrap pertama tetap konvergen (app unhealthy → di luar pool → heal setelah migrate).
+- **Deploy perubahan ini (524) = pengukurannya.** Target: jendela ≈ stop+create+boot+heal ≈ 5–8 dtk.
+
 ### [2026-08-28 — ZERO-DOWNTIME③] — OPS · hasil terukur: 81–115 dtk → ~13 dtk → retry-global menjembatani sisanya · +1 insiden proxy (4 mnt, ulah sendiri, pelajaran dicatat)
 
 - **Executor:** Main Session (Claude, Fable 5).
