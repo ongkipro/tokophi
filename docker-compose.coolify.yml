@@ -186,6 +186,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 40s
+      # Docker ≥25: during start_period the check runs every start_interval instead of `interval`,
+      # so a freshly recreated container turns healthy in ~2–4 s instead of waiting out the first
+      # 15 s tick. Traefik only routes to HEALTHY containers, so this IS the deploy 503 window.
+      start_interval: 2s
 
   super-admin:
     build:
@@ -222,6 +226,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 40s
+      # Docker ≥25: during start_period the check runs every start_interval instead of `interval`,
+      # so a freshly recreated container turns healthy in ~2–4 s instead of waiting out the first
+      # 15 s tick. Traefik only routes to HEALTHY containers, so this IS the deploy 503 window.
+      start_interval: 2s
 
   storefront:
     build:
@@ -271,7 +279,15 @@ services:
       - traefik.http.routers.tokophi-stores.priority=1
       - traefik.http.routers.tokophi-stores.entryPoints=https
       - traefik.http.routers.tokophi-stores.tls=true
-      - traefik.http.routers.tokophi-stores.middlewares=gzip
+      # `tokophi-retry` + gzip: during a deploy the old container leaves Traefik's pool before the
+      # new one is healthy (compose recreates in place — Coolify has no rolling update for compose
+      # apps). With start_interval above that gap is ~2–4 s; retry makes Traefik re-attempt the
+      # request against the pool instead of answering 503 on the first miss, so most requests that
+      # land inside the gap succeed on a later attempt rather than failing. 5 attempts, exponential
+      # from 500ms ≈ up to ~7.5 s of cover — past the measured gap, cheap when healthy.
+      - traefik.http.middlewares.tokophi-retry.retry.attempts=5
+      - traefik.http.middlewares.tokophi-retry.retry.initialinterval=500ms
+      - traefik.http.routers.tokophi-stores.middlewares=tokophi-retry,gzip
       - traefik.http.routers.tokophi-stores.service=tokophi-stores
       - traefik.http.services.tokophi-stores.loadbalancer.server.port=4327
     healthcheck:
@@ -283,6 +299,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+      # See the admin service's start_interval note — same 503-window fix.
+      start_interval: 2s
 
   # landing / front door for the apex (tokophi.com + www) — static Astro, currently "segera hadir".
   # Deliberately has NO database and NO depends_on: postgres — the front door must be servable even
@@ -318,6 +336,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+      # See the admin service's start_interval note — same 503-window fix.
+      start_interval: 2s
 
   # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).
   #
