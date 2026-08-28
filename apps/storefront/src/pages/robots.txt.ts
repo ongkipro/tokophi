@@ -1,3 +1,4 @@
+// deploy-marker 2026-08-28: measures the consistent-container-name surgical recreate (BUILD-LOG).
 // robots.txt — PER REQUEST, not a static file.
 //
 // It cannot live in `public/`: one deploy serves every merchant (ADR 0009), so a static file would
