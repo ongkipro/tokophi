@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-28 — ZERO-DOWNTIME②] — OPS · akar 503 yang SEBENARNYA: teardown penuh Coolify → `is_consistent_container_name_enabled`
+
+- **Executor:** Main Session (Claude, Fable 5). Probe 300ms selama deploy 521 memberi angka jujur: **jendela 81–115 dtk** — bukan aritmetika healthcheck.
+- **Forensik (timeline container + log perintah Coolify):** healthcheck baru justru sudah bekerja (migrate 04:45:44→:49 = 5 dtk; apps start :49, healthy ±:53 — `start_interval` menunaikan tugasnya). Yang dominan: **Coolify men-`docker stop` SEMUA container lama satu-per-satu (04:44:00) lalu membuat stack baru (04:45:38)** — `postgres` yang config-nya tak berubah pun ikut mati. Nama container membawa suffix acak per-deploy, jadi compose tak pernah bisa bilang "tidak berubah".
+- **Fix:** `application_settings.is_consistent_container_name_enabled = true` (dieksekusi di Coolify, 2026-08-28). Dengan nama konsisten `docker compose up -d` me-recreate HANYA service yang berubah: postgres/cron tak tersentuh, **app lama tetap melayani selama migrate berjalan**, lalu tiap app di-swap in place (~5–8 dtk; router wildcard toko dijembatani `tokophi-retry` — attempt lanjutan mendarat setelah pool terisi lagi).
+- **Deploy ini adalah pengukurannya:** perubahan kode inert hanya di storefront (marker di `robots.txt.ts`) → hanya image storefront yang berubah → probe harus menunjukkan `app.`/`rich.` **nol** downtime dan `toko.` hanya jendela swap singkat. Angka menyusul di entry berikutnya.
+
 ### [2026-08-28 — ZERO-DOWNTIME①] — OPS · jendela 503 deploy dikecilkan: `start_interval: 2s` + retry Traefik di router wildcard toko
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "lanjut healthcheck + rolling coolify biar zero-downtime".
