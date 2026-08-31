@@ -2367,3 +2367,70 @@ default), batiknusantara `current_period_end` restored to `2026-08-04 03:59:23.8
 probe rows (users/store_users/platform_admins `e9999999-…`) deleted. Migration 0101 applied to the
 shared dev DB as raw idempotent SQL (journal stamp NOT recorded — drizzle re-runs it harmlessly on
 merge).
+
+---
+
+## 2026-08-31 17:32 UTC — Main Session — Task 5.19 (F-S9/F-S10 caveats) · seed COD finance · ESM path fixes
+
+**Scope:** three unrelated concerns, committed separately.
+
+**① Task 5.19 / F-S9 + F-S10 — the half that needs no provider evidence.**
+The SPX "retur gratis" premise is **UNVERIFIED** (`specs/docs/REQUIREMENTS.md` F-S9: free returns are a
+*Shopee Seller Center* benefit; we reach SPX through *KiriminAja*, a different contract whose API has
+no return field at all). The super-admin Pengaturan → Pengiriman note stated it as fact, and an
+operator uses that line to decide COD allow/deny **per service** — so a belief was doing the work of
+evidence. The copy now says "**diyakini** gratis di SPX … tapi ini **belum diverifikasi tertulis**",
+with a code comment naming the task so nobody deletes the caveat before the ADR exists.
+`platform_cod.fee_pct` (F-S10: exists, seeded `0`, read by nothing) is marked a dead column in
+`schema.ts` — do not activate without the owner decision + provider evidence 5.19 requires.
+⚠️ **5.19 stays OPEN.** This is the honest-label half; the task itself is owner-gated on written
+KiriminAja confirmation.
+
+**② Seed — COD orders that exercise the real fee schedule (FIN-01 follow-through).**
+`packages/db/src/seed.ts` seeded every order as `transfer` with `total_idr = subtotal`, so **no
+seeded order exercised `@tokophi/lib/order-finance` at all** and the FIN-01 COD formula (3% of goods
++ PPN 11% on the fee) had no demo data behind it. Now ~15% of orders are COD, priced by
+`calculateOrderFinance()` — **the same function `/api/public/order` calls** — with a real
+`order_financials` row each. The draw uses its own `mulberry32(6600)` stream so **every existing
+customer/city/status/total stays byte-identical**; only the COD subset changes.
+The ledger insert is goods-only now, mirroring `apps/admin/lib/ledger-credit.ts`:
+`coalesce(f.goods_proceeds_idr + greatest(o.tax_idr - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0))`.
+A plain `p.amount_idr` credit would have paid the seller the **buyer's COD fee**.
+Subscription invoice amounts moved off the hardcoded `305_250`/`55_500` (PPN baked into `amount_idr`
+while `tax_idr` stayed 0 — self-contradictory the moment `subscription_ppn_enabled` defaulted OFF)
+onto `subscriptionCharge(BILLING.*, false)`, and now store `tax_idr` alongside `amount_idr`.
+
+**③ ESM paths — the suite could not run from a directory containing a space.**
+`new URL(…, import.meta.url).pathname` percent-encodes: this checkout is `/Users/admin/Tokophi new`,
+so every such path resolved to `Tokophi%20new` and the file was not found. Fixed with
+`fileURLToPath()` in `vitest.config.ts` (both aliases — `server-only` and `@/`, i.e. **the entire
+admin data layer was unimportable**), `packages/db/src/migration-stamp.test.ts`,
+`packages/db/src/schema-indexes.test.ts` and `apps/super-admin/lib/route-roles.test.ts`; plus
+`NODE_OPTIONS: --import="…"` quoting in `apps/admin/scripts/audit-responsive.test.ts`.
+`Header.astro` gained `meta!` on four reads — `.filter((t) => t.meta?.image)` does not narrow the
+type, so `astro check` was red on a value the filter had already proved present.
+
+**Files:** `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx` · `packages/db/src/schema.ts`
+· `packages/db/src/seed.ts` · `vitest.config.ts` · `packages/db/src/migration-stamp.test.ts` ·
+`packages/db/src/schema-indexes.test.ts` · `apps/super-admin/lib/route-roles.test.ts` ·
+`apps/admin/scripts/audit-responsive.test.ts` · `apps/storefront/src/components/Header.astro` ·
+`AGENTS.md`.
+
+**Verification:** `npx vitest run` → **111 files / 950 tests passed**, 24 files / 167 tests skipped ·
+`npm run check:storefront` → **0 errors** · `npx tsc --noEmit` on `packages/db`, `apps/admin`,
+`apps/super-admin` → exit 0 on all three.
+
+**NOT verified — read this before trusting ②.** This machine has **no Docker**, so the 24 skipped
+files are every Postgres-coupled suite, `ledger-credit.test.ts` among them — which is precisely the
+guard for the seed's new goods-only ledger expression. **The seed has not been run.** Before merging,
+run `docker compose up -d db && npm run test:db` and a full `npm run seed -w @tokophi/db` on a machine
+that has Docker, and reconcile the COD orders' `order_financials` against `/saldo`. Also unresolved:
+the seed picks COD orders without consulting `platform_cod.allowed_provinces`, so a demo COD order
+may sit in a province the live eligibility chain would refuse — harmless for a payment-method record,
+misleading if anyone reads the seed as a COD fixture.
+
+**Doc fix (④):** `AGENTS.md` step 2 of the shipping flow claimed `createShipment` and
+`bulkGenerateResi` behave identically ("deliberately NO rate picker"). Verified in code 2026-08-28:
+the single-order screen ("Cek Ongkir") **is** a rate picker, deliberately, and reconciles the
+difference through the seller's ledger (`shipping-order-debit`) or platform margin rather than
+changing the buyer's `orders.shipping_idr`. Documented as intentional, not a bug to unify away.
