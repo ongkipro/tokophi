@@ -8,6 +8,17 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-31 17:32 UTC] — AUDIT-FULL · audit menyeluruh tervalidasi + 2 aksi: OVO dinonaktifkan (probe live) & `expiryStamp` dipatok WIB (bug TZ nyata)
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "audit keseluruhan biar sempurna, validasi dulu" → semua temuan diukur, bukan dibaca.
+- **Temuan kritis (infra, diverifikasi live):** ① panel Coolify `:8000` (+6001/6002/8080) menjawab 200 dari internet publik; ② origin `:443` bisa diakses langsung by IP → Cloudflare ter-bypass (dan IP ada di repo yang publik); ③ `KIRIMINAJA_ENV=sandbox` di produksi — blocked eksternal: sheet UAT belum dikirim → belum ada akses production KA; ④ backup 6-jam-an sehat tapi HANYA lokal (VPS mati = data+backup hilang); ⑤ kapasitas lega (8GB/4vCPU, load 1.0, swap 8G) — blue-green terjangkau; SSH keras (key-only+fail2ban); cron hidup; 3 pesanan "problem" KA = booking uji demo batik, bukan merchant.
+- **Repo/proses:** 12 P1 + 6 P2 terbuka (4 owner-gated: 5.8/5.12/5.19/5.20); dokumen ledger saling kontradiksi (OPEN.md basi "13 P0", NEXT.md N1 diklaim open padahal shipped, tiga hitungan P1/P2 berbeda) — 5.14/5.15 adalah obatnya; Stage 7 belum pernah jalan.
+- **AKSI ① — OVO DINONAKTIFKAN di produksi** (`platform_payment_channels.enabled=false`): probe `create_payment` live dari container admin → **`rc=68 EXT TIMEOUT` konsisten ×2**; kontrol QRIS saat itu `rc=11 BILLER DISRUPTION` (00:30 WIB — indikasi jendela maintenance PSP). Pembeli tak lagi bisa memilih channel yang error di langkah akhir. Re-probe siang WIB sebelum menyalakan lagi. (QRIS+5 VA tetap ON — terbukti hidup 2026-08-26 dengan pembayaran sungguhan.)
+- **AKSI ② — bug nyata dari probe: `expiryStamp` membaca jam LOKAL container.** Dibuktikan live: stamp UTC "now+1h" ditolak `rc=08 Invalid expired date` (terbaca masa lalu di WIB); digeser +7 jam → lolos validasi. **AutoLaris membaca `expired` sebagai WIB.** Container produksi = UTC ⇒ tagihan diam-diam berlaku 17 jam (bukan 24); TZ lebih barat dari UTC ⇒ SEMUA pembayaran ditolak. Fix: `expiryStamp` WIB by arithmetic (+7h lalu baca via `getUTC*`); test baru `autolaris-expiry.test.ts` (paritas Asia/Jakarta + larangan `get(Hours|…)` lokal via `codeOnly`).
+- **Efek repo PUBLIC lagi (perintah owner):** CI hidup gratis — re-run di main **success 3m29s**. GitHub dicek sebelum push: HEAD `5c1e6b2` = merge terakhir sesi ini, tidak ada commit kolaborator yang bisa tertimpa.
+- **Menunggu keputusan owner:** allowlist-IP vs SSH-tunnel untuk port Coolify; kredensial R2 untuk backup offsite; kirim sheet UAT KA; opsi struktural zero-downtime.
+- **Verifikasi:** vitest lib+actions 36 file / 254 hijau · tsc lib+admin 0 · verdict penuh di CI PR ini.
+
 ### [2026-08-28 — ZERO-DOWNTIME⑤/FINAL] — OPS · hasil akhir terukur: **81–115 dtk → 7,0–8,3 dtk** (−93%)
 
 - **Executor:** Main Session (Claude, Fable 5). Deploy 524 diukur (probe 300ms): jendela utama `app` 8,3 dtk · `rich` 7,0 dtk · `toko` 7,3 dtk (+blip kecil <2 dtk; 13×500 singkat di storefront saat swap tetangganya). Persis target 5–8 dtk.

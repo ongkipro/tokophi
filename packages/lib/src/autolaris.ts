@@ -99,10 +99,17 @@ export type AlPaymentStatus = {
 };
 
 // expired: default +24h, format YYYYMMDDHHMMSS
-function expiryStamp(msFromNow: number): string {
-  const d = new Date(Date.now() + msFromNow);
+// ⚠️ AutoLaris reads `expired` as WIB — proven live 2026-09-01 against production create_payment:
+// a stamp built from UTC "now + 1h" answered rc=08 "Invalid expired date" (it reads as the PAST in
+// WIB), while the same instant shifted +7h passed validation. This function used the CONTAINER's
+// local clock (`getHours()`), which is UTC in every deployed container — so production bills were
+// silently valid for 17 hours, not the intended 24, and a container in any timezone west of UTC
+// would emit stamps AutoLaris rejects outright, failing every payment. Pinned to WIB by arithmetic;
+// never reintroduce local-clock reads here.
+export function expiryStamp(msFromNow: number): string {
+  const d = new Date(Date.now() + msFromNow + 7 * 3600 * 1000); // shift to WIB, then read as UTC
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
 }
 
 export async function alCreatePayment(input: {
