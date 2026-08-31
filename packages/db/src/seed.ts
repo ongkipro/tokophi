@@ -11,6 +11,8 @@ import { hashPassword, tempPassword, PUBLISHED_PASSWORDS } from "@tokophi/lib/pa
 import { assertTruncateIsDeliberate } from "./seed-guard";
 import { packedDims } from "./product-dims";
 import { slugify } from "@tokophi/lib/store-slug";
+import { BILLING, subscriptionCharge } from "@tokophi/lib/billing";
+import { calculateOrderFinance } from "@tokophi/lib/order-finance";
 
 // ── SEEDED CREDENTIALS — RANDOM PER ACCOUNT, PER RUN, REVEALED ONCE (N29) ─────────────────────────
 //
@@ -99,10 +101,14 @@ const PLANS: Array<{ key: "pemula" | "bisnis" | "skala"; name: string; price: nu
   { key: "skala", name: "Skala", price: 799_000, blurb: "Untuk volume tinggi", features: ["Semua fitur Bisnis", "API akses", "Multi-lokasi", "Peran lanjutan", "Account manager"] },
 ];
 
-// Single-plan TokoΦ subscription amounts, PPN 11% inclusive (base 275k/50k + PPN → what's charged).
-// Faktur/history recover the DPP + PPN via baseFromTotal(). Mirrors @tokophi/lib/billing.
-const SUB_MONTHLY = 305_250; // Rp275.000 + PPN 11%
-const SUB_FIRST_MONTH = 55_500; // Rp50.000 + PPN 11%
+// Single-plan TokoΦ subscription amounts, via the SAME subscriptionCharge() the three real invoice
+// creators use — PPN off matches the platform default at launch (platform_finance.subscription_ppn_enabled).
+// Writing amountIdr with tax baked in while taxIdr stayed 0 (the old hardcoded 305_250/55_500) made every
+// seeded invoice self-contradictory the moment the toggle defaulted off.
+const SUB_MONTHLY_CHARGE = subscriptionCharge(BILLING.MONTHLY_IDR, false);
+const SUB_FIRST_MONTH_CHARGE = subscriptionCharge(BILLING.FIRST_MONTH_IDR, false);
+const SUB_MONTHLY = SUB_MONTHLY_CHARGE.total;
+const SUB_FIRST_MONTH = SUB_FIRST_MONTH_CHARGE.total;
 
 // Recent monthly billing history for the store.
 const INVOICES: Array<{ number: string; status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }> = [
@@ -1120,12 +1126,24 @@ async function main() {
     if (row) districtByCity.set(city, row.id);
   }
   const shipRnd = mulberry32(3131);
+  // Independent stream (own seed, drawn once per order, right here) so it cannot shift any of
+  // ORDERS_SEED's own draws — every customer/city/status/total stays byte-identical to before.
+  // ~15% COD is the only demo data that exercises the COD fee schedule end to end (order_financials
+  // + the real 3%+PPN11% formula); every other order stays plain `transfer`, unchanged.
+  const codRnd = mulberry32(6600);
 
   // orders (+ line items + payment) — customers link by name
   // Captured so a RECOVERED checkout session (0044) can point at the real order it became —
   // `recovered_order_id` is the only thing that makes "pulih" a fact instead of a guess.
   const seededOrders: Array<{ id: string; customer: string; total: number; picks: number[]; minutesAgo: number }> = [];
   for (const o of ORDERS_SEED) {
+    const isCod = codRnd() < 0.15;
+    // COD's own fee (3% of goods, +PPN 11% on the fee — @tokophi/lib/order-finance, the SAME function
+    // the checkout API calls) rides on top of the goods total; a plain transfer order pays no fee.
+    const finance = isCod
+      ? calculateOrderFinance({ subtotalIdr: o.total, shippingListIdr: 0, paymentKind: "cod" })
+      : null;
+    const orderTotal = finance ? finance.orderPayableIdr : o.total;
     const [ord] = await db.insert(schema.orders).values({
       storeId: store.id,
       number: o.number,
@@ -1134,7 +1152,7 @@ async function main() {
       financialStatus: o.status === "batal" ? "pending" : "dibayar",
       channel: CHANNEL_MAP[o.channel],
       subtotalIdr: o.total,
-      totalIdr: o.total,
+      totalIdr: orderTotal,
       city: o.city,
       province: PROV_OF[o.city] ?? null,
       // Shipping address SNAPSHOT (0042) — generated AT the order's own destination city, not looked
@@ -1151,9 +1169,28 @@ async function main() {
     await db.insert(schema.orderLineItems).values(
       o.picks.map((idx) => ({ orderId: ord.id, variantId: seededProducts[idx].variantId, title: CATALOG[idx].name, qty: 1, priceIdr: CATALOG[idx].price, totalIdr: CATALOG[idx].price })),
     );
+    if (finance) {
+      // order_financials is what creditSaleForPayment (and this seed's own ledger insert below) read
+      // to keep the COD fee OUT of seller proceeds — without this row a COD payment's full cash
+      // amount (goods + fee) would fall back to the legacy credit path and over-pay the seller.
+      await db.insert(schema.orderFinancials).values({
+        storeId: store.id,
+        orderId: ord.id,
+        goodsDiscountIdr: finance.goodsDiscountIdr,
+        shippingDiscountIdr: finance.shippingDiscountIdr,
+        includedSalesTaxIdr: finance.includedSalesTaxIdr,
+        goodsProceedsIdr: finance.goodsProceedsIdr,
+        shippingChargedIdr: finance.shippingChargedIdr,
+        codFeeBeforeVatIdr: finance.codFeeBeforeVatIdr,
+        codFeeVatIdr: finance.codFeeVatIdr,
+        codFeeFinalIdr: finance.codFeeFinalIdr,
+        orderPayableIdr: finance.orderPayableIdr,
+        expectedGatewayFeeIdr: finance.gatewayFeeIdr,
+      });
+    }
     // storeId is the RLS key (0036) — the app write paths always set it; the seed used to omit it,
     // which left every seeded payment orphaned (store_id NULL = belongs to no tenant).
-    await db.insert(schema.payments).values({ orderId: ord.id, storeId: store.id, method: "transfer", amountIdr: o.total, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
+    await db.insert(schema.payments).values({ orderId: ord.id, storeId: store.id, method: isCod ? "cod" : "transfer", amountIdr: orderTotal, status: o.status === "batal" ? "gagal" : "berhasil", paidAt: o.status === "batal" ? null : minutesAgo(o.minutesAgo) });
     seededOrders.push({ id: ord.id, customer: o.customer, total: o.total, picks: o.picks, minutesAgo: o.minutesAgo });
   }
 
@@ -1171,14 +1208,22 @@ async function main() {
   // order collected nothing, so it is booked nothing. This is the same rule the app writes at
   // runtime and the same rule migration 0041 backfills with — one rule, one number, three screens
   // (Dashboard revenue = Pesanan totals = Saldo book).
+  //
+  // The credit itself is goods-only, the SAME expression `creditSaleForPayment` uses
+  // (apps/admin/lib/ledger-credit.ts): orders with an `order_financials` row (COD, above) credit
+  // goods_proceeds_idr, never the fee-inclusive payment amount — a plain `p.amount_idr` credit would
+  // silently pay the seller the buyer's COD fee too. Legacy orders (no order_financials, the other
+  // 85%) fall back to subtotal − discount, unchanged from before.
   await db.execute(sql`
     insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, created_at, available_at)
     select p.store_id, o.id, p.id, 'sale',
            case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
-           p.amount_idr, 'Penjualan ' || o.number,
+           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0)),
+           'Penjualan ' || o.number,
            coalesce(p.paid_at, o.placed_at),
            case when o.status in ('selesai', 'retur') then coalesce(p.paid_at, o.placed_at) end
       from payments p join orders o on o.id = p.order_id
+      left join order_financials f on f.order_id = o.id
      where p.status = 'berhasil' and o.status <> 'batal'
     on conflict do nothing
   `);
@@ -1633,7 +1678,7 @@ async function main() {
 
   // invoices for this account — single plan TokoΦ (Rp275rb/bln recurring)
   await db.insert(schema.invoices).values(
-    INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: SUB_MONTHLY, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
+    INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: SUB_MONTHLY, taxIdr: SUB_MONTHLY_CHARGE.taxIdr, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
   );
 
   // platform activity
@@ -1746,8 +1791,8 @@ async function main() {
     await db.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: d.gmv, ordersCount: d.orders, productsCount: d.products, ship7dAvg: d.ship7d ?? 0, updatedAt: TODAY });
     if (d.invoices.length) {
       // single plan: Rp50rb first-month promo (firstPaid=false) else Rp275rb recurring
-      const amount = firstPaid ? SUB_MONTHLY : SUB_FIRST_MONTH;
-      await db.insert(schema.invoices).values(d.invoices.map((inv) => ({ number: `INV-${invSeq++}`, accountId: acc.id, storeId: st.id, planKey: d.plan, amountIdr: amount, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })));
+      const charge = firstPaid ? SUB_MONTHLY_CHARGE : SUB_FIRST_MONTH_CHARGE;
+      await db.insert(schema.invoices).values(d.invoices.map((inv) => ({ number: `INV-${invSeq++}`, accountId: acc.id, storeId: st.id, planKey: d.plan, amountIdr: charge.total, taxIdr: charge.taxIdr, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })));
     }
     if (d.lastOrderDaysAgo !== null) {
       // a few orders; the most-recent placedAt drives the "activity" health signal
