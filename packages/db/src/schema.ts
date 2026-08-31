@@ -1813,6 +1813,8 @@ export const platformCod = pgTable("platform_cod", {
   enabled: boolean().notNull().default(false),
   maxAmountIdr: money().notNull().default(0),
   allowedProvinces: jsonb(),
+  // Dead column: no pricing/checkout/ledger code reads this (Task 5.19 / F-S10).
+  // Do not activate without the owner decision + provider evidence this task requires.
   feePct: integer().notNull().default(0),
 });
 
