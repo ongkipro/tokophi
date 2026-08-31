@@ -2420,7 +2420,7 @@ type, so `astro check` was red on a value the filter had already proved present.
 `npm run check:storefront` → **0 errors** · `npx tsc --noEmit` on `packages/db`, `apps/admin`,
 `apps/super-admin` → exit 0 on all three.
 
-**NOT verified — read this before trusting ②.** This machine has **no Docker**, so the 24 skipped
+**NOT verified at the time of writing — SUPERSEDED by the 2026-08-31 17:38 entry below, which verified all of it against a real Postgres. Kept for the record.** This machine has **no Docker**, so the 24 skipped
 files are every Postgres-coupled suite, `ledger-credit.test.ts` among them — which is precisely the
 guard for the seed's new goods-only ledger expression. **The seed has not been run.** Before merging,
 run `docker compose up -d db && npm run test:db` and a full `npm run seed -w @tokophi/db` on a machine
@@ -2434,3 +2434,51 @@ misleading if anyone reads the seed as a COD fixture.
 the single-order screen ("Cek Ongkir") **is** a rate picker, deliberately, and reconciles the
 difference through the seller's ledger (`shipping-order-debit`) or platform margin rather than
 changing the buyer's `orders.shipping_idr`. Documented as intentional, not a bug to unify away.
+
+---
+
+## 2026-08-31 17:38 UTC — Main Session — Seed COD scoped to the platform policy + the whole suite verified against real Postgres
+
+**Scope:** closes the two boundaries the 17:32 entry above left open.
+
+**① The seed could mint a COD order the live rule refuses.** The COD draw consulted neither
+`platform_cod.allowed_provinces` nor `max_amount_idr`, and the platform row's own allow-list was a
+second literal 750 lines away from the draw — so the demo data contradicted the rule it exists to
+demonstrate. `COD_ALLOWED_PROVINCES` + `COD_MAX_IDR` are defined ONCE now and feed both the draw and
+the `platform_cod` insert. The cap is tested against `orderPayableIdr` (goods + fee), which is the
+number `apps/admin/lib/cod.ts` compares — the 3% fee can cross the line the subtotal sits under. The
+`codRnd()` draw happens for **every** order before any eligibility test, so the stream stays
+positional: changing the allow-list re-labels orders, it never shifts the draw for the ones after.
+
+**② A local PostgreSQL 16 was found (Homebrew, `:5432`) — Docker was never the only way.** The
+17:32 entry called the seed unverified because `docker compose` is absent on this machine. It is,
+but `brew services` has `postgresql@16` running, which is enough for both the seed and the
+DB-coupled suites.
+
+**Verification — seed RUN, then reconciled in SQL** (throwaway `tokophi_seedcheck`, migrated to head,
+seeded; the machine's existing `tokophi` / `tokophi_test` were never touched, and both scratch
+databases were dropped afterwards — `select datname from pg_database where datname like 'tokophi%'`
+returns only the original two):
+- **685 orders / 64 COD** — `province_violation 0`, `cap_violation 0`. (211 *transfer* orders sit
+  outside the COD provinces, which is correct: they are not COD.)
+- `order_financials` exists for **64 of 64** COD orders and **0 of 621** transfer orders.
+- Fee formula exact on all 64: `cod_fee_before_vat = round(goods × 0,03)`,
+  `cod_fee_vat = round(fee × 0,11)`, `order_payable = goods + fee_final` — 0 mismatches on all three.
+- Ledger: **59 COD sale credits, 59 goods-only, 0 credited the fee-inclusive `payments.amount_idr`**
+  (64 − 59 = the cancelled orders, correctly excluded).
+- Invoices: `tax_idr = 0` on every row, amounts `275.000` ×13 and `50.000` ×3 — the DPP, matching the
+  PPN-off launch default.
+
+**MUTATION PROOF — the province filter is load-bearing, not decoration.** The same seed with
+`COD_ALLOWED_PROVINCES.includes(...)` removed, into a second throwaway database, produced **97 COD
+orders of which 33 sit in a refused province**. With the filter: **0 of 64**. The check cannot be
+green for want of matching anything.
+
+**FULL SUITE, NOTHING SKIPPED:** `DATABASE_URL=…/tokophi npm run test:db` →
+**135 files / 1117 tests passed, 0 skipped** (against 111/950 with 24 files skipped when no database
+was reachable). That includes `ledger-credit.test.ts`, the guard the 17:32 entry named as unrun, and
+the forced-race suites. `npx tsc --noEmit -p packages/db` → exit 0.
+
+**Still true, unchanged:** **the seed is not a migration** — none of this reaches a store that
+already exists. And Task **5.19 stays OPEN**: it is owner-gated on written KiriminAja confirmation of
+the SPX return terms; only the honest-label half is done.

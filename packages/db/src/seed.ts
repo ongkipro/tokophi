@@ -110,6 +110,13 @@ const SUB_FIRST_MONTH_CHARGE = subscriptionCharge(BILLING.FIRST_MONTH_IDR, false
 const SUB_MONTHLY = SUB_MONTHLY_CHARGE.total;
 const SUB_FIRST_MONTH = SUB_FIRST_MONTH_CHARGE.total;
 
+// THE COD POLICY, defined ONCE — the platform_cod row below is seeded from these, and so is the
+// choice of which demo orders are COD. Two literals would let the seed mint a COD order in a
+// province the live eligibility chain (apps/admin/lib/cod.ts) refuses, or above the cap: demo data
+// that contradicts the rule it is supposed to demonstrate.
+const COD_ALLOWED_PROVINCES = ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"];
+const COD_MAX_IDR = 2_000_000;
+
 // Recent monthly billing history for the store.
 const INVOICES: Array<{ number: string; status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }> = [
   { number: "INV-9006", status: "menunggu", daysAgo: 2 },
@@ -1137,12 +1144,19 @@ async function main() {
   // `recovered_order_id` is the only thing that makes "pulih" a fact instead of a guess.
   const seededOrders: Array<{ id: string; customer: string; total: number; picks: number[]; minutesAgo: number }> = [];
   for (const o of ORDERS_SEED) {
-    const isCod = codRnd() < 0.15;
+    // Drawn for EVERY order, before any eligibility test, so the stream stays positional: a change
+    // to the allow-list re-labels orders but never shifts the draw for the ones after it.
+    const codDraw = codRnd() < 0.15;
     // COD's own fee (3% of goods, +PPN 11% on the fee — @tokophi/lib/order-finance, the SAME function
     // the checkout API calls) rides on top of the goods total; a plain transfer order pays no fee.
-    const finance = isCod
-      ? calculateOrderFinance({ subtotalIdr: o.total, shippingListIdr: 0, paymentKind: "cod" })
-      : null;
+    const codCandidate =
+      codDraw && COD_ALLOWED_PROVINCES.includes(PROV_OF[o.city] ?? "")
+        ? calculateOrderFinance({ subtotalIdr: o.total, shippingListIdr: 0, paymentKind: "cod" })
+        : null;
+    // The cap is tested against what the courier would actually COLLECT (goods + fee), not the
+    // subtotal — that is the number apps/admin/lib/cod.ts compares, and the fee can cross the line.
+    const finance = codCandidate && codCandidate.orderPayableIdr <= COD_MAX_IDR ? codCandidate : null;
+    const isCod = finance !== null;
     const orderTotal = finance ? finance.orderPayableIdr : o.total;
     const [ord] = await db.insert(schema.orders).values({
       storeId: store.id,
@@ -1885,7 +1899,7 @@ async function main() {
       enabled: !COURIERS_OFF.includes(c.code),
     })),
   );
-  await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: 2_000_000, allowedProvinces: ["DI Yogyakarta", "Jawa Tengah", "Jawa Barat", "DKI Jakarta", "Banten", "Jawa Timur"], feePct: 0 });
+  await db.insert(schema.platformCod).values({ enabled: true, maxAmountIdr: COD_MAX_IDR, allowedProvinces: COD_ALLOWED_PROVINCES, feePct: 0 });
 
   // The merchant's PER-SERVICE selection (store_shipping_methods) — never seeded, so a fresh database
   // had ZERO rows and /api/public/ongkir fell back to the courier-level filter, which is exactly the
