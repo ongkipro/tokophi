@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
@@ -104,7 +105,7 @@ const INDEX_CENSUS: Record<string, Census> = {
 
 /** Nama index → tabel, DITURUNKAN dari berkas migrasi. Tidak pernah ditulis tangan. */
 function indexesInMigrations(): Map<string, string> {
-  const dir = new URL("../drizzle/", import.meta.url).pathname;
+  const dir = fileURLToPath(new URL("../drizzle/", import.meta.url));
   const sql = readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
     .map((f) => readFileSync(dir + f, "utf8"))
