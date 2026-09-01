@@ -13,7 +13,7 @@ function runAudit(credentials: Partial<Record<"AUDIT_EMAIL" | "AUDIT_PASSWORD", 
     AUDIT_EMAIL: "audit@example.test",
     AUDIT_PASSWORD: "local-test-password",
     ...credentials,
-    NODE_OPTIONS: `--import=${PLAYWRIGHT_STUB}`,
+    NODE_OPTIONS: `--import="${PLAYWRIGHT_STUB}"`,
   };
   for (const [name, value] of Object.entries(credentials)) {
     if (value === undefined) delete env[name as keyof typeof env];

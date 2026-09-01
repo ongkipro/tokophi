@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { codeOnly } from "../../../test/source-code";
 import { canOpenPath, landingForRole, minRoleForPath, ROUTE_RULES } from "./route-roles";
@@ -111,7 +112,7 @@ describe("route floors — the policy", () => {
 
 /* ── THE WIRING ─────────────────────────────────────────────────────────────────────────────── */
 
-const PAGES_ROOT = new URL("../app/(platform)", import.meta.url).pathname;
+const PAGES_ROOT = fileURLToPath(new URL("../app/(platform)", import.meta.url));
 
 /** Every `page.tsx` under the route group, as [route path, absolute file]. Derived, never listed. */
 function pageRoutes(): { route: string; file: string }[] {

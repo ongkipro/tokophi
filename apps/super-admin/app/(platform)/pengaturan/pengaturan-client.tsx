@@ -430,15 +430,17 @@ export function PengaturanClient({
                   </Button>
                 </div>
 
-                {/* Retur, bukan ketersediaan, yang membuat COD mahal: paket COD yang ditolak
-                    dikirim balik gratis oleh SPX, tapi ditagihkan ke merchant oleh kurir lain.
-                    Karena itu ini keputusan platform per-layanan, bukan aturan yang dilas di kode. */}
+                {/* Klaim "retur gratis di SPX" BELUM diverifikasi tertulis dari KiriminAja/SPX
+                    (Task 5.19 / F-S9 — specs/docs/REQUIREMENTS.md). Jangan hapus caveat ini sampai
+                    ada bukti tertulis dan ADR-nya ditulis; operator memakai baris ini untuk
+                    keputusan allow/deny COD per layanan, jadi ini tidak boleh dibaca sebagai fakta. */}
                 <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
                   <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <span>
                     KiriminAja mendukung COD di hampir semua layanan <b>Reguler</b>. Yang membedakan adalah <b>ongkos retur</b> bila
-                    pembeli menolak paket — gratis di SPX, ditagihkan ke merchant di kurir lain. Buka COD hanya pada layanan
-                    yang risikonya Anda terima.
+                    pembeli menolak paket — <b>diyakini</b> gratis di SPX, ditagihkan ke merchant di kurir lain, tapi ini{" "}
+                    <b>belum diverifikasi tertulis</b> dari KiriminAja/SPX. Buka COD hanya pada layanan yang risikonya Anda terima
+                    sampai ada konfirmasi resmi.
                   </span>
                 </div>
 

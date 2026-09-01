@@ -627,10 +627,27 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
   | # | step | what happens | where |
   |---|---|---|---|
   | 1 | **Proses** | `baru → diproses` via `applyOrderStatusChange` (the only writer of `orders.status`) | order detail · `/pesanan` |
-  | 2 | **Atur pengiriman** | `createShipment` / `bulkGenerateResi` books with **the service the SHOPPER paid for** (`orders.courier` + `service_type`) — there is deliberately NO rate picker here | order detail · `/pesanan/massal` |
+  | 2 | **Atur pengiriman** | `bulkGenerateResi` books with **the service the SHOPPER paid for** (`orders.courier` + `service_type`) — deliberately NO rate picker. `createShipment` (order-detail single-order screen) is DIFFERENT — see below | order detail · `/pesanan/massal` |
   | 3 | **Resi terbit** | booking returns `awb: null` (`awbPending`); **`cron-tracking` fills `orders.awb` on its own, every 15 min**, batch 100, for orders with a `ka_order_id` in `diproses`/`dikirim` | `api/cron/tracking` |
   | 4 | **Cetak label** | `/api/admin/labels`, then `markLabelsPrinted` stamps `label_printed_at` — the "sudah/belum dicetak" filter | `/pesanan/massal` |
 
+  ⚠️ **Step 2 is NOT one behavior — the two screens genuinely differ, on purpose (verified in code
+  2026-08-28).** `/pesanan/massal` matches the doc above exactly: no picker, books whatever the
+  shopper already paid for. The single-order screen (`order-detail.tsx`, button **"Cek Ongkir"**) is
+  a deliberate escape hatch: it opens a real KiriminAja rate list and lets the seller book ANY
+  service, not gated on order status (booking itself advances `baru → diproses` if needed, via the
+  same `applyOrderStatusChange`, so clicking it before "Proses" just reorders the two steps rather
+  than corrupting anything). **This is not the N30 quote/booking mismatch class — the buyer's charged
+  `orders.shipping_idr` never changes, and the cost difference is reconciled, not hidden:**
+  `createShipment` (`apps/admin/lib/actions/shipping.ts:784-891`) refuses a stale quote
+  (`serverCost !== input.cost`), then computes `sellerDebit = max(0, actualCourierCost −
+  shippingChargedToBuyer)` and `platformMargin = max(0, shippingChargedToBuyer − actualCourierCost)`.
+  A costlier courier choice is **debited from the seller's own ledger balance**
+  (`ledger_entries`, component `shipping-order-debit`) — and refused outright
+  (*"Saldo Seller tidak cukup untuk selisih ongkir…"*) if the seller can't cover it; a cheaper choice
+  becomes platform margin. Same `sellerShippingDebitIdr`/`platformShippingMarginIdr` mechanism as
+  `order-finance.ts`. Treat this as intentional flexibility with its own guard, not a bug to unify
+  away with the bulk screen.
   ⚠️ **Step 3 is the one that gets described wrongly.** The waybill is issued when a courier ACCEPTS
   the pickup, not when we book — so `awb: null` is the normal post-booking state, not a failure. The
   poller is what makes it appear; **"Ambil resi" / "Lacak" are shortcuts for a merchant who does not

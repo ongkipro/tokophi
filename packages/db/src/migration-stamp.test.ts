@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { isMillisecondStamp, MS_CEIL, MS_FLOOR } from "./migration-stamp";
 
@@ -8,7 +9,7 @@ import { isMillisecondStamp, MS_CEIL, MS_FLOOR } from "./migration-stamp";
 // dilewati diam-diam. Yang menangkapnya waktu itu adalah mata manusia yang kebetulan membaca
 // angkanya sebelum commit. Itu bukan penjaga; ini penjaganya.
 
-const journalPath = new URL("../drizzle/meta/_journal.json", import.meta.url).pathname;
+const journalPath = fileURLToPath(new URL("../drizzle/meta/_journal.json", import.meta.url));
 const entries: Array<{ tag: string; when: number }> = JSON.parse(readFileSync(journalPath, "utf8")).entries;
 
 describe("stempel journal adalah milidetik", () => {
