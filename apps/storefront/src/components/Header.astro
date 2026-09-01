@@ -248,9 +248,9 @@ const drawerEmail = (store.email ?? "").trim() || null;
       >
       <span class="block aspect-[4/3] w-full overflow-hidden rounded-xl bg-brand-50">
       <img
-      src={meta!.image}
-      srcset={imageSrcSet(meta!.image)}
-      sizes={imageSrcSet(meta!.image) ? TILE_SIZES : undefined}
+      src={meta.image}
+      srcset={imageSrcSet(meta.image)}
+      sizes={imageSrcSet(meta.image) ? TILE_SIZES : undefined}
       alt=""
       loading="lazy"
       class="h-full w-full object-cover transition-transform duration-500 group-hover/tile:scale-105 motion-reduce:transition-none motion-reduce:group-hover/tile:scale-100"
@@ -260,7 +260,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
       {child.label}
       </span>
       <span class="block text-center text-xs text-muted tabular-nums">
-      {meta!.count > 0 ? `${meta!.count} produk` : "Segera hadir"}
+      {meta.count > 0 ? `${meta.count} produk` : "Segera hadir"}
       </span>
       </a>
       ))}
