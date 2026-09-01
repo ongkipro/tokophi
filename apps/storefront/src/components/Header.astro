@@ -230,9 +230,14 @@ const drawerEmail = (store.email ?? "").trim() || null;
       "Heavyweight". The merchant curates them by ordering their menu: first two categories
       with a photo win. -->
       {(() => {
+      {/* flatMap, not map+filter: the truthy guard narrows `meta` to non-null INSIDE the branch,
+      so the returned objects are typed with a real `meta` — a .filter() predicate does not
+      narrow the element type, which is the ts(18047) CI caught on its first live run. */}
       const tiles = item.children
-      .map((child) => ({ child, meta: categoryMeta(child.href) }))
-      .filter((t) => t.meta?.image)
+      .flatMap((child) => {
+      const meta = categoryMeta(child.href);
+      return meta && meta.image ? [{ child, meta }] : [];
+      })
       .slice(0, 2);
       return tiles.length > 0 ? (
       <div class="grid grid-cols-2 gap-4">

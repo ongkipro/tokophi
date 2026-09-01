@@ -8,6 +8,69 @@
 
 ## Log History & Execution Entries
 
+### [2026-08-31 17:32 UTC] — AUDIT-FULL · audit menyeluruh tervalidasi + 2 aksi: OVO dinonaktifkan (probe live) & `expiryStamp` dipatok WIB (bug TZ nyata)
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "audit keseluruhan biar sempurna, validasi dulu" → semua temuan diukur, bukan dibaca.
+- **Temuan kritis (infra, diverifikasi live):** ① panel Coolify `:8000` (+6001/6002/8080) menjawab 200 dari internet publik; ② origin `:443` bisa diakses langsung by IP → Cloudflare ter-bypass (dan IP ada di repo yang publik); ③ `KIRIMINAJA_ENV=sandbox` di produksi — blocked eksternal: sheet UAT belum dikirim → belum ada akses production KA; ④ backup 6-jam-an sehat tapi HANYA lokal (VPS mati = data+backup hilang); ⑤ kapasitas lega (8GB/4vCPU, load 1.0, swap 8G) — blue-green terjangkau; SSH keras (key-only+fail2ban); cron hidup; 3 pesanan "problem" KA = booking uji demo batik, bukan merchant.
+- **Repo/proses:** 12 P1 + 6 P2 terbuka (4 owner-gated: 5.8/5.12/5.19/5.20); dokumen ledger saling kontradiksi (OPEN.md basi "13 P0", NEXT.md N1 diklaim open padahal shipped, tiga hitungan P1/P2 berbeda) — 5.14/5.15 adalah obatnya; Stage 7 belum pernah jalan.
+- **AKSI ① — OVO DINONAKTIFKAN di produksi** (`platform_payment_channels.enabled=false`): probe `create_payment` live dari container admin → **`rc=68 EXT TIMEOUT` konsisten ×2**; kontrol QRIS saat itu `rc=11 BILLER DISRUPTION` (00:30 WIB — indikasi jendela maintenance PSP). Pembeli tak lagi bisa memilih channel yang error di langkah akhir. Re-probe siang WIB sebelum menyalakan lagi. (QRIS+5 VA tetap ON — terbukti hidup 2026-08-26 dengan pembayaran sungguhan.)
+- **AKSI ② — bug nyata dari probe: `expiryStamp` membaca jam LOKAL container.** Dibuktikan live: stamp UTC "now+1h" ditolak `rc=08 Invalid expired date` (terbaca masa lalu di WIB); digeser +7 jam → lolos validasi. **AutoLaris membaca `expired` sebagai WIB.** Container produksi = UTC ⇒ tagihan diam-diam berlaku 17 jam (bukan 24); TZ lebih barat dari UTC ⇒ SEMUA pembayaran ditolak. Fix: `expiryStamp` WIB by arithmetic (+7h lalu baca via `getUTC*`); test baru `autolaris-expiry.test.ts` (paritas Asia/Jakarta + larangan `get(Hours|…)` lokal via `codeOnly`).
+- **Efek repo PUBLIC lagi (perintah owner):** CI hidup gratis — re-run di main **success 3m29s**. GitHub dicek sebelum push: HEAD `5c1e6b2` = merge terakhir sesi ini, tidak ada commit kolaborator yang bisa tertimpa.
+- **Menunggu keputusan owner:** allowlist-IP vs SSH-tunnel untuk port Coolify; kredensial R2 untuk backup offsite; kirim sheet UAT KA; opsi struktural zero-downtime.
+- **Verifikasi:** vitest lib+actions 36 file / 254 hijau · tsc lib+admin 0 · verdict penuh di CI PR ini.
+
+### [2026-08-28 — ZERO-DOWNTIME⑤/FINAL] — OPS · hasil akhir terukur: **81–115 dtk → 7,0–8,3 dtk** (−93%)
+
+- **Executor:** Main Session (Claude, Fable 5). Deploy 524 diukur (probe 300ms): jendela utama `app` 8,3 dtk · `rich` 7,0 dtk · `toko` 7,3 dtk (+blip kecil <2 dtk; 13×500 singkat di storefront saat swap tetangganya). Persis target 5–8 dtk.
+- **Kurva lengkap, semua terukur:** 521 baseline **81–115 dtk** (teardown penuh) → 522 nama-konsisten **~13 dtk** (postgres/cron selamat) → 523 **17–20 dtk** (retry entrypoint TERBUKTI bukan obatnya — pool kosong = 503 instan tanpa dial) → 524 gate `migrate` dilepas **7–8 dtk**.
+- **Komposisi sisa ~7 dtk** = stop app lama + create + boot Next + heal (start_interval 2 dtk) + refresh provider Traefik — lantai praktis untuk compose recreate in-place.
+- **Menuju nol mutlak = keputusan struktural owner, bukan tuning lagi:** ① lepas health-gating Traefik pada app yang dirutekan (container masuk pool saat start; dial gagal selama boot ~1–3 dtk DIJEMBATANI retry-global yang sudah terpasang → efektif ~nol; trade: app hang-tapi-listening tidak di-eject) ATAU ② pecah surface jadi app Dockerfile-type Coolify (rolling update didukung penuh) ATAU ③ blue-green 2 replika manual. Ketiganya dicatat; tidak dieksekusi tanpa perintah.
+- Probe dihentikan; semua branch ops (zero-downtime 1–3) merged (#370–#373); setting Coolify yang diubah: `is_consistent_container_name_enabled=true`; file proxy: `dynamic/tokophi-retry-global.yaml` + arg entrypoint; backup pra-edit tersimpan di `proxy/backups/`.
+
+### [2026-08-28 — ZERO-DOWNTIME④] — OPS · koreksi terukur: retry TIDAK menjembatani pool kosong → gate `migrate` dilepas dari app yang dirutekan
+
+- **Executor:** Main Session (Claude, Fable 5). Deploy 523 diukur: `app` 19,6 dtk · `rich` 17,5 dtk · `toko` 3,4+19,6 dtk — retry-global TIDAK memperbaiki jendela, dan alasannya kini dipahami: **saat pool health-gated kosong, Traefik menjawab 503 SEKETIKA tanpa dial**, dan middleware retry hanya mengulang **dial yang gagal**, bukan respons 503. Ekspektasi di entry ③ salah; dikoreksi di sini dengan angka. (retry-global tetap dipasang — ia tetap benar untuk kelas dial-failure, cuma bukan obat jendela swap.)
+- **Lever yang benar (dari forensik 521):** `depends_on: migrate: service_completed_successfully` di admin/super-admin/storefront — compose menghentikan dependent SEBELUM me-recreate dependency, jadi gate itu MEMAKSA urutan [app lama mati] → migrate → [app baru boot], ~13–20 dtk gelap di TIAP deploy. Gate dilepas: app re-create paralel dengan migrate.
+- **Trade yang diambil, dinyatakan gamblang:** deploy yang MEMBAWA migrasi bisa membuat kode baru membaca skema pra-migrasi selama ±durasi migrate (~10 dtk) — 500 terbatas pada query terdampak, tanpa korupsi, dan tidak lebih buruk dari blackout total yang justru dijamin oleh gate lama. Mayoritas deploy tidak membawa migrasi. Bootstrap pertama tetap konvergen (app unhealthy → di luar pool → heal setelah migrate).
+- **Deploy perubahan ini (524) = pengukurannya.** Target: jendela ≈ stop+create+boot+heal ≈ 5–8 dtk.
+
+### [2026-08-28 — ZERO-DOWNTIME③] — OPS · hasil terukur: 81–115 dtk → ~13 dtk → retry-global menjembatani sisanya · +1 insiden proxy (4 mnt, ulah sendiri, pelajaran dicatat)
+
+- **Executor:** Main Session (Claude, Fable 5).
+- **Deploy 522 diukur (probe 300ms):** `app` 13,9 dtk · `rich` 12,9 dtk · `toko` 7,8+12,9 dtk — dari 81–115 dtk. Nama-konsisten bekerja: postgres/cron TIDAK ikut mati; sisa jendela = swap in-place ketiga app (image Next tidak reproducible → ketiganya selalu berganti image walau kode tak berubah; hanya-storefront tidak tercapai karena itu).
+- **`retry-global` di entrypoint https** (file dynamic `tokophi-retry-global.yaml` + arg statis `--entrypoints.https.http.middlewares=retry-global@file`): 6 attempts eksponensial dari 700ms ≈ ~22 dtk cover — melampaui jendela swap, dan menjangkau router generated Coolify (app./rich./toko.) yang tak bisa diberi label dari repo. Retry di dial yang gagal tidak mengirim byte apa pun → tidak bisa double-submit POST. Retry level-router `tokophi-stores` DIHAPUS di commit ini — dua lapis = nested (6×5 dial ≈ 40 dtk hold); satu lapis di entrypoint yang memilikinya.
+- 🔴 **INSIDEN (jujur): recreate `coolify-proxy` memutus attachment network runtime buatan Coolify** — proxy hidup hanya di network `coolify`, semua backend app di network resource → pool kosong → ketiga host menggantung ±4 menit (05:00–05:04 UTC) sampai `docker network connect l7r4qaqcml4zigw1dc7iptun coolify-proxy`. Backup compose proxy dibuat SEBELUM edit (`backups/docker-compose.yml.pre-retry-*`). **Runbook:** setiap kali proxy di-recreate manual, sambungkan ulang network resource — atau restart proxy lewat UI Coolify yang mengurusnya sendiri.
+- **Deploy perubahan ini (523) = pengukuran final** dengan seluruh konfigurasi terpasang; angka di entry berikut.
+
+### [2026-08-28 — ZERO-DOWNTIME②] — OPS · akar 503 yang SEBENARNYA: teardown penuh Coolify → `is_consistent_container_name_enabled`
+
+- **Executor:** Main Session (Claude, Fable 5). Probe 300ms selama deploy 521 memberi angka jujur: **jendela 81–115 dtk** — bukan aritmetika healthcheck.
+- **Forensik (timeline container + log perintah Coolify):** healthcheck baru justru sudah bekerja (migrate 04:45:44→:49 = 5 dtk; apps start :49, healthy ±:53 — `start_interval` menunaikan tugasnya). Yang dominan: **Coolify men-`docker stop` SEMUA container lama satu-per-satu (04:44:00) lalu membuat stack baru (04:45:38)** — `postgres` yang config-nya tak berubah pun ikut mati. Nama container membawa suffix acak per-deploy, jadi compose tak pernah bisa bilang "tidak berubah".
+- **Fix:** `application_settings.is_consistent_container_name_enabled = true` (dieksekusi di Coolify, 2026-08-28). Dengan nama konsisten `docker compose up -d` me-recreate HANYA service yang berubah: postgres/cron tak tersentuh, **app lama tetap melayani selama migrate berjalan**, lalu tiap app di-swap in place (~5–8 dtk; router wildcard toko dijembatani `tokophi-retry` — attempt lanjutan mendarat setelah pool terisi lagi).
+- **Deploy ini adalah pengukurannya:** perubahan kode inert hanya di storefront (marker di `robots.txt.ts`) → hanya image storefront yang berubah → probe harus menunjukkan `app.`/`rich.` **nol** downtime dan `toko.` hanya jendela swap singkat. Angka menyusul di entry berikutnya.
+
+### [2026-08-28 — ZERO-DOWNTIME①] — OPS · jendela 503 deploy dikecilkan: `start_interval: 2s` + retry Traefik di router wildcard toko
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "lanjut healthcheck + rolling coolify biar zero-downtime".
+- **Diagnosa (diukur dari konfigurasi, bukan tebakan):** healthcheck SUDAH ada di keempat surface — jendela 503 datang dari mekanika recreate compose: Traefik 3 hanya me-rutekan container **HEALTHY**, dan cek pertama baru jalan setelah `interval: 15s`. Jendela ≈ boot + ≤15 dtk. **Rolling sejati tidak tersedia**: Coolify tidak mendukung rolling update untuk app berbasis compose (recreate in place); itu batas platform, dicatat di file.
+- **Fix ①:** `start_interval: 2s` (Docker ≥25; VPS = 29.6.1 ✓, Compose 5.3.1 ✓) pada healthcheck admin/super-admin/storefront/landing — selama `start_period`, cek jalan tiap 2 dtk → healthy ~2–4 dtk setelah boot. Cron/backup sengaja tak diubah (tidak ada rute ke sana).
+- **Fix ②:** middleware `tokophi-retry` (5 attempts, exponential dari 500ms ≈ tutup ~7,5 dtk) dipasang di router `tokophi-stores` — **wildcard `<slug>.tokophi.com`, permukaan yang dihantam pembeli** dan satu-satunya router yang label-nya milik repo (router app./rich./toko. digenerate Coolify). Request yang mendarat di celah di-retry sampai pool terisi, bukan langsung 503.
+- **Validasi:** `docker compose config` VALID (dengan env dummy; error interpolasi lokal = variabel rahasia yang memang tak ada di dev). **Pengukuran sebenarnya menyusul pada deploy perubahan ini sendiri**: probe 300ms ke tiga host selama deploy — angka jendela before/after dilaporkan di entry berikutnya.
+- **Sisa menuju zero mutlak (keputusan owner, bukan to-do):** pecah app per-Dockerfile di Coolify (rolling didukung) ATAU dua replika + blue-green manual. Dicatat di handover.
+
+### [2026-08-28 — EOD] — OPS · repo PRIVATE lagi (perintah owner) · konsekuensi: CI mati bersamanya · md + memori disinkronkan
+
+- **Executor:** Main Session (Claude, Fable 5). Urutan: owner memerintahkan private → flip dilakukan → md + memori proyek diperbarui.
+- Jendela public ≈ 1 hari (2026-08-27 → 28). Selama itu: Actions gratis menghidupkan `ci.yml`, run sungguhan pertama menangkap bug nyata (`ts(18047)` mega menu → #368/deploy 520), CI hijau di PR dan `main`. **Private ⇒ Actions butuh billing (lapse) ⇒ CI mati lagi** — bukan regresi kode; pulihkan billing dan gerbang yang sama hidup kembali.
+- Handover 2026-08-27 diberi addendum (visibilitas, status CI, pelajaran "jangan gate lewat pipe", asumsi konten terindeks); memori proyek dotfiles diperbarui + di-push.
+
+### [2026-08-27 10:10 UTC] — CI-LIVE · GitHub Actions hidup lagi (efek repo public) dan run pertamanya LANGSUNG menangkap bug nyata
+
+- **Executor:** Main Session (Claude, Fable 5). Repo public → Actions gratis → `ci.yml` (yang mati sejak billing lapse) dieksekusi sungguhan untuk pertama kali; kegagalan 3-detik sebelumnya adalah blok billing, bukan hasil.
+- **Run pertama = MERAH, dan itu berita bagus:** `astro check` di CI menangkap `Header.astro:246–258 ts(18047) 'meta' is possibly 'null'` — tile mega menu (#361) memakai `.map().filter(t => t.meta?.image)`, dan predikat `.filter()` TIDAK menyempitkan tipe elemen. Fix: `flatMap` dengan guard `meta && meta.image` di dalam badan fungsi — penyempitan terjadi di cabang, objek yang dikembalikan bertipe `meta` non-null.
+- 🔴 **Kenapa lolos "verifikasi" lokal — cacat pengukuran, dicatat supaya tidak terulang:** cek dijalankan sebagai `npm run check:storefront 2>&1 | tail -3 && …` — exit code pipeline = milik `tail` (selalu 0), dan `tail -3` hanya menampilkan baris warnings/hints, MEMOTONG baris errors. Jadi "astro check 0" yang diklaim untuk lane #361–#365 sebenarnya tidak terukur. Aturan mulai sekarang: **jangan pernah menge-gate lewat pipe — jalankan cek apa adanya, baca exit code-nya, baru lihat lognya.** CI adalah penangkap kelas ini, dan menangkapnya pada run pertama.
+- **Verifikasi (dengan exit code kali ini):** `astro check` exit 0 · 0 errors · build 0 · suite storefront 112 hijau · verdict CI penuh diserahkan ke check PR ini sendiri — itulah gunanya.
+
 ### [2026-08-27 09:55 UTC] — DOCS · handover Irwansyah 2026-08-27 (kereta #350–#366 / deploy 505–519) + memori proyek diperbarui
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "update memori tokophi + handover irwansyah".
