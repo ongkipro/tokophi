@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-02 05:30 UTC] — OPS · backup OFFSITE ke R2: mekanismenya ada, dibuktikan terhadap endpoint S3 nyata; menunggu satu kredensial
+
+- **Executor:** Main Session (Claude, Fable 5). Owner: "lanjut backup offsite ke r2". Menutup gap #4 audit 2026-09-01 (dump 6-jaman sehat tapi 100% lokal — VPS mati = data + seluruh backup hilang).
+- **Kredensial: BUNTU, dan itu temuan tersendiri.** Kedua token Cloudflare di estate ini **zone-scoped** — `/accounts` mengembalikan kosong untuk keduanya (token lokal `CLOUDFLARE_API_TOKEN` dan `CF_SAAS_API_TOKEN` di container admin), sementara R2 adalah produk level-AKUN. Jadi token baru harus dicetak dengan izin **R2 Storage: Edit**. Nilai token tidak pernah dicetak ke mana pun selama pemeriksaan ini.
+- **Yang dikirim (`backup-offsite` sidecar):** image `rclone/rclone:1.68`, mirror `tokophi-backups` → `r2:$BUCKET/postgres` tiap jam, lalu prune **remote saja** (`R2_RETENTION_DAYS`, default 30 > lokal 14 — offsite justru yang dicari ketika yang baru ikut hilang bersama boks). Volume di-mount **read-only** (mustahil menghapus dump lokal) dan memakai `rclone copy`, **bukan `sync`** — sync akan mencerminkan penghapusan, jadi prune lokal 14-hari akan menghapus arsip offsite yang justru jadi alasan service ini ada.
+- 🔴 **INERT + UNHEALTHY sampai dikonfigurasi, sengaja:** tanpa variabel R2 ia mencetak `offsite-UNCONFIGURED` dan gagal healthcheck. Backup yang dipercaya tapi tak ada lebih buruk daripada yang jelas-jelas tidak ada. `last-ok` hanya ditulis setelah ronde upload+prune sungguhan, jadi "healthy" tak bisa berarti "loop hidup tapi kredensial mati".
+- **Dibuktikan sebelum kirim (MinIO lokal sebagai endpoint S3 nyata, bukan mock):** ① copy naik → 2 dump di remote; ② retensi menghapus **hanya** dump 60-hari di remote, **kedua file lokal utuh** (mount ro terbukti); ③ kredensial salah → `offsite-FAILED`, `last-ok` tak ditulis, healthcheck **UNHEALTHY**; ④ tanpa kredensial → `offsite-UNCONFIGURED` + UNHEALTHY. MinIO + fixture dibersihkan.
+- **Docs:** `SLA-DRP.md` §3 diturunkan dari 🔴 ke 🟡 dengan jujur (mekanisme ada, kredensial belum, **restore belum pernah diuji**); `DEPLOY.md` dapat prosedur 4-langkah penyalaan + **runbook restore-dari-R2** (ke database throwaway, selalu di-drop) — karena mengunggah belum jadi backup sampai satu dump pernah dipulihkan.
+- **Verifikasi:** `docker compose config` VALID pada kedua kondisi (kosong → unconfigured; `R2_ACCOUNT_ID` diisi → endpoint terbentuk otomatis).
+
 ### [2026-08-31 17:32 UTC] — AUDIT-FULL · audit menyeluruh tervalidasi + 2 aksi: OVO dinonaktifkan (probe live) & `expiryStamp` dipatok WIB (bug TZ nyata)
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "audit keseluruhan biar sempurna, validasi dulu" → semua temuan diukur, bukan dibaca.

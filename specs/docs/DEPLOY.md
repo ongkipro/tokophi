@@ -702,3 +702,47 @@ Everything is host-agnostic (Coolify + git + `pg_dump` + Cloudflare), so:
 ## Domain wiring (when going live)
 
 `tokophi.com` is already in Cloudflare (DNS not pointed yet). Point: `app.tokophi.com` → admin, `rich.tokophi.com` → super-admin, apex/`www` → landing, storefront subdomain/custom. Code is env-driven (`PUBLIC_APP_URL`/`ADMIN_URL`/`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`) → switching = env only.
+
+## Offsite backup (Cloudflare R2) — how to switch it on
+
+The `backup-offsite` sidecar ships INERT: with no credentials it logs `offsite-UNCONFIGURED` and
+reports unhealthy (deliberate — see `SLA-DRP.md` §3). Four variables in **Coolify → the TokoΦ
+resource → Environment Variables** turn it on; no code change, no redeploy of anything else.
+
+1. **Mint the token** — Cloudflare dashboard → R2 → *Manage R2 API Tokens* → Create. Permission
+   **Object Read & Write**, scoped to the one bucket. ⚠️ It must be an **account-scoped** token: the
+   zone-scoped tokens already on this estate cannot see R2 at all (verified 2026-09-02 — `/accounts`
+   returns empty for both).
+2. **Create a PRIVATE bucket** (e.g. `tokophi-backups`). Never enable public access: these dumps hold
+   customer PII — names, phones, delivery addresses — and password hashes.
+3. **Set in Coolify**, then redeploy (or just restart `backup-offsite`):
+   - `R2_ACCOUNT_ID` — the 32-char account id (R2 endpoint is derived: `https://<id>.r2.cloudflarestorage.com`)
+   - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` — from step 1
+   - `R2_BUCKET` — from step 2
+   - optional `R2_RETENTION_DAYS` (default **30**; longer than the local 14 on purpose)
+4. **Verify it actually ran** — not that the container is up:
+   ```bash
+   docker logs $(docker ps --format '{{.Names}}' | grep -m1 '^backup-offsite') --tail 5
+   # want: offsite-ok <timestamp> bucket=… retention=30d     (not offsite-UNCONFIGURED/FAILED)
+   docker inspect $(docker ps --format '{{.Names}}' | grep -m1 '^backup-offsite') --format '{{.State.Health.Status}}'
+   ```
+   `healthy` here means a real upload+prune round finished within 8 h — the state file is written
+   only after one, so a live loop with a dead credential cannot read as healthy.
+
+### Restore FROM R2 (the half that makes it a backup)
+
+Uploading is not a backup until this has been done at least once. Run it against a THROWAWAY
+database, never production:
+
+```bash
+# 1. pull the newest dump out of R2 (inside the sidecar, where the credentials already are)
+docker exec $(docker ps --format '{{.Names}}' | grep -m1 '^backup-offsite') \
+  sh -c 'rclone copy "r2:$R2_BUCKET/postgres" /tmp/restore --include "*.dump" --max-age 24h && ls -l /tmp/restore'
+# 2. restore it into a scratch database and count rows — a dump that will not restore is not a backup
+docker exec -i $(docker ps --format '{{.Names}}' | grep -m1 '^postgres-') \
+  sh -c 'createdb -U tokophi restore_probe && pg_restore -U tokophi -d restore_probe --no-owner' < <dump>
+docker exec -i $(docker ps --format '{{.Names}}' | grep -m1 '^postgres-') \
+  psql -U tokophi -d restore_probe -c 'select count(*) from orders;'
+# 3. ALWAYS drop the scratch database afterwards
+docker exec -i $(docker ps --format '{{.Names}}' | grep -m1 '^postgres-') dropdb -U tokophi restore_probe
+```
