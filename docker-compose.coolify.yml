@@ -591,7 +591,17 @@ services:
       RCLONE_CONFIG_R2_PROVIDER: Cloudflare
       RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      RCLONE_CONFIG_R2_ENDPOINT: ${R2_ACCOUNT_ID:+https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}
+      # ⚠️ USE ONLY THE PLAIN DEFAULT FORM OF SHELL EXPANSION IN THIS FILE (name, colon-dash,
+      # fallback). The endpoint was first written with the ALTERNATE-VALUE form — colon-plus, with a
+      # second expansion of the same variable nested inside the replacement text. `docker compose
+      # config` accepted it happily, but Coolify parses this file with its OWN env reader and derives
+      # a variable KEY out of that whole expression, which its key validator rejects: deploy 527 died
+      # with "The key must start with a letter or underscore…" before a single container was touched.
+      # Local compose validation is necessary and NOT sufficient. ⚠️ And do not write the offending
+      # form in a comment either — the parser reads raw text, so an example is as dangerous as code
+      # (same class as the literal script token that killed `npm run dev`, AGENTS.md). The endpoint is
+      # built in the shell below, where it is plain string concatenation.
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
       RCLONE_CONFIG_R2_ACL: private
       R2_BUCKET: ${R2_BUCKET:-}
       R2_RETENTION_DAYS: ${R2_RETENTION_DAYS:-30}
@@ -604,7 +614,11 @@ services:
     command:
       - |
         while true; do
-          if [ -z "$$R2_BUCKET" ] || [ -z "$$RCLONE_CONFIG_R2_ACCESS_KEY_ID" ] || [ -z "$$RCLONE_CONFIG_R2_ENDPOINT" ]; then
+          # Built here, not in `environment:` above — see the note there.
+          if [ -n "$$R2_ACCOUNT_ID" ]; then
+            export RCLONE_CONFIG_R2_ENDPOINT="https://$$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          fi
+          if [ -z "$$R2_BUCKET" ] || [ -z "$$RCLONE_CONFIG_R2_ACCESS_KEY_ID" ] || [ -z "$$R2_ACCOUNT_ID" ]; then
             echo "offsite-UNCONFIGURED: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET in Coolify"
             rm -f /state/last-ok
           else
