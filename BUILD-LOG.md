@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-02 — DEPLOY-FIX] — OPS · deploy 527 GAGAL: parser env Coolify menolak bentuk ekspansi alternate-value (produksi tak tersentuh)
+
+- **Executor:** Main Session (Claude, Fable 5). Deploy sidecar offsite (#377) gagal — **sebelum satu container pun disentuh**; produksi tetap melayani (uptime 26 jam, ketiga surface 200/307). Kegagalan aman by construction.
+- **Sebab:** endpoint R2 ditulis di `environment:` memakai bentuk ekspansi **alternate-value** (colon-plus) dengan ekspansi variabel yang sama bersarang di dalam teks penggantinya. `docker compose config` MENERIMANYA; **Coolify mengurai file ini dengan pembaca env-nya sendiri** dan menurunkan sebuah KUNCI variabel dari ekspresi itu → ditolak validator: *"The key must start with a letter or underscore…"* (`ValidationPatterns.php:219`).
+- **Pelajaran (dicatat di file):** **validasi `docker compose config` perlu tapi TIDAK cukup** — Coolify punya parser sendiri. Di file ini pakai hanya bentuk default polos (name, colon-dash, fallback).
+- 🔴 **Dan jebakan keduanya nyaris terulang:** perbaikan pertama saya menuliskan bentuk terlarang itu **di dalam komentar** sebagai contoh. Parser membaca teks mentah, jadi contoh sama berbahayanya dengan kode — kelas yang sama dengan token skrip literal yang mematikan `npm run dev` (#364). Komentar ditulis ulang dengan kata-kata, dan diverifikasi: **0 kemunculan** pola itu di seluruh file.
+- **Fix:** `R2_ACCOUNT_ID` dilewatkan sebagai variabel polos; endpoint dirakit di shell (`export RCLONE_CONFIG_R2_ENDPOINT="https://$R2_ACCOUNT_ID.r2…"`), dan gate unconfigured kini menguji `R2_ACCOUNT_ID` langsung.
+- **Verifikasi:** compose VALID · runtime dengan `R2_ACCOUNT_ID=abc123` → `endpoint=https://abc123.r2.cloudflarestorage.com` · tanpa kredensial → `UNCONFIGURED` (benar) · 0 pola terlarang tersisa.
+
 ### [2026-09-02 05:30 UTC] — OPS · backup OFFSITE ke R2: mekanismenya ada, dibuktikan terhadap endpoint S3 nyata; menunggu satu kredensial
 
 - **Executor:** Main Session (Claude, Fable 5). Owner: "lanjut backup offsite ke r2". Menutup gap #4 audit 2026-09-01 (dump 6-jaman sehat tapi 100% lokal — VPS mati = data + seluruh backup hilang).
