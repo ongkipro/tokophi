@@ -87,11 +87,23 @@ old code left, spanning `11:08` → `16:56` on 2026-08-05 — the two oldest wer
 ran before the fix landed. The window **grows to 14 days over the next fortnight**; it is not 14 days
 today. Do not read §4's "logical corruption" row as covered until it has.
 
-🔴 **Gap — the backups are on the machine they protect.** `tokophi-backups` is a Docker volume on
-`45.77.33.112`, beside `tokophi-pgdata`. **There is no offsite copy** — no R2, no S3, nothing in the
-compose file or `ops/`. A lost VPS loses the database *and* every backup of it. `native-first`'s own
-self-host rule says "backup rutin → R2 + tes restore sebelum pindah"; only the first half of the first
-clause exists.
+🟡 **Gap — the backups are on the machine they protect: the MECHANISM now exists, the CREDENTIAL does
+not.** `tokophi-backups` is a Docker volume on `45.77.33.112`, beside `tokophi-pgdata`; a lost VPS
+still loses the database *and* every backup of it **until the R2 variables are set**.
+Shipped 2026-09-02: the `backup-offsite` sidecar (`docker-compose.coolify.yml`) mirrors the existing
+dumps to Cloudflare R2 hourly and prunes only the REMOTE copies (`R2_RETENTION_DAYS`, default 30).
+It mounts `tokophi-backups` **read-only** — it can never delete a local dump — and uses `rclone copy`,
+never `sync`, so a local prune cannot propagate. Proven against a live S3 endpoint before shipping:
+upload, remote-only retention (a 60-day dump deleted remotely while both local files survived), plus
+both failure paths.
+🔴 **It is INERT and UNHEALTHY until the owner supplies four Coolify variables** — `R2_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. Unconfigured it logs
+`offsite-UNCONFIGURED` and reports unhealthy on purpose: a backup you believe in and do not have is
+worse than an obviously absent one. Neither Cloudflare token on this estate can create it — both are
+ZONE-scoped (verified 2026-09-02: `/accounts` returns empty for each), and R2 is an account-level
+product, so the token must be minted with **R2 Storage: Edit**.
+⚠️ **Still untested end to end: the RESTORE.** Uploading is not a backup until a dump has been pulled
+from R2 and restored into a throwaway database. That exercise is §7's, and it has not been run.
 
 **Proposal — RPO objectives, once the two gaps above are closed:** 24 h for a full-box loss (offsite
 daily), 1 h for a logical/corruption event (retained hourly for 48 h, daily for 14 d).
