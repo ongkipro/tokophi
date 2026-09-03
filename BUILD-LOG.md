@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-03 — CHECKPOINT] — DOCS · resume checklist sebelum restart laptop owner (deploy 528 diverifikasi live)
+
+- **Executor:** Main Session (Claude, Fable 5). Owner me-restart laptop; seluruh status dibekukan ke `specs/docs/tasks/2026-09-03-resume-checklist.md` — antrean owner (R2 4-variabel + uji restore, sheet UAT KA, port Coolify, keputusan struktural), antrean engineering (re-probe OVO siang WIB, promo-AI→API, P1/P2, Stage 7), dan log kereta #375–#378.
+- **Verifikasi 528:** produksi sehat; `backup-offsite` running dengan log `offsite-UNCONFIGURED` + health menuju unhealthy — persis perilaku yang dirancang dan diuji.
+- md-only → tanpa build.
+
 ### [2026-09-02 — DEPLOY-FIX] — OPS · deploy 527 GAGAL: parser env Coolify menolak bentuk ekspansi alternate-value (produksi tak tersentuh)
 
 - **Executor:** Main Session (Claude, Fable 5). Deploy sidecar offsite (#377) gagal — **sebelum satu container pun disentuh**; produksi tetap melayani (uptime 26 jam, ketiga surface 200/307). Kegagalan aman by construction.
