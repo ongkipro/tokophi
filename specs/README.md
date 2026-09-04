@@ -31,7 +31,8 @@ Start from the authority map below. Verify dated claims against code and the tar
 
 Supporting domain references:
 
-- [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) maps routes, data layers, and tables.
+- [`docs/PAGE_MAP.md`](docs/PAGE_MAP.md) is the **generated** page-level index of all four surfaces — every URL → file, data/action modules, gate, tests (`node scripts/gen-page-map.mjs`; `test/page-map-fresh.test.ts` fails when stale). Start here to find a screen.
+- [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) explains the surfaces, the tenant boundary and the cross-surface edges (dated; see its header for what is stale).
 - [`docs/FLOWS.md`](docs/FLOWS.md) and [`docs/UML.md`](docs/UML.md) describe critical flows and state machines.
 - [`docs/SCHEMA.md`](docs/SCHEMA.md) is a dated schema snapshot; query the target database before relying on counts.
 - [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) records engineering applicability, open policy owners, and legal-review gates.

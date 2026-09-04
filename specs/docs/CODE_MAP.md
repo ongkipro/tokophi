@@ -23,8 +23,9 @@ TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia U
 ```
 tokophi/
   apps/
-    admin/          # merchant admin — 39 routes, 22 action files, 22 data files
-    super-admin/    # platform control plane — 8 routes
+    admin/          # merchant admin ("Seller") — route/page inventory: PAGE_MAP.md (generated, never counted by hand here again:
+                    #   this line said "39 routes" while the directory held 55)
+    super-admin/    # platform control plane — routes in PAGE_MAP.md
     storefront/     # Astro SSR shopper site — ONE deploy serves every store (tenant from the Host header):
                     #   src/middleware.ts → getStoreByHost() → {store, catalog} on Astro.locals
                     #   src/data/store.ts (host→store, RESERVED labels, custom-domain SEAM) · cache.ts (per-store TTL)
