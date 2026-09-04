@@ -12,6 +12,7 @@
     "build:admin": "npm run build -w @tokophi/admin",
     "build:super": "npm run build -w @tokophi/super-admin",
     "test": "vitest run && npm run check:storefront && npm run check:landing",
+    "page-map": "node scripts/gen-page-map.mjs",
     "test:watch": "vitest",
     "check:storefront": "astro check --root apps/storefront",
     "check:landing": "astro check --root apps/landing",

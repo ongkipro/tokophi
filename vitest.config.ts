@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // The repo runs vitest with no config, which is fine until a test needs a module that only Next
 // provides. `server-only` is such a module: it is not an npm dependency here — Next aliases it during
@@ -36,5 +36,11 @@ export default defineConfig({
     // over the ledger never ran on anyone's machine — and there is no CI here to notice. See the long
     // note in the setup file, especially the guard that refuses any database not named `*_test`.
     globalSetup: ["./test/db-setup.ts"],
+    // Vitest's defaults skip node_modules/dist/.git but NOT `.claude/`, and `.claude/worktrees/*` holds
+    // dozens of stale agent checkouts, each a full copy of the tree. Measured 2026-09-04: a bare
+    // `npx vitest run` collected 3603 files (the repo has ~135), took 15 minutes, and 68 files failed —
+    // every copy racing the others for the one `_test` database. Same trap `scripts/gen-page-map.mjs`
+    // hit on its first run.
+    exclude: [...configDefaults.exclude, "**/.claude/**"],
   },
 });

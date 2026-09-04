@@ -2545,3 +2545,56 @@ the forced-race suites. `npx tsc --noEmit -p packages/db` → exit 0.
 **Still true, unchanged:** **the seed is not a migration** — none of this reaches a store that
 already exists. And Task **5.19 stays OPEN**: it is owner-gated on written KiriminAja confirmation of
 the SPX return terms; only the honest-label half is done.
+
+## 2026-09-04 09:55 UTC — Main Session — Task 6.10 · generated PAGE MAP (all four surfaces) + route sweep report
+
+**Why.** `CODE_MAP.md` said "admin — 39 routes" while the directory held 55; `SYSTEM_MAP.md` still
+described the 2-minute impersonation JWT that Task 4.11 replaced. A map written by hand is a snapshot
+that reads as current. The user asked for a non-public "sitemap of the code" an agent can use to find
+a screen or analyse the whole — so it is DERIVED from the tree and pinned fresh by a test.
+
+**Files.** `scripts/gen-page-map.mjs` (new) → `specs/docs/PAGE_MAP.md` + `specs/docs/page-map.json`
+(generated, same run, same check) · `test/page-map-fresh.test.ts` (new; `--check` must exit 0) ·
+`package.json` (`npm run page-map`) · `specs/docs/tasks/2026-09-04-page-map-report.md` (findings) ·
+pointers in `AGENTS.md`, `specs/README.md`, `specs/docs/CODE_MAP.md`, `specs/docs/SYSTEM_MAP.md` ·
+`TASKS.md` (Task 6.10 `[x]`), `specs/docs/TASKS.md` (Epic 0), `specs/docs/STATUS.md` (docs boundary).
+
+**What the map records per route** (read from the route file's own CODE via the TS scanner, so a
+commented-out `requireCapability` is not a gate): URL → file → `*-client.tsx` siblings → `lib/data` /
+`lib/actions` imports (page + client) → declared gate (`cap:` · `route:` · `rank:` · `session` ·
+`tenant` · `cron` · `public-body` · `rate-limit` · `bot`) → `force-dynamic` → owner-`db` import →
+tests naming the route. Plus a module index (every `lib/data`, `lib/actions`, super-admin `lib`,
+storefront `data`/`lib` file with its exports). **129 routes**: Seller 56 pages + 3 layouts + 18 API ·
+Super Admin 11 + 2 + 1 · Storefront 18 pages + 10 endpoints · Landing 9 + 1.
+
+**Sweep findings — 34, in the report, none fixed by this task except G-1:** 5 super-admin
+(`removeStoreUser` writes blind + logs unconditionally; `setStoreComped` throws `23503` on an unknown
+id; no `isUuid` before `eq(id, param)` on two `[id]` pages; `savePaymentChannels` has no audit line),
+4 landing (hygiene), 8 seller (🔴 **AD-3** avatar initials hard-coded `BN` on every tenant's
+Pengaturan; six `[id]` pages 500 on a non-UUID; `getMedia`/`getMediaPage` on the bare owner `db`; 5
+dead exports), 12 storefront (🔴 **SF-1** `feed/google.xml` + `feed/tiktok.xml` build their origin
+from the raw `Host` instead of `locals.origin`, so a custom-domain store publishes two origins;
+`chat/read` has no rate limit; BlogPosting JSON-LD logo URL 404s; hard-coded "jam operasional" on
+every store; 66 `<!-- -->` comments served to browsers; dead `ORIGIN_CITY`; no `<h1>` on `/lp`),
+3 repo hygiene (36 agent worktrees = 42 GB, 13 fully merged — **owner decides**; root
+`STATUS.md`/`ARCHITECTURE.md`/… untracked placeholder scaffolds contradict the real tracker).
+
+**G-1 — the map's own bug, found by querying the JSON.** The gate detector used `rateLimited?\s*\(`,
+which is `rateLimite` + optional `d` and cannot match `rateLimit(`. Every rate-limited route rendered
+with an EMPTY gate column, indistinguishable from `chat/read`, which genuinely has none. Fixed to
+`rateLimit(?:ed)?`; regenerated: 8 routes now carry `rate-limit` (`api/public/{ongkir,order,promo,
+pay/callback}`, `chat/{poll,send}`, `checkout-session`, `track`) and `chat/read` is the only chat
+endpoint without a gate — the map agrees with SF-2 instead of hiding it.
+
+**Verification.** `node scripts/gen-page-map.mjs --check` → `PAGE_MAP.md + page-map.json are fresh`
+(exit 0). `npx vitest run test/page-map-fresh.test.ts` → 1/1. Full `npx vitest run` → **137 files / 1120
+tests passed, 0 failed, 36 s** (136 + the new freshness test; 1117 + 1 + 2 landed since the 08-27
+boundary). No app source was changed; the generator is docs tooling.
+
+**RH-4 — `npm test` on this machine was running 3603 files, not 137.** The first full run took
+**918 s** and reported **68 failed files / 165 failed tests** — none of them in this repo. Vitest's
+default `exclude` covers `node_modules`, `dist`, `.git` but not `.claude/`, and `.claude/worktrees/`
+holds 37 stale agent checkouts, each a full copy of the tree, each racing the others for the ONE
+`_test` database. `vitest.config.ts` now adds `**/.claude/**` to `configDefaults.exclude`; the
+same run after the fix: 137/1120 green in 36 s. Same trap the page-map generator hit on its first
+run (it walks the tree and skips dot-directories for that reason). Recorded in the report as RH-4.

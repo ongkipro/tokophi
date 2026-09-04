@@ -9,6 +9,7 @@
 ---
 
 ## Epic 0 — Monorepo hygiene (foundation)
+- [x] **Generated page map (all 4 surfaces) + route sweep report** · **M** · `scripts/gen-page-map.mjs` → `specs/docs/PAGE_MAP.md` + `page-map.json`, derived from the tree (URL → file → data/actions → gate → tests), pinned by `test/page-map-fresh.test.ts`. Findings (35, two 🔴) in `specs/docs/tasks/2026-09-04-page-map-report.md`; root `TASKS.md` Task 6.10. See BUILD-LOG 2026-09-04.
 - [x] **Perkecil jendela 503 saat deploy** · **M** · **DIUKUR: 15 menit → 81 detik** (probe 20-detik dari detik merge; 503 mulai +506 s, pulih +587 s). Seed chain diangkat dari jalur kritis; `migrate` migrasi saja. ⚠️ Klaim lama "build ~6 menit dengan container mati" TERBUKTI SALAH — selama build host tetap 200. Sisa 81 detik = biaya swap; menekannya butuh overlapping swap (orkestrasi Coolify). See BUILD-LOG 2026-08-19 (keempat & kelima).
 - [x] **Migration stamp scale guard** · **S** · `verify-migrations` only asserted stamps increase, so a nanosecond stamp passed (it really happened, on `0096`). Predicate extracted to the pure `migration-stamp.ts` + 7 pinning tests; mutation-proved both directions. Deploy's ~15-minute 503 window also measured and recorded in `DEPLOY.md`. See BUILD-LOG 2026-08-19 (ketiga).
 - [x] **Index census + the missing `order_line_items` index** · **S** · `schema-indexes.test.ts` now classifies every migration-created index (drizzle / sql-only+reason); found `order_line_items.order_id` unindexed in every database and fixed it with idempotent migration `0096`. See BUILD-LOG 2026-08-19 (kedua).

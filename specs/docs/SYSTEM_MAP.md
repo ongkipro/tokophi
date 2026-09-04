@@ -6,6 +6,14 @@
 > Companion docs: [`FLOWS.md`](./FLOWS.md) (sequence diagrams), [`STATUS.md`](./STATUS.md) (what is real vs. fake).
 >
 > **Corrections to prior docs are listed at the bottom** ([§12](#12-corrections-to-the-existing-docs)).
+>
+> ⚠️ **Dated 2026-07-13 and known stale on two counts (2026-09-04):** the impersonation edge in §1.1/§1.2/§8
+> describes the **2-minute JWT** that Task 4.11 replaced with a one-time exchange (`impersonation_grants`,
+> migration 0098 — see AGENTS.md "IMPERSONATION IS A ONE-TIME EXCHANGE"), and the table/migration/RLS
+> counts in the diagram are from July (82 tables · 106 migrations on disk now; RLS is whatever
+> `verify-rls` prints). **For any route-level fact — which URL is which file, what it reads, what
+> gates it — read [`PAGE_MAP.md`](./PAGE_MAP.md), which is generated from the tree and pinned fresh
+> by a test.** This file keeps the *why* and the diagrams.
 
 ---
 
