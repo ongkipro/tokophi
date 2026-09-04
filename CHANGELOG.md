@@ -2,6 +2,18 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-09-04 — Log Sistem: audit log platform akhirnya punya layar
+
+- **Super Admin → Log Sistem** (`/log-sistem`, rank minimum `admin`): seluruh `platform_activity`,
+  filter jenis / toko / teks, 25 per halaman — paging di database, bukan di browser. Selama ini log
+  hanya terbaca 8 baris di dashboard dan 20 baris di detail toko; tindakan operator hilang dari layar
+  dalam sehari. Form GET + link pagination sungguhan: URL = state, bisa ditempel ke tiket.
+- **Tiga penulis audit yang bolong ditutup** (temuan page-map SA-1/SA-2/SA-4): `removeStoreUser`
+  tidak lagi mencatat "dihapus" untuk delete yang tidak mengenai baris (dan pre-read-nya kini
+  di-scope ke toko); `setStoreComped` menjawab "Toko tidak ditemukan." alih-alih melempar FK
+  `23503`; `savePaymentChannels` — satu-satunya penulis konfigurasi platform tanpa jejak — kini
+  mencatat kanal mana yang ON/OFF dan siapa operatornya.
+
 ## Unreleased — 2026-08-23 — Builder tema hidup lagi setelah mati sembilan hari, dan bar ringkasan checkout jadi flat
 
 ### 🔴 Builder `/tema/[id]` crash di SETIAP build produksi sejak 15 Agustus (#333)

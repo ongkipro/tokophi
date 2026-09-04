@@ -40,6 +40,7 @@ const EXPECTED: Record<string, Record<PlatformRole, boolean>> = {
   "/pencairan": { support: false, admin: true, owner: true },
   "/analitik": { support: false, admin: true, owner: true },
   "/pengaturan": { support: false, admin: true, owner: true },
+  "/log-sistem": { support: false, admin: true, owner: true },
 };
 
 describe("route floors — the policy", () => {
@@ -54,7 +55,7 @@ describe("route floors — the policy", () => {
   it("gives money and platform configuration a floor above support — THE DEFECT", () => {
     // `/pencairan` served a support operator every merchant's bank account and pending amount, in
     // full, because nothing but the buttons had ever compared a rank.
-    for (const path of ["/", "/pencairan", "/paket", "/analitik", "/pengaturan"]) {
+    for (const path of ["/", "/pencairan", "/paket", "/analitik", "/pengaturan", "/log-sistem"]) {
       expect(canOpenPath("support", path), `${path} must not open for support`).toBe(false);
       expect(minRoleForPath(path)).toBe("admin");
     }

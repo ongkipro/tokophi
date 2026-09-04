@@ -23,7 +23,7 @@
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
 | Seller (merchant panel) | 56 | 3 | 18 |
-| Super Admin (platform control plane) | 11 | 2 | 1 |
+| Super Admin (platform control plane) | 12 | 2 | 1 |
 | Storefront (multi-tenant shopper site) | 18 | — | 10 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
@@ -120,7 +120,7 @@
 
 ## Super Admin (platform control plane) — `apps/super-admin`
 
-11 pages · 2 layouts · 1 API routes
+12 pages · 2 layouts · 1 API routes
 
 ### Pages
 
@@ -128,10 +128,11 @@
 |---|---|---|---|---|---|---|---|---|---|
 | `/analitik` | page | `apps/super-admin/app/(platform)/analitik/page.tsx` | — | `data` | — | — | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | layout | `apps/super-admin/app/(platform)/layout.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `platform-session` | — | ✓ | — |
+| `/log-sistem` | page | `apps/super-admin/app/(platform)/log-sistem/page.tsx` | — | `data` | — | `route:/log-sistem` | — | ✓ | `apps/super-admin/lib/activity-log.test.ts` `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | page | `apps/super-admin/app/(platform)/page.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `route:/` | — | ✓ | — |
 | `/paket` | page | `apps/super-admin/app/(platform)/paket/page.tsx` | `paket-client.tsx` | `data` | `actions` | `route:/paket` | — | ✓ | `apps/super-admin/lib/invoice-flip-is-bookkeeping.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/pencairan` | page | `apps/super-admin/app/(platform)/pencairan/page.tsx` | `pencairan-client.tsx` | `data` | `actions` | `route:/pencairan` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
-| `/pengaturan` | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `pengaturan-client.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/pengaturan` | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `pengaturan-client.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/tiket/[id]` | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | — |
 | `/tiket` | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
 | `/toko/[id]` | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/super-admin/lib/add-store-user.test.ts` |
@@ -314,7 +315,8 @@
 | module | exports |
 |---|---|
 | `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `processPayout` `rejectPayout` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `saveCodAllowed` `saveCouriers` `saveGateways` `savePaymentChannels` `savePayoutPolicy` `sendPaymentReminder` `setInvoiceStatus` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` |
-| `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
+| `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
+| `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
 | `health-types.ts` | `VERDICT_RANK` `checkToneClass` `verdictMeta` |
 | `health.ts` | `getHealthMap` `getStoreHealth` `healthFromSignals` |
 | `list-page.ts` | `UPDATE_LOG_PAGE_SIZE` `filterChanged` `pageSlice` |

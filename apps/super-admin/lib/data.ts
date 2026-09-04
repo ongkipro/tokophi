@@ -3,7 +3,9 @@ import { db, schema } from "@tokophi/db";
 import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
+import { likeContains } from "@tokophi/lib/like";
+import { LOG_PAGE_SIZE, logPages, type LogQuery } from "./activity-log";
 import { type Store, type StoreStatus, type Invoice, type PActivity } from "./types";
 import { BILLING, computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
 
@@ -703,6 +705,57 @@ export async function getActivity(
     text: r.text,
     minutesAgo: minutesBetween(r.ts),
   }));
+}
+
+// ---- /log-sistem: the whole audit log, filtered and paged IN THE DATABASE ----
+//
+// `getActivity` above is the dashboard's 8-row peek; this is the screen that answers "who changed
+// what, and when?" across every store. Paged by `limit/offset` against a `count(*)` rather than
+// sliced in the browser: `platform_activity` is append-only and grows with every operator action,
+// so a "load it all and filter client-side" list is the query that gets slower every week.
+//
+// The filters arrive from `parseLogQuery` (`activity-log.ts`), which has already whitelisted `kind`
+// against the enum and `storeId` as a uuid — nothing here casts a raw URL value. The search is a
+// `LIKE` over the text, escaped via `likeContains` (`%` and `_` are wildcards; an unescaped `_`
+// once matched all 842 orders on the seller side).
+export type ActivityLogRow = PActivity & { storeId: string | null; storeName: string | null; ts: number };
+
+export async function getActivityLog(q: LogQuery): Promise<{ rows: ActivityLogRow[]; total: number; page: number }> {
+  const conds: SQL[] = [];
+  if (q.kind) conds.push(eq(schema.platformActivity.kind, q.kind));
+  if (q.storeId) conds.push(eq(schema.platformActivity.storeId, q.storeId));
+  if (q.q) conds.push(ilike(schema.platformActivity.text, likeContains(q.q)));
+  const where = conds.length ? and(...conds) : undefined;
+
+  // Count FIRST, then clamp: `?page=99` on an 11-row log must fetch the last page, not offset 2450
+  // and render "11 catatan" over an empty table (measured in a browser before this line existed).
+  const [{ total }] = await db.select({ total: count() }).from(schema.platformActivity).where(where);
+  const { page } = logPages(total, q.page, LOG_PAGE_SIZE);
+  const rows = await db
+      .select({
+        id: schema.platformActivity.id,
+        kind: schema.platformActivity.kind,
+        text: schema.platformActivity.text,
+        storeId: schema.platformActivity.storeId,
+        storeName: schema.stores.name,
+        ts: schema.platformActivity.ts,
+      })
+      .from(schema.platformActivity)
+      .leftJoin(schema.stores, eq(schema.stores.id, schema.platformActivity.storeId))
+      .where(where)
+      .orderBy(desc(schema.platformActivity.ts), desc(schema.platformActivity.id))
+      .limit(LOG_PAGE_SIZE)
+      .offset((page - 1) * LOG_PAGE_SIZE);
+  return {
+    total,
+    page,
+    rows: rows.map((r) => ({ id: r.id, kind: r.kind, text: r.text, storeId: r.storeId, storeName: r.storeName, ts: r.ts.getTime(), minutesAgo: minutesBetween(r.ts) })),
+  };
+}
+
+/** `id` + `name` of every store, for the filter — deliberately not `getStores()`, which computes billing per row. */
+export async function getStoreOptions(): Promise<{ id: string; name: string }[]> {
+  return db.select({ id: schema.stores.id, name: schema.stores.name }).from(schema.stores).orderBy(asc(schema.stores.name));
 }
 
 // ---- platform settings (pengaturan) ----

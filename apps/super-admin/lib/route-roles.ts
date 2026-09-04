@@ -65,6 +65,7 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/pencairan", min: "admin", why: "Uang merchant: nomor rekening, nominal, dan persetujuan transfer." },
   { prefix: "/analitik", min: "admin", why: "Pendapatan platform dan kesehatan infrastruktur." },
   { prefix: "/pengaturan", min: "admin", why: "Konfigurasi platform dan daftar operator." },
+  { prefix: "/log-sistem", min: "admin", why: "Jejak tindakan operator di SEMUA toko — reset password, suspend, VIP, konfigurasi platform. Bukan konteks satu toko: itu ada di halaman toko." },
 ];
 
 /**

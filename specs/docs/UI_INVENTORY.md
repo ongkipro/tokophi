@@ -128,6 +128,7 @@ shipping/payment providers of ADR 0004).
 | `/toko/[id]` | Store detail (`store-detail.tsx`) | per-store profile: GMV/orders/products stats, owner/contact, plan, billing/invoices, impersonate/suspend actions | ✅ mock |
 | `/paket` | Plans & billing | MRR/paid-customers/invoices summary, 3 plan cards (Pemula/Bisnis/Skala, "Populer" ring), invoices table w/ status tabs | ✅ mock |
 | `/analitik` | Platform analytics | GMV per plan, GMV per city (top 8), store-status breakdown | ✅ mock |
+| `/log-sistem` | System / audit log (`platform_activity`) | filter jenis (enum) · toko · teks (LIKE, escaped) as a GET form; table (icon, catatan, toko → `/toko/[id]`, waktu WIB + relatif); DB-side pagination 25/page with real `href` links; rank floor `admin` | ✅ DB |
 | `/pengaturan` | Platform settings | **platform-managed** payment gateways + shipping aggregator toggles, users/roles, COD config | ✅ mock |
 
 **Super-admin cross-cutting:** own shell/layout; shares `@tokophi/ui` + `@tokophi/lib`; plans = Pemula/Bisnis/Skala; store status = aktif/trial/ditangguhkan; deterministic mock anchored `TODAY=2026-07-02`.
