@@ -448,12 +448,21 @@ export async function syncPaymentChannels(): Promise<{ ok: boolean; error?: stri
 export async function savePaymentChannels(updates: { key: string; on: boolean }[]): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
+  // ⚠️ THIS IS THE ONE PLATFORM-CONFIG WRITE THAT LEFT NO AUDIT LINE (page-map sweep SA-4). It flips
+  // `platform_payment_channels.enabled` — the half checkout ENFORCES — while `saveGateways`,
+  // `saveCouriers` and `saveCodAllowed` each `logPlatform`, and `saveCouriers`'s own comment records
+  // a day of forensics caused by exactly this silence. Log what was WRITTEN (`.returning()`), by
+  // label, so "who switched QRIS off?" has an answer on `/log-sistem`.
+  const changed: string[] = [];
   for (const u of updates) {
-    await db
+    const rows = await db
       .update(schema.platformPaymentChannels)
       .set({ enabled: u.on })
-      .where(eq(schema.platformPaymentChannels.channel, u.key));
+      .where(eq(schema.platformPaymentChannels.channel, u.key))
+      .returning({ label: schema.platformPaymentChannels.label });
+    for (const r of rows) changed.push(`${r.label} ${u.on ? "ON" : "OFF"}`);
   }
+  if (changed.length) await logPlatform(`Kanal pembayaran diubah oleh ${gate.admin.email}: ${changed.join(", ")}`);
   revalidatePath("/pengaturan");
   return { ok: true };
 }
@@ -889,7 +898,11 @@ export async function setStoreComped(storeId: string, comped: boolean, reason?: 
   const gate = await platformGate();
   if (!gate.ok) return gate;
   const patch: Record<string, unknown> = { comped, compedReason: comped ? (reason?.trim() || "Dibebaskan platform") : null, compedAt: comped ? new Date() : null };
-  await db.update(schema.stores).set(patch).where(eq(schema.stores.id, storeId));
+  // An unknown store id used to fall through: 0 rows updated, then `logStore` hit the
+  // `platform_activity.store_id` FK and threw `23503` out of the action as a Next digest (page-map
+  // sweep SA-2). Same shape as `suspendStore`/`liftSuspension`: report what was WRITTEN.
+  const updated = await db.update(schema.stores).set(patch).where(eq(schema.stores.id, storeId)).returning({ id: schema.stores.id });
+  if (!updated.length) return { ok: false, error: "Toko tidak ditemukan." };
   // VIP is always active — for BILLING. It is not an abuse shield: an operator suspension outranks
   // it (see `computeBilling`), so the stored status is derived rather than asserted `active` here.
   const state = await syncStoredStatus(storeId);
@@ -980,12 +993,23 @@ export async function setStoreUserRole(storeId: string, storeUserId: string, rol
 export async function removeStoreUser(storeId: string, storeUserId: string): Promise<{ ok: boolean; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
+  // ⚠️ SAME CLASS AS `setStoreUserRole` ABOVE, AND IT WAS LEFT BEHIND (page-map sweep SA-1). The
+  // pre-read had no `storeId` filter, the delete did, and the audit line was written regardless of
+  // rows affected — so a `storeUserId` from ANOTHER store deleted 0 rows, returned `{ ok: true }`,
+  // and wrote "User <the other store's email> dihapus dari toko" into THIS store's log. The
+  // membership is read in THIS store only, the delete `.returning()`s, and nothing is logged for
+  // a delete that did not happen.
   const [su] = await db.select({ role: schema.storeUsers.role, email: schema.users.email })
     .from(schema.storeUsers).innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
-    .where(eq(schema.storeUsers.id, storeUserId)).limit(1);
-  if (su?.role === "owner") return { ok: false, error: "Owner tidak bisa dihapus." };
-  await db.delete(schema.storeUsers).where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)));
-  await logStore(storeId, `User ${su?.email ?? ""} dihapus dari toko oleh platform`);
+    .where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId))).limit(1);
+  if (!su) return { ok: false, error: "Pengguna toko tidak ditemukan." };
+  if (su.role === "owner") return { ok: false, error: "Owner tidak bisa dihapus." };
+  const removed = await db
+    .delete(schema.storeUsers)
+    .where(and(eq(schema.storeUsers.id, storeUserId), eq(schema.storeUsers.storeId, storeId)))
+    .returning({ id: schema.storeUsers.id });
+  if (!removed.length) return { ok: false, error: "Pengguna toko tidak ditemukan." };
+  await logStore(storeId, `User ${su.email} dihapus dari toko oleh platform`);
   revalidatePath(`/toko/${storeId}`);
   return { ok: true };
 }

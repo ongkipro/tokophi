@@ -2623,3 +2623,48 @@ holds 37 stale agent checkouts, each a full copy of the tree, each racing the ot
 `_test` database. `vitest.config.ts` now adds `**/.claude/**` to `configDefaults.exclude`; the
 same run after the fix: 137/1120 green in 36 s. Same trap the page-map generator hit on its first
 run (it walks the tree and skips dot-directories for that reason). Recorded in the report as RH-4.
+
+## 2026-09-04 03:15 UTC — Main Session — Log Sistem (Super Admin) + page-map SA-1 / SA-2 / SA-4 closed
+
+**Why.** `platform_activity` — the platform's own audit log, written by every `logStore`/`logPlatform`
+in `actions.ts` — had exactly two readers: the dashboard's 8-row card and the 20-row card on one
+store's detail. An operator's password reset, suspension, VIP grant or courier toggle scrolled off the
+dashboard within a day and was then unreadable from any screen: a write-only table. The owner asked
+for the "button action → log sistem" screen; the page-map sweep of the same morning had listed three
+writers whose audit line could lie (SA-1, SA-2) or was missing (SA-4), so they were closed together.
+
+**Files.** `apps/super-admin/app/(platform)/log-sistem/page.tsx` (new — server-rendered, GET-form
+filter, DB-side pagination with real links) · `apps/super-admin/lib/activity-log.ts` (new, PURE:
+`parseLogQuery` whitelists `?kind=` against the enum and `?toko=` as a uuid, `logHref`, `logPages`) ·
+`apps/super-admin/lib/data.ts` (`getActivityLog` — `count(*)` first, clamp, then `limit/offset`,
+`ilike` via `likeContains`; `getStoreOptions`) · `lib/nav.ts` ("Log Sistem") · `lib/route-roles.ts`
+(`/log-sistem` floor `admin`) · `lib/actions.ts` (SA-1 `removeStoreUser`: pre-read scoped to
+`storeId`, delete `.returning()`, refuse on zero rows BEFORE `logStore`; SA-2 `setStoreComped`: update
+`.returning()`, "Toko tidak ditemukan." before `syncStoredStatus`/`logStore`; SA-4
+`savePaymentChannels`: `.returning({ label })` → `logPlatform("Kanal pembayaran diubah oleh <email>:
+QRIS ON, …")`) · tests `lib/activity-log.test.ts` (12), `lib/audit-writes.test.ts` (7, each claim
+paired with the old shape as a mutation self-check), `lib/route-roles.test.ts` (+1 route) ·
+`specs/docs/PAGE_MAP.md` + `page-map.json` regenerated · `specs/docs/TASKS.md` (Epic 2 `[x]`),
+`specs/docs/STATUS.md`, `specs/docs/UI_INVENTORY.md`, `CHANGELOG.md`,
+`specs/docs/tasks/2026-09-04-page-map-report.md` (SA-1/2/4 marked closed).
+
+**Verification (exit codes read directly).**
+- `npx vitest run apps/super-admin test/page-map-fresh.test.ts` → **15 files / 121 tests green**
+  (was 13 / 102). `activity-log.test.ts` pins the kind list EQUAL to `platformActivityKind.enumValues`,
+  so a new enum value fails here until the label map learns it.
+- `npx tsc -p apps/super-admin --noEmit` → 0. `eslint` on the touched files → 0 errors (1 pre-existing
+  warning, `withPpn` unused). `npm run build -w @tokophi/super-admin` → exit 0.
+- **Driven in Chromium** (Playwright, owner session, dev server on a private port, killed by PID):
+  `/log-sistem` 200 / 11 rows · `?kind=admin` 7 rows "(tersaring)" · `?kind=zzz&toko=abc&page=-9`
+  **200, unfiltered** (the `/pesanan?bayar=` class, refused at the parser) · `?q=%25` 4 rows — and
+  `select count(*) … where text like '%\%%'` on the dev DB is **4**, so the wildcard is escaped, not
+  interpreted · `?page=99` → **the first run rendered "11 catatan" over 0 rows** (offset 2450); the
+  clamp was moved INTO `getActivityLog` (count first, then page) and the re-run served 11 · sidebar
+  link present · form submit lands on `?kind=admin&toko=&q=kurir`. **0 console errors** on every run.
+- Not driven: a log with > 25 rows (the dev DB holds 11), so the pager's rendering is covered by
+  `logPages` unit tests only. Nothing was written to the shared DB.
+
+**Not done / deliberately left.** SA-3 (no `isUuid` before `eq(id, param)` on `/toko/[id]`,
+`/tiket/[id]`) is untouched — the report pairs it with the six admin pages (AD-1) for ONE shared
+`@tokophi/lib` helper, which is its own change. Merchants still cannot see their own store's audit
+trail (PRD open question 4: `platform_activity` has no RLS).

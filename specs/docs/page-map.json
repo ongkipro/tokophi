@@ -1612,6 +1612,28 @@
           "tests": []
         },
         {
+          "url": "/log-sistem",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/log-sistem/page.tsx",
+          "clients": [],
+          "data": [
+            "data"
+          ],
+          "actions": [],
+          "gate": [
+            "route:/log-sistem"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/super-admin/lib/activity-log.test.ts",
+            "apps/super-admin/lib/audit-writes.test.ts",
+            "apps/super-admin/lib/route-roles.test.ts"
+          ]
+        },
+        {
           "url": "/",
           "kind": "page",
           "methods": [],
@@ -1704,6 +1726,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/super-admin/lib/audit-writes.test.ts",
             "apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
           ]
@@ -3365,11 +3388,23 @@
         ]
       },
       {
+        "module": "activity-log.ts",
+        "exports": [
+          "ACTIVITY_KINDS",
+          "ACTIVITY_KIND_LABEL",
+          "LOG_PAGE_SIZE",
+          "logHref",
+          "logPages",
+          "parseLogQuery"
+        ]
+      },
+      {
         "module": "data.ts",
         "exports": [
           "MOVEMENTS_PER_PAGE",
           "PAYOUT_POLICY_DEFAULT",
           "getActivity",
+          "getActivityLog",
           "getAggregator",
           "getAllTickets",
           "getConversion",
@@ -3401,6 +3436,7 @@
           "getStoreInvoices",
           "getStoreMoneySignals",
           "getStoreMovements",
+          "getStoreOptions",
           "getStorePayouts",
           "getStoreUsers",
           "getStores",
