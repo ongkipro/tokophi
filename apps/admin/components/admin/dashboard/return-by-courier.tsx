@@ -22,7 +22,21 @@ import type { ReturnSummary } from "@/lib/data/dashboard";
  * with no shipped parcel still renders it; a courier row only EXISTS once that courier has shipped
  * (`getReturnsByCourier` groups over shipped orders), so `shipped === 0` cannot reach this map. A
  * neutral arm here would be dead code pretending to be a safeguard.
+ *
+ * ── Task 5.18: A PARCEL WITH NO COURIER IS NOT A COURIER ───────────────────────────────────────
+ * `getReturnsByCourier` used to fold every shipped order with a NULL/'' courier into a row named
+ * "Tidak diketahui" and rank it here beside SPX and JNE with a rate, a bar and a verdict glyph — a
+ * per-courier finding about a courier that does not exist. Those orders now arrive as
+ * `r.unattributed`, outside every rate, and the card says how many were left out instead.
  */
+/**
+ * The ONE sentence for orders left out of every per-courier rate. Shared with the Pesanan tab's
+ * `ReturnSummary` so the dashboard tile and the "Pengembalian" tab never explain the same gap in two
+ * different words.
+ */
+export const unattributedNote = (n: number) =>
+  `${num(n)} pesanan tanpa data kurir tidak dihitung (pengiriman tidak dibuat lewat TokoΦ).`;
+
 export function ReturnByCourier({ returns: r }: { returns: ReturnSummary }) {
   return (
     <Card>
@@ -36,7 +50,9 @@ export function ReturnByCourier({ returns: r }: { returns: ReturnSummary }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {r.byCourier.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Belum ada paket yang dikirim.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {r.unattributed > 0 ? "Belum ada paket dengan data kurir yang dikirim." : "Belum ada paket yang dikirim."}
+          </p>
         ) : (
           r.byCourier.map((c) => {
             const rate = c.returnRate * 100;
@@ -70,6 +86,11 @@ export function ReturnByCourier({ returns: r }: { returns: ReturnSummary }) {
               </div>
             );
           })
+        )}
+        {r.unattributed > 0 && (
+          <p className="pt-1 text-xs text-muted-foreground tabular-nums">
+            {unattributedNote(r.unattributed)}
+          </p>
         )}
         {r.codShipped === 0 && r.byCourier.length > 0 && (
           <p className="pt-1 text-xs text-muted-foreground">

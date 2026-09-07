@@ -55,7 +55,9 @@ export default async function AnalitikPage() {
   const crons = cronRows(sys.crons);
 
   const integrations = [
-    { label: "KiriminAja (kurir)", ok: sys.kiriminaja, icon: Truck, note: sys.kiriminaja ? `Terhubung · ${sys.kaEnv}` : "Belum dikonfigurasi" },
+    // Task 8.3: the note is the LIVE probe's word + detail (`refused` prints the vendor's sentence, e.g.
+    // the 2026-09-07 IP allow-list refusal) — "Belum dikonfigurasi" was wrong for every state but one.
+    { label: "KiriminAja (kurir)", ok: sys.kiriminaja, icon: Truck, note: sys.kiriminaja ? `Terhubung · ${sys.kaEnv}` : `${sys.kiriminajaProbe.word} · ${sys.kiriminajaProbe.detail}` },
     { label: "AutoLaris (pembayaran)", ok: sys.autolaris, icon: CreditCard, note: sys.autolaris ? "Terhubung" : "Belum dikonfigurasi" },
     { label: "Database (PostgreSQL)", ok: sys.dbOk, icon: Database, note: sys.dbOk ? `${num(sys.stores)} toko` : "Tidak terjangkau" },
     { label: "Server", ok: true, icon: Server, note: sys.region },

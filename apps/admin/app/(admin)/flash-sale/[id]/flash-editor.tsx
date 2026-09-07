@@ -8,6 +8,7 @@ import { ArrowLeft, Trash2, Zap, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { toast } from "sonner";
 import { createFlashSale, updateFlashSale, deleteFlashSale, type FlashInput } from "@/lib/actions/flash";
 import type { FlashSaleEditor } from "@/lib/data/flash";
@@ -108,6 +109,7 @@ export function FlashEditor({
       }
     });
 
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -120,6 +122,8 @@ export function FlashEditor({
         router.refresh();
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
 
@@ -216,7 +220,7 @@ export function FlashEditor({
         {canWrite && (
           <div className="flex items-center justify-between">
             {!isNew ? (
-              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={del} disabled={saving}>
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmOpen(true)} disabled={saving}>
                 <Trash2 /> Hapus
               </Button>
             ) : <span />}
@@ -224,6 +228,18 @@ export function FlashEditor({
               {saving && <Loader2 className="size-4 animate-spin" />} {isNew ? "Buat Flash Sale" : "Simpan"}
             </Button>
           </div>
+        )}
+        {/* `deleteFlashSale` is a hard DELETE and `flash_sale_items` cascades with it — the sale
+            prices stop applying the moment it lands. Product base prices are untouched. */}
+        {!isNew && (
+          <ConfirmDelete
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            title="Hapus flash sale?"
+            description={`Flash sale "${sale!.name}" dihapus permanen beserta semua harga promonya, dan berhenti berlaku di toko saat itu juga. Harga normal produk tidak berubah.`}
+            onConfirm={del}
+            pending={saving}
+          />
         )}
       </div>
     </div>

@@ -18,6 +18,7 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { NavLinks, type NavCounts } from "./nav-links";
 import { Brand } from "./brand";
+import { initials } from "./initials";
 import { signOut } from "@/lib/actions/auth";
 import { switchStore } from "@/lib/actions/store";
 import { ROLE_LABEL, type Role } from "@/lib/rbac-policy";
@@ -150,10 +151,14 @@ export function Topbar({
       }
     });
   };
-  const name = user?.name || "Ongki Pratama";
-  const email = user?.email || "owner@tokophi.id";
+  // No demo fallback: the seeded owner's name used to stand in whenever `user` was missing, so a
+  // screen with no session named an account that authenticates (AGENTS.md, "NO SHIPPED SCREEN MAY
+  // NAME AN ACCOUNT THAT AUTHENTICATES"). The layout always passes the session user; an empty
+  // string is the honest fallback.
+  const name = user?.name ?? "";
+  const email = user?.email ?? "";
   const roleLabel = user?.role ? ROLE_LABEL[user.role as Role] ?? user.role : null;
-  const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "OP";
+  const avatarInitials = initials(name);
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
       {/* mobile menu — CONTROLLED so a nav tap closes the drawer. It was uncontrolled, so tapping a
@@ -273,7 +278,7 @@ export function Topbar({
           <DropdownMenuTrigger
             render={
               <Button variant="ghost" className={`${HIT} gap-2 pl-1.5 pr-2`}>
-                <Avatar className="size-7"><AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">{initials}</AvatarFallback></Avatar>
+                <Avatar className="size-7"><AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">{avatarInitials}</AvatarFallback></Avatar>
                 <span className="hidden text-sm font-medium sm:inline">{name.split(" ")[0]}</span>
               </Button>
             }

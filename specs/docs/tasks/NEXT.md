@@ -10,7 +10,14 @@
 > of treating this historical checkbox as authority.
 >
 > ⚠️ **Task numbers N36–N43 each appear twice.** The shipping sweep (#146) and audit wave 7 (#148)
-> both numbered from N36. Always quote the title, never the bare number.
+> both numbered from N36. Always quote the title, never the bare number. The disambiguation table
+> lives in [`OPEN.md`](./OPEN.md).
+>
+> 🔁 **Open/closed marks re-verified against the code on 2026-09-07** (branch `feat/sweep-0907`): N1 ·
+> N28 · N35 (card half) · N40 · N42 (wave 7) · N44 · N46 · N47 · N48 · N59–N63 were still marked open
+> while shipped — each now carries a `Re-verified` note with the commit or file. N35 also gained an
+> URGENT addendum (KiriminAja sandbox allow-list refusing the VPS IP). Still open: N2 · N16 · N25 ·
+> N29 · N38 · N39 (registration only) · N41 · N56 · N57 · N58.
 
 > Standing follow-up history beginning 2026-08-01, after `#117`–`#125` and audit wave 2. Dated
 > handoffs and `../audit-2026-08-01/FINDINGS-SOURCE.md` preserve the evidence behind entries below.
@@ -50,7 +57,14 @@
 
 ## 🔴 BLOCKED ON THE OWNER — nobody else can do these
 
-### N1. Impersonation token — an account-takeover path into any merchant · **L**
+### ✅ N1. Impersonation token — **CLOSED 2026-08-21 (root Task 4.11 / SEC-10, migration 0098)**
+> **Re-verified 2026-09-07.** All three limbs are gone: the URL carries an opaque 256-bit handle that is
+> SPENT by one `update … where consumed_at is null … returning` (replay + concurrent replay tested), the
+> minted merchant session is bounded to 30 minutes and carries a signed `imp` marker naming the operator,
+> and every gated write under it is audited to `platform_activity`. `apps/admin/lib/impersonation.test.ts`
+> (12 mutations, 12 reds). The decision was recorded in AGENTS.md § Super Admin rather than a new ADR.
+> The text below is the original finding, kept as history.
+
 Carried over across several sessions and still open. **This is a decision, not a task.**
 
 The super-admin impersonation token:
@@ -85,6 +99,9 @@ POST + body instead of a query string · bind the minted session's expiry to the
 redemption of one token fails.
 
 ### N2. Two Cloudflare zone settings — APPROVED 2026-08-01, procedure written, NOT done · **S**
+> **Re-verified STILL OPEN 2026-09-07:** `curl https://toko.tokophi.com/` served 4 `email-decode` /
+> `email-protection` hits; `CLOUDFLARE-PERF.md` §1–§2 carry no execution record (only §4 HSTS is done).
+
 Full steps, API equivalents and verification commands: **`specs/docs/CLOUDFLARE-PERF.md`**.
 
 Not doable from this repo: wrangler auth is expired and these are **zone settings, not Workers**.
@@ -141,6 +158,9 @@ already exists. Rotating it means minting per-deploy (`@tokophi/lib/password` al
 down where an operator will find it.
 
 ### N16. `tokophi_app` holds full DML on the platform tables, with RLS off · **M** · NEW
+> **Re-verified STILL OPEN 2026-09-07:** grants live in `0012_tenant_rls.sql`; no `REVOKE` in any migration
+> 0000–0105. Task 4.12 (2026-08-22) proved the RUNTIME role is restricted, which is a different fact.
+
 `platform_cod`, `platform_couriers`, `platform_payout`, `platform_payment_channels` and `plans` are
 writable by the tenant role with no policy on them — and the `stores` policy is `FOR ALL`, so the tenant
 role can UPDATE its own `comped` / `status` / `trial_ends_at`. A merchant could comp themselves.
@@ -161,7 +181,11 @@ cutover keeps writes behind the Next apps. Picking one changes what PostgREST is
 > waiting on the owner, the two traps that fired during waves 6–9, and the five claims that were
 > refuted by measurement (do not re-file those).
 
-### N47. An operator who forgets their password has NO way back in · **S** · NEW
+### ✅ N47. An operator who forgets their password has NO way back in — **DONE 2026-08-05 (#166 `c9d9c29`)**
+> **Re-verified 2026-09-07:** `resetPlatformAdminPassword` (`apps/super-admin/lib/actions.ts:721`), owner-rank,
+> mints via `@tokophi/lib/password`, revealed once; rotation revokes the target's sessions (0088). The
+> `NEW` below is historical.
+
 Opened by the branch that shipped `changePlatformPassword` (audit wave 7). That form requires the
 CURRENT password — correctly, it is a self-service rotation, not a recovery. But nothing else writes
 `platform_admins.password_hash` except `invitePlatformAdmin`, which only INSERTs, so an operator who
@@ -179,7 +203,11 @@ separate decision with its own escalation question (may an owner reset ANOTHER o
 and never logged; the action is audited to `platform_activity` with both emails; the target's live
 sessions end (migration 0088's trigger already does this — assert it).
 
-### N48. A refused super-admin action shows the operator NOTHING · **S** · NEW
+### ✅ N48. A refused super-admin action shows the operator NOTHING — **DONE 2026-08-05 (#166), hardened 2026-08-22**
+> **Re-verified 2026-09-07:** `platformGate()` returns `{ ok: false, error }` with an Indonesian rank
+> refusal (`rankRefusal`, `platform-auth.ts:158-163`); 32 `toast.error` call sites in the super-admin
+> clients render it. `requirePlatformAdmin` still throws by design (fail closed). Historical text below.
+
 `requirePlatformAdmin` **throws**, and none of the callers in `pengaturan-client.tsx` /
 `store-detail.tsx` catch it. Measured on 2026-08-03 with a demoted operator: clicking "Undang"
 produced **no toast at all** — the action correctly refused (`Tidak diizinkan — perlu peran owner,
@@ -325,7 +353,25 @@ No waybill was issued in ~1 minute of polling, so there was no AWB to cancel wit
 (`tdev.kiriminaja.com`) and nothing will be collected, but if the owner wants it gone it must be voided
 from the KiriminAja dashboard, or cancelled via the API once a waybill exists.
 
-### N35. Surface which KiriminAja environment a deploy is on · **S** · scoped down by the owner
+### 🟡 N35. Surface which KiriminAja environment a deploy is on · **S** — **the AC below SHIPPED 2026-08-05 (#166); URGENT ADDENDUM 2026-09-07**
+> ✅ **The card half is done:** `pengaturan-client.tsx:400-406` renders `aggregator.env` (sandbox /
+> production, with a title explaining which one bills) from `kaEnvName()`; Analitik → Sistem shows
+> `Terhubung · <env>` too.
+>
+> 🔴 **What 2026-09-07 proved is missing, and it is the same class one level deeper:** the env NAME is
+> visible, but an upstream REFUSAL is not. After the 70 h VPS suspension (BUILD-LOG 2026-09-07 11:53 UTC)
+> `tdev.kiriminaja.com` answers `401 "Your IP address 45.77.33.112 were not allowed to access this API"`
+> — the allow-list entry at the KiriminAja developer sandbox lapsed. Consequence on the shop: `op:"rates"`
+> → `SHIPPING_QUOTE_UNAVAILABLE` → **no ongkir, no COD, no order at all**, while kecamatan / kelurahan /
+> kodepos keep working because they are local tables — so the checkout looks healthy and only the
+> admin container log says `[ongkir] courier API refused the quote: Unauthorized.`
+> **Owner action first:** re-add `45.77.33.112` on the KiriminAja sandbox allow-list, then Super Admin →
+> Pengaturan → "Tes koneksi KiriminAja" (`province`, free). **Code follow-on (S):** make the Analitik →
+> Sistem KiriminAja row reflect the LAST real upstream answer (e.g. the `cron-tracking` tick or a cheap
+> scheduled `province` probe writing `cron_runs`-style state), red on 401/timeout, naming the IP in the
+> message — "Terhubung · sandbox" must not be printed from `process.env` while the vendor is refusing us.
+> Same rule as `platform_payment_gateways.enabled`: a status light wired to nothing is worse than none.
+
 🔵 **Owner's ruling (2026-08-03): the API is the SAME on sandbox and production — same contract, same
 shapes; the cutover is an endpoint swap and nothing else.** So this is NOT an integration-parity task
 and must not be re-raised as one. Do not write a "verify the two environments behave alike" check, and
@@ -560,6 +606,9 @@ changes what they are owed — that is not a call an audit gets to make. **AC:**
 `specs/decisions/`, and only then a ledger kind for cost.
 
 ### N38. The label is missing required fields · **M** (one part blocked)
+> **Re-verified 2026-09-07:** insurance is still booking-time only (`createShipment` `input.insurance`,
+> `bulk-shipping.ts:88` hardcodes `false`; no column in `schema.ts`); Sorting Code still vendor-blocked.
+
 ✅ **THE PLUMBING HALF SHIPPED 2026-08-12** (branch `feat/n38-label-fields`, handoff
 [`2026-08-12-n38-label-plumbing.md`](./2026-08-12-n38-label-plumbing.md)): service name, both
 kodepos as their own fields, sender phone + address line, billable weight and per-item prices now
@@ -599,7 +648,14 @@ the store name and nothing else.
 
 **AC:** the unblocked fields printed and eyeballed on a real 100×150 print preview.
 
-### N39. Webhooks exist and we use none · **L** · 🔴 **BLOCKED — registration path not in the docs**
+### 🟡 N39. Webhooks exist and we use none · **L** — **the RECEIVER shipped 2026-08-24 (KA-UAT, `2e1fba5`)**
+> **Re-verified 2026-09-07:** `apps/admin/app/api/public/kiriminaja/webhook/route.ts` exists and follows
+> every constraint below — hint-only (the payload is never trusted; each named `order_id` triggers a
+> verified pull through `verifyKaHint` → `kaTrack` → `syncOrderFromKa`, the single writer), timing-safe
+> bearer, fail-closed on an empty key, and it sits BESIDE the 15-minute poller. **Still open: whether the
+> URL is actually registered on the KiriminAja account** — nothing in BUILD-LOG records the registration
+> call, and the UAT sheet is unsent. Ask the owner / vendor before assuming AWBs arrive in seconds.
+
 `processed_packages` carries the **AWB** (and `sorting_code`); `shipped_packages`, `canceled_packages`,
 `finished_packages`, `returned_packages` cover the rest. **This is what would make the resi appear in
 seconds instead of up to 15 minutes** — the thing the owner actually asked for.
@@ -620,7 +676,10 @@ Design constraints the docs impose, none of them optional:
 **Blocked on:** the registration endpoint's path (`POST {"url": …}` — verb only in the docs). Get it
 from the portal or support. Everything else can be built and tested against a hand-rolled POST.
 
-### N40. We book on `/api/mitra/v6.1/request_pickup` — **KiriminAja marks v6.1 deprecated** · **M**
+### ✅ N40. We book on `/api/mitra/v6.1/request_pickup` — **MIGRATED to v6.2 2026-08-20**
+> **Re-verified 2026-09-07:** `packages/lib/src/kiriminaja.ts:171` ("v6.2 — MIGRATED 2026-08-20 (N40)",
+> destination-field contradiction settled against the sandbox) + `kiriminaja-v62.test.ts`. Historical text below.
+
 `10-deprecated-api/01-express.md` is titled "Create Order Express v6.1" and says: *"This API is
 deprecated. Please use the new Create Order Express v6.2 API."* Only the **order** call is affected —
 `shipping_price` v6.1 is not in the deprecated section.
@@ -665,6 +724,9 @@ gets waved through. Worth fixing soon: either a per-suite `testTimeout`, or shar
 across the textual guards the way `test/source-code.ts` already shares the scanner.
 
 ### N41. We cannot see courier holidays (`libur`) · **S** · gated on the path
+> **Re-verified STILL OPEN 2026-09-07:** 0 matches for `libur` in `packages/lib/src` and `apps/admin/lib`;
+> `KIRIMINAJA.md` records no accepted-risk decision either.
+
 The schedule endpoint returns `{clock, until, expired, libur}` per window, `libur` = holiday. **Not
 calling it is allowed** (see the 🔵 note above), so this is not a bug — but it means a fixed
 tomorrow-10:00 booking can target a day the courier is closed, and we would not know. The docs do
@@ -999,6 +1061,9 @@ source's declared width IS its real width; every listed rung exists; every rung'
 filename; no source on disk is missing from the manifest). No browser and no server, so it cannot flake.
 
 ### N25. `color_palettes` is an orphan table, and the journal has lost two entries before · **S** · NEW
+> **Re-verified STILL OPEN 2026-09-07:** no `color_palettes` in `schema.ts` or any `.sql` 0000–0105;
+> `SCHEMA.md:133` still lists it from the dev container. Dropping it there is the owner's call.
+
 Two facts, one lesson: **`verify-migrations` checks the journal against itself and the files beside it,
 so it is structurally blind to an entry that was removed, renumbered or never written.**
 
@@ -1045,7 +1110,12 @@ the `<h1>` and re-running: `FAIL /checkout has exactly 1 <h1> — h1 0`.
 had built. `article-editor.tsx` next door renders its own unconditionally; the two had diverged. The two
 skips were `<h3>` on pages with no `<h2>`; tag changed, `className` untouched.
 
-### N28. super-admin's 7 screens have never been crawled · **S** · NEW · BLOCKED ON THE OWNER
+### ✅ N28. super-admin's 7 screens have never been crawled — **CLOSED by root Task 5.17 (2026-08-22) + the page map (2026-09-04)**
+> **Re-verified 2026-09-07:** 5.17 drove every `(platform)` route live with three REAL operator rows
+> across all eight route classes (per-role/per-route table in BUILD-LOG 2026-08-22); the 2026-09-04 page
+> map covers all 11 pages + 33 gated actions and Log Sistem was driven in Chromium (6 URL shapes, 0 console
+> errors). The `<h1>`/heading-skip sweep per screen was not repeated as such — file a new item if wanted.
+
 Routing and gating ARE verified — all 7 routes 307 to login unauthenticated. The screens themselves were
 not driven: it needs a platform credential, and since `#133` the operator password is randomly minted
 and revealed once, so obtaining one means **resetting a control-plane password on the shared DB**. Not a
@@ -1254,7 +1324,11 @@ change an existing store should **not** receive — NULL is safer there, because
 explicitly ruled not-needed with the reason. Check production before writing anything — see the psql
 snippet in `AGENTS.md`.
 
-### N42. `SEED_FORCE=1` destroys operator config with no restore path — including CAPI tokens · **S** · NEW
+### ✅ N42 (wave 7). `SEED_FORCE=1` destroys operator config with no restore path — **DONE 2026-08-05 (#150, `packages/db/src/seed-guard.ts`)**
+> **Re-verified 2026-09-07:** `SEED_FORCE=1` REFUSES when the DB holds rows nothing writes back (prints
+> the count per table, including `store_tracking_channels`), and needs `SEED_DESTROY_CONFIG=1` as well;
+> AGENTS.md carries the landmine note. Historical text below.
+
 **READ** — `seed.ts:672`. The truncate keep-list is
 `('__drizzle_migrations','kiriminaja_areas','kelurahan','product_taxonomy')`. All three reference tables
 are present, so the `AGENTS.md` landmine is satisfied. **But the list only protects REFERENCE data.**
@@ -1299,7 +1373,10 @@ CLOSING an entry applies just as much to OPENING one.
 **AC:** ① `getPlatformSession` re-reads `platform_admins` (rank and existence) on every call, the same
 one-round-trip shape `getSession()` uses; ② `addStoreUser` returns `password` only when it wrote the hash.
 
-### 🟡 N44 (wave 7). Empty states — **2 fixed, 2 left**, verified 2026-08-05
+### ✅ N44 (wave 7). Empty states — **4 of 4 DONE** (last two `6ddb137`, 2026-08-06)
+> **Re-verified 2026-09-07:** `segmen-client.tsx` and `template-client.tsx` both render
+> `components/admin/empty-state.tsx` at zero rows. Historical text below.
+
 Done: `recent-orders.tsx`, `live-activity.tsx` (guarded by `dashboard-empty.test.tsx`). **Left:**
 `pelanggan/segmen/segmen-client.tsx` (a strip reading "0 segmen aktif" over a bare `.map`) and
 `crm/template/template-client.tsx` (unconditional "Variabel tersedia" strip over a bare `.map`).
@@ -1355,7 +1432,10 @@ carry `alt`; 17 of 19 icon buttons carry an `aria-label`, most of them contextua
 **AC:** `/produk` renders h1 → h2; `/tema/[id]` has an `<h1>`; the three buttons have names that say
 which item they delete.
 
-### N46. The credential sweep scans `apps/` only, while its sibling already scans the whole repo · **S** · NEW
+### ✅ N46. The credential sweep scans `apps/` only — **DONE** (the test's own header names N46)
+> **Re-verified 2026-09-07:** `packages/lib/src/no-published-credentials.test.ts:27` — "the sweep walks
+> `packages/` too, not `apps/` alone". Historical text below.
+
 **MEASURED** — `packages/lib/src/no-published-credentials.test.ts:25`: `const APPS = join(ROOT, "apps")`,
 and `sources(APPS)` is what it walks. So **23 `.astro`/`.tsx` files under `packages/{sections,ui}` —
 markup that is rendered into merchants' live storefronts — are outside it.** `packages/lib/src/password.test.ts`
@@ -1684,11 +1764,17 @@ measurement, until this is.
 1.4.1 class as the two wave-9 fixed; found while fixing those, outside the two the brief named.
 
 ### N56. Puck's own vendored controls are unnamed · **S** · NEW
+> **Re-verified STILL OPEN 2026-09-07:** 0 `aria-label` overrides under `app/(admin)/tema/[id]/`, no
+> accepted-risk note.
+
 Measured: the viewport-zoom `<select>` and the ArrayField add-button inside
 `node_modules/@measured/puck` have no accessible name. The array field has an override point; the
 zoom control does not. Not ours to patch in place — either an override, or accepted and recorded.
 
 ### N57. Nobody is TOLD when a signup arrives — WhatsApp the operator · **M** · NEW
+> **Re-verified STILL OPEN 2026-09-07:** `apps/admin/lib/actions/register.ts` fires no notifier; no
+> transport ADR. (A `/daftar` signup still lands in the review queue with only pull-side traces.)
+
 Self-serve signup is OPEN in production (`SIGNUP_ENABLED=true`, 2026-08-06) and every new shop lands
 suspended in the review queue (0090). The merchant's own dashboard promises **"biasanya dalam 1×24
 jam"** — and nothing anywhere pushes that fact to a human. The only two traces are pull-only:
@@ -1717,6 +1803,8 @@ anyone assumes WhatsApp: the recipient is US, not a merchant, so the channel is 
 different audience, a different consent question, and it needs the verified-identity work in N58.
 
 ### N58. There is no mailer at all — decide the email track · **L** · NEW
+> **Re-verified STILL OPEN 2026-09-07:** 0 mail dependencies in any `package.json`.
+
 Blocks: email verification at signup (the one open item in
 `2026-08-05-signup-open-audit.md` §1, and the reason the approval queue exists), password reset for
 merchants, invoice delivery, and any order email a shopper might expect.
@@ -1730,7 +1818,12 @@ decision about which of the two audiences (operators, merchants, shoppers) email
 wanted is an address that can RECEIVE (`support@tokophi.id`), Cloudflare Email Routing forwards to an
 existing inbox for free and needs no provider at all — both zones are already on Cloudflare.
 
-### N59. Tidak ada CI — `main` bisa merah dan tak ada yang tahu · **M** · NEW
+### ✅ N59. Tidak ada CI — **SUDAH DIKIRIM 2026-08-06 (#176 `a8b5007`, `.github/workflows/ci.yml`) — tapi INERT sejak 2026-08-28**
+> **Diverifikasi ulang 2026-09-07:** workflow ada (Postgres service, `verify-migrations`, `verify-rls`,
+> `npm test`), hidup lagi 2026-08-27 saat repo public dan run pertamanya langsung menangkap bug nyata
+> (BUILD-LOG CI-LIVE); **repo PRIVATE lagi 2026-08-28 atas perintah owner** (`gh api` → `private`,
+> 2026-09-07) → tidak ada run. Sisa = root Task 5.12, owner-gated. Teks di bawah historis.
+
 `ls .github/workflows/` → tidak ada. Tak satu pun menjalankan `npm test` selain manusia. Bukti bukan
 hipotetis: `apps/admin/lib/seller-entity-links.test.ts` merah di `origin/main` sejak `e6d557e` dan
 ter-merge begitu saja; hari yang sama `store-slug.test.ts` juga merah sejak #157 sampai #168.
@@ -1739,7 +1832,10 @@ container, dan biarkan DB tak terjangkau GAGAL (`npm run test:db`), bukan SKIP; 
 persis cara 22 test ledger tidak pernah jalan selama berbulan-bulan.
 Detail + urutan: `2026-08-06-alerting-gaps.md` ⓐ.
 
-### N60. Env yang tak sampai ke container tidak berbunyi apa pun · **S** · NEW
+### ✅ N60. Env yang tak sampai ke container tidak berbunyi apa pun — **SUDAH DIKIRIM 2026-08-06 (#177 `940ad0d`)**
+> **Diverifikasi ulang 2026-09-07:** `apps/admin/app/api/health/env/route.ts` (header-gated sejak Task 4.13;
+> menyebut NAMA env + ADA/KOSONG, tak pernah nilainya). Teks di bawah historis.
+
 Terukur 5→6 Agustus: `SIGNUP_ENABLED=true` disimpan jam 17:03 UTC, deployment #368 mulai 16:59 —
 Coolify memotret env saat deployment DIMULAI, jadi compose-nya berbunyi `SIGNUP_ENABLED: ''`.
 Container sehat, semua host 200/307, `/daftar` tetap tertutup, tanpa satu pun sinyal. Kelas yang sama
@@ -1747,20 +1843,31 @@ terjadi di #154 (variabel tak diteruskan di `docker-compose.coolify.yml`).
 Usul: `/api/health/env` yang menyebut NAMA env kritis + status ADA/KOSONG — jangan pernah nilainya.
 Detail: `2026-08-06-alerting-gaps.md` ⓑ.
 
-### N61. Empat `verify-*` ada, tak satu pun dijalankan otomatis · **S** · NEW
+### ✅ N61. Empat `verify-*` ada, tak satu pun dijalankan otomatis — **SUDAH DIKIRIM bersama N59** (`ci.yml:114` `verify-migrations`, `:201` `verify-rls`)
+> **Diverifikasi ulang 2026-09-07** — dengan catatan N59: CI inert selama repo private. `verify-ledger`
+> terhadap produksi tetap manual (tulis-probe, owner-gated). Teks di bawah historis.
+
 `verify-rls`, `verify-rls-app`, `verify-migrations`, `verify-ledger` — semuanya read-only. `verify-rls`
 adalah pagar yang pernah merah berminggu-minggu (dua kebocoran lintas-tenant lolos di belakangnya);
 `verify-migrations` satu-satunya yang menangkap tabrakan nomor migrasi. Ikutkan ke N59, plus satu cron
 mingguan untuk `verify-ledger` terhadap produksi. Detail: `2026-08-06-alerting-gaps.md` ⓒ.
 
-### N62. Login gagal tidak dicatat di mana pun · **S** · NEW
+### ✅ N62. Login gagal tidak dicatat di mana pun — **SUDAH DIKIRIM 2026-08-06 (#183 `a1c9ff0`)**
+> **Diverifikasi ulang 2026-09-07:** `recordFailedLogin` / `failedLoginLocked` di `@tokophi/lib/cache`,
+> dipakai `apps/admin/lib/actions/auth.ts:31` (burst → satu baris `platform_activity`, tanpa kata sandi);
+> `packages/lib/src/failed-login.test.ts`. Teks di bawah historis.
+
 `grep -rn "failed_login|loginFailed|login_attempts"` → nol hasil. Rate limit ada tapi `Map` dalam
 proses: reset tiap redeploy, tak melintasi replika, menghitung IP bukan AKUN. Satu merchant bisa
 diserang 15/menit per alamat sumber tanpa tabel, log, atau layar mana pun mencatatnya.
 Usul: satu baris `platform_activity` per N kegagalan berturut-turut pada satu email — bukan per
 kegagalan, dan jangan pernah menyimpan kata sandinya. Detail: `2026-08-06-alerting-gaps.md` ⓓ.
 
-### N63. Sidecar cron hanya bersuara ke `docker logs` · **S** · NEW
+### ✅ N63. Sidecar cron hanya bersuara ke `docker logs` — **SUDAH DIKIRIM 2026-08-06 (#184 `7aff184`, migrasi 0091 `cron_runs`)**
+> **Diverifikasi ulang 2026-09-07:** setiap tick sidecar meng-upsert `cron_runs` (`api/cron/record-run.ts`),
+> dibaca Analitik → Sistem (`cron-liveness.ts`). ⚠️ Batasnya terbukti 2026-09-07: sinyal ini mati bersama
+> VPS-nya — 70 jam suspend tanpa satu pun alarm. Monitoring EKSTERNAL ada di `OPEN.md`. Teks di bawah historis.
+
 `cron-tracking` (900 detik) yang membuat resi muncul sendiri. Komentarnya sendiri di
 `docker-compose.coolify.yml:281` merekam `awbFilled` nol SEMINGGU saat ia tidak jalan. Sekarang ia
 mencetak timestamp — ke log container, yang tak seorang pun buka tanpa alasan.

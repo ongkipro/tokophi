@@ -61,6 +61,7 @@ const CHECKS = [
   { name: "check-pdp-srcset", server: true },
   { name: "check-search-srcset", server: true },
   { name: "check-pixel-defer", server: true },
+  { name: "check-feed-origin", server: true },
   { name: "check-h1-floor", server: true },
 ];
 

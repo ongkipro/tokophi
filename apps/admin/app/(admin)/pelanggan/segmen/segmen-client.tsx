@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { createSegment, updateSegment, deleteSegment } from "@/lib/actions/segments";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { useCan } from "@/components/admin/permissions";
 import { num, pct } from "@tokophi/lib/format";
 import { type CustSegment } from "@/lib/mock/store";
@@ -47,6 +48,7 @@ function SegmentActions({ segment }: { segment: CustSegment }) {
   const canWrite = useCan("crm:write");
   const [pending, startTransition] = React.useTransition();
   const [editOpen, setEditOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const remove = () =>
     startTransition(async () => {
       try {
@@ -55,6 +57,8 @@ function SegmentActions({ segment }: { segment: CustSegment }) {
         router.refresh();
       } catch {
         toast.error("Gagal menghapus segmen");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
@@ -69,10 +73,20 @@ function SegmentActions({ segment }: { segment: CustSegment }) {
           <DropdownMenuItem disabled className="opacity-60"><Users /> Lihat pelanggan<span className="ml-auto text-[10px] text-muted-foreground">segera</span></DropdownMenuItem>
           {canWrite && <DropdownMenuItem onClick={() => setEditOpen(true)}><Sparkles /> Edit</DropdownMenuItem>}
           {canWrite && <DropdownMenuSeparator />}
-          {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={remove}><TrendingDown /> Hapus</DropdownMenuItem>}
+          {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}><TrendingDown /> Hapus</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
       {editOpen && <EditSegmentDialog segment={segment} onOpenChange={setEditOpen} />}
+      {/* `deleteSegment` is a hard DELETE of the segment row only — customers are never touched
+          (memberCount is a stored number, not a membership). Say exactly that. */}
+      <ConfirmDelete
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hapus segmen?"
+        description={`Segmen "${segment.name}" dihapus permanen. Pelanggan di dalamnya tidak ikut terhapus.`}
+        onConfirm={remove}
+        pending={pending}
+      />
     </>
   );
 }

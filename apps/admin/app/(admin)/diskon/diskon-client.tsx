@@ -22,6 +22,7 @@ import { IDR, num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteDiscount } from "@/lib/actions/discounts";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { type Discount, type DiscountType } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -175,6 +176,7 @@ function RowActions({ id }: { id: string }) {
   const canWrite = useCan("discounts:write");
   const router = useRouter();
   const [pending, start] = React.useTransition();
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -183,9 +185,12 @@ function RowActions({ id }: { id: string }) {
         router.refresh();
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
@@ -210,13 +215,24 @@ function RowActions({ id }: { id: string }) {
         )}
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* `deleteDiscount` hard-deletes the row AND its `discount_usages` trail; `orders.discount_idr`
+        on past orders is untouched, which is what the copy promises. */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title="Hapus diskon?"
+      description="Kode ini beserta riwayat pemakaiannya dihapus permanen dan tidak bisa dikembalikan. Pesanan yang sudah memakainya tidak berubah."
+      onConfirm={del}
+      pending={pending}
+    />
+    </>
   );
 }
 

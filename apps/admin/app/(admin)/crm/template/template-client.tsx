@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { fillTemplate } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { createWaTemplate, updateWaTemplate, deleteWaTemplate } from "@/lib/actions/crm";
@@ -142,6 +143,7 @@ function CardActions({ t }: { t: WaTemplate }) {
         toast.error("Gagal menduplikat — coba lagi.");
       }
     });
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -150,6 +152,8 @@ function CardActions({ t }: { t: WaTemplate }) {
         router.refresh();
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
 
@@ -165,10 +169,20 @@ function CardActions({ t }: { t: WaTemplate }) {
           <DropdownMenuItem onClick={() => setEditOpen(true)}><Pencil /> Edit</DropdownMenuItem>
           <DropdownMenuItem onClick={dup}><Copy /> Duplikat</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={del}><Trash2 /> Hapus</DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}><Trash2 /> Hapus</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {editOpen && <TemplateDialog initial={t} onOpenChange={setEditOpen} />}
+      {/* `deleteWaTemplate` is a hard DELETE of the template row — no FK points at it, so nothing
+          else is touched; it just stops being offered to follow-up and broadcast. */}
+      <ConfirmDelete
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hapus template?"
+        description={`Template "${t.name}" dihapus permanen dan tidak bisa dipakai lagi untuk follow-up maupun broadcast. Pesan yang sudah terkirim tidak terpengaruh.`}
+        onConfirm={del}
+        pending={pending}
+      />
     </>
   );
 }

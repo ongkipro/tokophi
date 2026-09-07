@@ -55,12 +55,12 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
     <title>{title} - {store.name}</title>
     {description && <meta name="description" content={description} />}
 
-    <!-- No canonical, no Open Graph. Nothing links to a checkout and nobody shares one — those tags
+    {/* No canonical, no Open Graph. Nothing links to a checkout and nobody shares one — those tags
          exist to win a crawl or a WhatsApp preview card, and neither applies here.
 
          robots.txt already disallows /checkout (src/pages/robots.txt.ts) and that is the primary
          instruction; Google will not fetch this page and so will never read the tag below. It is here
-         for the crawlers that fetch anyway — robots.txt is a request, this is on the page itself. -->
+         for the crawlers that fetch anyway — robots.txt is a request, this is on the page itself. */}
     {/* `follow`, not `nofollow` (user's call, and the right one). `noindex` is the whole intent: keep
         a per-shopper page out of the index. `nofollow` is a different instruction — "treat every link
         on this page as untrusted" — and the links here are the merchant's own logo, their cart and
@@ -76,7 +76,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
         otherwise only discover it after parsing the CSS. latin only — latin-ext is fetched on demand
         by unicode-range and preloading it would download 84 KB almost nobody needs. */}
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- The merchant's brand-shade injection is GONE from this page (2026-07-16). It is not an
+    {/* The merchant's brand-shade injection is GONE from this page (2026-07-16). It is not an
          oversight: nothing on the checkout reads `--color-brand-*` any more — the surface is neutral
          and the accent is the checkout's own (below). Leaving the <style> in would have been dead
          code that looks load-bearing, and the next person would have "fixed" a colour by editing a
@@ -86,7 +86,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
          The shop is warm on purpose (`--color-cream` #faf6f2, a tinted paper); a checkout is the
          opposite: white, quiet, out of the way. Cream also made "white form vs recessed panel" a
          contrast between two nearly identical warm tones. Nothing here may leak back into the
-         storefront — that cream is the shop's identity. -->
+         storefront — that cream is the shop's identity. */}
     <style is:global>
       :root {
         --co-panel: #f5f5f5; /* the recessed summary column */
@@ -120,7 +120,7 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       }
     </style>
     <Analytics />
-    <!-- The merchant's own pixels — this layout owns InitiateCheckout + Purchase (see the note above). -->
+    {/* The merchant's own pixels — this layout owns InitiateCheckout + Purchase (see the note above). */}
     <MarketingPixels />
     <ImageFallback />
   </head>
@@ -129,24 +129,26 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
        every layered one regardless of specificity, so the utility loses silently. The column
        backgrounds are set on <main>/<aside> instead, which nothing unlayered targets.
        (This note is an HTML comment on purpose: a `{/* … */}` JSX comment placed between </head> and
-       <body> is NOT a comment — Astro renders it as text, straight onto the top of the page.) -->
+       <body> is NOT a comment — Astro renders it as text, straight onto the top of the page.)
+       It is also the ONE HTML comment this file keeps on purpose (SF-5, 2026-09-08): every
+       other note here is `{/* … */}` so it is not served; this one cannot be, for the reason above. -->
   <body class="min-h-screen text-ink antialiased">
-    <!-- TWO COLUMNS, the way Shopify's checkout is built: a WHITE form column and a RECESSED summary
+    {/* TWO COLUMNS, the way Shopify's checkout is built: a WHITE form column and a RECESSED summary
          panel that bleeds to the right edge of the viewport and runs the full height. The panel is
          not a card — it is the page. That single relationship (form bright, summary quiet, a hairline
          between them) is most of what reads as "clean"; our version had every section in its own
          rounded card floating on cream, which is six competing rectangles instead of two zones.
          Each column keeps its content in an inner max-width box aligned to the centre gutter, so the
-         two meet in the middle rather than drifting apart on a wide screen. -->
+         two meet in the middle rather than drifting apart on a wide screen. */}
 
-    <!-- The logo LINKS HOME (user's call, 2026-07-16). It was deliberately inert — the tunnel
+    {/* The logo LINKS HOME (user's call, 2026-07-16). It was deliberately inert — the tunnel
          argument: home is an exit at the most expensive point in the funnel. That reasoning stands,
          but a shop's mark is the one thing every shopper expects to be clickable, and an unclickable
          one reads as broken rather than as focused. The cart link on the right makes the trade
          explicit: the exits here are chosen, not absent.
          The "Pembayaran aman" badge is gone. It sat where a shopper looks for their cart, and a
          platform asserting its own trustworthiness in a corner is the weakest possible place to
-         spend that space — the padlock in the address bar already says it, and better. -->
+         spend that space — the padlock in the address bar already says it, and better. */}
     {/* The logo aligns with the FORM column and the cart sits at the far RIGHT of the page — the cart
         used to be `ml-auto` inside the form column's own 36rem box, so on a wide screen it landed
         mid-canvas and read as floating rather than as the header's right-hand control.
@@ -290,8 +292,8 @@ const LOGO = store.logoUrl ? mediaUrl(store.logoUrl) : null;
       </div>
     </div>
 
-    <!-- Minimal by intent: no policy links invented here. If the merchant has such pages they belong
-         in the storefront footer, not fabricated into the checkout. -->
+    {/* Minimal by intent: no policy links invented here. If the merchant has such pages they belong
+         in the storefront footer, not fabricated into the checkout. */}
     {/* `bg-white` explicitly: without it the storefront's warm cream shows through from <body> (which
          cannot be overridden there — see the note above), leaving a tinted strip under a page that is
          otherwise neutral. */}

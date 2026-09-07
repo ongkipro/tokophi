@@ -54,6 +54,7 @@ import { cn } from "@tokophi/ui/lib/utils";
 import { SegmentBadge } from "@/components/admin/pelanggan/segment-badge";
 import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
 import { SearchInput } from "@/components/admin/search-input";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 
 // ---- helpers ----
 function initials(name: string) {
@@ -92,27 +93,67 @@ const SORTS: Record<SortKey, string> = {
 // Punya akun / tidak. "Tamu" is the normal case here — checkout never asks for a registration.
 type AccountTab = "semua" | "terdaftar" | "tamu";
 
-function DeleteCustomerItem({ id }: { id: string }) {
+function RowMenu({ c }: { c: CustomerRow }) {
   const canWrite = useCan("customers:write");
   const router = useRouter();
   const [pending, start] = useTransition();
-  if (!canWrite) return null;
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const del = () =>
     start(async () => {
       try {
-        await deleteCustomer(id);
+        await deleteCustomer(c.id);
         toast.success("Pelanggan dihapus.");
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
     <>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
-        <Trash2 className="size-4" /> Hapus
-      </DropdownMenuItem>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Aksi"
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => router.push(`/pelanggan/${c.id}`)}
+          >
+            <Eye className="size-4" /> Lihat profil
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!c.phone}
+            onClick={() => c.phone && window.open(`https://wa.me/${c.phone.replace(/\D/g, "")}`, "_blank", "noopener")}
+          >
+            <MessageCircle className="size-4" /> Kirim WhatsApp
+          </DropdownMenuItem>
+          {canWrite && <DropdownMenuSeparator />}
+          {canWrite && (
+            <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}>
+              <Trash2 className="size-4" /> Hapus
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {/* `deleteCustomer` is a hard DELETE; the FK refuses (23503 → its own message) when the customer
+          has orders or reviews, so the copy names both halves. */}
+      <ConfirmDelete
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hapus pelanggan?"
+        description={`${c.name} dihapus permanen beserta tag dan catatannya. Pelanggan yang sudah punya pesanan atau ulasan tidak bisa dihapus.`}
+        onConfirm={del}
+        pending={pending}
+      />
     </>
   );
 }
@@ -487,33 +528,7 @@ export function PelangganClient({ customers }: { customers: CustomerRow[] }) {
                   className="pr-4 text-right"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Aksi"
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => router.push(`/pelanggan/${c.id}`)}
-                      >
-                        <Eye className="size-4" /> Lihat profil
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!c.phone}
-                        onClick={() => c.phone && window.open(`https://wa.me/${c.phone.replace(/\D/g, "")}`, "_blank", "noopener")}
-                      >
-                        <MessageCircle className="size-4" /> Kirim WhatsApp
-                      </DropdownMenuItem>
-                      <DeleteCustomerItem id={c.id} />
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <RowMenu c={c} />
                 </TableCell>
               </TableRow>
             ))}

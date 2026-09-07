@@ -4,11 +4,19 @@
 import type { APIRoute } from "astro";
 import { db, schema } from "@tokophi/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { json, readVisitorToken } from "../../../lib/chat";
+import { LIMITS, clientIp, json, rateLimit, readVisitorToken } from "../../../lib/chat";
 
 export const POST: APIRoute = async (ctx) => {
   const store = ctx.locals.store;
   if (!store) return json({ error: "unknown store" }, 404);
+
+  // Same gate shape as poll.ts / send.ts. This route had none (page-map finding SF-2): a signed
+  // visitor cookie is issued to anyone who sends one message, and every call here opens a
+  // transaction with two UPDATEs. 429 with the same silent `{ ok: true }` the no-token path returns —
+  // the panel has nothing to do with a refusal, and a stamped read is not something the shopper waits on.
+  const ip = clientIp(ctx.request, ctx.clientAddress);
+  if (!rateLimit(`chat:read:ip:${ip}`, LIMITS.readPerIpMin.limit, LIMITS.readPerIpMin.windowMs))
+    return json({ ok: true }, 429);
 
   const token = await readVisitorToken(ctx, store.id);
   if (!token) return json({ ok: true });

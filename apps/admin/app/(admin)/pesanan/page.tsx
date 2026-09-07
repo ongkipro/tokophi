@@ -48,7 +48,8 @@ export default async function PesananPage({ searchParams }: { searchParams: Prom
       list={list}
       tab={tab}
       filters={{ field, q, courier, method }}
-      returns={returns}
+      returns={returns.byCourier}
+      unattributedReturns={returns.unattributed}
     />
   );
 }

@@ -95,11 +95,11 @@ const discount =
 const soldLabel = product.unitsSold > 0 ? `${num(product.unitsSold)} terjual` : null;
 ---
 
-<!-- FRAMELESS / FLAT (owner, 2026-07-23). No card box — no white fill, no `ring-1 ring-line`, no drop
+{/* FRAMELESS / FLAT (owner, 2026-07-23). No card box — no white fill, no `ring-1 ring-line`, no drop
      shadow. The product IS the image; the type sits flush beneath it on the page. The only hover is the
      image easing up in scale and the title warming to brand — nothing lifts or casts a shadow (that was
      the framed look this replaces). The focus ring hugs the rounded IMAGE, where the eye already is,
-     offset against the cream page so it reads on the shop's most-used control. -->
+     offset against the cream page so it reads on the shop's most-used control. */}
 <a href={`/produk/${product.handle}`} class="group block select-none focus-visible:outline-none">
   {/* The image is the card's ONE surface now that there is no outer box, so it carries the radius and
       the clip (badges, the discount pill and the sold-out scrim all ride inside this rounded frame). */}

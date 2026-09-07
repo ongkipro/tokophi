@@ -214,6 +214,102 @@ jobs:
       - run: npx tsc --noEmit
         working-directory: apps/super-admin
 
+  # ── Task 5.12 / NF-14: every deployable surface BUILDS, not just typechecks ──────────────────
+  #
+  # Until 2026-09-08 this workflow built exactly ONE of the four surfaces — the storefront, as a
+  # side effect of `npm run verify` above (`run-checks.mjs` runs `astro build` first and exits
+  # non-zero if it fails, so that half is already a required step and is NOT repeated here).
+  # Admin and super-admin only got `tsc --noEmit`, and the landing only `astro check`. Neither is
+  # a build: `next build` fails on things `tsc` cannot see (a Server Component importing a client-
+  # only module, a route segment config that is not statically analysable, a `"use server"` file
+  # exporting a non-function, a workspace dependency missing from the lockfile) — and Coolify is
+  # where those were being found, after merge. (Next 16's `next build` DOES run a TypeScript pass
+  # of its own — "Running TypeScript ..." — so the `tsc` steps above are not the only type gate
+  # any more; they stay because they are cheaper and report first.)
+  #
+  # The job mirrors the Dockerfiles, which are the only builds that count:
+  #   apps/admin/Dockerfile · apps/super-admin/Dockerfile
+  #     `DATABASE_RUNTIME_ROLE=owner DATABASE_URL=postgres://build:build@localhost:5432/build
+  #      npm run build -w @tokophi/<app>`
+  #   apps/landing/Dockerfile
+  #     `npm run build -w @tokophi/landing`  (no DB, no DATABASE_URL — by design; PUBLIC_* are
+  #      baked at build time and every one of them has either a Dockerfile default or a deliberate
+  #      "unset means not supplied" contract, so a bare build is the honest one)
+  #
+  # ⚠️ THE DUMMY DATABASE_URL IS NOT OPTIONAL FOR THE TWO NEXT BUILDS. Route collection imports
+  # `@tokophi/db`, whose `client.ts` throws AT MODULE LOAD when `planPools()` cannot resolve a
+  # connection plan; nothing is ever connected to (postgres.js opens lazily, on first query), so
+  # `localhost:5432` with nothing listening is fine — measured locally 2026-09-08, exit 0 with no
+  # database on that port. `DATABASE_RUNTIME_ROLE=owner` matters too: `next build` sets
+  # `NODE_ENV=production`, and in production a `RUNTIME_ROLE=app` with no `APP_DATABASE_URL` is a
+  # refusal-to-start by design (Task 4.12). There is no service container here on purpose — a build
+  # that needs a live database to succeed is a build the Dockerfile could not run either.
+  #
+  # COST (the repo is private again since 2026-09-04, so minutes are metered): three parallel
+  # ubuntu jobs, each `npm ci` (or a node_modules cache hit) + one build. Measured 2026-09-08 from a
+  # clean `npm ci` on a dev laptop (warm npm cache): npm ci 34 s · admin 52 s · super-admin 21 s ·
+  # landing 13 s. A hosted runner is ~2× slower, so budget ~2–4 min each ⇒ ~6–12 billed minutes
+  # per run on top of the ~20 the `test` job already spends. `needs: test` so a PR that is
+  # already red on tests does not also pay for three builds; the price is that a build-only
+  # breakage is reported after the test job, not beside it.
+  build:
+    name: build · ${{ matrix.app }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      # Every surface's verdict is evidence; a red admin must not hide a red landing.
+      fail-fast: false
+      matrix:
+        app: [admin, super-admin, landing]
+
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_RUNTIME_ROLE: owner
+      DATABASE_URL: postgres://build:build@localhost:5432/build
+
+    steps:
+      # Shallow is fine here — nothing in a build reads git history (the journal replay lives in
+      # `test`, which is why THAT checkout carries `fetch-depth: 0`).
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      # The installed tree, keyed on the lockfile (+ OS + Node major, because native binaries such
+      # as unrs-resolver's napi module are platform-specific). On a hit `npm ci` is skipped — it
+      # would wipe node_modules and reinstall anyway, which is the whole cost being saved. A miss
+      # falls through to the same plain `npm ci` the `test` job runs (see its note on allowScripts).
+      - id: node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: node-modules-${{ runner.os }}-node24-${{ hashFiles('package-lock.json') }}
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      # Next's build cache. The key ends in the SHA so every run saves a fresh entry; `restore-keys`
+      # then hands the next run the newest one for the same lockfile. Landing has no `.next`, so
+      # the step is skipped there rather than caching an empty path. ⚠️ Under Turbopack (Next 16)
+      # this directory held only `.tsbuildinfo` / `.rscinfo` / `.previewinfo` — ~400 KB, measured —
+      # so today it saves the TypeScript pass and little else; it is cheap and becomes worth more
+      # if Turbopack's persistent build cache is ever switched on. Do not expect it to hide a slow
+      # build.
+      - if: matrix.app != 'landing'
+        uses: actions/cache@v4
+        with:
+          path: apps/${{ matrix.app }}/.next/cache
+          key: next-${{ matrix.app }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ matrix.app }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - run: npm run build -w @tokophi/${{ matrix.app }}
+
 # NOT here yet, deliberately:
 #   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it
 #     now would make CI red on day one, which is how a check stops being read. Fix the lint errors,

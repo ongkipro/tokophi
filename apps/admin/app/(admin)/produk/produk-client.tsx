@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Upload,LayoutGrid, List, ChevronDown, MoreHorizontal,
   Pencil, Copy, Archive, Package, CheckCircle2, AlertTriangle, Tags, Check,
-  ArrowUpDown, X, Trash2, CircleCheck, FileText, Calendar, Sparkles,
+  ArrowUpDown, X, CircleCheck, FileText, Calendar, Sparkles,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -16,6 +16,7 @@ import type { Product } from "@/lib/mock/store";
 import { cn } from "@tokophi/ui/lib/utils";
 import { toast } from "sonner";
 import { bulkSetProductStatus, bulkDeleteProducts, duplicateProduct, deleteProduct } from "@/lib/actions/products";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { useCan } from "@/components/admin/permissions";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -120,6 +121,7 @@ function RowActions({ id, number, className }: { id: string; number?: number; cl
       if (r.ok) { toast.success("Produk diduplikat sebagai draft."); router.refresh(); }
       else toast.error(r.error ?? "Gagal menduplikat — coba lagi.");
     });
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const archive = () =>
     start(async () => {
       try {
@@ -128,9 +130,12 @@ function RowActions({ id, number, className }: { id: string; number?: number; cl
         router.refresh();
       } catch {
         toast.error("Gagal mengarsipkan — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className={className} aria-label="Aksi produk" />}>
         <MoreHorizontal />
@@ -139,9 +144,21 @@ function RowActions({ id, number, className }: { id: string; number?: number; cl
         <DropdownMenuItem render={<Link href={`/produk/${number ?? id}`} />}><Pencil /> Edit</DropdownMenuItem>
         {canWrite && <DropdownMenuItem disabled={pending} onClick={dup}><Copy /> Duplikat</DropdownMenuItem>}
         {canDelete && <DropdownMenuSeparator />}
-        {canDelete && <DropdownMenuItem variant="destructive" disabled={pending} onClick={archive}><Archive /> Arsipkan</DropdownMenuItem>}
+        {canDelete && <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}><Archive /> Arsipkan</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* `deleteProduct` is an ARCHIVE (status='archived'), never a DELETE — order line-items reference
+        the row. The list filters archived out and offers no restore, so the copy promises neither. */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title="Arsipkan produk?"
+      description="Produk ini tidak dihapus — riwayat pesanannya tetap utuh — tetapi disembunyikan dari daftar produk dan dari toko. Belum ada tombol untuk mengembalikannya dari arsip."
+      confirmLabel="Ya, arsipkan"
+      onConfirm={archive}
+      pending={pending}
+    />
+    </>
   );
 }
 
@@ -241,18 +258,26 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
     });
   const clearSel = () => setSelected(new Set());
   const [bulkPending, startBulk] = React.useTransition();
+  const [bulkArchiveOpen, setBulkArchiveOpen] = React.useState(false);
+  const doBulk = async (fn: (ids: string[]) => Promise<{ ok: boolean; count: number }>, verb: string) => {
+    const ids = [...selected];
+    try {
+      const r = await fn(ids);
+      if (!r.ok) throw new Error();
+      toast.success(`${num(r.count)} produk ${verb}.`);
+      clearSel();
+      router.refresh();
+    } catch {
+      toast.error(`Gagal — coba lagi.`);
+    }
+  };
   const runBulk = (fn: (ids: string[]) => Promise<{ ok: boolean; count: number }>, verb: string) =>
+    startBulk(() => doBulk(fn, verb));
+  // The confirm closes when the archive settles, not on click — the spinner is the feedback.
+  const bulkArchive = () =>
     startBulk(async () => {
-      const ids = [...selected];
-      try {
-        const r = await fn(ids);
-        if (!r.ok) throw new Error();
-        toast.success(`${num(r.count)} produk ${verb}.`);
-        clearSel();
-        router.refresh();
-      } catch {
-        toast.error(`Gagal — coba lagi.`);
-      }
+      await doBulk(bulkDeleteProducts, "diarsipkan");
+      setBulkArchiveOpen(false);
     });
   const visibleIds = pageProducts.map((p) => p.id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
@@ -408,9 +433,20 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             {canWrite && <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => runBulk((ids) => bulkSetProductStatus(ids, "active"), "diaktifkan")}><CircleCheck /> Jadikan Aktif</Button>}
             {canWrite && <Button variant="outline" size="sm" disabled={bulkPending} onClick={() => runBulk((ids) => bulkSetProductStatus(ids, "draft"), "dijadikan draft")}><FileText /> Jadikan Draft</Button>}
-            {canDelete && <Button variant="outline" size="sm" className="text-destructive" disabled={bulkPending} onClick={() => runBulk(bulkDeleteProducts, "dihapus")}><Trash2 /> Hapus</Button>}
+            {canDelete && <Button variant="outline" size="sm" className="text-destructive" disabled={bulkPending} onClick={() => setBulkArchiveOpen(true)}><Archive /> Arsipkan</Button>}
             <Button variant="ghost" size="sm" disabled={bulkPending} onClick={clearSel}>Batal</Button>
           </div>
+          {/* `bulkDeleteProducts` ARCHIVES, same as the single action — the button used to read "Hapus"
+              and the toast "dihapus" over an UPDATE that deleted nothing. */}
+          <ConfirmDelete
+            open={bulkArchiveOpen}
+            onOpenChange={setBulkArchiveOpen}
+            title={`Arsipkan ${num(selected.size)} produk?`}
+            description="Produk-produk ini tidak dihapus — riwayat pesanannya tetap utuh — tetapi disembunyikan dari daftar produk dan dari toko. Belum ada tombol untuk mengembalikannya dari arsip."
+            confirmLabel="Ya, arsipkan"
+            onConfirm={bulkArchive}
+            pending={bulkPending}
+          />
         </div>
       ) : null}
 

@@ -17,6 +17,7 @@ import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deletePage } from "@/lib/actions/pages";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { type CmsPage } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -58,6 +59,7 @@ function RowActions({ id }: { id: string }) {
   const canWrite = useCan("content:write");
   const router = useRouter();
   const [pending, start] = React.useTransition();
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -67,9 +69,12 @@ function RowActions({ id }: { id: string }) {
         router.refresh(); // either way: on a refusal this is what clears the row that is already gone
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
@@ -85,13 +90,23 @@ function RowActions({ id }: { id: string }) {
         </DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* `deletePage` is a hard DELETE — say so; nothing brings the row back. */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title="Hapus halaman?"
+      description="Halaman ini dihapus permanen dan tidak bisa dikembalikan. Tautan yang mengarah ke halaman ini akan menjadi 404 di toko."
+      onConfirm={del}
+      pending={pending}
+    />
+    </>
   );
 }
 

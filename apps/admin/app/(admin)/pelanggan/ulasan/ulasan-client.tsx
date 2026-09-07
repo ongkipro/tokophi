@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { Card } from "@tokophi/ui/card";
 import { Badge } from "@tokophi/ui/badge";
 import { Button } from "@tokophi/ui/button";
@@ -299,6 +300,7 @@ function ReviewActions({ id, status, reply = "" }: { id: string; status: ReviewS
   const router = useRouter();
   const [pending, start] = useTransition();
   const [replyOpen, setReplyOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const run = (fn: () => Promise<{ ok: boolean }>, msg: string) =>
     start(async () => {
       try {
@@ -310,6 +312,8 @@ function ReviewActions({ id, status, reply = "" }: { id: string; status: ReviewS
         toast.error("Gagal — coba lagi.");
       }
     });
+  // Closes the confirm when the delete settles either way; `run` owns the toasts.
+  const del = () => run(() => deleteReview(id).finally(() => setConfirmOpen(false)), "Ulasan dihapus.");
   return (
     <>
       <DropdownMenu>
@@ -334,12 +338,22 @@ function ReviewActions({ id, status, reply = "" }: { id: string; status: ReviewS
             <MessageSquare className="size-4" /> {reply ? "Edit balasan" : "Balas"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => run(() => deleteReview(id), "Ulasan dihapus.")}>
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}>
             <Trash2 className="size-4" /> Hapus
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {replyOpen && <ReplyDialog id={id} reply={reply} onOpenChange={setReplyOpen} run={run} />}
+      {/* `deleteReview` is a hard DELETE (the seller's reply goes with the row). "Sembunyikan" is the
+          reversible alternative, so the copy points at it. */}
+      <ConfirmDelete
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hapus ulasan?"
+        description="Ulasan ini beserta balasan Anda dihapus permanen dan tidak bisa dikembalikan. Kalau hanya ingin menyembunyikannya dari toko, pakai 'Sembunyikan'."
+        onConfirm={del}
+        pending={pending}
+      />
     </>
   );
 }

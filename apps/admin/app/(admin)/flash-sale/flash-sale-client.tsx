@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteFlashSale } from "@/lib/actions/flash";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import type { FlashSaleRow } from "@/lib/data/flash";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -31,6 +32,7 @@ function RowActions({ id }: { id: string }) {
   const canWrite = useCan("discounts:write");
   const router = useRouter();
   const [pending, start] = React.useTransition();
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       // The action RETURNS its outcome now — awaiting and ignoring it reported "dihapus" over a
@@ -41,16 +43,28 @@ function RowActions({ id }: { id: string }) {
         toast.success("Flash sale dihapus.");
         router.refresh();
       } catch { toast.error("Gagal menghapus — coba lagi."); }
+      finally { setConfirmOpen(false); }
     });
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi flash sale"><MoreHorizontal /></Button>} />
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuItem render={<Link href={`/flash-sale/${id}`} />}><Pencil /> Edit</DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
-        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}><Trash2 /> Hapus</DropdownMenuItem>}
+        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}><Trash2 /> Hapus</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* `deleteFlashSale` hard-deletes the sale; `flash_sale_items` go with it (ON DELETE CASCADE). */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title="Hapus flash sale?"
+      description="Flash sale ini beserta daftar produk dan harga promonya dihapus permanen dan tidak bisa dikembalikan. Produk-produknya kembali ke harga normal di toko."
+      onConfirm={del}
+      pending={pending}
+    />
+    </>
   );
 }
 

@@ -37,7 +37,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 
   <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12">
-      <!-- Store info -->
+      {/* Store info */}
       <div class="flex flex-col gap-6">
         {/* No card. Nothing here is elevated, nothing is clickable, and the two-column grid already
              separates this from the block beside it — the box was drawn because the content needed a
@@ -99,7 +99,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
         </div>
       </div>
 
-      <!-- Contact form -->
+      {/* Contact form */}
       {/* The form that used to live here was the worst control on the site: it called
           `e.preventDefault()`, revealed "Terima kasih! Pesan Anda sudah kami terima", and then called
           `form.reset()` — DESTROYING the message a millisecond after telling the shopper it had been

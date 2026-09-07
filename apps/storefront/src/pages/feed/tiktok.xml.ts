@@ -6,17 +6,13 @@
 // Everything else — the item shape, the ids, the values — comes from the shared builder, so the two
 // feeds cannot drift into disagreeing about what a product is.
 import type { APIRoute } from "astro";
-import { getStoreByHost } from "../../data/store";
-import { getCatalog } from "../../data/catalog";
 import { feedDocument, feedItems, PROFILES } from "../../lib/product-feed";
 import type { CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 
-export const GET: APIRoute = async ({ request }) => {
-  const host = request.headers.get("host");
-  const store = await getStoreByHost(host);
-  if (!store) return new Response("Store not found", { status: 404 });
-  const origin = `https://${host}`;
-  const catalog = await getCatalog(store);
+export const GET: APIRoute = async ({ locals }) => {
+  // Store, catalog and PRIMARY origin from the middleware, like `sitemap.xml.ts` and `google.xml.ts`
+  // (see the note there — SF-1: a raw-Host origin disagreed with the canonicals under a custom domain).
+  const { store, catalog, origin } = locals;
   const scheme = (store.catalogIdScheme === "number" ? "number" : "handle") as CatalogIdScheme;
 
   const items = catalog.products.flatMap((p) =>

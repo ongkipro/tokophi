@@ -308,16 +308,43 @@ export async function kaServices(): Promise<{ ok: boolean; services: KaService[]
   return out;
 }
 
-// connection check (used by super-admin) — hits the province endpoint
-export async function kaTestConnection(): Promise<{ ok: boolean; env: string; provinces?: number; message: string }> {
-  if (!KEY) return { ok: false, env: ENV, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
+// connection check (used by super-admin) — hits the province endpoint, which costs nothing.
+//
+// Task 8.3: this reply feeds BOTH the manual "Test koneksi" button and the cached health probe on
+// Super Admin → Pengaturan, so it carries FACTS, not a verdict: `configured` (was anything called at
+// all), `httpStatus`, and the vendor's own `text` verbatim on a `{status:false}` reply. The 401 that
+// took every quote down on 2026-09-07 reads "Your IP address 45.77.33.112 were not allowed to access
+// this API" — the sentence names the IP that has to be re-added, and it used to be flattened into
+// "Auth ditolak / respons tidak valid." ADR 0004 hides provider words from SHOPPERS; the operator is
+// exactly who must read them. `classifyKaProbe` (super-admin) turns these facts into a state.
+export type KaTestResult = {
+  ok: boolean;
+  env: string;
+  /** `false` = no API key, so nothing was called. */
+  configured: boolean;
+  /** HTTP status of whatever came back — a JSON refusal or a non-JSON transport failure alike. */
+  httpStatus?: number;
+  provinces?: number;
+  /** The vendor's sentence on a parseable `{status:false}` reply, verbatim. Absent when no JSON arrived. */
+  text?: string;
+  message: string;
+};
+
+export async function kaTestConnection(): Promise<KaTestResult> {
+  if (!KEY) return { ok: false, env: ENV, configured: false, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
   try {
-    const { body: r } = await ka<{ status: boolean; datas?: unknown[] }>("/api/mitra/province", {});
+    const { body: r, httpStatus } = await ka<{ status: boolean; datas?: unknown[]; text?: string; message?: string }>("/api/mitra/province", {});
     const n = (r.datas ?? []).length;
-    return r.status
-      ? { ok: true, env: ENV, provinces: n, message: `Terhubung ke KiriminAja (${ENV}) — ${n} provinsi.` }
-      : { ok: false, env: ENV, message: "Auth ditolak / respons tidak valid." };
+    if (r.status) return { ok: true, env: ENV, configured: true, httpStatus, provinces: n, message: `Terhubung ke KiriminAja (${ENV}) — ${n} provinsi.` };
+    const text = r.text ?? r.message ?? "respons tidak valid";
+    return { ok: false, env: ENV, configured: true, httpStatus, text, message: `KiriminAja (${ENV}) menolak — HTTP ${httpStatus}: ${text}` };
   } catch (e) {
-    return { ok: false, env: ENV, message: e instanceof Error ? e.message : "Gagal terhubung." };
+    return {
+      ok: false,
+      env: ENV,
+      configured: true,
+      httpStatus: e instanceof KaTransportError ? e.httpStatus : undefined,
+      message: e instanceof Error ? e.message : "Gagal terhubung.",
+    };
   }
 }

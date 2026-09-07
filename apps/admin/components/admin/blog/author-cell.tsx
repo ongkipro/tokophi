@@ -1,13 +1,5 @@
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .toUpperCase();
-}
+import { initials } from "../initials";
 
 export function AuthorCell({ name }: { name: string }) {
   return (

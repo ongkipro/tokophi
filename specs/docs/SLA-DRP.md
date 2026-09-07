@@ -8,6 +8,7 @@ points of failure, the recovery runbook, and the exercise plan.
 
 Claims are labelled **Observed** (measured), **Derived** (computed from measurements), **Proposal**
 (not yet agreed), or **Gap**. Measured **2026-08-05** against production. §8 says how to re-derive.
+**Amended 2026-09-07** with the billing-suspension incident (§2, §4, §6, §8).
 
 ---
 
@@ -42,6 +43,26 @@ container, one region. Cloudflare in front.
 - `2026-07-14` — Coolify built the containers, left them `created`, and moved on. Production 503'd.
 - `2026-07-18` — storefront 503'd for **~2 h** while the other three stayed up. Root cause: **disk at
   100 %** (Coolify keeps every per-deploy image; 204 images / ~129 GB). L1b exists because of this.
+
+**Observed — a third incident, 2026-09-04 → 2026-09-07, and this one was neither hardware nor code:**
+- **The hosting account's balance ran out and Vultr SUSPENDED the instance** (`volumdev`,
+  `45.77.33.112` — the only box) from **Fri 2026-09-04 20:27 WIB to Mon 2026-09-07 18:47 WIB**:
+  **~70 h 20 min**, every surface, every host, Cloudflare **522** throughout (the landing has no DB
+  and would have survived any *software* failure; it did not survive this).
+- **Detection: none.** No off-box monitor exists (`ops/tokophi-probe.sh` is built and installed
+  nowhere — `DEPLOY.md` §L2), there is no Vultr low-balance alert, and the box cannot report its own
+  power-off. It was found **three days later** from a merchant-style "the shop is down" report.
+- **Impact:** no shopper could reach any store for 70 h; the Seller and Super Admin panels were down;
+  every cron sidecar (billing, tracking, conversions, backups, offsite mirror) stopped by
+  construction. **Data: intact** — the volume survived, the last on-box dump before the stop was
+  2026-09-04 11:50 UTC, and the shared DB shows zero orders since 2026-08-26, so nothing was lost
+  *this time*. **Recovery: a top-up; the instance auto-resumed** and all 18 containers came back
+  healthy without intervention (`DEPLOY.md` → "Origin unreachable / every host 522"). ⚠️ A side
+  effect is STILL OPEN as of 2026-09-07: the KiriminAja sandbox now refuses the VPS IP (401
+  allow-list), so **no order can be quoted or placed** until the owner fixes the vendor allow-list —
+  a second, *silent* outage of the product's one money path, behind a site that looks up.
+- **The RTO for this scenario was decided by a human noticing, not by any system** — which is the
+  §5 gap in one sentence.
 
 **Derived — deploy is a planned outage, and the documented number was wrong.** Measured **10 times on
 2026-08-05**: merge → all four hosts green in **524, 656, 558, 542, 553, 550, 538, 531, 510 s**
@@ -118,7 +139,8 @@ daily), 1 h for a logical/corruption event (retained hourly for 48 h, daily for 
 | disk full | L1b prune, then redeploy | **Observed** the 2026-07-18 case ran **~2 h** *before* L1b existed |
 | bad release | `git revert` + push + rebuild | **Derived** ~9–11 min, from the 10 deploys measured |
 | logical corruption / bad migration | `pg_restore` the newest dump | **Derived** minutes — the dump is 1,2 MB / 621 objects. ⚠️ **Untested.** |
-| **total VPS loss** | provision + Coolify install + deploy + restore | **Gap — unknown and untested.** Coolify install alone is ~10 min; realistically 1–3 h, and **there is no offsite dump to restore from** (§3) |
+| **hosting billing lapse (instance suspended)** | top up → instance auto-resumes → containers self-start | **Observed 2026-09-07:** minutes after payment — but the *outage* was **70 h 20 min** because nothing detected it (§2). RTO here = time-to-notice, not time-to-fix |
+| **total VPS loss** | provision + Coolify install + deploy + restore | **Gap — unknown and untested.** Coolify install alone is ~10 min; realistically 1–3 h, and **there is no offsite dump to restore from** (§3) | ⚠️ `backup-offsite` exists since 2026-09-02 but is **INERT** until the R2 credentials are set (below, §6) |
 
 **Proposal — SLO, not a promise:** 99,5 % monthly on the storefront SLI, *excluding* announced deploy
 windows. That is ~3,6 h/month of unplanned unavailability. It is deliberately modest: a single box, a
@@ -143,6 +165,9 @@ continuously, any SLO here is an intention, not a measurement.
 | | consequence | mitigated? |
 |---|---|---|
 | one VPS | everything down | ❌ |
+| **hosting BILLING on that VPS** (Vultr suspends on a negative balance) | everything down, **silently**, until a human notices — **realised 2026-09-04 → 09-07, 70 h 20 min** | ❌ no low-balance alert, no auto-top-up (owner action in the Vultr console: Billing → alerts / auto-payment) |
+| **no external uptime monitor** | an origin outage of any cause is detected by a merchant, days later | ❌ `ops/tokophi-probe.sh` is built (`DEPLOY.md` §L2) and **installed nowhere**; needs one off-box cron + an alert channel |
+| offsite backup credential | the `backup-offsite` sidecar (2026-09-02, #377/#378) mirrors dumps to R2 **only once `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` are set in Coolify** — until then it logs `offsite-UNCONFIGURED` and reports UNHEALTHY by design (`docker-compose.coolify.yml` → `backup-offsite`, BUILD-LOG 2026-09-02 "inert until credentialed") | ❌ **still uncredentialed as of 2026-09-07** (deploy 528 verified it running `offsite-UNCONFIGURED`; BUILD-LOG lists "kredensial R2" under "Menunggu keputusan owner"). Every backup is still on the same box that just spent 70 h powered off |
 | one Postgres container, one volume | total data loss if the volume dies | ❌ backups are on the same box (§3) |
 | one region (SGP) | regional outage = full outage | ❌ accepted for now |
 | `AUTH_SECRET` | lost ⇒ every session invalid (recoverable: users log in again) | 🟡 fail-closed by design |
@@ -191,6 +216,13 @@ An untested recovery path is a **Proposal**, not a capability. None of these has
 - [ ] **Rebuild from nothing** on a throwaway VPS — the only way to turn the "total loss" row in §4
       from `unknown` into a number.
 - [ ] **Confirm the volumes survive a redeploy** (`selfhost.md` names this as a house gotcha).
+- [x] **Survive a power-off + resume of the whole box** — exercised involuntarily 2026-09-07: volume,
+      env and every container came back; nothing had to be restored. What did NOT come back on its
+      own: the KiriminAja sandbox allow-list (vendor side) — add "re-probe the vendor APIs" to any
+      post-resume checklist.
+- [ ] **Install `ops/tokophi-probe.sh` off-box with an alert channel and set a Vultr low-balance
+      alert** — the two cheapest items on this page, and the only ones that would have turned the
+      70-hour outage into a 15-minute one.
 
 ## 9. How to re-derive everything here
 

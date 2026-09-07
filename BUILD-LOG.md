@@ -2668,3 +2668,94 @@ paired with the old shape as a mutation self-check), `lib/route-roles.test.ts` (
 `/tiket/[id]`) is untouched — the report pairs it with the six admin pages (AD-1) for ONE shared
 `@tokophi/lib` helper, which is its own change. Merchants still cannot see their own store's audit
 trail (PRD open question 4: `platform_activity` has no RLS).
+
+## 2026-09-07 11:53 UTC — Main Session — INCIDENT: production VPS suspended for billing (~70 h) · recovered · KiriminAja IP allow-list still refusing
+
+**Report as received.** "Storefront form cannot search kecamatan." It was not the form.
+
+**What it actually was.** Every `tokophi.com` host answered Cloudflare `522`; ping/SSH/80/443 to
+45.77.33.112 timed out; `vultr-cli instance list` showed the ONE production box (`volumdev`) as
+`suspended`, power `stopped`. Account: balance $9.35 vs $10.36 pending; the promo credit expired
+2026-08-20 ($223.89), the 2026-09-01 invoice ($48) was not covered; last real payment 2026-07-09.
+**Window (from `journalctl --list-boots`): last entry Fri 2026-09-04 20:27 WIB → boot Mon 2026-09-07
+18:47 WIB ≈ 70 h 20 min.** Last DB backup on the volume: 2026-09-04 11:50 UTC. No orders were lost by
+the outage itself: `orders_since_sep1 = 0` (last order 2026-08-26), but nothing could have been placed.
+
+**Recovery.** Owner topped up; Vultr auto-resumed (status `active`, power `running` — no manual
+start needed). Verified: all 18 app/Coolify containers `healthy` within ~2 min (`coolify-sentinel`
+exited 255 at boot and was restarted by Coolify on its own); four hosts 200/307; **checkout driven in
+Chromium on production**: typing "sewon" → dropdown "Sewon, Kabupaten Bantul, DI Yogyakarta" → pick
+fills `dest_id` 552 + kota + provinsi, kelurahan list (4) + kodepos row appear, 0 console errors.
+**The reported symptom is gone.**
+
+**Still broken, and NOT fixable in code — owner action.** The rates call (`op:"rates"`) answers
+`SHIPPING_QUOTE_UNAVAILABLE`; the admin container log says `[ongkir] courier API refused the quote:
+Unauthorized.` Probed from inside the container (key never printed; 64 chars; `KIRIMINAJA_ENV=sandbox`):
+`tdev.kiriminaja.com /api/mitra/province` → **401 "Your IP address 45.77.33.112 were not allowed to
+access this API."** The IP is unchanged since provisioning (Vultr keeps it across suspension), so the
+allow-list entry on the KiriminAja developer dashboard has lapsed or been removed. Consequence today:
+no ongkir → no COD → **no order can be placed**, while search/kelurahan/kodepos all work (they are
+local tables). Fix: re-add 45.77.33.112 to the sandbox IP allow-list at KiriminAja, then Super Admin →
+Pengaturan → "Tes koneksi KiriminAja" (`kaTestConnection`, hits `province`, costs nothing). The
+AutoLaris "Tes koneksi" was deliberately NOT run — it creates a real Rp10.000 QRIS bill.
+
+**Also stopped during the window** (by construction, not by a bug): daily backup + offsite copy,
+`cron-tracking` (resi poll), `cron-order-expiry`, `cron-domains`. All back and `healthy` now.
+
+**Files.** None in code. `BUILD-LOG.md` (this entry) · memory
+`prod-outage-check-vps-first.md` (updated with the allow-list follow-on).
+
+## 2026-09-07 17:18 UTC — Main Session + 15 parallel subagents — SWEEP: docs reconciled 1:1 against code, 13 open tasks executed (branch `feat/sweep-0907`)
+
+**Why.** Owner's goal (2026-09-07): "audit and perfect what exists, execute the TASKS.md items not yet done, keep the
+development map 1:1, run in parallel, validated." Root `TASKS.md` had 19 tasks with NO Status line; `specs/docs/TASKS.md`
+listed five super-admin epics as open that had shipped weeks ago; `UI_INVENTORY.md` called every super-admin route
+"✅ mock"; the root scaffolds said the project was un-started. Fifteen subagents ran on strictly disjoint file sets
+(no `git stash`, no commits, no re-seed, no production access); the main session integrated.
+
+**Docs (four lanes).**
+- Root `TASKS.md`: every task now carries a `Status:` with the check that was run; 17 tasks added (5.21–5.26 from the
+  page-map sweep, 6.11–6.13, Stage 8 "Operations & Hygiene" 8.1–8.11 incl. the 2026-09-07 incident follow-ups).
+- `specs/docs/TASKS.md` 22 epic items corrected with evidence (E2 provisioning/impersonation/tiket/billing/config = shipped;
+  E1 toasts `[~]` with the six bare deletes named; E6 gateway/aggregator/payout/billing shipped; Epic 8 added).
+  `OPEN.md` rewritten from the Status lines (P0 13/13; P1 12 open; P2 6 open; Stage 7 never run) with the N36–N43
+  disambiguation table RESTORED (it had been dropped 2026-08-16). `NEXT.md` 23 re-verification notes, N35 flagged urgent.
+- `UI_INVENTORY.md` rebuilt from the 11 super-admin pages + `route-roles.ts` floors + 32 actions; seller IA re-read from
+  `lib/nav.ts`; storefront/landing sections fixed. `STATUS.md` incident block (re-derived: 106 migrations, 82 tables,
+  `verify-rls` 54/55, vitest 139 files / 1136 tests at that moment). `DEPLOY.md` two runbooks (origin 522 ladder;
+  KiriminAja 401 probe, AutoLaris test = real Rp10.000). `SLA-DRP.md` third incident + 3 SPOF rows (hosting billing,
+  no external monitor, offsite uncredentialed). `KIRIMINAJA.md` allow-list fact. `CODE_MAP.md`/`SYSTEM_MAP.md` counts.
+- Root `STATUS.md`/`ARCHITECTURE.md`/`DECISIONS.md`/`OBSERVABILITY.md`/`RELEASE.md` (RH-2): filled as THIN pointers from disk
+  (`State: SMOKE_TESTING` because rates are red; ADR index with "0010 never written"; the real probes; release
+  `4b0f4c8-pr381`, rollback `cbf261d`). `.delivery/current.json` left alone — the ledger derives it. `AGENTS.md`: RLS
+  53/54 → **54/55**, child tables 12 → **11** (`0100`), the stale "admin still has its own components/ui" line (deleted
+  `b14bdc9` 2026-07-14) corrected. `DECISIONS.md` DEC-009 visibility = private since 2026-09-04 (fourth flip).
+
+**Code (executed tasks; per-task evidence is on each `Status:` line in `TASKS.md`).** 5.4 checkout search states
+(browser-driven) · 5.6 product-editor unsaved guard (source-verified, `[~]`) · 5.12 CI build matrix · 5.18 honest
+per-courier returns (+ Pesanan tab follow-up) · 5.21 `BN` initials + seeded-owner fallbacks removed · 5.22 feed origin
+(+ `check-feed-origin.mjs` proved red on the old build) · 5.23 shared `isUuid` on 8 pages · 5.24 media reads under
+tenant · 5.25 `chat/read` rate limit (measured 429 at the 31st call) · 5.26 blog JSON-LD logo · 6.1 `test:release` ·
+6.8 npm + 3 stray lockfiles deleted · 6.11 served HTML comments 66+16 → 1 (served pages 0 except the deliberate one) ·
+8.3 live KiriminAja probe on the control plane · Epic 1 confirm dialogs on six lists (new `confirm-delete.tsx`,
+`no-silent-delete.test.ts` 12 tests; bulk "Hapus" relabelled "Arsipkan" because the action archives).
+
+**Hygiene found on the way.** Local `node_modules` was stale: `playwright` and `@astrojs/react` are in
+`package-lock.json` but were absent, so `npm run verify -w @tokophi/storefront` could not run here at all and the landing
+build failed locally while passing on a clean `npm ci`. Restored with `npm install`. `apps/admin/.next/types/validator.ts`
+carries a stale reference to the deleted `api/public/pay/route.js` (dev-typegen artefact; `tsc -p apps/admin` reports
+only that).
+
+**Verification (integration run, 2026-09-07 17:26 UTC, read from exit codes).**
+- `npm run test:release` → **exit 0 in 92 s**: `verify-migrations` OK · `TEST_DB_REQUIRED=1 vitest` **149 files / 1200 tests
+  green** (was 139 / 1136 at the start of the sweep: +10 files, +64 tests) · `verify-rls` **54/55**, 11 child tables ·
+  `verify-rls-app` all ✓ · storefront `verify` **7/7 checks green** (incl. the new `check-feed-origin`).
+- `tsc --noEmit`: admin 0 · super-admin 0 · packages/lib 0 · packages/db 0 (the only admin diagnostic is the stale
+  `.next/dev/types/validator.ts`, excluded). `astro check` storefront **0 errors** (123 files).
+- eslint: admin **0 errors** / 21 warnings (pre-existing), super-admin **0 errors** / 4 warnings.
+- `node scripts/gen-page-map.mjs --check` → exit 0 after regeneration (admin 77 · super-admin 15 · storefront 28 ·
+  landing 10).
+- Browser-driven in this sweep: 5.4 (Chromium, built server, route fixtures), 6.11 served-HTML counts, 5.22 feed
+  `<link>`, 5.25 429 at call 31. NOT browser-driven: 5.6, Epic 1 dialogs, 5.18 tabs, 8.3 badge — source/tsc/vitest only.
+- Still red in production and outside code: KiriminAja sandbox allow-list (401 for 45.77.33.112, re-probed
+  2026-09-07 17:00 UTC) → `op:"rates"` fails → no ongkir/COD/order. Owner action at the vendor dashboard.

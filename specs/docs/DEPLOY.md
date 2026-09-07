@@ -4,7 +4,9 @@
 > (Vultr → Hetzner) or re-provisioning is exact. Companion: `PROD_PLAN.md` (decisions),
 > `.env.coolify.example` (env). Topology: **Cloudflare edge → Coolify/Traefik (origin) → containers**.
 
-## Current dev server (2026-07-10) — `volumdev`
+## Current server (2026-07-10; it is PRODUCTION since 2026-07-13) — `volumdev`
+
+> ⚠️ **Billing is a single point of failure on this box — realised 2026-09-04 → 2026-09-07 (~70 h down).** Vultr suspends the instance when the account balance runs out, silently. Runbook below: "Origin unreachable / every host 522".
 
 - **Vultr**, region **Singapore (sgp)**, plan `vhp-4c-8gb-amd` (4 vCPU / 8GB / 180GB NVMe), **Ubuntu 24.04.4 LTS**. ~$48/mo.
 - IP **45.77.33.112**; SSH **key-only** (`ssh -i ~/.ssh/tokophi_dev root@45.77.33.112`) — password auth **disabled** (`passwordauthentication no`).
@@ -127,6 +129,80 @@ biaya swap itu sendiri (81 detik: stop, start, healthcheck pertama).
 Sisa 81 detik itu bukan lagi milik rantai seed. Menekannya lebih jauh berarti swap yang tumpang-tindih
 (container baru sehat dulu, baru yang lama dimatikan) — itu orkestrasi Coolify, bukan berkas compose
 ini, dan belum dikerjakan. Sebelum ada yang mencobanya: **ukur dulu**, dengan cara di tabel atas.
+
+## 🔴 Origin unreachable / every host 522 — the diagnosis ladder (used 2026-09-07)
+
+Cloudflare **522** on `tokophi.com`, `app.`, `rich.`, `toko.` AND `<slug>.tokophi.id` at once means the
+**origin** is gone, not a container — one bad container gives a 503 on ONE host, and the landing has
+no DB and would still serve. Walk the ladder top-down; each step rules out the cheaper cause.
+
+1. **Confirm it is every host, from off the box** (a single-host failure is a different runbook):
+   ```bash
+   for h in tokophi.com app.tokophi.com rich.tokophi.com toko.tokophi.com; do
+     printf '%-22s ' "$h"; curl -s -o /dev/null -w '%{http_code}\n' --max-time 15 "https://$h/"
+   done
+   # 522 on all four = origin unreachable. (rich. → 307 is HEALTHY; toko. → 200; app. → 307 to /login.)
+   ```
+2. **Is the box alive at all?** `ping -c 3 45.77.33.112` and `ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 uptime`.
+   Ping dead + SSH timing out (not "connection refused") ⇒ the VM itself is stopped, not the daemon.
+3. **Ask the hosting provider, not the server.** `vultr-cli instance list` (the CLI is configured via
+   `~/.vultr-cli.yaml` on the owner's machine — nowhere else, and not on the VPS). Read the
+   `STATUS`/`POWER` columns. On 2026-09-07 it said **`suspended`**: the account balance had gone
+   negative and Vultr powered the instance off at **2026-09-04 20:27 WIB**. That is a **billing**
+   state; no amount of `docker` will fix it and nothing on the box logged anything.
+4. **If `suspended`: top up the balance in the Vultr console.** The instance **auto-resumes** after
+   the payment clears (measured: back at 2026-09-07 18:47 WIB, ~70 h 20 min after the stop). Do NOT
+   `vultr-cli instance start` first and do NOT redeploy from Coolify while it is suspended — the
+   webhook queues a build against a box that cannot receive it.
+5. **After resume, verify in this order** — the box boots everything with `restart: unless-stopped`,
+   so most of it comes back by itself, but "up" is not "serving":
+   ```bash
+   ssh -i ~/.ssh/tokophi_dev root@45.77.33.112 'docker ps --format "{{.Names}}\t{{.Status}}" | sort'
+   # want: all 18 containers Up (healthy) — postgres, admin, super-admin, storefront, landing, cron*,
+   #       backup, backup-offsite (unhealthy is EXPECTED there until R2 is credentialed), coolify-*.
+   ```
+   then the four-host curl loop from step 1 (want 200/307), then `coolify-sentinel` — it restarts on
+   its own; if Coolify's UI (`:8000`) does not answer within a few minutes, `docker ps | grep coolify`
+   before touching anything. Finally drive **one shopper path in a real browser** (checkout →
+   kecamatan search returning rows), because a healthy container is not a working product (§L2).
+6. **What the suspension does NOT do:** it does not lose the Postgres volume (data was intact; last
+   dump before the stop 2026-09-04 11:50 UTC), it does not rotate any env, and it does not change the
+   egress IP. **What it DID break beside the outage:** the KiriminAja sandbox began refusing our IP —
+   next section. Record the window in `SLA-DRP.md` §2 and `STATUS.md`.
+
+**The gap this exposed** (tracked in `SLA-DRP.md` §6): nothing off-box watches the origin (`ops/tokophi-probe.sh`
+is built but installed nowhere), and there is no Vultr low-balance alert or auto-top-up, so a billing
+lapse is a silent multi-day outage. The probe would have caught it in 15 minutes.
+
+## 🔴 KiriminAja 401 after a restart — "Your IP address … were not allowed to access this API"
+
+Symptom on production: checkout renders, kecamatan search works (that is Postgres), but **no rates
+appear** and `/api/public/ongkir` `op:"rates"` answers `SHIPPING_QUOTE_UNAVAILABLE`. The shopper-facing
+string is deliberately ours (ADR 0004); the vendor's is in the admin container's `console.error`.
+
+Probe **from inside the admin container**, where the key already lives — never paste the key into a
+shell, a ticket or this file:
+```bash
+A=$(docker ps --format '{{.Names}}' | grep -m1 '^admin-')
+# 1. What does the vendor say to OUR key from OUR box?  (province is a POST with a {} body)
+docker exec "$A" node --input-type=module -e 'const r=await fetch("https://tdev.kiriminaja.com/api/mitra/province",{method:"POST",headers:{Authorization:"Bearer "+process.env.KIRIMINAJA_API_KEY,"Content-Type":"application/json"},body:"{}"}); console.log(r.status, await r.text())'
+# 2026-09-07: 401 {"status":false,"text":"Your IP address 45.77.33.112 were not allowed to access this API",...}
+# 2. Which IP does the vendor actually see?  (must equal the VPS IP; if not, something is proxying egress)
+docker exec "$A" node --input-type=module -e 'console.log(await (await fetch("https://api.ipify.org")).text())'
+# 2026-09-07: 45.77.33.112
+# 3. Is the key even set / which env?  (prints presence and length only — NEVER the value)
+docker exec "$A" node -e 'console.log(process.env.KIRIMINAJA_ENV||"unset(=sandbox)", "key:", process.env.KIRIMINAJA_API_KEY?process.env.KIRIMINAJA_API_KEY.length+" chars":"MISSING")'
+```
+Reading the three answers: **401 with that text + egress = VPS IP + key present** ⇒ the **sandbox
+IP allow-list** on the KiriminAja developer portal no longer contains `45.77.33.112`. That is an
+**owner action on the vendor portal** (or a support ticket to KiriminAja); nothing in this repo can
+fix it, and `Super Admin → Pengaturan → "Tes koneksi" KiriminAja` will report the same 401 with the
+env name. Swap `tdev.` for `client.` in the probe when `KIRIMINAJA_ENV=production`.
+
+⚠️ **Do NOT press the AutoLaris "Tes koneksi" button as a casual health check.** `alTestConnection`
+(`packages/lib/src/autolaris.ts`) proves connectivity by **creating a real Rp10.000 QRIS bill**
+(`PING-…`, channel `QRIS`, `amount: 10000`) and reading `rc=00`. It is an authorised action, not a
+ping. The KiriminAja test is read-only (province list) and safe.
 
 ## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
 

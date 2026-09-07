@@ -10,8 +10,8 @@
 > ⚠️ **Dated 2026-07-13 and known stale on two counts (2026-09-04):** the impersonation edge in §1.1/§1.2/§8
 > describes the **2-minute JWT** that Task 4.11 replaced with a one-time exchange (`impersonation_grants`,
 > migration 0098 — see AGENTS.md "IMPERSONATION IS A ONE-TIME EXCHANGE"), and the table/migration/RLS
-> counts in the diagram are from July (82 tables · 106 migrations on disk now; RLS is whatever
-> `verify-rls` prints). **For any route-level fact — which URL is which file, what it reads, what
+> counts in the diagram were refreshed 2026-09-07 (82 tables · 106 migrations · RLS 54/55 per
+> `verify-rls` — re-run it rather than trusting the number; §2 keeps the July figures as a dated record). **For any route-level fact — which URL is which file, what it reads, what
 > gates it — read [`PAGE_MAP.md`](./PAGE_MAP.md), which is generated from the tree and pinned fresh
 > by a test.** This file keeps the *why* and the diagrams.
 
@@ -58,7 +58,7 @@ graph TB
     subgraph Data["Data layer"]
         TENANT["withTenant / withCurrentTenant<br/>SET app.store_id + SET LOCAL ROLE tokophi_app"]
         OWNER["owner connection<br/>role: tokophi — RLS bypassed"]
-        PG[("PostgreSQL 16 :5433<br/>67 tables · 44 migrations<br/>RLS on 43")]
+        PG[("PostgreSQL 16 :5433<br/>82 tables · 106 migrations (0000–0105)<br/>RLS on 54 of 55 store-scoped (2026-09-07)")]
         DISK["public/uploads/<br/>local media (→ MinIO on VPS)"]
     end
 
@@ -111,6 +111,7 @@ select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
  where n.nspname='public' and c.relkind='r' and c.relrowsecurity;             -- 44
 ```
 
+- **Re-derived 2026-09-07:** **82 tables** (`pgTable(` in `schema.ts`), **106 migrations** (`0000` … `0105`, 106 SQL files = 106 journal entries), and `verify-rls` prints **54/55 store-scoped tables with RLS** (exception `platform_activity`) + **11** un-RLS'd child tables (`inventory_levels` got its own policy in `0100`). The July figures below are kept as the dated record.
 - **70 tables**, **51 migrations** (`0000` … `0050`). *(Re-verified 2026-07-14: `0042_order_address_snapshot`,
   `0043_chat`, and then `0044_customers_and_abandoned_checkout` / `0045_checkout_abandoned_at` landed after this
   file was first written. `0043` is the shopper⇄merchant chat feature; `0044`/`0045` add **`checkout_sessions`**
@@ -328,8 +329,9 @@ Two consequences worth naming:
 ## 5. `apps/super-admin` — routes → data → tables
 
 Separate identity: table **`platform_admins`**, cookie **`platform_session`** (distinct from the admin's `session`, so an
-admin login never grants control-plane access). Guard = `requirePlatformAdmin()`, and **every exported action in
-`lib/actions.ts` calls it as its first statement** (verified line by line). No API routes at all — RSC pages + server actions only.
+admin login never grants control-plane access). Guard = `platformGate(min)` (2026-09-07: **34 call sites over 32 exported actions** in
+`lib/actions.ts`, first statement of each), plus `platformRouteGate(path)` as the first await of every page (SEC-9, floors in
+`lib/route-roles.ts`). One API route only — `/api/auth/signout` (a Server Component cannot delete a cookie); everything else is RSC pages + server actions.
 
 | Route | Reads | Tables |
 |---|---|---|
@@ -340,11 +342,13 @@ admin login never grants control-plane access). Guard = `requirePlatformAdmin()`
 | `/tiket`, `/tiket/[id]` | `getAllTickets`, `getTicketAdmin` | `support_tickets`, `support_messages`, `stores` |
 | `/analitik` | `getFinanceStats`, `getSystemStatus`, `getServerMetrics` | `invoices`, `stores` + `node:os` |
 | `/pengaturan` | `getPaymentChannels`, `getPaymentGateways`, `getCouriers`, `getPlatformAdmins`, `getAggregator` | `platform_payment_channels`, `platform_payment_gateways`, `platform_cod`, `platform_couriers`, `platform_admins`, `shipping_aggregator` |
+| **`/log-sistem`** (2026-09-04) | `getActivityLog`, `getStoreOptions` | `platform_activity`, `stores` |
+| `/update-log` | — (`lib/data/dev-logs.ts`, in-code) | none |
 
 Mutations that touch **money or identity** (all audit-logged to `platform_activity` with `kind='admin'`):
 `processPayout`, `markPayoutPaid`, **`rejectPayout`** (posts an opposing `adjustment` entry — see FLOWS §4), `savePayoutPolicy`,
 `compStore`, `extendTrial`, `setStoreComped`, `resetOwnerPassword`, `resetStoreUserPassword`, `addStoreUser`, `removeStoreUser`,
-`createManualInvoice`, `setStoreStatus`.
+`createManualInvoice`, `suspendStore`/`liftSuspension`/`approveStore` (`setStoreStatus` no longer exists — 0086).
 
 ✅ **FIXED 2026-07-14 (`0776e99`, `571ed17`): `requirePlatformAdmin(min)` now enforces the role** — ranked
 `support` 1 < `admin` 2 < `owner` 3. `impersonateStore` and `resetOwnerPassword` require **`owner`**, and
@@ -355,8 +359,8 @@ Mutations that touch **money or identity** (all audit-logged to `platform_activi
 
 ✅ **The role-check hole is CLOSED (2026-07-15):** `invitePlatformAdmin` is now `owner`-gated, takes `role` **whitelisted** (support/admin/owner) and is audit-logged
 (`role: input.role || "admin"`), and is **unlogged** — so an `admin` operator can mint themselves an `owner` and
-reach the two owner-only actions. Role enforcement is also **action-only**: the middleware and page guards check for
-*a* session, not a role, so a lower-privileged operator sees every screen. See STATUS.md §3.3.
+reach the two owner-only actions. ~~Role enforcement is also **action-only**: the middleware and page guards check for
+*a* session, not a role, so a lower-privileged operator sees every screen.~~ **Closed 2026-08-22 (SEC-9):** every `(platform)` page calls `platformRouteGate(path)` above its first read; an unlisted route is `owner`. See AGENTS.md "THE RANK IS NOW CHECKED AT ROUTE ENTRY TOO".
 
 ---
 
