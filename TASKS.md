@@ -230,7 +230,7 @@
 - **Target Files:** `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`, focused browser tests.
 - **Change:** Derive dirty state from persisted form fields, install guards only while dirty, clear them after accepted save, and retain them after failed save.
 - **Done when:** Browser tests cover untouched navigation, dirty navigation, cancel/continue choices, successful save then navigation, and failed save; only the dirty cases warn.
-- **Status:** `[~]` **DONE (source-verified) 2026-09-08, browser AC not driven** — `product-editor.tsx:523-545` derives `dirty` by comparing `JSON.stringify(buildInput())` against `savedSnapshot` (seeded at mount, reset only on an ACCEPTED save, before `router.push`); native `beforeunload` while dirty (same shape as `tema/[id]/builder-client.tsx:40-46`); `confirmLeave` on the three `/produk` back links. Guard `product-editor-unsaved.test.ts` (5 mutations → 5 reds); census `product-editor-controls.test.ts` classifies `savedSnapshot` as local. Ceiling: sidebar/topbar navigation is not intercepted (no app-wide route guard exists); the task's browser matrix (untouched/dirty/cancel/continue/failed save) was not run — only source assertions.
+- **Status:** `[x]` **DONE 2026-09-08 — full browser acceptance matrix driven and PASSED** (`specs/docs/tasks/2026-09-08-browser-verification.md`): clean → all three controls navigate with 0 dialogs; dirty → all three prompt, Cancel keeps the edit, OK leaves; `close({runBeforeUnload:true})` fires a real `beforeunload`; a successful save clears the guard; a forced 500 on the action POST keeps it up. Confirmed ceiling: a SIDEBAR link while dirty gets no prompt (different URL space, `/store/<slug>/…`). — `product-editor.tsx:523-545` derives `dirty` by comparing `JSON.stringify(buildInput())` against `savedSnapshot` (seeded at mount, reset only on an ACCEPTED save, before `router.push`); native `beforeunload` while dirty (same shape as `tema/[id]/builder-client.tsx:40-46`); `confirmLeave` on the three `/produk` back links. Guard `product-editor-unsaved.test.ts` (5 mutations → 5 reds); census `product-editor-controls.test.ts` classifies `savedSnapshot` as local. Ceiling: sidebar/topbar navigation is not intercepted (no app-wide route guard exists) — measured, not assumed.
 
 ### Task 5.7: Add the Full Commerce Lifecycle Integration Test
 - **Requirement:** `NF-9`
@@ -681,3 +681,23 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
 - **Change:** Owner picks one option or explicitly accepts 7–8 s as the floor; record it as an ADR with the measured numbers and the trade each option carries (already written out in BUILD-LOG 2026-08-28 ④/⑤); Task 8.1's alert threshold must be set above whatever window is chosen.
 - **Done when:** The ADR exists and `DEPLOY.md` states the expected deploy window as a number with its source.
 - **Status:** `[ ]` **BLOCKED — owner decision** (added 2026-09-08). Current measured state is fine; this records the choice so the next agent does not re-derive it.
+
+### Task 8.12: Remove the `shipping_aggregator.enabled` Status Light, or Enforce It
+- **Tracing:** browser verification 2026-09-08 (observation beside Task 8.3)
+- **Target Files:** `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx`, `packages/db/src/seed.ts`
+- **Change:**
+  1. Establish by grep that `shipping_aggregator.enabled` is read in exactly two places — that card and the seed — and by NOTHING on the shipping path (`apps/admin/lib/shipping-quote.ts`, `api/public/ongkir`, `lib/actions/shipping.ts`).
+  2. Apply the standing ruling for this exact shape: `platform_payment_gateways.enabled` was ruled "a record, not a switch" (owner, 2026-08-20) and its badge was REMOVED ~100 lines above in this same file while the column was kept. Remove the `Aktif` chip the same way, keep the column.
+  3. If a real aggregator kill-switch is wanted instead, it must be ENFORCED at the quote path FIRST (the way `platform_cod.enabled` is) and only then surfaced — that is a different, larger task.
+- **Done when:** no chip on the Kurir card claims a state nothing enforces; a guard in the shape of `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` fails if it is put back.
+- **Status:** `[ ]` **OPEN** (found 2026-09-08 while driving Task 8.3: a green `Aktif` renders directly beside the red `Ditolak` that reflects the real upstream 401 — the control plane says "on" over an aggregator that cannot price a single parcel).
+
+### Task 8.13: Stop the Seed's Billing Anchor from Blocking Every Local Write
+- **Tracing:** browser verification 2026-09-08 (blocker hit by two agents)
+- **Target Files:** `packages/db/src/seed.ts`, `packages/db/src/seed-recent.ts`, `AGENTS.md`
+- **Change:**
+  1. `stores.current_period_end` is seeded at a fixed date (`2026-08-04` on `batiknusantara`), so once the wall clock passes it `computeBilling()` returns `readOnly` and EVERY admin write fails with `SuspendedError`, surfacing as "Gagal menyimpan produk". `npm run seed:recent` does not touch it.
+  2. Extend `seed:recent` (INSERT/UPDATE-only, idempotent, one store — the same contract it already has) to push `current_period_end` to a future date, or seed it relative to `now()` in the first place.
+  3. `AGENTS.md`'s seed-rot note covers CHARTS only ("the demo looks dead"); add the write path, because the symptom there is a save that fails with a message about suspension on a store nobody suspended.
+- **Done when:** on a machine whose clock is past the anchor, `npm run seed:recent -w @tokophi/db` is enough to make an admin save succeed; no agent has to hand-edit `stores` to drive a write path.
+- **Status:** `[ ]` **OPEN** (found 2026-09-08; both browser agents had to move the column forward and put it back to test anything that writes).

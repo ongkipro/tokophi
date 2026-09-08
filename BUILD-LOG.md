@@ -2756,6 +2756,28 @@ only that).
 - `node scripts/gen-page-map.mjs --check` → exit 0 after regeneration (admin 77 · super-admin 15 · storefront 28 ·
   landing 10).
 - Browser-driven in this sweep: 5.4 (Chromium, built server, route fixtures), 6.11 served-HTML counts, 5.22 feed
-  `<link>`, 5.25 429 at call 31. NOT browser-driven: 5.6, Epic 1 dialogs, 5.18 tabs, 8.3 badge — source/tsc/vitest only.
+  `<link>`, 5.25 429 at call 31 — and, on 2026-09-08 against a local dev server, the four that had been source-only:
+  **5.6, Epic 1 dialogs (6 screens), 5.18, 8.3 — all four PASS**. Report:
+  `specs/docs/tasks/2026-09-08-browser-verification.md`. Highlights: 5.6's full acceptance matrix including a forced
+  500 (guard stays up) and a real `beforeunload`; Produk confirmed to ARCHIVE (`status='archived'` in SQL) with the
+  bulk control reading "Arsipkan"; 5.18's caveat correctly ABSENT on data with no courier-less orders and correct
+  (`3 pesanan tanpa data kurir tidak dihitung…`, denominator 736→733) when three were blanked; 8.3 rendering
+  `[sandbox] [Ditolak · 20.04 WIB]` with the vendor's 401 verbatim and `Terhubung` nowhere on the page.
+  0 console errors throughout. Every dev-DB row touched was restored and re-read.
 - Still red in production and outside code: KiriminAja sandbox allow-list (401 for 45.77.33.112, re-probed
   2026-09-07 17:00 UTC) → `op:"rates"` fails → no ongkir/COD/order. Owner action at the vendor dashboard.
+
+**Three findings the verification produced, filed rather than silently fixed.**
+1. 🔴 **A confirmed delete left the row on screen** (Halaman, Blog): toast fires, DB row gone, table unchanged until a
+   manual reload. Cause is a `useMemo` dependency array omitting the server-prop list (`halaman-client.tsx:121`,
+   `blog-client.tsx:130`) — the exact class `diskon-client.tsx:257` already documents and fixed per-file, so two
+   siblings were missed. On Blog it contradicts itself: the `counts` memo DOES list `posts`, so the tab counter drops
+   while the table does not. Being fixed as a CLASS (all `*-client.tsx` swept + a directory-derived guard).
+2. ⚪ **A second status light wired to nothing**: the green `Aktif` chip beside the KiriminAja badge is
+   `shipping_aggregator.enabled`, read in exactly two places (that card and the seed) — nothing on the shipping path
+   gates on it. Identical to the `platform_payment_gateways.enabled` badge deliberately removed ~100 lines above it in
+   the same file (owner ruling 2026-08-20). Filed as a task, not removed unilaterally.
+3. ⚠️ **The seed's billing anchor blocks every admin WRITE locally**, not just charts: `batiknusantara`'s
+   `current_period_end` is 2026-08-04, so `computeBilling()` returns `readOnly` and every save fails with
+   `SuspendedError` ("Gagal menyimpan produk"). `seed:recent` does not touch it. Any agent driving a write path must
+   move it forward and put it back. Filed; `AGENTS.md`'s seed-rot note covers charts only.
