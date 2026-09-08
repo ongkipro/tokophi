@@ -2817,3 +2817,28 @@ own throwaway rows:** `/halaman` delete → row gone in **556 ms** with no reloa
 **still on screen at 8 s** while the DB row was gone; `/blog` → **526 ms**. The middle run is the causal proof: same
 click, same server, only the dep array differs. 0 console errors. `stores.current_period_end` was moved forward to
 drive the writes (Task 8.13) and restored byte-identical; `zz-refresh%` rows: 0 pages, 0 articles left.
+
+## 2026-09-08 23:50 UTC — Main Session — DEPLOYED: PR #382 merged as `4212631`, verified live
+
+**Deploy.** Merged 2026-09-08 13:26:59 UTC; Coolify queue `4212631` ran **13:27:01 → 13:38:52 (11 m 51 s)**, status
+`finished`. All 18 containers up and `healthy` — **except `backup-offsite`, which reports `unhealthy`**: that is the
+known uncredentialed R2 copy (Task 8.4, BUILD-LOG 2026-09-02 "inert until credentialed"), not a regression from this
+release. Hosts: landing 200 · storefront 200 · admin 307 · super-admin 307.
+
+**Verified LIVE on production, without a credential** (the parts of this release a shopper can see):
+- **6.11** served HTML comments, `toko.tokophi.com`: `/` **0** · `/produk` **0** · `/keranjang` **0** · `/blog` **0** ·
+  `/promo` **0** · `/blog/batik-tulis-vs-cap` **0** · `/checkout` **1** — exactly the one comment kept on purpose in
+  `CheckoutLayout.astro`. Before this release those pages served 25–32 each.
+- **5.22** feed origin: `/feed/google.xml` `<link>https://toko.tokophi.com</link>` equals the sitemap's
+  `<loc>https://toko.tokophi.com/</loc>` — one origin for the catalogue, which is the whole point of the fix.
+- **5.26** media origin: the article's JSON-LD `image` resolves through `mediaUrl` to
+  `https://app.tokophi.com/api/uploads/…` (the admin origin that actually serves uploads) rather than a storefront
+  404. ⚠️ The `logo` key is ABSENT from `publisher` here because this store has no `logo_url` — the code omits it
+  rather than publishing an empty URL, so the fix is confirmed by the sibling field, not by the logo itself.
+
+**Not verified on production** (needs an operator/merchant credential, so it stays on local evidence): the Seller
+confirm dialogs, the product-editor guard, the Pengembalian caveat, and the Super Admin KiriminAja badge.
+
+**Still blocked, unchanged and outside this release:** the KiriminAja sandbox refuses the VPS IP
+(`401 … 45.77.33.112 were not allowed`), so `op:"rates"` fails and no order can be placed. Owner action at the vendor
+dashboard; the control plane now SHOWS this instead of a green light (Task 8.3).
