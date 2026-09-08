@@ -2748,7 +2748,8 @@ only that).
 
 **Verification (integration run, 2026-09-07 17:26 UTC, read from exit codes).**
 - `npm run test:release` → **exit 0 in 92 s**: `verify-migrations` OK · `TEST_DB_REQUIRED=1 vitest` **149 files / 1200 tests
-  green** (was 139 / 1136 at the start of the sweep: +10 files, +64 tests) · `verify-rls` **54/55**, 11 child tables ·
+  green** (was 139 / 1136 at the start of the sweep: +10 files, +64 tests). ⚠️ Superseded by the FINAL run after the
+  stale-memo fix below: **150 files / 1235 tests, exit 0 in 90 s**, `verify-rls` 54/55, storefront 7/7. · `verify-rls` **54/55**, 11 child tables ·
   `verify-rls-app` all ✓ · storefront `verify` **7/7 checks green** (incl. the new `check-feed-origin`).
 - `tsc --noEmit`: admin 0 · super-admin 0 · packages/lib 0 · packages/db 0 (the only admin diagnostic is the stale
   `.next/dev/types/validator.ts`, excluded). `astro check` storefront **0 errors** (123 files).
