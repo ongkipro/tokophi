@@ -18,3 +18,7 @@ apps/admin/public/uploads/
 
 # Claude Code local worktrees/state
 .claude/
+
+# Delivery ledger — the ledger is its canonical writer, so it is never committed
+# (~/dotfiles/docs/task-change-boundary.md: ".delivery/ is excluded").
+.delivery/
