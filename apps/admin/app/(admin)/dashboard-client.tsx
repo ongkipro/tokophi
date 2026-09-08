@@ -22,7 +22,7 @@ import {
 } from "@/lib/data/dashboard";
 import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
 import type { FunnelDay } from "@/lib/data/funnel";
-import type { CourierReturns } from "@/lib/data/returns";
+import type { ReturnsByCourier } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
 import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
 import { IDR, num, pct, share } from "@tokophi/lib/format";
@@ -49,7 +49,7 @@ export function DashboardClient({
   orders: Order[];
   reviews: Review[];
   tickets: TicketRow[];
-  returns: CourierReturns[];
+  returns: ReturnsByCourier;
   activities: Activity[];
   channels: ChannelDay[];
   productSales: ProductSaleDay[];

@@ -25,7 +25,7 @@ const { rows = 3, unit = "item" } = Astro.props;
 <div data-reveal data-reveal-rows={rows} data-reveal-unit={unit}>
   <slot />
 
-  <!-- `hidden` by default: if the grid fits in `rows` (or JS never runs) no control should appear. -->
+  {/* `hidden` by default: if the grid fits in `rows` (or JS never runs) no control should appear. */}
   <div class="mt-10 flex flex-col items-center gap-3" data-reveal-footer hidden>
     <p class="text-sm text-muted" data-reveal-status aria-live="polite"></p>
     <button

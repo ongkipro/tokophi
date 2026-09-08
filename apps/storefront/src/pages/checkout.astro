@@ -339,7 +339,7 @@ if (rToken) {
       id-ID one. */}
   <form id="checkout-form" class="mt-8" novalidate>
     <div class="space-y-10">
-        <!-- Kontak -->
+        {/* Kontak */}
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Kontak</legend>
           {/* `input-field` like every other control. This one carried a hand-rolled COPY of those
@@ -362,7 +362,7 @@ if (rToken) {
           </p>
         </fieldset>
 
-        <!-- Alamat pengiriman -->
+        {/* Alamat pengiriman */}
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Alamat Pengiriman</legend>
           <div class="grid gap-4 sm:grid-cols-2">
@@ -395,14 +395,14 @@ if (rToken) {
                   address does not need one; copying it exactly would have deleted this. */}
               <p class="mt-1.5 text-xs text-[var(--co-muted)]">Nama jalan, no. rumah, RT/RW, dan patokan terdekat.</p>
             </div>
-            <!-- Kecamatan comes FIRST, and it drives Kota + Provinsi.
+            {/* Kecamatan comes FIRST, and it drives Kota + Provinsi.
                  Before: the shopper typed Kota, Provinsi and Kode Pos by hand AND then separately
                  searched a kecamatan for the ongkir quote — re-keying an address the aggregator
                  already knows, with nothing keeping the two in agreement.
                  It also closes a real hole. `apps/admin/lib/data/areas.ts` puts it plainly: a typed
                  province is a CLAIM, not a fact — the backend already refuses to trust it and derives
                  the province from the district id when gating COD. Deriving the visible fields from
-                 the same id means the form can no longer disagree with what ships. -->
+                 the same id means the form can no longer disagree with what ships. */}
             <div class="sm:col-span-2">
               {/* THIS IS A COMBOBOX, AND IT NOW SAYS SO. It had no ARIA at all: a screen reader was
                   told "Kecamatan Tujuan, edit text" and nothing else — not that a list appears, not
@@ -460,13 +460,13 @@ if (rToken) {
                 Ketik untuk mencari, lalu pilih dari daftar. Mis. Semarang Tengah.
               </p>
 
-              <!-- KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
+              {/* KOTA + PROVINSI ARE DERIVED, SO THEY ARE SHOWN, NOT ASKED.
                    They used to be two readonly boxes the shopper could not fill in anyway — two more
                    columns of chrome for values that are a pure function of the district id. They are
                    still SUBMITTED (hidden inputs, same `name`s, same FormData / capture payload) and
                    are shown to the shopper inside the "Kirim ke" summary below the kodepos. The hidden
                    inputs remain the single source the payload + the COD province gate read
-                   (codProvinceOk), so nothing downstream changed. -->
+                   (codProvinceOk), so nothing downstream changed. */}
               <input type="hidden" name="kota" id="kota" />
               <input type="hidden" name="provinsi" id="provinsi" />
               {/* The partial "Kota · Provinsi" line that used to sit here is gone: the "Kirim ke"
@@ -475,7 +475,7 @@ if (rToken) {
                   duplication. Kota/Provinsi stay as hidden inputs — the payload + COD gate read them. */}
             </div>
 
-            <!-- Kelurahan + Kode Pos, ONE ROW: picking a kelurahan is what fills the kodepos, so the
+            {/* Kelurahan + Kode Pos, ONE ROW: picking a kelurahan is what fills the kodepos, so the
                  cause sits next to its effect instead of a screen apart. Stacks to one column below
                  `sm` (the sub-grid is grid-cols-1 by default) — on a 320px phone they are never
                  squeezed side by side.
@@ -485,7 +485,7 @@ if (rToken) {
                  orders are (Semarang Tengah alone has 11). Shown only once a kecamatan is chosen, and
                  only for districts we have kelurahan for (~96% of KiriminAja's list); for the rest the
                  kelurahan row stays hidden, Kode Pos widens to the full row and is TYPED — that path
-                 must never block the order. See packages/db/scripts/build-kelurahan.mjs. -->
+                 must never block the order. See packages/db/scripts/build-kelurahan.mjs. */}
             <div class="grid gap-4 sm:col-span-2 sm:grid-cols-2">
               {/* SAME SHAPE AS KECAMATAN — an input with a list that drops below it, not a <select>.
                   Two reasons beyond consistency. A native <select> on Android/iOS opens a full-screen
@@ -537,17 +537,17 @@ if (rToken) {
                 <p id="kodepos-hint" hidden class="mt-1.5 text-xs text-[var(--co-muted)]"></p>
               </div>
 
-              <!-- Shown ONLY for the 18% of districts that really do span several postcodes: there the
-                   kelurahan is the question, so say why we are asking it. -->
+              {/* Shown ONLY for the 18% of districts that really do span several postcodes: there the
+                   kelurahan is the question, so say why we are asking it. */}
               <p id="kel-note" hidden class="text-xs text-[var(--co-muted)] sm:col-span-2">
                 Kecamatan ini punya beberapa kode pos — pilih kelurahan agar kode posnya terisi benar.
               </p>
 
-              <!-- DESTINATION SUMMARY — "this is where the parcel goes", assembled from what has been
+              {/* DESTINATION SUMMARY — "this is where the parcel goes", assembled from what has been
                    entered. Kota/Provinsi are HIDDEN inputs (agent-1 field reduction), so without this
                    a shopper types a kecamatan and never sees, in one place, the full address they are
                    shipping to before they pick a courier and pay. It confirms; it is not another
-                   field. Hidden until a kecamatan is chosen (nothing to confirm before then). -->
+                   field. Hidden until a kecamatan is chosen (nothing to confirm before then). */}
               <div id="dest-summary" hidden class="sm:col-span-2 rounded-xl border border-[var(--co-line)] bg-[var(--co-accent-weak)]/40 p-3">
                 <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--co-accent)]">
                   <MapPin class="h-3.5 w-3.5 shrink-0" stroke-width={1.75} aria-hidden="true" />
@@ -560,7 +560,7 @@ if (rToken) {
           </div>
         </fieldset>
 
-        <!-- Pengiriman -->
+        {/* Pengiriman */}
         <fieldset class="min-w-0">
           <legend class="mb-4 text-base font-semibold text-ink">Pengiriman</legend>
           <p id="ship-hint" class="rounded-xl border border-dashed border-[var(--co-line)] px-4 py-3 text-sm text-[var(--co-muted)]">
@@ -866,10 +866,10 @@ if (rToken) {
           </div>
         </div>
 
-        <!-- PAY — the bottom of the LEFT column, directly under Pembayaran, on every breakpoint.
+        {/* PAY — the bottom of the LEFT column, directly under Pembayaran, on every breakpoint.
              This is where Shopify puts it, and the reason is the reading order: the button is the last
              thing after the last decision, not a control parked in a side panel the shopper's eye has
-             already left. -->
+             already left. */}
         <div>
           {/* `rounded-lg`, not a pill, and no drop shadow. A pill with a coloured glow is a
               marketing button — it belongs on the hero CTA where it is competing for attention. The
@@ -1652,9 +1652,11 @@ if (rToken) {
       });
     }
 
-    function api(payload) {
+    // `signal` is optional: only the district search passes one (Task 5.4), so a request that has
+    // outlived the keystroke it answers — or a 10 s ceiling — can be cut off instead of landing late.
+    function api(payload, signal) {
       return fetch(ONGKIR_API, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: signal,
       }).then(function (r) { return r.json(); });
     }
 
@@ -1914,6 +1916,19 @@ if (rToken) {
       if (destSearch) destSearch.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
+    // One writer for the non-result rows (loading / empty / failure). Inside a listbox the only legal
+    // child is an option, so each speaks as a DISABLED one — a bare <p> here would be markup a screen
+    // reader is entitled to drop on the floor. `text` is already escaped by the caller where it
+    // carries shopper input.
+    var searchSeq = 0;          // bumped per keystroke; a response whose seq is older is stale
+    var searchAbort = null;     // the in-flight district search's AbortController, if any
+    var SEARCH_TIMEOUT_MS = 10000;
+    function setDestNotice(text) {
+      if (!destResults) return;
+      destResults.innerHTML = '<p role="option" aria-disabled="true" class="px-4 py-3 text-sm text-[var(--co-muted)]">' + text + "</p>";
+      setDestOpen(true);
+    }
+
     // The visible half of the `q.length < 3` guard. `min` = they have typed something, but not enough.
     var DEST_HINT_IDLE = destHint ? destHint.textContent.trim() : "";
     function setDestHint(min) {
@@ -1935,17 +1950,51 @@ if (rToken) {
         destSearch.setCustomValidity("");
         clearArea();
         clearTimeout(searchTimer);
+        // Every keystroke retires whatever is in flight: its answer would describe a query the box no
+        // longer holds. Bumping the sequence makes that answer stale even if the text comes back.
+        searchSeq++;
+        if (searchAbort) { searchAbort.abort(); searchAbort = null; }
         var q = destSearch.value.trim();
         if (q.length < 3) { setDestOpen(false); setDestHint(q.length > 0); return; }
         setDestHint(false);
         searchTimer = setTimeout(function () {
+          // ── FIVE STATES, FIVE DIFFERENT THINGS ON SCREEN (Task 5.4 / F-F10) ────────────────────
+          // idle (hint only) · loading ("Mencari…") · results · empty ("tidak ditemukan") · failure
+          // ("Gagal mencari…"). Before this, an EMPTY answer only closed the list — a shopper typing a
+          // real district that is not in our snapshot saw exactly what they saw while the request was
+          // still in flight: nothing. And a non-ok JSON reply was folded into the same silence. The
+          // one field the whole ongkir quote depends on must never answer with a blank.
+          //
           // A .catch() is not optional here. Without one, a hiccup in the ongkir proxy made this an
           // UNHANDLED REJECTION and the shopper saw NOTHING: no dropdown, no spinner, no error — they
           // typed a kecamatan, nothing happened, and "Bayar Sekarang" then silently did nothing either.
           // A dead checkout with no explanation. The rates call at the bottom of this file already
           // degrades properly; these two just never followed it.
-          api({ op: "search", q: q }).then(function (res) {
-            if (!res.ok || !res.results.length) { setDestOpen(false); return; }
+          //
+          // STALE GUARD — the same shape `loadRates()` / `loadKelurahan()` use (`destAtCall`): the
+          // query is captured at call time and a response is dropped unless the box still holds it.
+          // Two keystrokes 300 ms apart are two requests, and the network returns them in any order;
+          // without this the FIRST answer could paint over the SECOND. `searchSeq` is the belt to that
+          // brace: it also catches "typed, changed, changed back" inside one round-trip.
+          var qAtCall = q;
+          var mySeq = ++searchSeq;
+          var stale = function () { return mySeq !== searchSeq || destSearch.value.trim() !== qAtCall; };
+          // TIMEOUT — a request with no ceiling is a "Mencari…" row that never ends, which is the
+          // loading state impersonating the failure state. 10 s lands it in the failure row, where
+          // the sentence tells the shopper what to do (the typed text is kept, so retry = keep typing).
+          var ctl = typeof AbortController === "function" ? new AbortController() : null;
+          searchAbort = ctl;
+          var deadline = setTimeout(function () { if (ctl) ctl.abort(); }, SEARCH_TIMEOUT_MS);
+          setDestNotice("Mencari\u2026");
+          api({ op: "search", q: qAtCall }, ctl ? ctl.signal : undefined).then(function (res) {
+            if (stale()) return;
+            // A well-formed refusal is still a failed search — the shopper cannot act on `ok:false`.
+            if (!res || !res.ok || !res.results) throw new Error("search refused");
+            if (!res.results.length) {
+              // ONLY a successful, empty answer may say "not found"; a failure never wears this text.
+              setDestNotice('Kecamatan "' + esc(qAtCall) + '" tidak ditemukan. Coba ejaan lain atau nama kota.');
+              return;
+            }
             destResults.innerHTML = res.results.slice(0, 8).map(function (a) {
               // data-city / data-province ride along so picking a result can fill the form without a
               // second round-trip. They may be absent (the live-API fallback can't always be parsed),
@@ -1956,10 +2005,13 @@ if (rToken) {
             }).join("");
             setDestOpen(true);
           }).catch(function () {
-            // Inside a listbox the only legal child is an option, so the failure speaks as a disabled
-            // one — a bare <p> here would be markup a screen reader is entitled to drop on the floor.
-            destResults.innerHTML = '<p role="option" aria-disabled="true" class="px-4 py-3 text-sm text-[var(--co-muted)]">Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.</p>';
-            setDestOpen(true);
+            // An abort for a NEWER keystroke arrives here too; `stale()` is what keeps it silent. A
+            // timeout abort is not stale (same query, same box) and correctly lands in the failure row.
+            if (stale()) return;
+            setDestNotice("Gagal mencari kecamatan. Periksa koneksi lalu coba lagi.");
+          }).then(function () {
+            clearTimeout(deadline);
+            if (searchAbort === ctl) searchAbort = null;
           });
         }, 300);
       });

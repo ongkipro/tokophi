@@ -108,6 +108,7 @@ const FORM_STATE: Record<string, Fate> = {
   catOpen: { local: "dialog open/closed" },
   stockOpen: { local: "dialog open/closed" },
   poOpen: { local: "dialog open/closed" },
+  savedSnapshot: { local: "Task 5.6 unsaved-changes guard — the JSON of the last ACCEPTED payload; `dirty` is derived by comparing `buildInput()` against it, so it is never itself submitted" },
   dragOver: { local: "drag-hover styling on the media grid" },
 };
 

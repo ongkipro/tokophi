@@ -188,18 +188,18 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
 <Layout title={HOME_TITLE} description={SUMMARY} head={HEAD}>
   {
     HOMEPAGE_TEMPLATE ? (
-      <!-- ADR 0009: merchant-built homepage (Store Builder) -->
+      /* ADR 0009: merchant-built homepage (Store Builder) */
       <Fragment>
         {!TEMPLATE_HAS_HEADING && <h1 class="sr-only">{store.name}</h1>}
         <SectionRenderer data={HOMEPAGE_TEMPLATE} />
       </Fragment>
     ) : (
       <Fragment>
-  <!-- Hero — the registry section (see components/sections/Hero.astro), seeded with its defaults -->
+  {/* Hero — the registry section (see components/sections/Hero.astro), seeded with its defaults */}
   <Hero {...HERO} />
 
-  <!-- Trust strip: sits DIRECTLY under the hero (it answers the first objection a shopper has —
-       "will it reach me, can I pay how I want") instead of being buried near the footer. -->
+  {/* Trust strip: sits DIRECTLY under the hero (it answers the first objection a shopper has —
+       "will it reach me, can I pay how I want") instead of being buried near the footer. */}
   <section class="border-y border-line bg-white/60">
     <div class="mx-auto grid max-w-7xl gap-x-8 gap-y-5 px-4 py-7 sm:grid-cols-3 sm:px-6">
       {
@@ -224,9 +224,9 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
     </div>
   </section>
 
-  <!-- Categories. RENDERED ONLY IF THERE ARE ANY: a store with no categories used to get the heading
+  {/* Categories. RENDERED ONLY IF THERE ARE ANY: a store with no categories used to get the heading
        "Jelajahi Koleksi", the line "Temukan gaya yang paling kamu banget", and then nothing at all —
-       a titled, empty room. An empty section is not a section; it is a bug with a headline. -->
+       a titled, empty room. An empty section is not a section; it is a bug with a headline. */}
   {collections.length > 0 && (
   <section id="koleksi" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
     {/* "Kategori", not "Koleksi"/"gaya" — this container serves a coffee roaster and a phone shop
@@ -278,7 +278,7 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
       back with softer words — it comes back when the merchant WRITES one, as a rich-text section in
       the Store Builder, which already exists. */}
 
-  <!-- Bestsellers. Same guard as the categories above — no products, no titled empty room. -->
+  {/* Bestsellers. Same guard as the categories above — no products, no titled empty room. */}
   {best.length > 0 && (
   <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
     <div class="flex items-end justify-between gap-4">
@@ -308,9 +308,9 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
   </section>
   )}
 
-  <!-- Closing CTA. Was "Siap tampil anggun setiap hari?" / "temukan busana yang membuatmu percaya
+  {/* Closing CTA. Was "Siap tampil anggun setiap hari?" / "temukan busana yang membuatmu percaya
        diri" — an outfit promise on a phone shop. Neutral, and it is the one section that stays even
-       on an empty catalogue, because it is the way OUT of a thin page. -->
+       on an empty catalogue, because it is the way OUT of a thin page. */}
   <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
     <SectionHeading
       align="center"

@@ -2,6 +2,7 @@
   "name": "tokophi",
   "private": true,
   "version": "1.0.0",
+  "packageManager": "npm@11.17.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,12 +12,13 @@
     "dev:super": "npm run dev -w @tokophi/super-admin",
     "build:admin": "npm run build -w @tokophi/admin",
     "build:super": "npm run build -w @tokophi/super-admin",
-    "test": "vitest run && npm run check:storefront && npm run check:landing",
+    "test": "echo \"[npm test] OFFLINE suite: DB-coupled suites SKIP (with a banner) when no _test database is reachable. Release evidence is: npm run test:release\" && vitest run && npm run check:storefront && npm run check:landing",
     "page-map": "node scripts/gen-page-map.mjs",
     "test:watch": "vitest",
     "check:storefront": "astro check --root apps/storefront",
     "check:landing": "astro check --root apps/landing",
-    "test:db": "TEST_DB_REQUIRED=1 vitest run"
+    "test:db": "TEST_DB_REQUIRED=1 vitest run",
+    "test:release": "npm run verify-migrations -w @tokophi/db && npm run test:db && npm run verify-rls -w @tokophi/db && npm run verify-rls-app -w @tokophi/db && npm run verify -w @tokophi/storefront"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

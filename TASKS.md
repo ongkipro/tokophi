@@ -3,7 +3,9 @@
 > Traceable task backlog for resolving audit findings from Claude, Codex, and OMP.
 > Each task traces to a verified finding, names exact files, and carries a runnable "Done when" check.
 
-> **Historical intake status (Stages 0–3):** Tasks 0.1, 0.2, 1.2, 1.3, 2.2, and 2.3 are verified in the current source. Task 1.1 remains open as Task 5.16. Task 2.1 changed labels but did not prove a restricted runtime and is superseded by Task 4.12. Task 3.1 is superseded by Task 4.13. Stages 4–7 are the only active execution queue.
+> **Historical intake status (Stages 0–3):** Tasks 0.1, 0.2, 1.2, 1.3, 2.2, and 2.3 are verified in the current source. Task 1.1 remains open as Task 5.16. Task 2.1 changed labels but did not prove a restricted runtime and is superseded by Task 4.12. Task 3.1 is superseded by Task 4.13. Stages 4–8 are the only active execution queue.
+>
+> **Queue status (re-verified against code, tests and `BUILD-LOG.md` on 2026-09-08):** Stage 4 — **13/13 done**. Stage 5 — 8 done (5.2, 5.3, 5.5, 5.9, 5.10, 5.11, 5.16, 5.17), **9 open** (5.1, 5.4, 5.6, 5.7, 5.12, 5.13, 5.14, 5.15, 5.18), **3 blocked on the owner/provider** (5.8, 5.19, 5.20), plus 5.21–5.26 added from the 2026-09-04 page-map sweep. Stage 6 — 4 done (6.2, 6.5, 6.9, 6.10), **6 open** (6.1, 6.3, 6.4, 6.6, 6.7, 6.8), plus 6.11–6.13 added from the sweep. Stage 7 — **never run**; steps 2, 3 and 5 name commands that do not exist yet. Stage 8 (new) — operations & hygiene, seeded by the 2026-09-07 production outage. Every `- **Status:**` line below names the evidence it was set from; a task with no such line has not been verified.
 
 ## Stage 0: Security & Infra Blockers
 
@@ -192,6 +194,7 @@
 - **Target Files:** `apps/admin/lib/actions/shipping.ts`, shipping cancellation tests, schema/migration only if a durable reconciliation state is absent.
 - **Change:** Separate courier acceptance from local reconciliation. Persist a retryable reconciliation state when the courier cancels successfully but local order/shipment/ledger updates fail.
 - **Done when:** Fault injection after remote success produces a durable non-success state; a retry converges without issuing a second effective cancellation or double-reversing ledger/inventory state.
+- **Status:** `[ ]` **OPEN — partly done** (verified 2026-09-08). `cancelShipment` (`apps/admin/lib/actions/shipping.ts:1136-1218`) already records courier acceptance as `shipment_bookings.status='cancellation_requested'` and returns `{ ok:true, pending:true }` instead of claiming a refund (CHANGELOG 2026-08). Missing: the local `withTenant` write AFTER `kaCancelShipment` succeeded is not fault-tolerant — an exception there throws out of the action with nothing durable recorded, so the courier has queued a cancellation the database does not know about; nothing reads `cancellation_requested` back to reconcile (only `data/order-detail.ts` displays it and `ledger-credit.ts` excludes it); and `apps/admin/lib/cancel-shipment.test.ts` (4 tests) pins the AWB rule only — no fault-injection test. `REQUIREMENTS.md` F-S12 still reads NOT MET.
 
 ### Task 5.2: Persist or Remove Every Product Editor Control
 - **Requirement:** `F-C8`
@@ -212,6 +215,7 @@
 - **Target Files:** `apps/storefront/src/pages/checkout.astro`, district-search endpoint tests or browser fixtures.
 - **Change:** Represent idle, loading, results, empty, and error as distinct states. Preserve typed input and offer retry after timeout/5xx; use “not found” only for a successful empty response.
 - **Done when:** Browser verification covers successful selection, empty result, timeout/5xx, retry recovery, keyboard navigation, and screen-reader status messaging without losing the shopper's input.
+- **Status:** `[x]` **DONE 2026-09-08** — `checkout.astro`: five explicit states (loading "Mencari…", results, empty `Kecamatan "<q>" tidak ditemukan…`, failure incl. `ok:false`/non-JSON, 10 s `AbortController` timeout) + stale-response guard (`qAtCall`/`searchSeq`, both success and failure branches). Guard `apps/storefront/src/lib/checkout-search-states.test.ts` (4 tests, 6 mutations → 6 reds). Driven in Chromium on a built server with route fixtures: `zzqx` → not-found row · `sewon` → option, pick → `dest_id=552` · 500 / `ok:false` → failure row · 12 s hang → "Mencari…" then failure at ~10.5 s, input kept · stale race (`aaa` slow, `bbb` fast) never repaints · Tab+Enter picks. `astro check` 0 errors. Not added: an `aria-live` result count (follow-up).
 
 ### Task 5.5: Remove the Shared 320 px Seller Topbar Overflow
 - **Requirement:** `F-F11`
@@ -226,12 +230,14 @@
 - **Target Files:** `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`, focused browser tests.
 - **Change:** Derive dirty state from persisted form fields, install guards only while dirty, clear them after accepted save, and retain them after failed save.
 - **Done when:** Browser tests cover untouched navigation, dirty navigation, cancel/continue choices, successful save then navigation, and failed save; only the dirty cases warn.
+- **Status:** `[x]` **DONE 2026-09-08 — full browser acceptance matrix driven and PASSED** (`specs/docs/tasks/2026-09-08-browser-verification.md`): clean → all three controls navigate with 0 dialogs; dirty → all three prompt, Cancel keeps the edit, OK leaves; `close({runBeforeUnload:true})` fires a real `beforeunload`; a successful save clears the guard; a forced 500 on the action POST keeps it up. Confirmed ceiling: a SIDEBAR link while dirty gets no prompt (different URL space, `/store/<slug>/…`). — `product-editor.tsx:523-545` derives `dirty` by comparing `JSON.stringify(buildInput())` against `savedSnapshot` (seeded at mount, reset only on an ACCEPTED save, before `router.push`); native `beforeunload` while dirty (same shape as `tema/[id]/builder-client.tsx:40-46`); `confirmLeave` on the three `/produk` back links. Guard `product-editor-unsaved.test.ts` (5 mutations → 5 reds); census `product-editor-controls.test.ts` classifies `savedSnapshot` as local. Ceiling: sidebar/topbar navigation is not intercepted (no app-wide route guard exists) — measured, not assumed.
 
 ### Task 5.7: Add the Full Commerce Lifecycle Integration Test
 - **Requirement:** `NF-9`
 - **Target Files:** existing DB-coupled test harness plus one lifecycle integration test near the public-order/payment domain.
 - **Change:** Exercise cart/order creation, stock decrement, one successful payment callback, duplicate callback replay, order transition, ledger credit/release, cancellation/return restoration, and tenant isolation using real PostgreSQL transactions.
 - **Done when:** The test fails on duplicate credit, stock drift, cross-tenant access, or wrong order/payment transition; `npm run test:db` runs it without skips and remains deterministic in the full suite.
+- **Status:** `[x]` **DONE 2026-09-08** — `apps/admin/lib/commerce-lifecycle.test.ts` (rewritten from the unmerged `c61c89c` candidate, which was green by coincidence: it never checked the gateway fee). REAL against migrated Postgres: `POST /api/public/order` (stale cart price → 409 `repriced`, 0 rows) → `payments`/`order_financials` reconcile to `paymentFee("va", …, "VABCA")` = 6.500 → `pay/callback` (wrong amount ignored; PAID replay idempotent; EXPIRED after PAID does not regress) → `creditSaleForPayment` credits GOODS only (200.000, pending) → under `set local role tokophi_app` + GUC: `baru→diproses→dikirim` (still pending) `→selesai` (available) → `requestPayout` 150.000 (`payout` row with `order_id NULL`, over-draw refused) → `selesai→retur` (stock +2, `retur` −200.000, Σ −150.000 exposure) → terminal; `selesai→dikirim/batal` refused. Test 2: RLS as store B sees 0 of A's rows and cannot update them. STUBBED at the network edge only: `quoteShipping`, `areaById`, `alCreatePayment` (same `vi.mock` pattern as `route.test.ts`). 2 tests, 3× stable; 4 product mutations → 4 reds; `afterAll` cleanup (the candidate leaked 35 stores per run). Full `TEST_DB_REQUIRED=1` suite 1183/1184 (page-map staleness only).
 
 ### Task 5.8: Decide the TokoΦ Account Release Scope
 - **Requirement:** `F-K11`
@@ -239,6 +245,7 @@
 - **Target Files:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md`, `specs/PRD.md`, release/readiness docs that currently claim or omit the account surface.
 - **Change:** Record one explicit owner decision: integrate the accepted account architecture into the production release, or defer the account and remove it from production release claims. Do not treat the standalone localStorage prototype as production evidence.
 - **Done when:** One decision is recorded with owner, rationale, release impact, and acceptance boundary; every canonical product/release document agrees; implementation tasks are added only if integration is chosen.
+- **Status:** `[ ]` **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
 
 ### Task 5.9: Make Multi-Store Selection Explicit and Deterministic
 - **Requirement:** `F-T10`
@@ -266,24 +273,28 @@
 - **Target Files:** root `package.json`, `.github/workflows/ci.yml`, existing workspace build configuration.
 - **Change:** Add explicit production-native builds for Admin, Super Admin, Storefront, and Landing after checks/tests, reusing workspace scripts rather than introducing a build wrapper.
 - **Done when:** CI configuration proves all four build commands are required; a clean local run builds each surface successfully with documented environment boundaries.
+- **Status:** `[x]` **DONE 2026-09-08 — first hosted run observed green on PR #382 (build · admin / landing / super-admin all pass)** — `.github/workflows/ci.yml`: new `build` job, `needs: test`, matrix `admin | super-admin | landing`, `fail-fast: false`, 15 min timeout, `node_modules` + `.next/cache` caches keyed on the lockfile, Dockerfile-parity env (`DATABASE_RUNTIME_ROLE=owner`, dummy `DATABASE_URL`, `NEXT_TELEMETRY_DISABLED=1`, no postgres service). Storefront not repeated (`verify` already builds it). `actionlint` OK. Clean-`npm ci` local parity: landing 12,6 s · admin 52,1 s · super-admin 20,8 s, all exit 0. Estimated +6–12 billed minutes/run (repo is private → metered). First hosted run: PR #382, all three matrix legs pass. Finding: Next 16 `next build` DOES typecheck — the old comment in the `test` job is stale.
 
 ### Task 5.13: Make HTTP Contract Coverage Reproducible
 - **Requirement:** `NF-15`
 - **Target Files:** `specs/openapi/admin-api.yaml`, `specs/openapi/storefront-api.yaml`, `specs/openapi/account.yaml`, `specs/openapi/headless.yaml`, route inventory/validation scripts, root `package.json`, CI.
 - **Change:** Inventory every HTTP route, classify internal exclusions explicitly, document accepted public operations in the owning contract, and pin syntax/coverage/breaking-change validation in the repository.
 - **Done when:** `npm run verify:openapi` exits zero from a clean install, undocumented non-excluded routes fail the gate, and all owned OpenAPI files validate without relying on an ambient global tool.
+- **Status:** `[ ]` **OPEN** (verified 2026-09-08). No `verify:openapi` script in root `package.json`; `scripts/` holds only `gen-page-map.mjs`; `specs/openapi/` holds `admin-api.yaml` + `storefront-api.yaml` and NOT the `account.yaml` / `headless.yaml` this task's Target Files name (they were never committed — see 5.8). Note for whoever picks this up: the route inventory half is now free — `specs/docs/page-map.json` (Task 6.10) lists every API route of all four surfaces with its gate, so the classifier can read that instead of walking the tree a second time. NF-15 NOT MET.
 
 ### Task 5.14: Establish One Canonical Documentation Authority Map
 - **Requirement:** `NF-16`
 - **Target Files:** `specs/README.md`, canonical product/architecture/security/API/operations/release documents, historical audit headers.
 - **Change:** Name one owner document per concern, demote audits to dated evidence, remove conflicting “canonical/current/production-ready” claims, repair stale links, and keep repository documents as the only source of current status.
 - **Done when:** An ownership-map check finds one authority per concern; all canonical links resolve; historical reports cannot be read as current certification.
+- **Status:** `[ ]` **OPEN — partly done** (verified 2026-09-08). `specs/README.md` carries the authority map (one owner per concern; commit `2420bb5`, 2026-08-16) and demotes audits/`BACKLOG`/`NEXT.md` to evidence. Missing: no ownership-map CHECK exists; the map itself links four documents that are not on disk (`docs/TOKOPHI_ACCOUNT_SPEC.md`, `docs/HEADLESS_STOREFRONT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — all four confirmed absent 2026-09-08; `REQUIREMENTS.md` also links ADR 0016) so "all canonical links resolve" is false today; and the 2026-08-31 audit (BUILD-LOG) recorded `OPEN.md` still saying "13 P0", `NEXT.md` N1 claimed open while shipped, and three different P1/P2 counts — the contradiction class this task exists to end. NF-16 NOT MET.
 
 ### Task 5.15: Repair Active Requirement-to-Evidence Traceability
 - **Requirement:** `NF-17`
 - **Target Files:** `specs/docs/REQUIREMENTS.md`, `TASKS.md`, active status/evidence documents, `scripts/check-traceability.py` (new), root `package.json`.
 - **Change:** Add the smallest repository-owned checker for authoritative active contracts, fix malformed tables and invalid IDs there, and map every active task to one primary requirement and runnable acceptance check. Preserve historical IDs as history, not active obligations.
 - **Done when:** `npm run verify:traceability` exits zero; every Stage 4–6 task resolves to one requirement; no active requirement is silently orphaned or falsely marked verified.
+- **Status:** `[ ]` **OPEN** (verified 2026-09-08). `scripts/check-traceability.py` does not exist (`find . -name '*.py'` outside `node_modules`/`.claude` → nothing) and there is no `verify:traceability` script. Every Stage 4–6 task in this file does carry a `**Requirement:**` line, so the mapping half is done by hand; the checker that keeps it true is not. NF-17 PARTIAL.
 
 ### Task 5.16: Preserve Persisted CMS Page Bodies
 - **Requirement:** `F-F12`
@@ -304,6 +315,7 @@
 - **Target Files:** `apps/admin/app/api/public/order/route.ts`, `apps/super-admin/lib/data.ts`, `apps/super-admin/app/(platform)/analitik/page.tsx`, focused analytics/query tests.
 - **Change:** Preserve the server-verified courier and service snapshots already written by new checkout orders. Compute per-courier delivery/return rates only from rows with known courier identity, expose known-versus-legacy-unknown coverage, and never fold unknown historical rows into a named courier or a misleading denominator.
 - **Done when:** Fixtures containing current orders and legacy `courier IS NULL` rows show correct per-courier numerators/denominators plus an explicit unknown coverage count; the report cannot present unknown history as zero returns or as “Tidak diketahui” performance.
+- **Status:** `[x]` **DONE 2026-09-08** — `lib/data/returns.ts` groups on `nullif(o.courier,'')`, returns `{ byCourier, unattributed }`; the NULL group is never a row and its returns are discarded. `dashboard.ts` `ReturnSummary.unattributed`; `return-by-courier.tsx` + Pesanan → Pengembalian (`return-summary.tsx`, dead `"Tidak diketahui"` caveat deleted) both render ONE `unattributedNote(n)` sentence. Real-Postgres guard `lib/data/returns.test.ts` (2 tests under `tokophi_app`; the old `coalesce(...'Tidak diketahui')` put back → red) + `return-summary.test.ts` (3). Super-admin has no per-courier report to fix (audit).
 
 ### Task 5.19: Resolve COD Return Economics and Reserve Policy
 - **Requirement:** `F-S9`
@@ -311,12 +323,72 @@
 - **Target Files:** one new numbered decision record under `specs/decisions/`, `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx`, `apps/super-admin/lib/data.ts`, `packages/db/src/schema.ts`, COD policy tests and canonical product/release docs.
 - **Change:** Obtain written KiriminAja/SPX return-cost terms and record the owner decision. Until evidence exists, keep COD policy restrictive and remove unsupported “free return” claims. Do not activate or charge the unused `platform_cod.fee_pct`; if a platform reserve fee is approved, define payer, taxable base, VAT, refund/return treatment, ledger ownership, and immutable order snapshot, then add the resulting implementation tasks before changing checkout totals.
 - **Done when:** The decision record cites the provider evidence or states it is unavailable; UI, schema status, policy code, and release claims agree; COD cannot widen because of an unverified premise; no fee is charged without the complete accepted money contract and its own executable tasks.
+- **Status:** `[ ]` **BLOCKED — on written KiriminAja/SPX return terms (owner/provider)**. Honest-label half DONE 2026-08-31 (BUILD-LOG 17:32 UTC, PR #376): the super-admin Pengiriman note now says *"diyakini gratis di SPX … belum diverifikasi tertulis"* (`pengaturan-client.tsx`) and `platform_cod.fee_pct` is marked a dead column in `schema.ts`. Still missing: the decision record (`specs/decisions/` ends at `0015`), the provider evidence, and any fee contract. Do not activate `fee_pct` before both exist.
 
 ### Task 5.20: Verify the Real Google OAuth Contract
 - **Requirement:** `F-T6`
 - **Target Files:** `apps/admin/app/api/auth/google/start/route.ts`, `apps/admin/app/api/auth/google/callback/route.ts`, auth/session tests, canonical operations/readiness docs.
 - **Change:** With owner-provided test OAuth credentials supplied only through the environment, exercise start, state validation, callback, existing-user login, new-user policy, provider denial, replay, and disabled-feature behavior. Fix only contract failures proven by the smoke test; never copy credentials into fixtures, logs, or documents.
 - **Done when:** A real test-account browser run completes the accepted login/session flow; invalid state, replay, denial, and disabled configuration fail safely; operations docs name required configuration and evidence boundaries without exposing credentials.
+- **Status:** `[ ]` **BLOCKED — on owner-provided test OAuth credentials** (verified 2026-09-08). Both routes exist (`apps/admin/app/api/auth/google/{start,callback}/route.ts`), `DEPLOY.md:566` documents `GOOGLE_CLIENT_ID` empty = button hidden, and no test file names `google`. `REQUIREMENTS.md` F-T6 still reads **UNVERIFIED — never run against real Google credentials**; the 2026-09-03 resume checklist lists the credentials as pending owner input.
+
+### Task 5.21: Derive the Store Avatar Initials from the Store Name
+- **Requirement:** `F-T1` (tenant correctness of every rendered store fact)
+- **Tracing:** page-map report AD-3 🔴 (`specs/docs/tasks/2026-09-04-page-map-report.md`)
+- **Target Files:** `apps/admin/app/(admin)/pengaturan/page.tsx`, one focused source test beside it.
+- **Change:**
+  1. Replace the literal `BN` inside `<AvatarFallback>` (`page.tsx:167-169`) with initials derived from the `storeName` the same component already reads via `useStoreName()` at :173 — first letter of the first two words, upper-cased, with a safe fallback for an empty name.
+  2. Add a `codeOnly()` source test that fails if a literal two-letter string returns to that fallback, and a unit test for the derivation (one word, two words, empty).
+- **Done when:** Every tenant's Pengaturan renders its own initials (driven for two seeded stores in a browser); the source test is red against the old literal; `tsc` and lint stay green.
+- **Status:** `[x]` **DONE 2026-09-08** — `pengaturan/page.tsx:168` `BN` → `initials(storeName)` via new `components/admin/initials.ts` (+5-case test); `blog/author-cell.tsx` and `topbar.tsx` de-duplicated onto it; topbar avatar-menu fallbacks that named the seeded owner (`"Ongki Pratama"`, `owner@tokophi.id`, `OP`) removed ("no shipped screen names an account that authenticates"). 571 admin tests + credential scanner green. Left: three private `initials()` copies in `pesanan/[id]`, `pelanggan/`, `crm/followup/`.
+
+### Task 5.22: Build Catalog Feed Origins from `locals.origin`, Not the Raw `Host`
+- **Requirement:** `F-F3` / ADR 0009 (tenant + canonical origin resolved by the middleware, once)
+- **Tracing:** page-map report SF-1 🔴
+- **Target Files:** `apps/storefront/src/pages/feed/google.xml.ts`, `apps/storefront/src/pages/feed/tiktok.xml.ts`, `apps/storefront/src/lib/product-feed.test.ts`.
+- **Change:**
+  1. Both feeds currently do `const host = request.headers.get("host"); const store = await getStoreByHost(host); const origin = \`https://${host}\`` (google :14-17, tiktok :15-18). Read `{ store, catalog, origin }` from `locals` exactly as `sitemap.xml.ts:24` does — the middleware already set `locals.origin = primaryOrigin(store, …)` honouring `x-forwarded-*` and the store's primary custom domain.
+  2. Delete the second `getStoreByHost` resolution; one tenant resolution per request.
+  3. Extend `product-feed.test.ts` with a `codeOnly()` claim that neither feed file reads `headers.get("host")` or builds a `https://${…}` origin, proved red against the current file first.
+- **Done when:** With a store that has a primary custom domain, `/feed/google.xml` and `/feed/tiktok.xml` fetched over `<slug>.tokophi.com` emit `<link>`/`<g:link>` on the custom domain (same origin the sitemap and canonicals use); locally the feed no longer emits `https://localhost:43xx`; the source test is green and was red before.
+- **Status:** `[x]` **DONE 2026-09-08** — both feeds now `const { store, catalog, origin } = locals` like `sitemap.xml.ts`; `getStoreByHost`/`getCatalog` imports dropped. New `apps/storefront/scripts/check-feed-origin.mjs` registered in `run-checks.mjs` `CHECKS`: feed `<link>`/`g:link` must equal the sitemap origin under differing `x-forwarded-host/proto`. Measured on a built server (`Host: kopi-senja.test`, `x-forwarded-host: toko-kopi.example.test`): before `https://kopi-senja.test`, after `http://toko-kopi.example.test` = sitemap. The check run against the pre-fix build → 2 FAIL, exit 1.
+
+### Task 5.23: One Shared `isUuid` Guard on Every `[id]` Page of Both Panels
+- **Requirement:** `NF-5` (a 4xx where a 4xx belongs; no 500 from a URL segment)
+- **Tracing:** page-map report SA-3 + AD-1 🟠; AGENTS.md *"`isUuid` before any `eq(table.id, segment)`"*
+- **Target Files:** `packages/lib/src/uuid.ts` (new, moved from `apps/admin/lib/uuid.ts`), `apps/admin/lib/uuid.ts` (re-export or delete + update importers), `apps/super-admin/app/(platform)/toko/[id]/page.tsx`, `apps/super-admin/app/(platform)/tiket/[id]/page.tsx`, `apps/admin/app/(admin)/{bantuan,blog,halaman,pelanggan,tema}/[id]/page.tsx`, `apps/admin/app/(admin)/produk/kategori/[id]/page.tsx`, one new test that derives the `[id]` page list from the directory.
+- **Change:**
+  1. Move `isUuid` into `@tokophi/lib` (pure, no DB — the same split as `platform-rank.ts`); `apps/super-admin/lib/activity-log.ts` already needs it and cannot import from `apps/admin`.
+  2. Guard the eight unguarded pages with `if (!isUuid(params.id)) notFound()` BEFORE the first read — `toko/[id]` fires eleven reads in a `Promise.all` before it checks `if (!store)`. `/pesanan/[id]` (keyed on `orders.number`) and `/produk/[id]` (own number/UUID regex) are the documented exemptions.
+  3. Add `test/id-pages-guarded.test.ts` that walks both `app/` trees for `[id]/page.tsx`, reads each with `codeOnly()`, and fails on any page that reaches `eq(` without `isUuid(` — with an explicit allow-list for the two exemptions, so the ninth page cannot ship unguarded.
+- **Done when:** `/toko/abc`, `/tiket/1`, `/blog/1`, `/pelanggan/x` (etc.) answer 404, not 500 (`22P02`), driven against a dev server; the directory-derived test is green and is red when any one guard is removed.
+- **Status:** `[x]` **DONE 2026-09-08** — ONE implementation `packages/lib/src/uuid.ts` (`@tokophi/lib/uuid` export; `apps/admin/lib/uuid.ts` re-exports); `if (!isUuid(id)) notFound()` above the first data read on all eight pages (six admin, two super-admin — after `platformRouteGate`). Guards: `packages/lib/src/uuid.test.ts` + `apps/admin/lib/uuid-guard.test.ts` (12 pages read as CODE, ordering asserted, mutation self-check on a copy; guard deleted from `blog/[id]` → red).
+
+### Task 5.24: Run the Media Library Reads Under the Tenant Wrapper
+- **Requirement:** `F-T1` / `SEC-1` (every admin tenant read executes under RLS as `tokophi_app`)
+- **Tracing:** page-map report AD-2 🟠; AGENTS.md *"Do NOT use a bare module-level `db` for admin tenant data"*
+- **Target Files:** `apps/admin/lib/actions/media.ts` (`getMedia` :77-81, `getMediaPage` :88-105), a focused test.
+- **Change:**
+  1. Wrap both reads in `withCurrentTenant(async (db, storeId) => …)` and filter on the `storeId` it hands back, matching the three writers in the same file that already use `withTenant`.
+  2. Add a `codeOnly()` claim that `media.ts` has no `db.select` outside a `withTenant`/`withCurrentTenant` callback, proved red first.
+- **Done when:** `/files` and the Store Builder image picker still list this store's media; on `DATABASE_RUNTIME_ROLE=app` the two reads execute as `tokophi_app` (visible in `verify-rls-app` or a `current_user` probe); the source test is green.
+- **Status:** `[x]` **DONE 2026-09-08** — `getMedia`/`getMediaPage` run inside `withCurrentTenant(async (db, storeId) => …)`; `storeId` WHERE kept; unused `getSession` import removed; writers untouched.
+
+### Task 5.25: Rate-Limit `api/chat/read`
+- **Requirement:** `NF-6` (every public write path carries a quota)
+- **Tracing:** page-map report SF-2 🟠; `page-map.json` — the only chat endpoint with an empty gate column
+- **Target Files:** `apps/storefront/src/pages/api/chat/read.ts`, `apps/storefront/src/lib/chat.ts` (`LIMITS`).
+- **Change:** Add the same per-IP `rateLimit` gate `poll.ts:24` uses (`chat:read:ip:<ip>`, a `LIMITS.readPerIpMin` entry beside `pollPerIpMin`) before the conversation is resolved and the two-UPDATE transaction runs. 429 shape identical to `poll`.
+- **Done when:** `read.ts` shows `rate-limit` in the regenerated `PAGE_MAP.md` gate column (`node scripts/gen-page-map.mjs --check` clean); a loop past the quota receives 429 with no DB write; `poll`/`send` limits unchanged.
+- **Status:** `[x]` **DONE 2026-09-08** — `LIMITS.readPerIpMin = 30/min` in `src/lib/chat.ts`; `api/chat/read.ts` gates like `poll.ts` (429 `{ok:true}`, the client is fire-and-forget). Measured: 33 POSTs from one IP → 30×200 then 429 from the 31st.
+
+### Task 5.26: Publish the BlogPosting Logo Through `mediaUrl`
+- **Requirement:** `F-F4` (structured data must resolve)
+- **Tracing:** page-map report SF-3 🟠
+- **Target Files:** `apps/storefront/src/pages/blog/[handle].astro` (:84).
+- **Change:** Replace `abs(store.logoUrl)` in the BlogPosting JSON-LD with `mediaUrl(store.logoUrl)` — `store.logoUrl` is `/api/uploads/<name>`, served by the ADMIN app, so the absolute storefront URL 404s. `Layout.astro:85` and `index.astro:119` already do this and document why.
+- **Done when:** The rendered JSON-LD `logo.url` on a blog post fetches 200; a `textWithoutComments` claim on the file fails if `abs(store.logoUrl` returns.
+- **Status:** `[x]` **DONE 2026-09-08** — `blog/[handle].astro` JSON-LD `logo: abs(mediaUrl(store.logoUrl))`; served page shows the admin/media origin instead of a storefront-origin 404.
 
 ## Stage 6: P2 Hardening
 
@@ -325,6 +397,7 @@
 - **Target Files:** root `package.json`, DB test setup/output, `specs/docs/DEVELOPMENT_READINESS.md`, release gate documentation.
 - **Change:** Give offline and DB-required suites distinct commands and labels; make the release command require the dedicated test database and fail on skipped DB-coupled suites. Remove stale claims that a build runs lint when it does not.
 - **Done when:** The offline command reports its boundary, the release command cannot pass without all DB suites, and canonical readiness docs name the exact commands without equating the two.
+- **Status:** `[x]` **DONE 2026-09-08** — root `package.json` `test:release` = `verify-migrations && test:db && verify-rls && verify-rls-app && storefront verify` (composition only); `test` prints its offline boundary. `specs/docs/DEVELOPMENT_READINESS.md` §7 documents both commands. First run on the half-edited tree: exit 1 in 45 s from three transient reds (page map stale, census, in-flight checkout test) — `verify-migrations` and `test:db` (no skips) passed; `verify-rls`/`verify-rls-app` exit 0 run separately. Re-run green at integration (see BUILD-LOG).
 
 ### Task 6.2: Add Direct Tenant Isolation for `inventory_levels`
 - **Requirement:** `F-T8`
@@ -340,12 +413,14 @@
 - **Target Files:** `apps/admin/lib/public-guard.ts`, `apps/storefront/src/pages/api/track.ts`, production edge configuration and focused multi-instance tests.
 - **Change:** Enforce the existing endpoint quotas in a shared production boundary that survives process restart and scales across replicas. Keep local development deterministic without silently weakening production.
 - **Done when:** A multi-instance test cannot exceed the configured quota by alternating instances; restart does not reset the production counter; endpoint-specific limits and 429 responses remain documented and verified.
+- **Status:** `[ ]` **OPEN** (verified 2026-09-08). `packages/lib/src/cache.ts:40` `rateLimit` is an in-process `Map` and says so at :64 and :152 (*"per replica, gone on redeploy"*); `apps/storefront/src/lib/chat.ts:98-100` is a second in-process copy, deliberately separate. Nothing shared exists; production runs one replica per surface, so the quota holds only until the next deploy (every deploy restarts the counter — measured deploy cadence is several per day). NF-6 PARTIAL.
 
 ### Task 6.4: Remove Unused Direct Dependencies
 - **Requirement:** `NF-19`
 - **Target Files:** workspace `package.json` files, root lockfile, import audit.
 - **Change:** Confirm each reported dependency against runtime, build, test, and config imports; remove only unreferenced direct dependencies and regenerate the authoritative lockfile.
 - **Done when:** Dependency audit is clean and all four production builds plus focused tests pass from a clean install; no dependency is removed solely from a heuristic report.
+- **Status:** `[ ]` **OPEN** (verified 2026-09-08). No dependency audit is recorded in `BUILD-LOG.md` or `CHANGELOG.md` (`grep -i 'depcheck\|NF-19\|unused dep'` → 0). New input from the page-map sweep (§3): `@tokophi/ui` `scroll-area`, `select`, `skeleton`, `tooltip` have 0 importers; `@tokophi/ui/styles.css` has 0 importers by path; `@tokophi/data` has exactly one importer (`apps/admin/lib/mock/store.ts`) and dies with Task 6.7. NF-19 NOT MET.
 
 ### Task 6.5: Sanitize or Reject Active SVG Uploads
 - **Requirement:** `SEC-17`
@@ -359,18 +434,21 @@
 - **Target Files:** `apps/storefront/src/pages/checkout.astro`, `apps/admin/app/(admin)/produk/[id]/product-editor.tsx`, existing package scripts/CI.
 - **Change:** After functional fixes land, extract only cohesive state/behavior already present into stack-native modules/components; add an enforceable size budget for these entry files. Do not introduce generic frameworks or one-implementation abstractions.
 - **Done when:** Both entry files are below the accepted threshold, their existing browser contracts remain green, and the size guard fails when either file regresses above the configured limit.
+- **Status:** `[ ]` **OPEN — and both files GREW** (measured 2026-09-08). `wc -l`: `checkout.astro` **2789** lines (REQUIREMENTS measured ~2,759), `product-editor.tsx` **1552** (was ~1,364 — Tasks 4.6/5.2 added to it). No size guard exists (`grep -rn 'NF-12\|source-size'` outside `node_modules` → 0). Stage 7 step 5 names a "source-size" guard that does not exist. Prerequisites 5.4 and 5.6 are still open, so per Cross-Lane Contract 5/6 this refactor must still wait. NF-12 NOT MET.
 
 ### Task 6.7: Remove Runtime Mock Fixtures from Production Type Paths
 - **Requirement:** `NF-20`
 - **Target Files:** `apps/admin/lib/mock/store.ts`, all 51 current type-only consumers, `apps/admin/lib/types/domain.ts` (new).
 - **Change:** Move only consumed types into the admin's canonical domain-type module, migrate every importer, then delete the unreferenced generated runtime fixture source.
 - **Done when:** Production source and bundles contain no mock fixture generator, all 51 former consumers typecheck, and no duplicate domain type remains in another module.
+- **Status:** `[ ]` **OPEN** (verified 2026-09-08). `apps/admin/lib/mock/store.ts` exists; `grep -rl 'lib/mock/store' apps/admin` → **51** files still import it; `apps/admin/lib/types/domain.ts` does not exist. The page-map sweep confirmed every one of those imports is `import type` (25 client files, 16 data files), so no runtime fixture reaches a page today — the debt is the module's existence and the duplicated types, not a live leak. NF-20 NOT MET.
 
 ### Task 6.8: Standardize Package Manager and Lockfiles
 - **Requirement:** `NF-21`
 - **Target Files:** root/workspace package manifests, lockfiles, CI and contributor commands.
 - **Change:** Choose the repository's established package manager, declare it once, remove conflicting nested/alternate lockfiles after verifying they are not independent projects, and align CI/install commands.
 - **Done when:** A clean install uses one authoritative lockfile with no mutation, every workspace check/build runs through the declared manager, and CI rejects lockfile drift.
+- **Status:** `[x]` **DONE 2026-09-08** — package manager is npm by evidence (four Dockerfiles `npm ci`, `ci.yml:96`); `"packageManager": "npm@11.17.0"` added; deleted root `pnpm-lock.yaml` (one importer: typescript+vitest), `packages/lib/pnpm-lock.yaml` (jose only), `apps/admin/package-lock.json` (pre-monorepo `name: admin`, the source of Next's "multiple lockfiles" warning). `npm ci --dry-run` exit 0. Not added: a CI step refusing a re-appearing non-npm lockfile (`test ! -e pnpm-lock.yaml`) — one line for the next `ci.yml` change.
 
 ### Task 6.9: Persist Per-Store Public Contact Email
 - **Requirement:** `F-F7`
@@ -385,6 +463,40 @@
 - **Change:** Derive the route inventory of Seller, Super Admin, Storefront and Landing from the tree — URL → file, client components, `lib/data`/`lib/actions` imports, declared gate, tests naming the route — reading CODE not text (`codeOnly`), and pin the committed copy fresh by a test. Sweep every route while building it and record findings with severity in the report.
 - **Done when:** `node scripts/gen-page-map.mjs --check` is clean; a new `page.tsx`/`.astro` fails `npm test` until regenerated; the report's findings are re-read at the cited line.
 - **Status:** `[x]` **DONE 2026-09-04** — 129 routes mapped (56+3+18 admin · 11+2+1 super-admin · 18+10 storefront · 9+1 landing). Report: 5 SA, 4 LP, 8 AD, 12 SF, 4 RH, 2 G findings — **2 🔴** (AD-3 hard-coded `BN` initials on every tenant's Pengaturan; SF-1 feeds build origin from raw `Host`, not `locals.origin`) and the rest 🟠/🟡/⚪; fix order in report §7. Fixing them is **not** this task. See BUILD-LOG 2026-09-04.
+
+### Task 6.11: Convert the 66 Served HTML Comments in the Storefront to JSX Comments
+- **Requirement:** `NF-4` (no internal history, paths or measurements in a shopper's view-source)
+- **Tracing:** page-map report SF-5 🟡; AGENTS.md *"`<!-- … -->` in an `.astro` file is served to the browser"*; memory `ai-footprint-scope`
+- **Target Files:** 12 storefront files — `produk/[handle].astro` (12), `checkout.astro` (9), `blog/[handle].astro` (8), `keranjang.astro` (7), `layouts/CheckoutLayout.astro` (7), `index.astro` (6), `layouts/Layout.astro` (6), `checkout/sukses.astro` (5), `kontak.astro` (2), `kategori/[handle].astro` (2), `blog/index.astro` (1), `promo/index.astro` (1); one new source test.
+- **Change:**
+  1. Convert each `<!-- … -->` in template position to `{/* … */}`. The ONE that must stay HTML — `CheckoutLayout.astro:127-132`, which explains the JSX-comment trap — gets a sentence saying so.
+  2. Add a test that counts `<!--` across `apps/storefront/src/**/*.astro` with `textWithoutComments` (HTML comments survive it by design) and pins the count at the allow-listed one, so a new served comment fails `npm test`.
+- **Done when:** A production build's HTML for the homepage, a PDP, the cart, the checkout, `/checkout/sukses`, a blog post and `/kontak` contains zero `<!--` other than the allow-listed one; the count test is green; `astro check` 0 errors. Own PR — mechanical and large.
+- **Status:** `[x]` **DONE 2026-09-08** — 66 → 1 in the 12 files (1 kept on purpose in `CheckoutLayout.astro:127` with a line saying so; 2 became plain `/* */` in JS-expression context) plus 16 in six components (`Header`, `Chat`, `sections/Hero`, `RevealGrid`, `ProductCard` ×32 per page, `OrderFunnel`) → 0. Served HTML (built server, tenant Host): `/` 32→0 · `/produk/celana-kulot` 29→0 · `/keranjang` 26→0 · `/blog` 18→0 · `/promo` 27→0 · `/checkout` 16→1. `astro check` 0 errors, 116 storefront tests green.
+
+### Task 6.12: Give the Remaining Bare `<img>`s a Real `srcset`
+- **Requirement:** `NF-1` (storefront performance budget — see AGENTS.md "Storefront performance")
+- **Tracing:** page-map report SF-8 🟡
+- **Target Files:** `index.astro:251`, `kategori/index.astro:60`, `blog/[handle].astro:192,272`, `promo/index.astro:61`, `thanks.astro:103`, `keranjang.astro:235`, `checkout.astro:1170`, `checkout/sukses.astro:121`; `src/data/catalog.ts` (`imageSrcSet`); possibly `SearchPalette`-style server-side srcset for cart thumbs from `localStorage.cart.image`.
+- **Change:**
+  1. MEASURE first (the rule this section of AGENTS.md was written under): bytes served vs. box size per site at DPR 2, on the seeded store and on a merchant-upload store.
+  2. Category tiles, promo tiles, blog images: use `imageSrcSet` + a `sizes` derived from the component's own layout, named as a constant with the arithmetic written out.
+  3. Cart/checkout/sukses thumbs come from `localStorage.cart.image`; follow the search-palette pattern (ladder built server-side, shipped with the cart line) rather than shipping the 5 KB width manifest to the browser.
+- **Done when:** Each site's `currentSrc` at 320/768/1280 px is the rung for its box (browser check, not markup); the byte delta is recorded in `BUILD-LOG.md`; no `w` descriptor is asserted by hand (`check-image-widths.mjs` stays green).
+- **Status:** `[ ]` **OPEN** (added 2026-09-08 from the sweep; not re-measured — measure before touching).
+
+### Task 6.13: Close the Remaining 🟡 Page-Map Hygiene Findings
+- **Requirement:** documentation/code hygiene (`NF-4`, `NF-16`)
+- **Tracing:** page-map report SF-4, SF-6, SF-7, SF-9, SF-10, SF-11, AD-4, AD-6, LP-1, LP-2, LP-3 (all 🟡/⚪ and still open on 2026-09-08)
+- **Target Files:** `apps/storefront/src/pages/{kontak,keranjang,thanks,checkout,lp/[slug]}.astro`, `src/layouts/{LandingLayout,CheckoutLayout}.astro`, `apps/admin/lib/data/{checkout,collections,payments,theme}.ts`, `apps/admin/lib/actions/taxonomy.ts`, `apps/landing/Dockerfile`, `apps/landing/src/layouts/Base.astro`.
+- **Change:**
+  1. **SF-4** — drop the hard-coded *"Jam Operasional Senin–Jumat 09.00–17.00 WIB"* (`kontak.astro:66-68`) or add a store setting; derive the cart trust line (`keranjang.astro:133` *"transfer bank & QRIS"*) from `enabledPaymentChannels()` as `index.astro:22-43` does; remove the static **ADMIN ONLINE** pill and the English *"Safe Checkout · Quality Guaranteed"* from `thanks.astro:62,217`.
+  2. **SF-9** — `lp/[slug].astro`: add `<h1 class="sr-only">{landing.title}</h1>` the way `index.astro:160-193` does for builder homepages.
+  3. **SF-6** — delete the dead `ORIGIN_CITY` (`checkout.astro:31,982,1604`); **SF-10** — `LandingLayout.astro:26-31` imports `clamp` from `lib/text` instead of re-implementing it; **SF-11** — move the `TODO` at `CheckoutLayout.astro:110` out of the shipped `<style>`; **SF-7** — move the `checkout_sessions` recovery read from `checkout.astro:156-160` into `src/data/` so no page imports `@tokophi/db`.
+  4. **AD-4** — delete the five dead exports (`getAbandonedCart`, `getCollection`, `getOrderPayment`, `getTemplatesByType`, `getDefaultHomepage`); **AD-6** — add a `getSession()` bail to `searchTaxonomy`.
+  5. **LP-1** — add `PUBLIC_DEMO_URL` as a Dockerfile `ARG`; **LP-2** — convert the one HTML comment in `Base.astro:53`; **LP-3** — fix or delete the dangling *"naming rule in AGENTS.md"* reference at `Base.astro:7`.
+- **Done when:** Each item is closed in the report (`specs/docs/tasks/2026-09-04-page-map-report.md`) with the date; `npm test`, `check:storefront`, `check:landing` green; `node scripts/gen-page-map.mjs --check` clean (AD-4 changes the module index).
+- **Status:** `[ ]` **OPEN** (added 2026-09-08). Small items; can ride along with 5.21/5.26 in one PR.
 
 ## Parallel Execution Contract
 
@@ -424,6 +536,17 @@ Development starts from a fresh worktree based on the collaboration baseline. In
 | 3 | E | 6.5 | None |
 | 3 | F | 6.6 | All checkout/product-editor functional changes merged |
 | 3 | G | 6.7 | Task 6.4 import audit complete |
+| 4 | A | 5.21 → 5.26 → 6.13 | Trivial sweep items; one PR |
+| 4 | B | 5.23 | `@tokophi/lib` helper first, then both panels |
+| 4 | C | 5.22 | Before custom domains go live |
+| 4 | D | 5.24 | None |
+| 4 | E | 5.25 | None |
+| 4 | F | 6.11 | Own PR (mechanical, 12 files) |
+| 4 | G | 6.12 | Measure first |
+| 4 | H | 8.1 → 8.2 | Owner accounts (monitor, Vultr) |
+| 4 | I | 8.3 | None |
+| 4 | J | 8.4 | Owner supplies R2 variables |
+| 4 | K | 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11 | Owner decisions / credentials; independent of code lanes |
 
 ### Cross-Lane Contracts
 
@@ -447,3 +570,134 @@ After Stages 4–6 are integrated:
 5. Run RLS, migration, secret, source-size, OpenAPI coverage, documentation-authority, and traceability guards.
 6. Re-run every Stage 4/P0 reproduction and record before/after evidence in `specs/docs/AUDIT-SUMMARY.md`.
 7. Update requirement statuses only from executable evidence; then update `specs/docs/tasks/OPEN.md` and release readiness. No Stage 5/6 deferral is valid without a named owner decision recorded in the repository.
+
+- **Status:** `[ ]` **OPEN — never run** (verified 2026-09-08; BUILD-LOG 2026-08-31 *"Stage 7 belum pernah jalan"* and the 2026-09-03 resume checklist say the same). Three of its steps name commands that do not exist yet: step 2 `npm run test:release` (Task 6.1), step 3 `npm run build:all` (Task 5.12), step 5's source-size / OpenAPI-coverage / documentation-authority / traceability guards (Tasks 6.6, 5.13, 5.14, 5.15). Step 1 `npm run lint` is a per-workspace script, not a root one. What CAN run today and is green on `main`: `npm test` (137 files / 1120 tests, 2026-09-04), `verify-migrations`, `verify-rls`, `verify-rls-app`, storefront `verify`, `tsc` admin + super-admin — all in CI since 2026-08-20.
+
+## Stage 8: Operations & Hygiene
+
+Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev` (45.77.33.112) was SUSPENDED for billing from Fri 2026-09-04 20:27 WIB to Mon 2026-09-07 18:47 WIB (~70 h). Every host answered Cloudflare 522, the backup and cron sidecars stopped, and **nobody was alerted** — the outage was found from a merchant's "cannot search kecamatan" report. After resume, KiriminAja sandbox answers `401 "Your IP address 45.77.33.112 were not allowed to access this API"` on the rates call, so no ongkir → no COD → **no order can be placed**, while district search works (local tables). Full record: `BUILD-LOG.md` 2026-09-07 11:53 UTC. These are facts as received; this file does not re-verify them.
+
+### Task 8.1: External Uptime Monitoring and Alerting for the Four Hosts
+- **Requirement:** `NF-8` (availability is observed from outside the box — `SLA-DRP.md` SLI/SLO)
+- **Tracing:** 2026-09-07 incident (70 h dark, no alert); `specs/docs/tasks/2026-08-06-alerting-gaps.md` ⓕ *"Tidak ada pemantauan uptime dari luar"* (open since 2026-08-06)
+- **Target Files:** `specs/docs/SLA-DRP.md` (§ monitoring), `specs/docs/DEPLOY.md` (runbook link), `specs/docs/OBSERVABILITY.md`; no application code.
+- **Change:**
+  1. Stand up an external monitor **not on the VPS** for `tokophi.com`, `app.tokophi.com`, `rich.tokophi.com`, `toko.tokophi.com` — Cloudflare Health Checks is already in front and needs no new infrastructure (ⓕ's own suggestion); a free third-party pinger is the alternative. Check interval ≤ 5 min; a check on `/api/health` for the admin (it already exists) rather than `/` where one is available.
+  2. Alert to a channel the owner actually reads (WhatsApp/Telegram/email — owner picks), after ≥ 2 consecutive failures so the normal 7–8 s deploy swap (measured 2026-08-28) does not page anyone.
+  3. Record the monitor, its owner login location (never the credential), the alert route, and the expected deploy-window noise in `SLA-DRP.md`; close ⓕ in the alerting-gaps doc.
+- **Done when:** Stopping the storefront container for 10 minutes produces an alert on the recorded channel within 15 minutes and a recovery notice afterwards; a normal deploy produces none; `SLA-DRP.md` names the monitor and the alert route.
+- **Status:** `[ ]` **OPEN — needs the owner's monitor/notification account** (added 2026-09-08). Nothing external watches the hosts today: `grep -rn -i 'uptime' specs/docs/SLA-DRP.md` → 0 hits beyond ⓕ's statement of absence.
+
+### Task 8.2: Vultr Balance Guard — Auto-Top-Up or Low-Balance Alert Procedure
+- **Requirement:** `NF-8` (a billing lapse must not be a silent outage)
+- **Tracing:** 2026-09-07 incident — balance $9.35 vs $10.36 pending; promo credit expired 2026-08-20; the 2026-09-01 invoice was not covered; last real payment 2026-07-09.
+- **Target Files:** `specs/docs/SLA-DRP.md` (§ single points of failure — add "the hosting account's balance"), `specs/docs/DEPLOY.md` (ops runbook: `vultr-cli instance list` is the first check when every host is 522 — see memory `prod-outage-check-vps-first`).
+- **Change:**
+  1. Owner enables Vultr auto-top-up (or a saved card with automatic invoice payment) so a monthly invoice cannot suspend the box; if that is refused, set the Vultr low-balance email alert and mirror it into the 8.1 alert channel.
+  2. Write the procedure — balance check cadence, who receives the billing email, how a suspension is detected (`vultr-cli instance list` → `suspended`) and how resume works (automatic on payment; no manual start) — into `DEPLOY.md`, and add the account balance to `SLA-DRP.md`'s SPOF list beside the single VPS.
+- **Done when:** `SLA-DRP.md` lists the billing lapse as a named failure mode with its detection + recovery time; the owner confirms auto-top-up or a low-balance alert is live (confirmation recorded in `BUILD-LOG.md`, never the card/account details).
+- **Status:** `[ ]` **BLOCKED — owner action on the Vultr account** (added 2026-09-08). `grep -rn -i 'top-up\|balance' specs/docs/SLA-DRP.md specs/docs/DEPLOY.md` → 0: the failure mode is undocumented.
+
+### Task 8.3: Surface KiriminAja Environment AND Connection Health on Super Admin → Pengaturan
+- **Requirement:** `F-S1` (an operator can see whether shipping quotes can be produced at all)
+- **Tracing:** 2026-09-07 incident (IP allow-list lapsed; `/api/public/ongkir` `op:"rates"` → `SHIPPING_QUOTE_UNAVAILABLE`; only the container log said `[ongkir] courier API refused the quote: Unauthorized.`); `NEXT.md` N35 (env visibility — its AC is **already met**, see Status).
+- **Target Files:** `apps/super-admin/lib/data.ts` (`getSystemStatus` :388-424, `kaEnvName`), `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx` (:396-412), `apps/super-admin/app/(platform)/page.tsx` or the status card that renders `SystemStatus`, `packages/lib/src/kiriminaja.ts` (`kaTestConnection` :312), `apps/admin/app/api/cron/tracking/route.ts` or `cron_runs` (0091) as the liveness carrier.
+- **Change:**
+  1. **Health, not just configuration.** `SystemStatus.kiriminaja` is `kiriminajaConfigured()` = "the env key is non-empty" — it read green for the whole outage and reads green now, while every quote is refused. Add a real signal: the most recent outcome of an actual KiriminAja call (the `cron-tracking` sidecar already hits the API every 15 min — record its last HTTP status/`message` in `cron_runs.result` or a sibling column) and/or a cheap scheduled `kaTestConnection` (`province`, costs nothing). Render it on the same card as the env badge with the timestamp of the last successful call; an auth refusal (`401`, the allow-list message) must be named as such, not "Tidak terhubung".
+  2. Keep the env badge (N35) and the manual "Test koneksi" button; make the button's result print the provider's `message` verbatim to the OPERATOR (ADR 0004 hides provider text from shoppers, not from us) — the allow-list sentence names the IP that needs re-adding.
+  3. Document in `DEPLOY.md`: the sandbox IP allow-list is a KiriminAja-dashboard fact, it lapses, and the symptom is "district search works, rates fail".
+- **Done when:** With the allow-list refusing, Super Admin → Pengaturan shows a red KiriminAja health state naming the auth refusal and the last-OK timestamp without anyone opening a container log; with it restored the state goes green within one cron interval; `getSystemStatus` no longer reports `kiriminaja: true` from key presence alone (a test pins the field's source).
+- **Status:** `[x]` **DONE 2026-09-08** — `kaTestConnection()` returns facts (`configured`, `httpStatus`, `provinces`, vendor `text` verbatim) instead of a flattened verdict; pure `apps/super-admin/lib/ka-probe.ts` `classifyKaProbe` → `ok | refused | unreachable | unconfigured` (+6 tests incl. the exact 2026-09-07 allow-list sentence); `getKiriminajaProbe()` in `data.ts` = `cached("ka:probe", 5 min)` racing a 4 s timer, failures cached too; `SystemStatus.kiriminaja` is now `kiriminajaProbe.state === "ok"` (codeOnly guard + mutation self-check). Pengaturan renders `<KaProbeBadge>` (glyph + word + `HH.MM WIB`, refusal sentence under the banner); Analitik Sistem tile prints `word · detail`. Manual "Test koneksi" bypasses the cache. Ceiling: a 5-minute per-replica cache, not a cron carrier.
+
+### Task 8.4: Credential the Offsite Backup and Prove One Restore
+- **Requirement:** `NF-8` / `SLA-DRP.md` §3 (RPO survives loss of the VPS)
+- **Tracing:** BUILD-LOG 2026-09-02 05:30 UTC (*"backup OFFSITE ke R2: mekanismenya ada … menunggu satu kredensial"*), 2026-09-03 checkpoint (`offsite-UNCONFIGURED` + unhealthy in production), 2026-09-07 incident (last local dump 2026-09-04 11:50 UTC; the box that holds every backup was the box that was suspended).
+- **Target Files:** Coolify environment for the `backup-offsite` service (`docker-compose.coolify.yml:584-…`), `specs/docs/SLA-DRP.md` §3, `specs/docs/DEPLOY.md` (restore runbook at :719-745 already written), `BUILD-LOG.md`.
+- **Change:**
+  1. Owner mints an **account-scoped** Cloudflare API token with R2 Object Read & Write (both existing tokens are zone-scoped — measured 2026-09-02), creates a PRIVATE bucket, sets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` in Coolify, restarts the service.
+  2. Verify `offsite-ok` in the sidecar log and `healthy` on its healthcheck; confirm objects exist in the bucket.
+  3. Run the `DEPLOY.md` restore runbook once: pull the newest dump from R2, `pg_restore` into a throwaway database, count rows, drop it. Record counts and duration in `BUILD-LOG.md`; move `SLA-DRP.md` §3 from 🟡 to 🟢 only after the restore, because *"mengunggah belum jadi backup sampai satu dump pernah dipulihkan"*.
+- **Done when:** The sidecar is `healthy` with `offsite-ok` in production; a dump restored from R2 (not from the volume) produces a database with the expected row counts; `SLA-DRP.md` §3 records the restore date and the measured RPO.
+- **Status:** `[ ]` **BLOCKED — on the four R2 variables (owner)** (verified 2026-09-08). The mechanism is shipped and live: `docker-compose.coolify.yml:584` `backup-offsite` (rclone 1.68, read-only mount, `copy` not `sync`, remote-only 30-day retention), proven against MinIO on 2026-09-02 and deployed in #378 (deploy 528). It is **not credentialed**: BUILD-LOG 2026-09-03 confirms production logs `offsite-UNCONFIGURED` and the healthcheck is failing by design; the 2026-09-03 resume checklist has it as owner item #1. **No restore has ever been exercised.**
+
+### Task 8.5: Prune the 36 Agent Worktrees (42 GB) — Owner-Gated
+- **Requirement:** repository hygiene (`NF-16`)
+- **Tracing:** page-map report RH-1 🟡
+- **Target Files:** `.claude/worktrees/*` on this machine (not tracked); `git worktree list`.
+- **Change:**
+  1. Owner reviews the list. The 13 whose tips are ancestors of `main` (`a11y-ulang`, `agent-a09c67b4ca2f6ee51`, `agent-a2442ee7ff4764157`, `cat2`, `fin`, `kontras`, `mt`, `primitif`, `struktur`, `tema-token`, `w2a`, `w2b`, `w2c`) are safe to `git worktree remove`; the other 23 have unmerged tips and uncommitted files and are **each someone's afternoon until proven otherwise** — `feat/stage5-lifecycle` (Task 5.7's candidate) is among the unmerged branches.
+  2. Remove only what the owner names; never `rm -rf` the directory wholesale (destructive gate in `~/.claude/CLAUDE.md`).
+- **Done when:** `git worktree list` shows only live work; `du -sh .claude/worktrees` recorded before/after in `BUILD-LOG.md`; no unmerged branch was deleted without its owner's say-so.
+- **Status:** `[ ]` **BLOCKED — owner decision (destructive)** (re-measured 2026-09-08: `git worktree list` → 37 entries incl. main; `du -sh .claude/worktrees` → 42G). RH-4's `vitest` exclude already stops them from polluting `npm test`, so this is disk and confusion, not correctness.
+
+### Task 8.6: Commit or Delete the Untracked Root Delivery Scaffolds
+- **Requirement:** `NF-16` (one authority per concern)
+- **Tracing:** page-map report RH-2 🟡
+- **Target Files:** root `STATUS.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `OBSERVABILITY.md`, `RELEASE.md`, `.delivery/` (all `??` in `git status`).
+- **Change:**
+  1. Another agent is filling these from the delivery-ledger contract at the time of writing (2026-09-08) — do not edit them in parallel.
+  2. When that pass ends, the owner decides: **commit** them (then `specs/README.md`'s authority map must name which of root `STATUS.md` / `specs/docs/STATUS.md`, root `ARCHITECTURE.md` / `specs/docs/ARCHITECTURE.md`, root `DECISIONS.md` / `specs/decisions/` owns what — a second `STATUS.md` beside the real one is the split source of truth Task 5.14 exists to prevent), or **delete** them.
+- **Done when:** `git status` shows none of the six as untracked; if kept, `specs/README.md` maps each root file to its concern and no placeholder text (*"State: PLANNED"*, *"Database `none`"*) contradicts `TASKS.md`/`BUILD-LOG.md`; Task 5.14's link check (when it exists) passes over them.
+- **Status:** `[ ]` **BLOCKED — owner decision after the in-progress fill** (verified 2026-09-08: `git status --short` still lists all six as `??`).
+
+### Task 8.7: Move Promo-AI off the `claude` CLI Spawn (Dead in Production)
+- **Requirement:** `F-P9` (a shipped merchant feature works in the production container)
+- **Tracing:** BUILD-LOG 2026-08-31 / 2026-09-03 resume checklist — *"Promo-AI mati di produksi (spawn `claude` CLI; container tak punya)"*
+- **Target Files:** `apps/admin/lib/promo-ai.ts` (`runClaude` :54 spawns the CLI), its caller, `docker-compose.coolify.yml` (new `ANTHROPIC_API_KEY` env), `specs/docs/DEPLOY.md` (env table).
+- **Change:** Replace the CLI spawn with a `fetch` to the Claude Messages API (load skill `claude-api` before writing it — model id, pricing, parameters); key from the environment only; the feature stays hidden/disabled when the key is absent (same pattern as `GOOGLE_CLIENT_ID`); keep the existing prompt builder and output parsing.
+- **Done when:** In the production container (no `claude` binary) the promo generator returns a result; with the key unset the UI shows the feature disabled instead of a failed spawn; no key appears in any log; a unit test pins that `promo-ai.ts` no longer imports `child_process`.
+- **Status:** `[ ]` **OPEN — needs `ANTHROPIC_API_KEY` from the owner to verify in production** (verified 2026-09-08: `promo-ai.ts:54` still defines `runClaude` around a CLI spawn).
+
+### Task 8.8: Close the Publicly Reachable Coolify Panel and the Origin-by-IP Bypass
+- **Requirement:** `SEC-19` (the control plane's own control plane is not on the public internet)
+- **Tracing:** BUILD-LOG 2026-08-31 audit ①/② — Coolify `:8000` (+6001/6002/8080) answered 200 from the public internet; origin `:443` reachable directly by IP so Cloudflare (WAF, the only rate-limit wall per AGENTS.md) is bypassable; the IP is in a public repo.
+- **Target Files:** VPS firewall / Vultr firewall group; `specs/docs/SECURITY.md` (transport section), `specs/docs/DEPLOY.md`.
+- **Change:**
+  1. Owner chooses for the Coolify ports: allow-list the owner's IP(s) OR close them entirely and reach the panel over an SSH tunnel (the resume checklist lists both; the earlier "restrict 80/443 to Cloudflare ranges" idea was WITHDRAWN because it breaks ACME HTTP-01 and non-Cloudflare custom domains — do not re-propose it).
+  2. For the origin bypass, record the accepted residual risk in `SECURITY.md` if 80/443 must stay open for ACME, with the mitigation (Cloudflare Origin CA + Authenticated Origin Pulls if/when custom domains allow it).
+- **Done when:** `curl -m 5 http://45.77.33.112:8000` from outside the allow-list times out or is refused; `SECURITY.md` records the port policy and the origin-bypass decision with a date.
+- **Status:** `[ ]` **BLOCKED — owner decision (allow-list vs. tunnel)** (added 2026-09-08 from BUILD-LOG 2026-08-31; not re-probed — no production access from this session).
+
+### Task 8.9: KiriminAja Production Cutover — Send the UAT Sheet, Then Flip `KIRIMINAJA_ENV`
+- **Requirement:** `F-S1` (a booked parcel is actually collected)
+- **Tracing:** BUILD-LOG 2026-08-31 audit ③ (`KIRIMINAJA_ENV=sandbox` in production — bookings look healthy, no courier ever comes); resume checklist owner item #2; AGENTS.md "Shipping & COD" (*"a wrong setting is INVISIBLE"*).
+- **Target Files:** owner: the UAT document (`~/Downloads/UAT Mas Ongkie X Kiriminaja - FINAL.*`, outside the repo); then Coolify env `KIRIMINAJA_ENV=production` + production key; `specs/docs/DEPLOY.md`.
+- **Change:** Owner submits the UAT sheet to KiriminAja and obtains production access; on approval set the production key + env in Coolify, redeploy, and confirm via Super Admin → Pengaturan (the env badge from N35 / Task 8.3 reads `production`) and one real booking that a courier collects. Also re-request the IP allow-list for the PRODUCTION endpoint — the sandbox lapse of 2026-09-07 shows it is per-environment and can expire.
+- **Done when:** Production shows `production` on the KiriminAja card; one real order is booked, collected and tracked end to end; `DEPLOY.md` records the cutover date.
+- **Status:** `[ ]` **BLOCKED — owner sends the UAT sheet; provider approves** (added 2026-09-08; the sheet is reported ready since 2026-09-03).
+
+### Task 8.10: Re-Probe OVO in the Daytime Window Before Re-Enabling It
+- **Requirement:** `F-M2` (only channels the PSP can actually complete are offered)
+- **Tracing:** BUILD-LOG 2026-08-31 AKSI ① — OVO disabled in production (`platform_payment_channels.enabled=false`) after `create_payment` returned `rc=68 EXT TIMEOUT` ×2 at ~00:30 WIB while QRIS returned `rc=11 BILLER DISRUPTION` (PSP maintenance indicator); resume checklist engineering item #1.
+- **Target Files:** none in code — a live probe from the admin container using the valid `alProbeChannels` payload shape with a WIB `expired` stamp (see PR #375); `platform_payment_channels` row; `BUILD-LOG.md`.
+- **Change:** Probe OVO during business hours WIB; if `create_payment` succeeds, re-enable the channel from Super Admin → Pengaturan (audit line lands via `savePaymentChannels`, SA-4); if it still times out, leave it off and record the result. ⚠️ A probe creates a real bill — use the minimum amount and cancel/let it expire; never run the AutoLaris "Tes koneksi" casually (Rp10.000 QRIS each).
+- **Done when:** `BUILD-LOG.md` records the daytime probe's `rc` and the resulting channel state; the storefront's payment picker matches `enabledPaymentChannels()`.
+- **Status:** `[ ]` **OPEN — needs production access for the probe** (added 2026-09-08; not re-probed from this session).
+
+### Task 8.11: Record the Zero-Downtime Structural Decision
+- **Requirement:** `NF-8` (deploy window is a documented, chosen number)
+- **Tracing:** BUILD-LOG 2026-08-28 ZERO-DOWNTIME ⑤/FINAL — window measured **81–115 s → 7–8 s** (−93%); reaching ~0 s is one of three structural options the owner must choose (drop Traefik health-gating + global retry · split surfaces into Coolify Dockerfile-type apps with true rolling updates · manual blue-green with two replicas); resume checklist owner item #4.
+- **Target Files:** one new `specs/decisions/00NN-deploy-window.md`, `specs/docs/DEPLOY.md`, `specs/docs/SLA-DRP.md` (the deploy window is part of the availability budget).
+- **Change:** Owner picks one option or explicitly accepts 7–8 s as the floor; record it as an ADR with the measured numbers and the trade each option carries (already written out in BUILD-LOG 2026-08-28 ④/⑤); Task 8.1's alert threshold must be set above whatever window is chosen.
+- **Done when:** The ADR exists and `DEPLOY.md` states the expected deploy window as a number with its source.
+- **Status:** `[ ]` **BLOCKED — owner decision** (added 2026-09-08). Current measured state is fine; this records the choice so the next agent does not re-derive it.
+
+### Task 8.12: Remove the `shipping_aggregator.enabled` Status Light, or Enforce It
+- **Tracing:** browser verification 2026-09-08 (observation beside Task 8.3)
+- **Target Files:** `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx`, `packages/db/src/seed.ts`
+- **Change:**
+  1. Establish by grep that `shipping_aggregator.enabled` is read in exactly two places — that card and the seed — and by NOTHING on the shipping path (`apps/admin/lib/shipping-quote.ts`, `api/public/ongkir`, `lib/actions/shipping.ts`).
+  2. Apply the standing ruling for this exact shape: `platform_payment_gateways.enabled` was ruled "a record, not a switch" (owner, 2026-08-20) and its badge was REMOVED ~100 lines above in this same file while the column was kept. Remove the `Aktif` chip the same way, keep the column.
+  3. If a real aggregator kill-switch is wanted instead, it must be ENFORCED at the quote path FIRST (the way `platform_cod.enabled` is) and only then surfaced — that is a different, larger task.
+- **Done when:** no chip on the Kurir card claims a state nothing enforces; a guard in the shape of `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` fails if it is put back.
+- **Status:** `[ ]` **OPEN** (found 2026-09-08 while driving Task 8.3: a green `Aktif` renders directly beside the red `Ditolak` that reflects the real upstream 401 — the control plane says "on" over an aggregator that cannot price a single parcel).
+
+### Task 8.13: Stop the Seed's Billing Anchor from Blocking Every Local Write
+- **Tracing:** browser verification 2026-09-08 (blocker hit by two agents)
+- **Target Files:** `packages/db/src/seed.ts`, `packages/db/src/seed-recent.ts`, `AGENTS.md`
+- **Change:**
+  1. `stores.current_period_end` is seeded at a fixed date (`2026-08-04` on `batiknusantara`), so once the wall clock passes it `computeBilling()` returns `readOnly` and EVERY admin write fails with `SuspendedError`, surfacing as "Gagal menyimpan produk". `npm run seed:recent` does not touch it.
+  2. Extend `seed:recent` (INSERT/UPDATE-only, idempotent, one store — the same contract it already has) to push `current_period_end` to a future date, or seed it relative to `now()` in the first place.
+  3. `AGENTS.md`'s seed-rot note covers CHARTS only ("the demo looks dead"); add the write path, because the symptom there is a save that fails with a message about suspension on a store nobody suspended.
+- **Done when:** on a machine whose clock is past the anchor, `npm run seed:recent -w @tokophi/db` is enough to make an admin save succeed; no agent has to hand-edit `stores` to drive a write path.
+- **Status:** `[ ]` **OPEN** (found 2026-09-08; both browser agents had to move the column forward and put it back to test anything that writes).

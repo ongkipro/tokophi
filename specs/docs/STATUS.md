@@ -1,8 +1,41 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
+> **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
+> `volumdev` (`45.77.33.112`, the box that runs all 18 containers) was **suspended for an unpaid
+> balance from Fri 2026-09-04 20:27 WIB to Mon 2026-09-07 18:47 WIB**. Every host — `tokophi.com`,
+> `app.`, `rich.`, `toko.` and every `<slug>.tokophi.id` — answered **Cloudflare 522** (origin
+> unreachable) for the whole window. **Nobody was paged**: there is no off-box monitor and no Vultr
+> balance alert, so it was found three days later from a merchant-style "the shop is down" report.
+> Last on-box database backup before the stop: **2026-09-04 11:50 UTC**; the shared DB shows **zero
+> orders since 2026-08-26**, so no order was lost. After the top-up the instance resumed on its own;
+> `docker ps` showed all 18 containers healthy, the four hosts answered, `coolify-sentinel` restarted
+> itself, and the checkout **kecamatan search was verified in Chromium against production**. Runbook:
+> `DEPLOY.md` → "Origin unreachable / every host 522"; the DR record is `SLA-DRP.md` §2/§6.
+> **(b) STILL OPEN — no order can be placed on production.** The KiriminAja **sandbox** answers
+> `401 "Your IP address 45.77.33.112 were not allowed to access this API"`, so `/api/public/ongkir`
+> `op:"rates"` returns `SHIPPING_QUOTE_UNAVAILABLE` → **no ongkir → no COD → no order** (a parcel we
+> cannot price is a parcel we cannot ship, by design). Verified from inside the admin container: the
+> key is intact, `KIRIMINAJA_ENV` is `sandbox`, and the container's egress IP IS `45.77.33.112` — the
+> allow-list at the KiriminAja developer sandbox is what changed (or was reset by the suspension) and
+> correcting it is an **owner action** on the vendor portal. Probe: `DEPLOY.md` → "KiriminAja 401
+> after a restart"; contract note: `KIRIMINAJA.md` → "The sandbox enforces an IP allow-list".
+> **(c) Shipped 2026-09-04:** PR #380 (the generated page map, Task 6.10) and PR #381 (Super Admin
+> `/log-sistem` + page-map findings SA-1 / SA-2 / SA-4). The repository is **private again since
+> 2026-09-04** — GitHub Actions minutes are metered on a private repo, so CI remains unmeasured (see
+> the 2026-08-24 boundary below). **Re-derived today on this tree:** migrations **106 SQL files /
+> 106 journal entries through `0105_roles_advertiser_cs`** (`ls packages/db/drizzle/*.sql | wc -l` and
+> `_journal.json`); `npx vitest run --reporter=dot` → **139 files / 1136 tests green in 29 s** with the
+> Docker DB up (the 2026-09-04 block's 137 / 1120 was true on that day — #381 added 2 files / 19
+> tests, and this tree carries one more); `npm run verify-rls -w @tokophi/db` → **54/55 store-scoped
+> tables with RLS** (exception `platform_activity`), **11** un-RLS'd child tables (`inventory_levels`
+> left the list with `0100`); `packages/db/src/schema.ts` → **82 tables**.
+>
 > **Refreshed 2026-08-21 — PRE-RELEASE, BLOCKED.** The prior `v1.0.0 Release Edition` and “100% remediation closure” claims were invalidated by the 2026-08-16 precision audit. Current evidence is in [`AUDIT-SUMMARY.md`](./AUDIT-SUMMARY.md); accepted contracts are in [`REQUIREMENTS.md`](./REQUIREMENTS.md); root [`TASKS.md`](../../TASKS.md) owns the 42-task remediation queue and release gate.
 >
 > **Consolidation record — 2026-08-16.** `/home/ongki/Projects/tokophi` is the canonical checkout. Unique work recovered from secondary worktrees now lives here: the Account specification and proposed OpenAPI contract, the browser-runnable local Account prototype, the deployed order-finance task record, and corrected deployment safety notes. Redundant worktrees were classified but not deleted; destructive cleanup remains owner-gated.
+>
+> **Sweep — 2026-09-07 17:26 UTC (branch `feat/sweep-0907`).** Development map reconciled 1:1 with code and 14 open tasks executed by 15 parallel subagents (root `TASKS.md` Status lines are the ledger; BUILD-LOG entry of the same timestamp has the per-task evidence). Executable boundary: `npm run test:release` exit 0 in 90 s — **150 files / 1235 tests** (final run, after the stale-memo class fix), `verify-rls` **54/55**, storefront **7/7** checks; tsc 0 on admin, super-admin, lib, db; `astro check` 0 errors; eslint 0 errors. ⚠️ Production ordering is still blocked by the KiriminAja sandbox IP allow-list (owner action), unchanged.
 >
 > **Log Sistem — 2026-09-04 03:15 UTC.** Super Admin gained `/log-sistem` (the whole `platform_activity`, filtered + paged in the database, floor `admin`) and three page-map findings are closed: SA-1 `removeStoreUser`, SA-2 `setStoreComped`, SA-4 `savePaymentChannels` — each now reports what it WROTE before it logs. Super-admin suite **15 files / 121 tests green** (+2 files, +19 tests); `tsc` 0; `npm run build -w @tokophi/super-admin` exit 0; page map regenerated (super-admin 15 routes). Page-map report open count: 35 → 32.
 >

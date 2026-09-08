@@ -199,7 +199,7 @@ const funnelCatalogId = funnelProduct
       <p class="err mt-1 hidden text-sm text-rose-600" data-err="kecamatan"></p>
     </div>
 
-    <!-- 🔴 KODE POS. Its absence here rejected EVERY order from /promo and /lp for eighteen days.
+    {/* 🔴 KODE POS. Its absence here rejected EVERY order from /promo and /lp for eighteen days.
          `/api/public/order` made it required on 2026-08-03 and only the cart checkout was patched;
          this funnel kept posting {alamat, kota, provinsi}, so the API answered "Kode pos wajib
          diisi." and wrote nothing — on exactly the pages paid traffic lands on. Worse, the funnel's
@@ -211,7 +211,7 @@ const funnelCatalogId = funnelProduct
          is auto-filled would silently cancel `required`. It is auto-filled only where the district
          data can answer HONESTLY (one postcode for the whole district); anywhere else the shopper
          types it, because ~4% of KiriminAja's districts have no kelurahan data and this number gets
-         printed on a real parcel. -->
+         printed on a real parcel. */}
     <div>
       <label for="f-kodepos" class="mb-1 block text-sm font-medium text-ink">Kode pos <span class="text-rose-500">*</span></label>
       <input id="f-kodepos" name="kodepos" type="text" inputmode="numeric" autocomplete="postal-code"

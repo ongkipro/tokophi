@@ -40,56 +40,56 @@
 | `/akun` | layout | `apps/admin/app/(admin)/akun/layout.tsx` | `akun-nav.tsx` | — | — | — | — |  | — |
 | `/akun/profil` | page | `apps/admin/app/(admin)/akun/profil/page.tsx` | `profil-client.tsx` | — | `profile` | — | — | ✓ | — |
 | `/analitik` | page | `apps/admin/app/(admin)/analitik/page.tsx` | `analitik-client.tsx` | `analytics` `funnel` `products` | — | — | — | ✓ | — |
-| `/bantuan/[id]` | page | `apps/admin/app/(admin)/bantuan/[id]/page.tsx` | `thread-client.tsx` | `support` | `support` | — | — | ✓ | — |
-| `/bantuan` | page | `apps/admin/app/(admin)/bantuan/page.tsx` | `bantuan-client.tsx` `ticket-status.tsx` | `support` | `support` | — | — | ✓ | `apps/admin/lib/actions/menus.test.ts` |
-| `/blog/[id]` | page | `apps/admin/app/(admin)/blog/[id]/page.tsx` | `article-editor.tsx` | `articles` | `articles` `media` | — | — | ✓ | — |
+| `/bantuan/[id]` | page | `apps/admin/app/(admin)/bantuan/[id]/page.tsx` | `thread-client.tsx` | `support` | `support` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/bantuan` | page | `apps/admin/app/(admin)/bantuan/page.tsx` | `bantuan-client.tsx` `ticket-status.tsx` | `support` | `support` | — | — | ✓ | `apps/admin/lib/actions/menus.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/blog/[id]` | page | `apps/admin/app/(admin)/blog/[id]/page.tsx` | `article-editor.tsx` | `articles` | `articles` `media` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/blog/baru` | page | `apps/admin/app/(admin)/blog/baru/page.tsx` | — | `articles` | — | — | — | ✓ | — |
-| `/blog` | page | `apps/admin/app/(admin)/blog/page.tsx` | `blog-client.tsx` | `articles` | `articles` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
+| `/blog` | page | `apps/admin/app/(admin)/blog/page.tsx` | `blog-client.tsx` | `articles` | `articles` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/crm/followup` | page | `apps/admin/app/(admin)/crm/followup/page.tsx` | `followup-client.tsx` | `crm` | `crm` | — | — | ✓ | — |
 | `/crm` | page | `apps/admin/app/(admin)/crm/page.tsx` | — | `crm` `store` | — | `session` | — |  | — |
 | `/crm/pipeline` | page | `apps/admin/app/(admin)/crm/pipeline/page.tsx` | `pipeline-client.tsx` | `crm` | `crm` | — | — | ✓ | — |
 | `/crm/template` | page | `apps/admin/app/(admin)/crm/template/page.tsx` | `template-client.tsx` | `crm` | `crm` | — | — | ✓ | — |
-| `/diskon/[id]` | page | `apps/admin/app/(admin)/diskon/[id]/page.tsx` | `discount-editor.tsx` | `discounts` | `discounts` | — | — | ✓ | — |
+| `/diskon/[id]` | page | `apps/admin/app/(admin)/diskon/[id]/page.tsx` | `discount-editor.tsx` | `discounts` | `discounts` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/diskon/baru` | page | `apps/admin/app/(admin)/diskon/baru/page.tsx` | — | — | — | — | — |  | — |
-| `/diskon` | page | `apps/admin/app/(admin)/diskon/page.tsx` | `diskon-client.tsx` | `discounts` | `discounts` | — | — | ✓ | — |
+| `/diskon` | page | `apps/admin/app/(admin)/diskon/page.tsx` | `diskon-client.tsx` | `discounts` | `discounts` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/files` | page | `apps/admin/app/(admin)/files/page.tsx` | `files-client.tsx` | — | `media` | — | — | ✓ | — |
-| `/flash-sale/[id]` | page | `apps/admin/app/(admin)/flash-sale/[id]/page.tsx` | `flash-editor.tsx` | `flash` | `flash` | — | — | ✓ | — |
+| `/flash-sale/[id]` | page | `apps/admin/app/(admin)/flash-sale/[id]/page.tsx` | `flash-editor.tsx` | `flash` | `flash` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/flash-sale/baru` | page | `apps/admin/app/(admin)/flash-sale/baru/page.tsx` | — | `flash` | — | — | — | ✓ | — |
-| `/flash-sale` | page | `apps/admin/app/(admin)/flash-sale/page.tsx` | `flash-sale-client.tsx` | `flash` | `flash` `promo-hub` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
-| `/halaman/[id]` | page | `apps/admin/app/(admin)/halaman/[id]/page.tsx` | `page-editor.tsx` | `pages` | `pages` | — | — | ✓ | — |
+| `/flash-sale` | page | `apps/admin/app/(admin)/flash-sale/page.tsx` | `flash-sale-client.tsx` | `flash` | `flash` `promo-hub` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/halaman/[id]` | page | `apps/admin/app/(admin)/halaman/[id]/page.tsx` | `page-editor.tsx` | `pages` | `pages` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/halaman/baru` | page | `apps/admin/app/(admin)/halaman/baru/page.tsx` | — | — | — | — | — |  | — |
-| `/halaman` | page | `apps/admin/app/(admin)/halaman/page.tsx` | `halaman-client.tsx` | `pages` | `pages` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
+| `/halaman` | page | `apps/admin/app/(admin)/halaman/page.tsx` | `halaman-client.tsx` | `pages` | `pages` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/keuangan` | page | `apps/admin/app/(admin)/keuangan/page.tsx` | — | `finance` | — | — | — | ✓ | — |
 | `/keuangan/penghasilan` | page | `apps/admin/app/(admin)/keuangan/penghasilan/page.tsx` | `period-tabs.tsx` | `finance` `reconciliation` | — | — | — | ✓ | — |
 | `/` | layout | `apps/admin/app/(admin)/layout.tsx` | `dashboard-client.tsx` `error.tsx` | `billing` `domain` `orders` `search` `store` `topbar` | — | `session` | — |  | — |
 | `/navigasi` | page | `apps/admin/app/(admin)/navigasi/page.tsx` | `navigasi-client.tsx` | `menus` | `menus` | — | — | ✓ | `apps/admin/lib/actions/menus.test.ts` |
 | `/obrolan` | page | `apps/admin/app/(admin)/obrolan/page.tsx` | `obrolan-client.tsx` | `chat` | `chat` | — | — | ✓ | — |
 | `/` | page | `apps/admin/app/(admin)/page.tsx` | `dashboard-client.tsx` `error.tsx` | `activity` `analytics` `funnel` `orders` `products` `returns` `reviews` `store` `support` | — | `session` | — | ✓ | — |
-| `/pelanggan/[id]` | page | `apps/admin/app/(admin)/pelanggan/[id]/page.tsx` | `customer-detail.tsx` | `customers` | `customers` | — | — | ✓ | — |
+| `/pelanggan/[id]` | page | `apps/admin/app/(admin)/pelanggan/[id]/page.tsx` | `customer-detail.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/pelanggan/keranjang` | page | `apps/admin/app/(admin)/pelanggan/keranjang/page.tsx` | `keranjang-client.tsx` | `checkout` | `checkout` | — | — | ✓ | — |
-| `/pelanggan` | page | `apps/admin/app/(admin)/pelanggan/page.tsx` | `pelanggan-client.tsx` | `customers` | `customers` | — | — | ✓ | — |
+| `/pelanggan` | page | `apps/admin/app/(admin)/pelanggan/page.tsx` | `pelanggan-client.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/pelanggan/segmen` | page | `apps/admin/app/(admin)/pelanggan/segmen/page.tsx` | `segmen-client.tsx` | `segments` | `segments` | — | — | ✓ | — |
 | `/pelanggan/ulasan` | page | `apps/admin/app/(admin)/pelanggan/ulasan/page.tsx` | `ulasan-client.tsx` | `reviews` | `reviews` | — | — | ✓ | — |
 | `/pemasaran` | page | `apps/admin/app/(admin)/pemasaran/page.tsx` | `feed-card.tsx` `pemasaran-client.tsx` | `feed` `marketing` `tracking` | `tracking` | `session` | — | ✓ | — |
 | `/pengaturan` | page | `apps/admin/app/(admin)/pengaturan/page.tsx` | — | — | — | — | — |  | `apps/admin/lib/actions/users.test.ts` |
-| `/pesanan/[id]` | page | `apps/admin/app/(admin)/pesanan/[id]/page.tsx` | `order-detail.tsx` | `order-detail` `orders` | `orders` `payments` `shipping` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` |
+| `/pesanan/[id]` | page | `apps/admin/app/(admin)/pesanan/[id]/page.tsx` | `order-detail.tsx` | `order-detail` `orders` | `orders` `payments` `shipping` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/pesanan/massal` | page | `apps/admin/app/(admin)/pesanan/massal/page.tsx` | `massal-client.tsx` | `bulk-shipping` | `bulk-shipping` | — | — | ✓ | — |
-| `/pesanan` | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/seller-entity-links.test.ts` |
-| `/produk/[id]` | page | `apps/admin/app/(admin)/produk/[id]/page.tsx` | `product-editor.tsx` `taxonomy-field.tsx` | `products` | `media` `products` `purchases` `taxonomy` | — | — | ✓ | `apps/admin/lib/form-labels.test.tsx` |
+| `/pesanan` | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/produk/[id]` | page | `apps/admin/app/(admin)/produk/[id]/page.tsx` | `product-editor.tsx` `taxonomy-field.tsx` | `products` | `media` `products` `purchases` `taxonomy` | — | — | ✓ | `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/baru` | page | `apps/admin/app/(admin)/produk/baru/page.tsx` | — | — | — | — | — |  | — |
 | `/produk/inventori` | page | `apps/admin/app/(admin)/produk/inventori/page.tsx` | `inventori-client.tsx` | `inventory` `products` | `inventory` | — | — | ✓ | `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/seller-entity-links.test.ts` |
-| `/produk/kategori/[id]` | page | `apps/admin/app/(admin)/produk/kategori/[id]/page.tsx` | `collection-editor.tsx` | `collections` `products` | `collections` `media` | — | — | ✓ | — |
+| `/produk/kategori/[id]` | page | `apps/admin/app/(admin)/produk/kategori/[id]/page.tsx` | `collection-editor.tsx` | `collections` `products` | `collections` `media` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/kategori/baru` | page | `apps/admin/app/(admin)/produk/kategori/baru/page.tsx` | — | `products` | — | — | — | ✓ | — |
-| `/produk/kategori` | page | `apps/admin/app/(admin)/produk/kategori/page.tsx` | `kategori-client.tsx` | `collections` `domain` `store` | `collections` | `session` | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
-| `/produk` | page | `apps/admin/app/(admin)/produk/page.tsx` | `produk-client.tsx` | `products` | `products` | — | — | ✓ | `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/actions/menus.test.ts` `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/seller-entity-links.test.ts` |
+| `/produk/kategori` | page | `apps/admin/app/(admin)/produk/kategori/page.tsx` | `kategori-client.tsx` | `collections` `domain` `store` | `collections` | `session` | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/produk` | page | `apps/admin/app/(admin)/produk/page.tsx` | `produk-client.tsx` | `products` | `products` | — | — | ✓ | `apps/admin/app/(admin)/produk/[id]/product-editor-unsaved.test.ts` `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/actions/menus.test.ts` `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/pembelian` | page | `apps/admin/app/(admin)/produk/pembelian/page.tsx` | `pembelian-client.tsx` | `purchases` | `purchases` | — | — | ✓ | — |
-| `/promo/[id]` | page | `apps/admin/app/(admin)/promo/[id]/page.tsx` | `promo-editor-client.tsx` | `promo` | `promo` | — | — | ✓ | — |
-| `/promo/html/[id]` | page | `apps/admin/app/(admin)/promo/html/[id]/page.tsx` | `landing-editor-client.tsx` | `landing` | `landing` | — | — | ✓ | — |
+| `/promo/[id]` | page | `apps/admin/app/(admin)/promo/[id]/page.tsx` | `promo-editor-client.tsx` | `promo` | `promo` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/promo/html/[id]` | page | `apps/admin/app/(admin)/promo/html/[id]/page.tsx` | `landing-editor-client.tsx` | `landing` | `landing` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/promo/html/baru` | page | `apps/admin/app/(admin)/promo/html/baru/page.tsx` | — | `landing` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` |
-| `/promo` | page | `apps/admin/app/(admin)/promo/page.tsx` | `promo-list-client.tsx` | `landing` `promo` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` `apps/admin/lib/seller-entity-links.test.ts` |
+| `/promo` | page | `apps/admin/app/(admin)/promo/page.tsx` | `promo-list-client.tsx` | `landing` `promo` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/saldo` | page | `apps/admin/app/(admin)/saldo/page.tsx` | `saldo-client.tsx` | `ledger` | `ledger` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
-| `/tema/[id]` | page | `apps/admin/app/(admin)/tema/[id]/page.tsx` | `builder-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` |
-| `/tema` | page | `apps/admin/app/(admin)/tema/page.tsx` | `tema-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` |
+| `/tema/[id]` | page | `apps/admin/app/(admin)/tema/[id]/page.tsx` | `builder-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/tema` | page | `apps/admin/app/(admin)/tema/page.tsx` | `tema-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/daftar` | page | `apps/admin/app/daftar/page.tsx` | `daftar-form.tsx` `google-button.tsx` | — | `register` | — | — |  | — |
 | `/faktur/[number]` | page | `apps/admin/app/faktur/[number]/page.tsx` | `print-button.tsx` | `billing` | `billing` | `session` | — | ✓ | — |
 | `/` | layout | `apps/admin/app/layout.tsx` | — | — | — | — | — |  | — |
@@ -111,8 +111,8 @@
 | `/api/health/env` | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | — |
-| `/api/public/order` | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` |
-| `/api/public/pay/callback` | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | — |
+| `/api/public/order` | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` |
+| `/api/public/pay/callback` | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` |
 | `/api/public/promo` | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
 | `/api/uploads/[name]` | GET | `apps/admin/app/api/uploads/[name]/route.ts` | — |  | `apps/admin/lib/image-content.test.ts` |
 | `/impersonate/exit` | GET | `apps/admin/app/impersonate/exit/route.ts` | `session` |  | — |
@@ -133,10 +133,10 @@
 | `/paket` | page | `apps/super-admin/app/(platform)/paket/page.tsx` | `paket-client.tsx` | `data` | `actions` | `route:/paket` | — | ✓ | `apps/super-admin/lib/invoice-flip-is-bookkeeping.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/pencairan` | page | `apps/super-admin/app/(platform)/pencairan/page.tsx` | `pencairan-client.tsx` | `data` | `actions` | `route:/pencairan` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
 | `/pengaturan` | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `pengaturan-client.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
-| `/tiket/[id]` | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | — |
-| `/tiket` | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
-| `/toko/[id]` | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/super-admin/lib/add-store-user.test.ts` |
-| `/toko` | page | `apps/super-admin/app/(platform)/toko/page.tsx` | `toko-client.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/super-admin/lib/add-store-user.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/tiket/[id]` | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/tiket` | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/toko/[id]` | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` |
+| `/toko` | page | `apps/super-admin/app/(platform)/toko/page.tsx` | `toko-client.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/update-log` | page | `apps/super-admin/app/(platform)/update-log/page.tsx` | `update-log-client.tsx` | — | — | `route:/update-log` | — |  | `apps/super-admin/lib/list-page.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | layout | `apps/super-admin/app/layout.tsx` | — | — | — | — | — |  | — |
 | `/login` | page | `apps/super-admin/app/login/page.tsx` | — | — | `auth` | — | — |  | `packages/lib/src/no-published-credentials.test.ts` |
@@ -156,7 +156,7 @@
 | URL | file | layout | src/data | src/lib | locals | set:html | tests |
 |---|---|---|---|---|---|---|---|
 | `/404` | `apps/storefront/src/pages/404.astro` | `Layout` | — | — | ✓ |  | — |
-| `/blog/[handle]` | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
+| `/blog/[handle]` | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
 | `/checkout` | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` | `cart-variant` `recovery` | ✓ |  | — |
@@ -179,13 +179,13 @@
 | URL | methods | file | src/data | src/lib | `@tokophi/db` | gate | tests |
 |---|---|---|---|---|---|---|---|
 | `/api/chat/poll` | GET POST | `apps/storefront/src/pages/api/chat/poll.ts` | — | — | ✓ | `rate-limit` | — |
-| `/api/chat/read` | POST GET | `apps/storefront/src/pages/api/chat/read.ts` | — | — | ✓ | — | — |
+| `/api/chat/read` | POST GET | `apps/storefront/src/pages/api/chat/read.ts` | — | — | ✓ | `rate-limit` | — |
 | `/api/chat/send` | POST GET | `apps/storefront/src/pages/api/chat/send.ts` | — | — | ✓ | `rate-limit` | — |
 | `/api/checkout-session` | POST GET | `apps/storefront/src/pages/api/checkout-session.ts` | — | — | ✓ | `rate-limit` `bot` | — |
 | `/api/search` | GET | `apps/storefront/src/pages/api/search.ts` | `catalog` | — |  | — | — |
 | `/api/track` | POST GET | `apps/storefront/src/pages/api/track.ts` | — | — | ✓ | `rate-limit` `bot` | — |
-| `/feed/google.xml` | GET | `apps/storefront/src/pages/feed/google.xml.ts` | `catalog` `store` | `product-feed` |  | — | — |
-| `/feed/tiktok.xml` | GET | `apps/storefront/src/pages/feed/tiktok.xml.ts` | `catalog` `store` | `product-feed` |  | — | — |
+| `/feed/google.xml` | GET | `apps/storefront/src/pages/feed/google.xml.ts` | — | `product-feed` |  | — | — |
+| `/feed/tiktok.xml` | GET | `apps/storefront/src/pages/feed/tiktok.xml.ts` | — | `product-feed` |  | — | — |
 | `/robots.txt` | GET | `apps/storefront/src/pages/robots.txt.ts` | — | — |  | — | — |
 | `/sitemap.xml` | GET | `apps/storefront/src/pages/sitemap.xml.ts` | `content` | — |  | — | — |
 
@@ -254,7 +254,7 @@
 | `promo.ts` | `getPromoEditor` `listPromoPages` |
 | `purchases.ts` | `getPurchaseOrders` `getPurchaseProducts` |
 | `reconciliation.ts` | `getReconciliationMismatches` `reconciliationMismatchRows` |
-| `returns.ts` | `getReturnsByCourier` |
+| `returns.ts` | `getReturnsByCourier` `returnsByCourierRows` |
 | `reviews.ts` | `getReviews` |
 | `search.ts` | `getSearchIndex` |
 | `segments.ts` | `getSegments` |
@@ -316,9 +316,10 @@
 |---|---|
 | `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `processPayout` `rejectPayout` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `saveCodAllowed` `saveCouriers` `saveGateways` `savePaymentChannels` `savePayoutPolicy` `sendPaymentReminder` `setInvoiceStatus` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` |
 | `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
-| `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
+| `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getKiriminajaProbe` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
 | `health-types.ts` | `VERDICT_RANK` `checkToneClass` `verdictMeta` |
 | `health.ts` | `getHealthMap` `getStoreHealth` `healthFromSignals` |
+| `ka-probe.ts` | `classifyKaProbe` |
 | `list-page.ts` | `UPDATE_LOG_PAGE_SIZE` `filterChanged` `pageSlice` |
 | `nav.ts` | `NAV` `navFor` |
 | `payout-transition.ts` | `markPayoutPaidInTxn` |

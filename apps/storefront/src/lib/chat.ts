@@ -115,6 +115,9 @@ export const LIMITS = {
   msgPerVisitorHour: { limit: 60, windowMs: 60 * 60_000 },
   msgPerIpMin: { limit: 20, windowMs: 60_000 },
   pollPerIpMin: { limit: 120, windowMs: 60_000 },
+  // `/api/chat/read` runs a two-UPDATE transaction per call. It fires once per panel open, so a
+  // legitimate shopper needs a handful a minute; the ceiling is a fraction of the poll's.
+  readPerIpMin: { limit: 30, windowMs: 60_000 },
 } as const;
 
 // ---------------------------------------------------------------------------------------------

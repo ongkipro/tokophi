@@ -9,9 +9,9 @@ const store = Astro.locals.store;
 
 <CheckoutLayout title="Pesanan Berhasil" description={`Terima kasih telah berbelanja di ${store.name}.`}>
   <section class="mx-auto max-w-2xl px-4 py-16 sm:px-6">
-    <!-- Both states of this page are rendered here and one is hidden on arrival. This page is
+    {/* Both states of this page are rendered here and one is hidden on arrival. This page is
          reachable by simply typing the URL (and by a refresh long after the order), so it must NOT
-         assert "pesanan diterima" unless there is actually an order in localStorage to show. -->
+         assert "pesanan diterima" unless there is actually an order in localStorage to show. */}
     <div class="rounded-lg border border-[var(--co-line)] bg-white p-6 text-center sm:p-10">
       <div id="ok-icon" class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--co-accent-weak)]">
         <svg viewBox="0 0 24 24" class="h-9 w-9 fill-none stroke-[var(--co-accent)]" stroke-width="2.5" aria-hidden="true">
@@ -19,24 +19,24 @@ const store = Astro.locals.store;
         </svg>
       </div>
       <h1 id="ok-title" class="mt-5 text-3xl font-semibold text-ink">Terima kasih! Pesanan kamu diterima</h1>
-      <!-- No email is sent (the platform has no mailer): the payment instruction is on THIS page,
+      {/* No email is sent (the platform has no mailer): the payment instruction is on THIS page,
            and the order number is what identifies the order to the merchant. Promising an email
-           that never arrives is how a paid-for order turns into a support ticket. -->
+           that never arrives is how a paid-for order turns into a support ticket. */}
       <p id="ok-sub" class="mt-2 text-[var(--co-muted)]">
         Simpan nomor pesanan di bawah — sebutkan saat menghubungi {store.name}.
       </p>
-      <!-- The order number comes from the order API (`orders.number`, e.g. WEB-…). If it is not
+      {/* The order number comes from the order API (`orders.number`, e.g. WEB-…). If it is not
            there, the row is HIDDEN. It is never invented — a made-up "INV-2026-4112" is a number
-           that exists in no system, and the shopper would quote it to a merchant who cannot find it. -->
+           that exists in no system, and the shopper would quote it to a merchant who cannot find it. */}
       <p id="order-number-row" class="mt-4 hidden items-center gap-2 rounded-full bg-[var(--co-accent-weak)] px-4 py-1.5 text-sm font-medium text-[var(--co-accent-hover)]">
         No. Pesanan: <span id="order-number" class="font-semibold tabular-nums"></span>
       </p>
     </div>
 
-    <!-- Payment instruction (VA / QRIS / e-wallet) -->
+    {/* Payment instruction (VA / QRIS / e-wallet) */}
     <div id="pay-instruction" class="mt-6 hidden"></div>
 
-    <!-- Order summary -->
+    {/* Order summary */}
     <div id="order-summary" class="mt-6"></div>
 
     <div id="order-note" class="mt-6 hidden rounded-lg border border-[var(--co-line)] bg-white p-5 text-sm sm:p-6"></div>

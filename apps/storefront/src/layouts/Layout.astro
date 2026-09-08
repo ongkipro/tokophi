@@ -109,10 +109,10 @@ const ogImage = (() => {
     {robots && <meta name="robots" content={robots} />}
     <link rel="canonical" href={canonical} />
 
-    <!-- Open Graph / Twitter. There were NONE — so every product link forwarded to a WhatsApp group
+    {/* Open Graph / Twitter. There were NONE — so every product link forwarded to a WhatsApp group
          (the cheapest acquisition channel these merchants have) landed as a bare grey URL: no photo,
          no name, no price. For an ad-landed fashion store that is the difference between a share that
-         converts and one nobody taps. -->
+         converts and one nobody taps. */}
     <meta property="og:type" content={type} />
     <meta property="og:site_name" content={store.name} />
     <meta property="og:locale" content="id_ID" />
@@ -141,14 +141,14 @@ const ogImage = (() => {
         otherwise only discover it after parsing the CSS. latin only — latin-ext is fetched on demand
         by unicode-range and preloading it would download 84 KB almost nobody needs. */}
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- ADR 0009 — merchant's design-token overrides (brand shades + chosen neutrals/display font,
-         stores.theme 0092). One shared injection site; see ThemeTokens.astro for the gating rule. -->
+    {/* ADR 0009 — merchant's design-token overrides (brand shades + chosen neutrals/display font,
+         stores.theme 0092). One shared injection site; see ThemeTokens.astro for the gating rule. */}
     <ThemeTokens />
-    <!-- Per-page <head> extras: JSON-LD, article:* tags. Server-built strings only. -->
+    {/* Per-page <head> extras: JSON-LD, article:* tags. Server-built strings only. */}
     {head && <Fragment set:html={head} />}
-    <!-- Funnel/device tracking → POST /api/track → analytics_events → admin /analitik. -->
+    {/* Funnel/device tracking → POST /api/track → analytics_events → admin /analitik. */}
     <Analytics />
-    <!-- Merchant's own marketing pixels (Meta/Google/TikTok), per store — Pemasaran → Pelacakan. -->
+    {/* Merchant's own marketing pixels (Meta/Google/TikTok), per store — Pemasaran → Pelacakan. */}
     <MarketingPixels />
     <ImageFallback />
   </head>
@@ -168,7 +168,7 @@ const ogImage = (() => {
     <Footer />
     {/* One palette per page — the header trigger, ⌘K and `/` all open this instance. */}
     <SearchPalette />
-    <!-- Obrolan — shopper ⇄ merchant chat. Mounted once here so the bubble is on every page. -->
+    {/* Obrolan — shopper ⇄ merchant chat. Mounted once here so the bubble is on every page. */}
     <Chat />
   </body>
 </html>

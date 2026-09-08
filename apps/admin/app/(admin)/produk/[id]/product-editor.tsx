@@ -373,10 +373,17 @@ export function ProductEditor({ product }: { product?: Product }) {
       toast.error("Nama produk wajib diisi");
       return;
     }
+    // Serialise ONCE, up front: it is both the payload and — on success — the new dirty baseline, so
+    // the guard drops for exactly what was accepted and stays up over whatever the merchant typed
+    // while the save was in flight. Set BEFORE the push: the `beforeunload` listener is torn down on
+    // the same render, and the push is what would otherwise race it.
+    const input = buildInput();
+    const snapshot = JSON.stringify(input);
     startTransition(async () => {
       try {
         if (isEdit && product) {
-          await updateProduct(product.id, buildInput());
+          await updateProduct(product.id, input);
+          setSavedSnapshot(snapshot);
           toast.success("Perubahan produk disimpan");
           router.push("/produk");
         } else {
@@ -387,7 +394,8 @@ export function ProductEditor({ product }: { product?: Product }) {
           // `createProduct` returns the catalog NUMBER as well as the uuid (ADR 0013) — the product
           // URL is the number, so pushing the uuid would bounce through the compatibility redirect and
           // flicker the URL on the happiest path in this module.
-          const created = await createProduct(buildInput());
+          const created = await createProduct(input);
+          setSavedSnapshot(snapshot);
           toast.success("Produk baru disimpan — foto bisa ditambahkan sekarang");
           router.push(`/produk/${created.number}`);
         }
@@ -513,6 +521,28 @@ export function ProductEditor({ product }: { product?: Product }) {
   // is the condition to disable on, not `hasVariants`.
   const useVariantRows = hasVariants && parsedOptions.length > 0 && combos.length > 0;
   const variantAt = (key: string) => variantMap[key] ?? { price, stock: "0", sku: "" };
+
+  // ---- unsaved-changes guard (Task 5.6 / F-C9) ----
+  // `dirty` is DERIVED from what the save would persist — `buildInput()` serialised — against a
+  // snapshot of the same thing, taken at mount and re-taken only when a save is ACCEPTED. Not a
+  // "set on any onChange" flag: that reads dirty after typing a trailing space the payload trims,
+  // stays dirty after the merchant undoes an edit by hand, and needs clearing at every save site.
+  // A failed save leaves the snapshot alone, so the guard stays up for free. Same shape as the
+  // theme builder (`tema/[id]/builder-client.tsx`): native `beforeunload` for the tab, a
+  // `window.confirm` on this screen's own links back to /produk. Sidebar navigation is not
+  // intercepted — there is no app-wide route guard in this repo, and building one is not this task.
+  const currentSnapshot = JSON.stringify(buildInput());
+  const [savedSnapshot, setSavedSnapshot] = React.useState(currentSnapshot);
+  const dirty = currentSnapshot !== savedSnapshot;
+  React.useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  const confirmLeave = (e: React.MouseEvent) => {
+    if (dirty && !window.confirm("Ada perubahan yang belum disimpan. Tinggalkan halaman ini?")) e.preventDefault();
+  };
   const setVariantField = (key: string, field: "price" | "stock" | "sku", val: string) =>
     setVariantMap((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { price, stock: "0", sku: "" }), [field]: val } }));
 
@@ -558,14 +588,14 @@ export function ProductEditor({ product }: { product?: Product }) {
             variant="ghost"
             size="icon-sm"
             nativeButton={false}
-            render={<Link href="/produk" />}
+            render={<Link href="/produk" onClick={confirmLeave} />}
             aria-label="Kembali ke Produk"
           >
             <ChevronLeft />
           </Button>
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground">
-              <Link href="/produk" className="hover:underline">
+              <Link href="/produk" className="hover:underline" onClick={confirmLeave}>
                 Produk
               </Link>
             </p>
@@ -623,7 +653,7 @@ export function ProductEditor({ product }: { product?: Product }) {
               Hapus produk
             </Button>
           )}
-          <Button variant="ghost" nativeButton={false} render={<Link href="/produk" />}>
+          <Button variant="ghost" nativeButton={false} render={<Link href="/produk" onClick={confirmLeave} />}>
             Batal
           </Button>
           {canWrite && (

@@ -3,9 +3,8 @@ import { db, schema } from "@tokophi/db";
 import { and, count, desc, eq, ilike, sql } from "drizzle-orm";
 import { likeContains } from "@tokophi/lib/like";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
-import { withTenant } from "@/lib/tenant";
+import { withCurrentTenant, withTenant } from "@/lib/tenant";
 import { saveImage, checkFile, deleteImageFile } from "@/lib/image-store";
 
 // ---- product images (product_media + registered in the media library) ----
@@ -73,10 +72,13 @@ export async function deleteProductImage(mediaId: string, productId: string): Pr
 
 // ---- media library (Files) ----
 export type MediaItem = { id: string; url: string; filename: string; mime: string; sizeBytes: number; width: number | null; height: number | null; createdAt: Date };
+// Reads run under RLS like every other tenant read (page-map AD-2): `withCurrentTenant` drops to
+// `tokophi_app` with the session's store in the GUC. The `storeId` WHERE stays — RLS is the net, the
+// WHERE is the rule. No session ⇒ the nil store id ⇒ zero rows, which is the old `[]` answer.
 export async function getMedia(): Promise<MediaItem[]> {
-  const session = await getSession();
-  if (!session) return [];
-  return db.select().from(schema.media).where(eq(schema.media.storeId, session.storeId)).orderBy(desc(schema.media.createdAt));
+  return withCurrentTenant(async (db, storeId) =>
+    db.select().from(schema.media).where(eq(schema.media.storeId, storeId)).orderBy(desc(schema.media.createdAt)),
+  );
 }
 
 // Paged read for the Store Builder image picker (owner request 2026-08-24): the picker used to pull
@@ -89,19 +91,19 @@ export async function getMediaPage(opts: { offset: number; limit: number; q?: st
   items: MediaItem[];
   total: number;
 }> {
-  const session = await getSession();
-  if (!session) return { items: [], total: 0 };
   const limit = Math.min(Math.max(1, opts.limit), 60);
   const offset = Math.max(0, opts.offset);
   const q = opts.q?.trim();
-  const where = q
-    ? and(eq(schema.media.storeId, session.storeId), ilike(schema.media.filename, likeContains(q)))
-    : eq(schema.media.storeId, session.storeId);
-  const [items, [{ n }]] = await Promise.all([
-    db.select().from(schema.media).where(where).orderBy(desc(schema.media.createdAt)).limit(limit).offset(offset),
-    db.select({ n: count() }).from(schema.media).where(where),
-  ]);
-  return { items, total: Number(n) };
+  return withCurrentTenant(async (db, storeId) => {
+    const where = q
+      ? and(eq(schema.media.storeId, storeId), ilike(schema.media.filename, likeContains(q)))
+      : eq(schema.media.storeId, storeId);
+    const [items, [{ n }]] = await Promise.all([
+      db.select().from(schema.media).where(where).orderBy(desc(schema.media.createdAt)).limit(limit).offset(offset),
+      db.select({ n: count() }).from(schema.media).where(where),
+    ]);
+    return { items, total: Number(n) };
+  });
 }
 
 export async function uploadMedia(formData: FormData): Promise<{ ok: boolean; url?: string; error?: string }> {

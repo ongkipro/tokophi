@@ -1,7 +1,9 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
+import { kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
+import { cached } from "@tokophi/lib/cache";
+import { classifyKaProbe, type KaProbe } from "./ka-probe";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import { likeContains } from "@tokophi/lib/like";
@@ -383,9 +385,40 @@ export const kaEnvName = () => process.env.KIRIMINAJA_ENV ?? "sandbox";
  */
 export type CronRunRow = { job: string; lastRunAt: Date; intervalSec: number | null; ok: boolean; result: unknown };
 
+// ── Task 8.3: KiriminAja HEALTH, not key presence ────────────────────────────────────────────────
+//
+// `SystemStatus.kiriminaja` was `kiriminajaConfigured()` — the env key is non-empty. It read green
+// for the whole of 2026-09-07 while the sandbox answered 401 (IP allow-list lapsed) and every quote
+// on every checkout failed; only a container log said so. The tile now reads a LIVE probe of the
+// province endpoint (free), cached in-process for five minutes so a page render costs at most one
+// vendor call per replica per interval — and a FAILED probe is cached too, or an outage would turn
+// every Pengaturan/Analitik render into a fresh 4-second stall. The manual "Test koneksi" button
+// calls `kaTestConnection` directly and therefore bypasses this cache on purpose.
+//
+// The timeout races the vendor call: `ka()` already aborts at 8 s, but a page must not wait that
+// long for a status badge. The loser is abandoned, not cancelled — it holds no resource but a socket.
+const KA_PROBE_TTL_MS = 5 * 60_000;
+const KA_PROBE_TIMEOUT_MS = 4_000;
+
+export async function getKiriminajaProbe(): Promise<KaProbe> {
+  return cached("ka:probe", KA_PROBE_TTL_MS, async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<KaTestResult>((resolve) => {
+      timer = setTimeout(
+        () => resolve({ ok: false, env: kaEnvName(), configured: true, message: `Tidak ada jawaban dari KiriminAja dalam ${KA_PROBE_TIMEOUT_MS / 1000} detik.` }),
+        KA_PROBE_TIMEOUT_MS,
+      );
+    });
+    const r = await Promise.race([kaTestConnection(), timeout]).finally(() => clearTimeout(timer));
+    return { ...classifyKaProbe(r), probedAt: Date.now() };
+  });
+}
+
 // Platform system + integration status.
-export type SystemStatus ={ kiriminaja: boolean; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string; crons: CronRunRow[] };
+export type SystemStatus = { kiriminaja: boolean; kiriminajaProbe: KaProbe; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string; crons: CronRunRow[] };
 export async function getSystemStatus(): Promise<SystemStatus> {
+  // Kicked off first so the vendor round-trip overlaps the DB reads below.
+  const probe = getKiriminajaProbe();
   let stores = 0;
   let dbOk = true;
   try {
@@ -411,8 +444,11 @@ export async function getSystemStatus(): Promise<SystemStatus> {
   } catch (err) {
     console.error("[super-admin] cron_runs unreadable", err);
   }
+  const kiriminajaProbe = await probe;
   return {
-    kiriminaja: kiriminajaConfigured(),
+    // Green means the vendor ANSWERED and said yes — never "a key exists". Pinned by `ka-probe.test.ts`.
+    kiriminaja: kiriminajaProbe.state === "ok",
+    kiriminajaProbe,
     autolaris: autolarisConfigured(),
     kaEnv: kaEnvName(),
     stores,

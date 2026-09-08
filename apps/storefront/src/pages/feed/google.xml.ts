@@ -3,19 +3,19 @@
 // serves both. TikTok needs its own (`sku_id`, a 3-level category cap) — `/feed/tiktok.xml`, same
 // builder, different profile.
 //
-// Per-tenant: the store is resolved from the Host header, like every storefront route.
+// Per-tenant: the store, catalog and canonical origin come from `locals` (src/middleware.ts).
 import type { APIRoute } from "astro";
-import { getStoreByHost } from "../../data/store";
-import { getCatalog } from "../../data/catalog";
 import { feedDocument, feedItems, PROFILES } from "../../lib/product-feed";
 import type { CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 
-export const GET: APIRoute = async ({ request }) => {
-  const host = request.headers.get("host");
-  const store = await getStoreByHost(host);
-  if (!store) return new Response("Store not found", { status: 404 });
-  const origin = `https://${host}`;
-  const catalog = await getCatalog(store);
+export const GET: APIRoute = async ({ locals }) => {
+  // The tenant, its catalog and its PRIMARY origin all come from the middleware, exactly as
+  // `sitemap.xml.ts` takes them. This used to re-resolve the store from the raw `Host` and build the
+  // origin as `https://${host}` — which ignored `x-forwarded-*` and the store's primary custom domain,
+  // so under a custom domain the feed's `<link>`s named `<slug>.tokophi.com` while every canonical
+  // named the custom domain: two origins for one catalogue, and Meta/Google/TikTok match on URL
+  // (page-map finding SF-1). `locals.origin` is `primaryOrigin(store, …)`; there is one producer.
+  const { store, catalog, origin } = locals;
   const scheme = (store.catalogIdScheme === "number" ? "number" : "handle") as CatalogIdScheme;
 
   const items = catalog.products.flatMap((p) =>

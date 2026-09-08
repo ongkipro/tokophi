@@ -22,6 +22,7 @@ import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import { getArticle, getArticles, formatDate, readMinutes } from "../../data/content";
+import { mediaUrl } from "../../data/catalog";
 
 const { store, catalog } = Astro.locals;
 const { handle } = Astro.params;
@@ -81,7 +82,10 @@ const articleLd: Record<string, unknown> = {
   publisher: {
     "@type": "Organization",
     name: store.name,
-    ...(store.logoUrl ? { logo: { "@type": "ImageObject", url: abs(store.logoUrl) } } : {}),
+    // `mediaUrl()` first: `store.logoUrl` is the ADMIN app's `/api/uploads/<name>`, so absolutising it
+    // against the storefront origin published a 404 in every article's schema (SF-3). Same rule, same
+    // helper as the og:image in Layout.astro and the LOGO in index.astro — `abs()` alone was wrong.
+    ...(store.logoUrl ? { logo: { "@type": "ImageObject", url: abs(mediaUrl(store.logoUrl)) } } : {}),
   },
 };
 if (article.excerpt.trim()) articleLd.description = article.excerpt.trim();
@@ -93,12 +97,12 @@ if (article.blog) articleLd.articleSection = article.blog;
 const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 ---
 
-<!-- ⚠️ The comment that used to sit here said "Layout emits no OG/Twitter tags at all today, so an
+{/* ⚠️ The comment that used to sit here said "Layout emits no OG/Twitter tags at all today, so an
      article's imageUrl has nowhere to go" — and it had been FALSE since Layout gained the full og:/
      twitter: set (Layout.astro). The comment outlived the fact and then justified the gap it described:
      every article shared to WhatsApp — the cheapest channel these merchants have — showed the store
      LOGO instead of the article's own hero photo. `type="article"` for the same reason: it was
-     defaulting to "website" on a page that is unambiguously an article. -->
+     defaulting to "website" on a page that is unambiguously an article. */}
 <Layout
   title={article.seoTitle || article.title}
   description={article.seoDesc || article.excerpt}
@@ -109,8 +113,8 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
   <article class="mx-auto max-w-2xl px-4 pb-4 pt-10 sm:px-6 sm:pt-14">
     <Breadcrumb items={CRUMBS} class="mb-6" />
 
-    <!-- Topic chip. Medium shows several tags; we have exactly one axis that is real — the blog the
-         article belongs to (Berita Toko / Tips & Panduan). -->
+    {/* Topic chip. Medium shows several tags; we have exactly one axis that is real — the blog the
+         article belongs to (Berita Toko / Tips & Panduan). */}
     <div class="flex flex-wrap items-center gap-2 text-sm">
       <a
         href="/blog"
@@ -120,9 +124,9 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       </a>
     </div>
 
-    <!-- Medium's 42px works on a geometric sans; our `font-display` is a high-contrast serif, which
+    {/* Medium's 42px works on a geometric sans; our `font-display` is a high-contrast serif, which
          reads noticeably heavier at the same size. Dialled back to 28/36px, and to `semibold` — the
-         title should lead the page, not shout over the subtitle it sits above. -->
+         title should lead the page, not shout over the subtitle it sits above. */}
     <h1 class="mt-5 font-display text-[1.75rem] font-semibold leading-[1.2] text-balance text-ink sm:text-[2.25rem]">
       {article.title}
     </h1>
@@ -133,7 +137,7 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       )
     }
 
-    <!-- Author row -->
+    {/* Author row */}
     <div class="mt-8 flex items-center gap-3">
       <span
         class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-lg font-semibold text-brand-700"
@@ -159,11 +163,11 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       </div>
     </div>
 
-    <!-- Action bar. Hairline top + bottom, exactly where Medium puts the clap/share row.
+    {/* Action bar. Hairline top + bottom, exactly where Medium puts the clap/share row.
          The left slot used to hold a "← Jurnal" back-link; the breadcrumb at the top of the page now
          does that job, and the slot is a label instead. That is not cosmetic: the share buttons grew
          from 36px to 44px tap targets, and back-link + five 44px targets overflowed a 320px viewport.
-         Share markup itself lives in components/ShareBar.astro — the PDP renders the same one. -->
+         Share markup itself lives in components/ShareBar.astro — the PDP renders the same one. */}
     <div class="mt-8 flex items-center justify-between border-y border-line py-2.5">
       <span class="text-sm text-muted">Bagikan</span>
       <ShareBar
@@ -174,13 +178,13 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     </div>
   </article>
 
-  <!-- Feature image — LOCKED 3:2. The ratio is fixed, not the photo's: merchant art comes in every
+  {/* Feature image — LOCKED 3:2. The ratio is fixed, not the photo's: merchant art comes in every
        shape (our seed reuses portrait product shots), and letting each article set the page's rhythm
        makes the Jurnal look broken. object-cover crops to the frame; a missing image renders no
        frame at all rather than an empty box.
        Nearly square corners and NO shadow: in an editorial layout the photo is content, not a card.
        A raised, heavily-rounded frame reads as UI chrome and competes with the text — which is the
-       one thing this page exists to get out of the way of. -->
+       one thing this page exists to get out of the way of. */}
   {
     article.imageUrl && (
       <figure class="mx-auto mt-8 max-w-4xl px-4 sm:px-6">
@@ -211,13 +215,13 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     }
   </div>
 
-  <!-- Promoted products. Sits between the body and "Baca juga" ON PURPOSE: a reader who finished the
+  {/* Promoted products. Sits between the body and "Baca juga" ON PURPOSE: a reader who finished the
        article is at peak intent, and the next thing they meet should be something to buy — "Baca
        juga" pulls them back into reading, so it goes after.
        Labelled "Dari koleksi kami", NOT "Bersponsor": these are the merchant's OWN products. In
        Indonesian, "bersponsor" signals a PAID third-party placement — using it for a store's own
        goods would be an ad-disclosure lie, and if TokoΦ ever sells real placements the word has to
-       still mean something. -->
+       still mean something. */}
   {
     promoted.length > 0 && (
       <section class="border-t border-line">
@@ -259,9 +263,9 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <SectionHeading title="Baca juga" />
           <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3">
             {others.map((a) => (
-              <!-- Editorial, not card-chrome: the same restraint as the feature image (flat, barely
+              /* Editorial, not card-chrome: the same restraint as the feature image (flat, barely
                    rounded, no shadow). The article page is the one place the shop's card language
-                   would fight the reading. -->
+                   would fight the reading. */
               <a
                 href={`/blog/${a.handle}`}
                 class="group flex flex-col overflow-hidden rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"

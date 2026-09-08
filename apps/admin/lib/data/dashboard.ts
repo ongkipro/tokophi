@@ -4,7 +4,7 @@
 import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel";
 import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
-import type { CourierReturns } from "@/lib/data/returns";
+import type { CourierReturns, ReturnsByCourier } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
 
 export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "month" | "lastmonth";
@@ -405,6 +405,8 @@ export type ReturnSummary = {
   nonCodReturned: number;
   nonCodRate: number;
   byCourier: CourierReturns[];
+  /** Shipped orders with no courier — in none of the rates above; the card names the count. */
+  unattributed: number;
 };
 
 /**
@@ -413,7 +415,7 @@ export type ReturnSummary = {
  * orders that actually SHIPPED (dikirim | selesai | retur); an order still in `baru`/`diproses`
  * never had the chance to be refused and counting it would flatter the rate.
  */
-export function getReturnSummary(rows: CourierReturns[]): ReturnSummary {
+export function getReturnSummary({ byCourier: rows, unattributed }: ReturnsByCourier): ReturnSummary {
   const add = (k: keyof CourierReturns) => rows.reduce((a, r) => a + (r[k] as number), 0);
   const shipped = add("shipped");
   const returned = add("returned");
@@ -432,6 +434,7 @@ export function getReturnSummary(rows: CourierReturns[]): ReturnSummary {
     nonCodReturned,
     nonCodRate: nonCodShipped ? nonCodReturned / nonCodShipped : 0,
     byCourier: [...rows].sort((a, b) => b.returned - a.returned || b.shipped - a.shipped),
+    unattributed,
   };
 }
 

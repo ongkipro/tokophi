@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia UI, IDR. **Empat** surface (admin/Seller · super-admin · storefront · landing), satu monorepo, satu PostgreSQL. **Single-plan billing** (Rp275rb/mo + PPN 11%), all features unlocked. Provider brands (KiriminAja/AutoLaris) hidden from clients (white-label).
+TokoΦ is a **Shopify-style commerce SaaS for Indonesia** — Bahasa Indonesia UI, IDR. **Empat** surface (admin/Seller · super-admin · storefront · landing), satu monorepo, satu PostgreSQL. **Single-plan billing** (3-day trial → Rp50rb first month → Rp275rb/mo, prices ex-tax; PPN 11% only when the global `platform_finance.subscription_ppn_enabled` toggle is ON — default OFF, `0101`), all features unlocked. Provider brands (KiriminAja/AutoLaris) hidden from clients (white-label).
 
 | Surface | Package | Stack | Who uses it | Port (dev) |
 |---|---|---|---|---|
@@ -90,21 +90,24 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 | Route | Renders | Reads (`lib/data.ts`) | Writes (`lib/actions.ts`) |
 |---|---|---|---|
-| `/` | Dashboard: platform KPIs, MRR chart, health rollup, activity | `getPlatform`,`getMrrSeries`,`getSubscriptionStats`,`getInvoices`,`getActivity` | — |
-| `/toko` | Store catalog — 4 segment tabs, 1-line summaries | `getStores`,`getHealthMap` | `createStore`,`setStoreStatus`,`setStoreComped` |
-| `/toko/[id]` | Store detail — full control panel | `getStoreById`,`getStoreHealth`,`getStoreBilling`,`getStoreInvoices`,`getStoreUsers`,`getStoreActivity`,`getStoreComp` | `impersonateStore`, `compStore`, `extendTrial`, `setStoreComped`, `resetOwnerPassword`, `add/remove/setStoreUserRole/resetStoreUserPassword`, `createManualInvoice`, `sendPaymentReminder` |
-| `/paket` | Billing — single-plan card + invoices | `getFinanceStats`,`getSubscriptionStats`,`getInvoices` | `setInvoiceStatus` |
+| `/` | Dashboard: platform KPIs, revenue chart, status distribution, risk queue, approvals, activity | `getPlatform`,`getRevenueSeries`,`getSubscriptionStats`,`getStatusDistribution`,`getInvoices`,`getActivity`,`getPlatformFloat`,`getRiskQueue`,`getConversion`,`getFinanceStats`,`getPendingApprovals` | — |
+| `/toko` | Store catalog — segment tabs (Semua/Trial/Aktif/VIP/Menunggak/Ditangguhkan) + health filter | `getStores`,`getHealthMap` | `createStore`,`impersonateStore`,`liftSuspension`,`setStoreComped`,`approveStore` (`setStoreStatus` is gone — suspension is `suspendStore`/`liftSuspension` on `stores.suspended_at`, 0086) |
+| `/toko/[id]` | Store detail — full control panel + Saldo & transaksi | `getStoreById`,`getStoreHealth`,`getStoreBilling`,`getStoreInvoices`,`getStoreUsers`,`getStoreActivity`,`getStoreBalance`,`getStoreMovements`,`getStorePayouts`,`getStoreMoneySignals` | `impersonateStore`, `suspendStore`/`liftSuspension`, `approveStore`, `compStore`, `extendTrial`, `setStoreComped`, `resetOwnerPassword`, `add/remove/setStoreUserRole/resetStoreUserPassword`, `createManualInvoice`, `sendPaymentReminder` |
+| `/paket` | Billing — single-plan card + invoices | `getFinanceStats`,`getSubscriptionStats`,`getConversion`,`getInvoices` | `setInvoiceStatus` (bookkeeping only — never moves `current_period_end`) |
+| **`/pencairan`** | Payout queue (every store's withdrawals) | `getPayouts`,`getPayoutSummary`,`getPayoutPolicy` | `processPayout`,`markPayoutPaid` (CAS on `diproses`),`rejectPayout`,`savePayoutPolicy` |
 | **`/tiket`** (+`/[id]`) | Support tickets (all stores) | `getAllTickets`,`getTicketAdmin` | `replyTicketAdmin`,`setTicketStatus` |
-| `/analitik` | Keuangan & Analitik + realtime server metrics | `getFinanceStats`,`getSystemStatus`,`getServerMetrics` | — |
-| `/pengaturan` | Platform config: payment channels (grouped) + couriers + team | `getPaymentChannels/Gateways`,`getCouriers`,`getAggregator`,`getPlatformAdmins` | `syncPaymentChannels`,`save*`,`test*Connection`,`invitePlatformAdmin` |
+| `/analitik` | Keuangan & Analitik + realtime server metrics | `getFinanceStats`,`getSubscriptionStats`,`getSystemStatus`,`getServerMetrics`,`getGmvByCity`,`getPlatformFloat`,`getConversion`,`getCourierCostAbsorbed` | — |
+| `/pengaturan` | Platform config: payment channels + gateways + couriers/COD + finance (PPN toggle) + operators | `getPaymentChannels/Gateways`,`getCouriers`,`getAggregator`,`getPlatformAdmins`,`getPlatformFinance` | `syncPaymentChannels`,`save*`,`saveCodAllowed`,`syncCouriersFromKiriminaja`,`test*Connection` (⚠️ AutoLaris test creates a real Rp10.000 QRIS bill),`setSubscriptionPpn`,`invitePlatformAdmin`,`resetPlatformAdminPassword` |
+| **`/log-sistem`** | Audit log over `platform_activity`, filtered + paged in SQL (2026-09-04, #381) | `getActivityLog`,`getStoreOptions` | — |
+| `/update-log` | Release notes for operators — in-code list, no table | `lib/data/dev-logs.ts` (static) | — |
 
-**Auth:** `lib/platform-auth.ts` (`requirePlatformAdmin`), `lib/session.ts` (impersonation token signing), `lib/health.ts` (store healthcheck). Cross-tenant reads on the **owner** connection.
+**Auth:** `lib/platform-auth.ts` (`platformGate(min)` — first statement of every mutation, 34 call sites; `platformRouteGate(path)` — first await of every page, floors in `lib/route-roles.ts`), `lib/platform-session.ts` (pure session resolution — row re-read every request), `lib/health.ts` (store healthcheck). Impersonation is a one-time opaque grant (`impersonation_grants`, 0098) consumed by the admin's `/impersonate`; ⚠️ `lib/session.ts` (the old cookie-minting helper) has **no callers left** as of 2026-09-07 — dead code, candidate for deletion. Cross-tenant reads on the **owner** connection.
 
 ---
 
 ## 6. Code mapping — storefront (Astro)
 
-`/` · `/produk/[handle]` · `/kategori/[handle]` · `/keranjang` · `/checkout`(+`/sukses`) · `/blog` · `/akun` · `/kontak`. **SSR** (`@astrojs/node` standalone, `output: 'server'`): reads the DB via `@tokophi/db` at **server boot** (module-level in `src/data/catalog.ts`), so the container starts fast (no build-at-start). Dynamic routes resolve per-request from `Astro.params` (404 on unknown handle) — no `getStaticPaths`. Ongkir + order + pay proxied to the admin's public APIs (`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`). Store Builder sections render from `page_templates.sections`.
+`/` · `/produk` · `/produk/[handle]` · `/kategori` · `/kategori/[handle]` · `/cari` · `/promo` · `/promo/[handle]` · `/lp/[slug]` · `/keranjang` · `/checkout`(+`/sukses`) · `/thanks` · `/blog` · `/blog/[handle]` · `/halaman/[handle]` · `/kontak` (there is **no `/akun`** — buying never requires an account; full list in `PAGE_MAP.md`). **SSR** (`@astrojs/node` standalone, `output: 'server'`): reads the DB via `@tokophi/db` at **server boot** (module-level in `src/data/catalog.ts`), so the container starts fast (no build-at-start). Dynamic routes resolve per-request from `Astro.params` (404 on unknown handle) — no `getStaticPaths`. Ongkir + order + pay proxied to the admin's public APIs (`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`). Store Builder sections render from `page_templates.sections`.
 
 **Its own two API routes — the storefront's only writes**, both tenant-resolved from the `Host` header (`Astro.locals.store`), never from the body, and both **fail quiet** (204 + an `x-…` reason header) because a broken beacon must never break a working page:
 
@@ -131,9 +134,9 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 7. Data mapping (schema domains → SCHEMA.md)
 
-**80 tables** (diukur ulang 2026-08-12 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls` — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments, immutable order finance, shipment bookings) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform**.
+**82 tables** (diukur ulang 2026-09-07 — `grep -c 'pgTable(' packages/db/src/schema.ts`; angka 80 di sini sebelumnya dari 2026-08-12 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls` — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments, immutable order finance, shipment bookings) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform**.
 
-**RLS** (`0012`) on **52 of 53** store-scoped tables, enforced under `tokophi_app`; the deliberate exception is `platform_activity`. Owner exceptions: auth, super-admin, storefront, `/api/public/*`, cron.
+**RLS** (`0012`) on **54 of 55** store-scoped tables (keluaran `npm run verify-rls -w @tokophi/db` 2026-09-07 — angka ini DERIVED, jalankan verifier, jangan percaya kalimat ini), enforced under `tokophi_app`; the deliberate exception is `platform_activity`. 11 child tables without `store_id` (was 12 — `inventory_levels` gained a direct policy in `0100`). Owner exceptions: auth, super-admin, storefront, `/api/public/*`, cron.
 
 ---
 

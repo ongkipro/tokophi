@@ -2,6 +2,27 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## Unreleased — 2026-09-08 — Sweep: peta pengembangan 1:1 dengan kode, 14 task terbuka dieksekusi
+
+- **Dokumen jadi benar lagi.** Root `TASKS.md` punya baris Status di tiap task (19 sebelumnya tanpa) + 17 task
+  baru (Stage 8 Operasi: uptime eksternal, saldo Vultr, sinyal KiriminAja, backup offsite). `specs/docs/TASKS.md`
+  22 item epic dikoreksi (lima "epic super-admin" yang sebenarnya sudah lama jadi), `OPEN.md` ditulis ulang dari
+  Status (P0 13/13, P1 12, P2 6), tabel N36–N43 dipulihkan, `UI_INVENTORY` tidak lagi menyebut "mock", scaffold
+  root (`STATUS/ARCHITECTURE/DECISIONS/OBSERVABILITY/RELEASE.md`) diisi dari fakta disk, runbook 522 + KiriminAja
+  401 di `DEPLOY.md`, insiden 70 jam di `SLA-DRP.md`.
+- **Seller.** Konfirmasi sebelum hapus di 14 layar (satu `ConfirmDelete`, isi dialog menyebut apa yang benar-benar
+  terjadi; bulk produk "Hapus" → "Arsipkan"). Penjaga perubahan belum tersimpan di editor produk. Retur per kurir
+  jujur: order tanpa kurir dihitung terpisah, tidak lagi jadi kurir "Tidak diketahui". `isUuid` di delapan halaman
+  `[id]` (500 → 404). Inisial `BN` yang hard-coded dan fallback nama owner seed dihapus. Media dibaca di bawah RLS.
+- **Super Admin.** Tile KiriminAja membaca probe hidup (Terhubung / Ditolak + kalimat vendor / Tidak terjangkau /
+  Belum dikonfigurasi), cache 5 menit, timeout 4 detik — selama insiden 09-07 ia hijau di atas 401.
+- **Storefront.** Pencarian kecamatan punya state mencari / tidak ditemukan / gagal / timeout 10 detik + penjaga
+  respons basi; origin feed Google/TikTok ikut `locals.origin` (domain custom benar) dengan check baru;
+  `chat/read` di-rate-limit; 82 komentar HTML tidak lagi disajikan ke browser; logo JSON-LD blog via `mediaUrl`.
+- **Rilis & CI.** `npm run test:release` (bukti rilis, bukan cek offline); job build CI untuk admin, super-admin,
+  landing; `packageManager` npm dan tiga lockfile sisa dihapus; tes siklus commerce end-to-end di Postgres nyata
+  (order → callback → ledger → status → payout → retur, di bawah role tenant).
+
 ## Unreleased — 2026-09-04 — Log Sistem: audit log platform akhirnya punya layar
 
 - **Super Admin → Log Sistem** (`/log-sistem`, rank minimum `admin`): seluruh `platform_activity`,

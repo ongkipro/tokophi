@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { useCan } from "@/components/admin/permissions";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { FormFieldsCard } from "@/components/admin/form-fields-card";
 import { saveLanding, deleteLanding } from "@/lib/actions/landing";
 import type { LandingEditor } from "@/lib/data/landing";
@@ -29,6 +30,7 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
   const canEditHtml = useCan("landing:html");
   const [saving, startSave] = React.useTransition();
   const [deleting, startDelete] = React.useTransition();
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
   const [f, setF] = React.useState({
@@ -57,20 +59,24 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
     });
   }
 
-  function remove() {
+  const remove = () => {
     if (!editor.id) return;
     startDelete(async () => {
-      // The other half of `deleteLanding`'s return type. Navigating away on a delete that matched
-      // nothing is the failure that conversion exists to stop — same shape as `save()` above.
-      const res = await deleteLanding(editor.id!);
-      if (!res.ok) {
-        toast.error(res.error ?? "Gagal menghapus");
-        return;
+      try {
+        // The other half of `deleteLanding`'s return type. Navigating away on a delete that matched
+        // nothing is the failure that conversion exists to stop — same shape as `save()` above.
+        const res = await deleteLanding(editor.id!);
+        if (!res.ok) {
+          toast.error(res.error ?? "Gagal menghapus");
+          return;
+        }
+        toast.success("Landing dihapus");
+        router.push("/promo");
+      } finally {
+        setConfirmOpen(false);
       }
-      toast.success("Landing dihapus");
-      router.push("/promo");
     });
-  }
+  };
 
   function copyLink() {
     if (!editor.shareUrl) return;
@@ -211,11 +217,23 @@ export function LandingEditorClient({ editor }: { editor: LandingEditor }) {
 
       <div className="flex items-center justify-between gap-2">
         {editor.id ? (
-          <Button variant="outline" onClick={remove} disabled={!canWrite || deleting} className="text-rose-600 hover:text-rose-700">
+          <Button variant="outline" onClick={() => setConfirmOpen(true)} disabled={!canWrite || deleting} className="text-rose-600 hover:text-rose-700">
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         ) : (
           <span />
+        )}
+        {/* `deleteLanding` is a hard DELETE of the landing row — its public URL goes 404 at once, and
+            any ad still pointing there lands on nothing. Orders it already produced are untouched. */}
+        {editor.id && (
+          <ConfirmDelete
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            title="Hapus landing?"
+            description={`Landing "${editor.slug}" dihapus permanen. Tautannya langsung 404 — iklan yang masih mengarah ke sini akan mendarat di halaman kosong. Pesanan yang sudah masuk lewat landing ini tidak terpengaruh.`}
+            onConfirm={remove}
+            pending={deleting}
+          />
         )}
         <div className="flex gap-2">
           <Button variant="outline" nativeButton={false} render={<Link href="/promo" />}>

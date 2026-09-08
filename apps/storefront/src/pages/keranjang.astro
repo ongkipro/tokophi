@@ -35,12 +35,12 @@ const CRUMBS: Crumb[] = [
 ];
 ---
 
-<!-- `noindex,follow` — this was asymmetric with /checkout, which has carried it since day one. The cart
+{/* `noindex,follow` — this was asymmetric with /checkout, which has carried it since day one. The cart
      is per-shopper and empty for a crawler: there is nothing here worth a SERP slot. robots.txt already
      disallows /keranjang, but that is NOT the same guarantee and is in some ways weaker — a disallowed
      URL can still be indexed URL-only from an inbound link, and the crawler that is forbidden from
      fetching it can never read the `noindex` that would have kept it out. `follow`, so the links out of
-     an abandoned-cart share still pass to the catalogue. -->
+     an abandoned-cart share still pass to the catalogue. */}
 <Layout
   title="Keranjang"
   description={`Keranjang belanja di ${store.name}.`}
@@ -60,7 +60,7 @@ const CRUMBS: Crumb[] = [
       </a>
     </div>
 
-    <!-- Empty state -->
+    {/* Empty state */}
     <div
       id="cart-empty"
       hidden
@@ -77,11 +77,11 @@ const CRUMBS: Crumb[] = [
       </a>
     </div>
 
-    <!-- Cart body -->
+    {/* Cart body */}
     <div id="cart-body" hidden class="mt-8 grid gap-8 lg:grid-cols-[1fr_21rem] lg:items-start">
       <div class="rounded-2xl border border-line bg-white">
-        <!-- Column headers: desktop only. On a phone each row is a card, and headers for a
-             one-column list are noise. -->
+        {/* Column headers: desktop only. On a phone each row is a card, and headers for a
+             one-column list are noise. */}
         <div
           class="hidden grid-cols-[1fr_auto_7rem] gap-4 border-b border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted sm:grid"
         >
@@ -92,8 +92,8 @@ const CRUMBS: Crumb[] = [
         <div id="cart-items"></div>
       </div>
 
-      <!-- Order summary. `sticky` is the point of the two-column layout: on a long cart the
-           checkout button must never scroll out of reach. -->
+      {/* Order summary. `sticky` is the point of the two-column layout: on a long cart the
+           checkout button must never scroll out of reach. */}
       <aside class="rounded-2xl border border-line bg-white p-5 lg:sticky lg:top-24">
         <h2 class="font-display text-lg font-semibold text-ink">Ringkasan pesanan</h2>
 
@@ -104,8 +104,8 @@ const CRUMBS: Crumb[] = [
           </div>
           <div class="flex items-center justify-between">
             <dt class="text-muted">Ongkos kirim</dt>
-            <!-- Honest: ongkir is a live courier quote keyed on the destination (KiriminAja), so it
-                 genuinely cannot be known until the address is entered. Say that, don't show "Rp0". -->
+            {/* Honest: ongkir is a live courier quote keyed on the destination (KiriminAja), so it
+                 genuinely cannot be known until the address is entered. Say that, don't show "Rp0". */}
             <dd class="text-muted">Dihitung saat checkout</dd>
           </div>
         </dl>
@@ -155,8 +155,8 @@ const CRUMBS: Crumb[] = [
     </div>
   </section>
 
-  <!-- Recommendations. Shown whether the cart is full or empty: an empty cart is exactly when a
-       shopper most needs somewhere to go. -->
+  {/* Recommendations. Shown whether the cart is full or empty: an empty cart is exactly when a
+       shopper most needs somewhere to go. */}
   {
     recommended.length > 0 && (
       <section class="border-t border-line">

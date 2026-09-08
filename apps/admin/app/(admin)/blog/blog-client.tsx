@@ -16,6 +16,7 @@ import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteArticle } from "@/lib/actions/articles";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import type { BlogPost } from "@/lib/mock/store";
 
 import { Card, CardContent } from "@tokophi/ui/card";
@@ -54,6 +55,7 @@ function RowActions({ id }: { id: string }) {
   const canWrite = useCan("content:write");
   const router = useRouter();
   const [pending, start] = React.useTransition();
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -62,9 +64,12 @@ function RowActions({ id }: { id: string }) {
         router.refresh();
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         render={<Button variant="ghost" size="icon-sm" aria-label="Aksi artikel" />}
@@ -78,13 +83,23 @@ function RowActions({ id }: { id: string }) {
         </DropdownMenuItem>
         {canWrite && <DropdownMenuSeparator />}
         {canWrite && (
-          <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}>
+          <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}>
             <Trash2 />
             Hapus
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* `deleteArticle` is a hard DELETE — no draft/archive state to fall back to. */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title="Hapus artikel?"
+      description="Artikel ini dihapus permanen dan tidak bisa dikembalikan. Kalau hanya ingin menyembunyikannya, ubah statusnya menjadi draft lewat Edit."
+      onConfirm={del}
+      pending={pending}
+    />
+    </>
   );
 }
 
@@ -105,6 +120,10 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
     return map;
   }, [posts, blogs]);
 
+  // ⚠️ `posts` belongs in the deps — the same class the `counts` memo above already got right.
+  // `router.refresh()` gives this component fresh props without remounting it, so omitting `posts`
+  // left a deleted article in the table while the tab counter above it dropped: one screen, two
+  // answers about the same row.
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     return posts.filter((p) => {
@@ -112,7 +131,7 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
       if (q && !p.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [search, blog]);
+  }, [search, blog, posts]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);

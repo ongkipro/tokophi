@@ -16,6 +16,7 @@ import {
   setDefaultTemplate,
 } from "@/lib/actions/theme";
 import { Can, useCan } from "@/components/admin/permissions";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { PageHeader } from "@/components/admin/page-header";
 import { BrandColorDialog } from "@/components/theme/brand-color-dialog";
 import { ThemeTokensDialog } from "@/components/theme/theme-tokens-dialog";
@@ -168,7 +169,7 @@ export function TemaClient({ templates, collections, products, brandColor, galle
               tpl={t}
               pending={pending}
               onRename={(name) => run(() => renameTemplate(t.id, name), "Nama template diperbarui")}
-              onDelete={() => run(() => deleteTemplate(t.id), "Template dihapus")}
+              run={run}
               onSetDefault={() => run(() => setDefaultTemplate(t.id), "Template default diperbarui")}
             />
           ))}
@@ -205,17 +206,21 @@ function TemplateCard({
   tpl,
   pending,
   onRename,
-  onDelete,
+  run,
   onSetDefault,
 }: {
   tpl: TemplateSummary;
   pending: boolean;
   onRename: (name: string) => void;
-  onDelete: () => void;
+  /** The parent's action runner — the delete is wired here so it sits beside its confirm step. */
+  run: (fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => void;
   onSetDefault: () => void;
 }) {
   const [renameOpen, setRenameOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [name, setName] = React.useState(tpl.name);
+  // `run` owns the toasts; `finally` only closes the confirm once the action settles.
+  const del = () => run(() => deleteTemplate(tpl.id).finally(() => setConfirmOpen(false)), "Template dihapus");
 
   return (
     <Card className="overflow-hidden">
@@ -260,13 +265,28 @@ function TemplateCard({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                <DropdownMenuItem variant="destructive" onClick={() => setConfirmOpen(true)}>
                   <Trash2 data-icon="inline-start" /> Hapus
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </Can>
         </div>
+        {/* `deleteTemplate` is a hard DELETE; it first nulls `template_id` on every collection/product
+            assigned to it (they fall back to the type's default), and refuses a default that still has
+            siblings — the action's own message covers that refusal. */}
+        <ConfirmDelete
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Hapus template?"
+          description={
+            tpl.type === "homepage"
+              ? `Template "${tpl.name}" dihapus permanen beserta ${tpl.sectionCount} seksinya.`
+              : `Template "${tpl.name}" dihapus permanen beserta ${tpl.sectionCount} seksinya. ${tpl.assignedCount} halaman yang memakainya akan kembali ke template Default.`
+          }
+          onConfirm={del}
+          pending={pending}
+        />
 
         <Button
           nativeButton={false}

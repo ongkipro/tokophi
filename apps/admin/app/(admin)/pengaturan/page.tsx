@@ -23,6 +23,7 @@ import {
   CardFooter,
 } from "@tokophi/ui/card"
 import { useStoreName } from "@/components/admin/store-context"
+import { initials } from "@/components/admin/initials"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
@@ -165,7 +166,7 @@ export default function Page() {
               <div className="flex items-center gap-3">
                 <Avatar className="size-10">
                   <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
-                    BN
+                    {initials(storeName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">

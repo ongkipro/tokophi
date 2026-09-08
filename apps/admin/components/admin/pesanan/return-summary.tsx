@@ -1,6 +1,7 @@
 import { Undo2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { NO_FIGURE, num, share } from "@tokophi/lib/format";
+import { unattributedNote } from "@/components/admin/dashboard/return-by-courier";
 
 // `share()` is the part-of-a-whole formatter and it is the one this card wants. It is NOT `pct()`:
 // that one stamps a "+"/"−" because it measures a CHANGE, and a return rate is not a change.
@@ -26,7 +27,9 @@ export type CourierReturnRow = {
   codReturnRate: number; // 0..1
 };
 
-export function ReturnSummary({ rows }: { rows: CourierReturnRow[] }) {
+// Task 5.18: `rows` never carries a placeholder courier any more — orders shipped without a courier
+// arrive as `unattributed`, outside every rate, and are NAMED below rather than silently omitted.
+export function ReturnSummary({ rows, unattributed }: { rows: CourierReturnRow[]; unattributed: number }) {
   const shipped = rows.reduce((a, r) => a + r.shipped, 0);
   const returned = rows.reduce((a, r) => a + r.returned, 0);
   const codShipped = rows.reduce((a, r) => a + r.codShipped, 0);
@@ -42,7 +45,9 @@ export function ReturnSummary({ rows }: { rows: CourierReturnRow[] }) {
       <CardContent>
         {shipped === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Belum ada pesanan yang dikirim, jadi belum ada angka retur untuk ditampilkan.
+            {unattributed > 0
+              ? "Belum ada paket dengan data kurir yang dikirim, jadi belum ada angka retur untuk ditampilkan."
+              : "Belum ada pesanan yang dikirim, jadi belum ada angka retur untuk ditampilkan."}
           </p>
         ) : (
           <div className="space-y-4">
@@ -80,15 +85,15 @@ export function ReturnSummary({ rows }: { rows: CourierReturnRow[] }) {
                 </div>
               ))}
             </div>
-
-            {/* Honest caveat: `orders.courier` is only written when a shipment is booked through the
-                aggregator, so historical/manual orders legitimately have no courier. */}
-            {rows.some((r) => r.courier === "Tidak diketahui") && (
-              <p className="text-xs text-muted-foreground">
-                &quot;Tidak diketahui&quot; = pesanan tanpa data kurir (pengiriman belum dibuat lewat TokoΦ).
-              </p>
-            )}
           </div>
+        )}
+        {/* Honest caveat, same sentence as the dashboard tile: `orders.courier` is only written when a
+            shipment is booked through the aggregator, so historical/manual orders legitimately have
+            no courier. Rendered OUTSIDE the `shipped === 0` branch — a store whose every shipment is
+            courier-less has nothing to rate, but still has parcels the merchant should know were
+            left out. */}
+        {unattributed > 0 && (
+          <p className="pt-3 text-xs text-muted-foreground tabular-nums">{unattributedNote(unattributed)}</p>
         )}
       </CardContent>
     </Card>

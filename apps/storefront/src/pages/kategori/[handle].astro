@@ -91,15 +91,15 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 const NOINDEX = virtual ? "noindex,follow" : undefined;
 ---
 
-<!-- Was "Koleksi busana wanita di …" — the demo's vertical on every tenant's category page. `blurb` is
+{/* Was "Koleksi busana wanita di …" — the demo's vertical on every tenant's category page. `blurb` is
      `description ?? ""` upstream, so interpolating it raw also produced a stray " — . " on any category
-     the merchant left blank. Both gone: the merchant's own blurb when written, the category name when not. -->
-<!-- og:image — the merchant's own category cover, the same `imageUrl` PageHeader renders 20 lines
+     the merchant left blank. Both gone: the merchant's own blurb when written, the category name when not. */}
+{/* og:image — the merchant's own category cover, the same `imageUrl` PageHeader renders 20 lines
      below. It was in scope and thrown away, so every category link shared to WhatsApp showed the
      store logo instead of the collection's photo. Virtual collections have no row and no cover →
      undefined → Layout falls back to the logo, unchanged. Passed RAW, not absolutised here: Layout
      does `new URL(src, origin)` on it, which is also how produk/[handle] passes `product.image`
-     (its local `abs()` helper exists for the JSON-LD, which Layout never sees). -->
+     (its local `abs()` helper exists for the JSON-LD, which Layout never sees). */}
 <Layout
   head={HEAD}
   robots={NOINDEX}

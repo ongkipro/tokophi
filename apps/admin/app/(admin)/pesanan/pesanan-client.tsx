@@ -53,11 +53,14 @@ export function PesananClient({
   tab,
   filters,
   returns,
+  unattributedReturns,
 }: {
   list: OrderListResult;
   tab: OrderTab;
   filters: OrderFiltersValue;
   returns: CourierReturnRow[];
+  /** Shipped orders with no courier — outside every row in `returns`; named, never dropped. */
+  unattributedReturns: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -376,7 +379,7 @@ export function PesananClient({
 
       {/* Retur — real numbers from the orders that actually shipped (lib/data/returns.ts).
           Shown on the tab where it is the question being asked. */}
-      {tab === "pengembalian" && <ReturnSummary rows={returns} />}
+      {tab === "pengembalian" && <ReturnSummary rows={returns} unattributed={unattributedReturns} />}
     </div>
   );
 }

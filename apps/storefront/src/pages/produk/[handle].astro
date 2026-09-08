@@ -304,10 +304,10 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
   head={HEAD}
 >
   <section class="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
-    <!-- `grid-cols-1` is not decoration. Without an explicit template below `md`, the single column
+    {/* `grid-cols-1` is not decoration. Without an explicit template below `md`, the single column
          is an IMPLICIT `auto` track — and an auto track is sized from its CONTENT, so it may exceed
          the container. The gallery's thumbnail strip made it do exactly that and the page scrolled
-         sideways on a 320-360px phone. `grid-cols-1` = `1fr`, bounded by the available space. -->
+         sideways on a 320-360px phone. `grid-cols-1` = `1fr`, bounded by the available space. */}
     <div class="flex flex-col gap-10 md:grid md:grid-cols-2 md:items-start lg:gap-14">
       {/* Two columns on md+: LEFT = gallery + reviews, RIGHT = buy box + the long Deskripsi Produk (the
           reference's shape — reviews under the thumbnail, the description filling the column beside them).
@@ -317,7 +317,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           four blocks into the right reading order — gallery → buy box → description → reviews — so the buy
           actions are never buried under the reviews. */}
       <div class="contents md:flex md:flex-col md:gap-14">
-      <!-- Gallery — layout picked in Tema (thumbnail-left / thumbnail-bottom / grid) -->
+      {/* Gallery — layout picked in Tema (thumbnail-left / thumbnail-bottom / grid) */}
       {galleryIsGrid ? (
         /* GRID — every image in a 2-column grid, no main/thumbnail split (the reference #17 shape).
            An empty gallery still shows the one tinted placeholder tile. */
@@ -352,7 +352,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         </div>
       ) : (
         <div class:list={["order-1 flex flex-col gap-4 md:order-none", thumbsBeside && "sm:flex-row-reverse"]}>
-          <!-- Main image -->
+          {/* Main image */}
           <div class:list={["relative flex-1 overflow-hidden rounded-lg bg-brand-50", galleryAspectClass]}>
             {/* This is the LCP element of the most important page in the shop and it had no priority
                 hint at all — while the thumbnails BELOW it were `loading="lazy"`, i.e. backwards.
@@ -390,7 +390,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             }
           </div>
 
-          <!-- Thumbnails — a vertical rail beside the image (thumbnail-left) or a scrollable row under it -->
+          {/* Thumbnails — a vertical rail beside the image (thumbnail-left) or a scrollable row under it */}
           <div
             id="gallery-thumbs"
             class:list={["flex gap-3 overflow-visible pb-1", thumbsBeside && "sm:w-20 sm:flex-col sm:pb-0"]}
@@ -563,16 +563,16 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           </div>
         )}
 
-        <!-- `flex-wrap`: price + struck-through price + the discount badge are three items on one
+        {/* `flex-wrap`: price + struck-through price + the discount badge are three items on one
              line, and together they exceed the 288px of content a 320px phone has. Without wrapping,
-             the badge pushed the page sideways. -->
+             the badge pushed the page sideways. */}
         <div class:list={["flex flex-wrap items-center gap-x-3 gap-y-2", product.flashEndsAt ? "mt-3" : "mt-5"]}>
           {/* Unpriced → "Hubungi untuk harga" (not "Rp0"). NOT `tabular-nums`/`text-3xl` here since it
               is a phrase, not a figure. The variant-picker JS keeps this honest too — see below. */}
-          <!-- `data-catalog-id` lives HERE, on an element every PDP renders. It used to sit on the buy-box
+          {/* `data-catalog-id` lives HERE, on an element every PDP renders. It used to sit on the buy-box
                row, which a price-on-request product does not render at all — so no ViewContent fired for
                a page a shopper is very much viewing. The buy BUTTONS carry their own copy, kept in step
-               with the variant picker; the pixel prefers those and falls back to this one. -->
+               with the variant picker; the pixel prefers those and falls back to this one. */}
           <span id="pdp-price" data-catalog-id={catalogId} data-catalog-type={catalogType} class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
           {/* Both are ALWAYS in the DOM, hidden when they do not apply, so the variant picker can
               reveal them for a variant that carries a cut the base one does not. Rendering them
@@ -623,7 +623,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <p class="mt-6 text-base leading-relaxed text-ink/80">{product.shortDescription}</p>
         )}
 
-        <!-- Variant picker (real product_variants: Warna, Ukuran).
+        {/* Variant picker (real product_variants: Warna, Ukuran).
              ⚠️ THERE IS NO FALLBACK PICKER, AND THERE MUST NOT BE ONE AGAIN. `products.sizes` is a
              legacy display-only jsonb column (`["All Size"]`, `["S","M","L"]`) that was NEVER
              reconciled with `product_variants`, and this block used to render it as an "Ukuran"
@@ -641,7 +641,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
              A product with no option rows has no variant to NAME — the storefront cannot map a size
              to a `product_variants.title`, and guessing is exactly what the API refuses to do. If a
              merchant wants per-size stock, that is real variants in the Seller editor (which always
-             writes `product_options` alongside them), not a text column. -->
+             writes `product_options` alongside them), not a text column. */}
         {
           product.options && product.options.length > 0 ? (
             <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, compareAt: v.compareAt, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
@@ -674,7 +674,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           ) : null
         }
 
-        <!-- Quantity -->
+        {/* Quantity */}
         <div class="mt-6">
           <p class="text-sm font-medium text-ink">Jumlah</p>
           <div class="mt-3 inline-flex items-center rounded-lg border border-line bg-white">
@@ -684,9 +684,9 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           </div>
         </div>
 
-        <!-- Actions. An unpriced product does NOT get "Tambah ke Keranjang"/"Beli Sekarang" at all —
+        {/* Actions. An unpriced product does NOT get "Tambah ke Keranjang"/"Beli Sekarang" at all —
              see the `unpriced` note above: there is no price to cart, so it routes to the merchant
-             ("Tanya Harga") instead, which is what "Hubungi untuk harga" promised. -->
+             ("Tanya Harga") instead, which is what "Hubungi untuk harga" promised. */}
         {unpriced ? (
           <div class="mt-8">
             <a
@@ -736,12 +736,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           <a href="/keranjang" class="ml-1 underline">Lihat keranjang</a>
         </p>
 
-        <!-- Share. This bar existed ONLY on the blog, which was exactly the wrong way round:
+        {/* Share. This bar existed ONLY on the blog, which was exactly the wrong way round:
              forwarding a dress into a WhatsApp group is how these shops actually get customers, and a
              shopper who wants a second opinion before buying had nothing to tap but the address bar.
              Below the buy buttons on purpose — it is the second thing you might do here, never the
              first. Pinterest gets the main gallery image (absolute, as it requires); a product with
-             no photo passes none and the Pinterest button is simply not rendered. -->
+             no photo passes none and the Pinterest button is simply not rendered. */}
         <div class="mt-8 flex items-center gap-2 border-t border-line pt-6">
           <span class="text-sm text-muted">Bagikan</span>
           <ShareBar
@@ -820,7 +820,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       </div>
     </div>
 
-    <!-- Related — hand-built tail; a product template takes this slot instead (below). -->
+    {/* Related — hand-built tail; a product template takes this slot instead (below). */}
     {
       !TEMPLATE && related.length > 0 && (
         <div class="mt-20 border-t border-line pt-14">
@@ -870,8 +870,8 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
   }
 </style>
 
-<!-- The GROUP id is passed in rather than re-derived: it is the fallback when a variant combination
-     has no row, and it must be the exact string the shared helper produced server-side. -->
+{/* The GROUP id is passed in rather than re-derived: it is the fallback when a variant combination
+     has no row, and it must be the exact string the shared helper produced server-side. */}
 <script is:inline define:vars={{ GROUP_CATALOG_ID: catalogGroupId, GROUP_CATALOG_TYPE: catalogGroupType, FLASH_PRICE: product.flashPrice ?? null }}>
   (function () {
     // Flash-sale countdown — ticks to `data-ends` (ISO). Hides the whole banner at zero; the price stays

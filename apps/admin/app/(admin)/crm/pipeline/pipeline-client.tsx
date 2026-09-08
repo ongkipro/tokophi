@@ -51,6 +51,7 @@ import { useStoreName } from "@/components/admin/store-context";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCan } from "@/components/admin/permissions";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { createLead, setLeadStage, deleteLead } from "@/lib/actions/crm";
 
 // Board columns (kalah is intentionally excluded — still counted for closing rate).
@@ -201,6 +202,7 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
         toast.error("Gagal memindah tahap — coba lagi.");
       }
     });
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -209,9 +211,12 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
         router.refresh();
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
+    <>
     <Card className="gap-0 py-0 shadow-xs transition-shadow hover:shadow-md">
       <CardContent className="flex flex-col gap-2 p-3">
         <div className="flex items-start justify-between gap-2">
@@ -271,13 +276,24 @@ function LeadCard({ lead, waHref }: { lead: Lead; waHref: string }) {
                 <DropdownMenuItem key={s.stage} onClick={() => move(s.stage)}>{s.title}</DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={del}>Hapus</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => setConfirmOpen(true)}>Hapus</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           )}
         </div>
       </CardContent>
     </Card>
+    {/* `deleteLead` is a hard DELETE of the lead row; `wa_messages.lead_id` is a plain FK (no
+        cascade), so a lead with logged WA messages is refused by Postgres → the generic error toast. */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title="Hapus prospek?"
+      description={`Prospek ${lead.name} dihapus permanen dari pipeline, termasuk catatannya. Data pelanggan di menu Pelanggan tidak ikut terhapus; prospek yang sudah punya riwayat pesan WA tidak bisa dihapus.`}
+      onConfirm={del}
+      pending={pending}
+    />
+    </>
   );
 }
 

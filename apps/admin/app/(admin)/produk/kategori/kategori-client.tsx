@@ -13,6 +13,7 @@ import { num } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteCollection } from "@/lib/actions/collections";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { type Collection } from "@/lib/mock/store";
 
 import { Card } from "@tokophi/ui/card";
@@ -54,6 +55,7 @@ function RowActions({ c, storefrontBase }: { c: Collection; storefrontBase: stri
   const [pending, start] = React.useTransition();
   // The live storefront page only resolves for a published category with a handle; a draft would 404.
   const storeUrl = c.published && c.handle && storefrontBase ? `${storefrontBase}/kategori/${c.handle}` : null;
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const del = () =>
     start(async () => {
       try {
@@ -62,9 +64,12 @@ function RowActions({ c, storefrontBase }: { c: Collection; storefrontBase: stri
         router.refresh();
       } catch {
         toast.error("Gagal menghapus — coba lagi.");
+      } finally {
+        setConfirmOpen(false);
       }
     });
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Aksi kategori" />}>
         <MoreHorizontal />
@@ -82,9 +87,20 @@ function RowActions({ c, storefrontBase }: { c: Collection; storefrontBase: stri
           </DropdownMenuItem>
         )}
         {canWrite && <DropdownMenuSeparator />}
-        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={del}><Trash2 /> Hapus</DropdownMenuItem>}
+        {canWrite && <DropdownMenuItem variant="destructive" disabled={pending} onClick={() => setConfirmOpen(true)}><Trash2 /> Hapus</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* `deleteCollection` hard-deletes the category plus its `collection_products` / `_conditions`
+        rows — the PRODUCTS themselves are untouched, which is the half a merchant worries about. */}
+    <ConfirmDelete
+      open={confirmOpen}
+      onOpenChange={setConfirmOpen}
+      title={`Hapus kategori "${c.name}"?`}
+      description="Kategori ini dihapus permanen dan tidak bisa dikembalikan. Produk di dalamnya tetap ada — hanya keanggotaannya di kategori ini yang hilang, dan halaman kategorinya di toko menjadi 404."
+      onConfirm={del}
+      pending={pending}
+    />
+    </>
   );
 }
 
@@ -94,11 +110,13 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
 
+  // ⚠️ `collections` belongs in the deps. `router.refresh()` re-renders with fresh server props
+  // WITHOUT remounting, so a memo keyed only on `search` kept a deleted kategori on screen.
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return collections;
     return collections.filter((c) => c.name.toLowerCase().includes(q));
-  }, [search]);
+  }, [search, collections]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);

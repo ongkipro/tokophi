@@ -2,9 +2,10 @@
 
 import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound, Receipt } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound, Receipt, CircleCheck, CircleX, WifiOff, CircleDashed } from "lucide-react";
 import { toast } from "sonner";
 import type { CourierRow } from "@/lib/data";
+import type { KaProbe, KaProbeState } from "@/lib/ka-probe";
 
 import {
   Card,
@@ -82,6 +83,7 @@ export function PengaturanClient({
   aggregator,
   team,
   finance,
+  kaProbe,
   me,
 }: {
   gateways: Toggle[];
@@ -90,6 +92,7 @@ export function PengaturanClient({
   aggregator: { provider: string; enabled: boolean; env: string };
   team: TeamMember[];
   finance: { subscriptionPpnEnabled: boolean };
+  kaProbe: KaProbe;
   me: { adminId: string; role: string };
 }) {
   const router = useRouter();
@@ -408,11 +411,20 @@ export function PengaturanClient({
                       {aggregator.enabled && (
                         <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
                       )}
+                      {/* Task 8.3 — the LIVE state, not the key's presence. Glyph + word, never colour
+                          alone; the time is when the cached probe last ran (≤5 min old), not now. */}
+                      <KaProbeBadge probe={kaProbe} />
                       <Button variant="outline" size="sm" className="gap-1.5" disabled={pinging} onClick={testConn}>
                         <Plug className="size-3.5" /> {pinging ? "Menguji…" : "Test koneksi"}
                       </Button>
                     </div>
                   </div>
+                  {kaProbe.state !== "ok" && (
+                    <p className="mt-2 text-xs text-red-600 dark:text-red-400" data-ka-probe-detail>
+                      {/* The vendor's own sentence, verbatim — a 401 here names the IP the allow-list dropped. */}
+                      {kaProbe.detail}
+                    </p>
+                  )}
                   {ping && (
                     <p className={`mt-2 text-xs ${ping.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                       {ping.ok ? "✓ " : "✕ "}{ping.message}
@@ -657,5 +669,36 @@ function ChannelGroup({
         </div>
       )}
     </div>
+  );
+}
+
+// ── Task 8.3 ───────────────────────────────────────────────────────────────────────────────────────
+// Three failure states need three different people, so they get three different words:
+// `refused` = the vendor answered and said no (KiriminAja dashboard — the IP allow-list lapses);
+// `unreachable` = nothing parseable came back within the ceiling (network, gateway, or our timeout);
+// `unconfigured` = no key at all. The time is formatted with a FIXED zone so the server and the
+// client render the same string — `timeAgo()` would compare against `Date.now()` and mismatch.
+const KA_PROBE_STYLE: Record<KaProbeState, { icon: typeof CircleCheck; className: string }> = {
+  ok: { icon: CircleCheck, className: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" },
+  refused: { icon: CircleX, className: "bg-red-500/12 text-red-700 dark:text-red-400" },
+  unreachable: { icon: WifiOff, className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  unconfigured: { icon: CircleDashed, className: "bg-muted text-muted-foreground" },
+};
+const WIB = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" });
+
+function KaProbeBadge({ probe }: { probe: KaProbe }) {
+  const { icon: Icon, className } = KA_PROBE_STYLE[probe.state];
+  const at = `${WIB.format(new Date(probe.probedAt))} WIB`;
+  return (
+    <Badge
+      variant="secondary"
+      className={cn("gap-1 border-transparent", className)}
+      title={`${probe.detail} · dicek ${at}`}
+      data-ka-probe={probe.state}
+    >
+      <Icon className="size-3" aria-hidden="true" />
+      {probe.word}
+      <span className="font-normal opacity-80">· {at}</span>
+    </Badge>
   );
 }

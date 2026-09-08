@@ -100,3 +100,16 @@
 8. The plan checks current code/runtime evidence immediately before approval and records the reviewed revision/environment.
 
 **Decision:** Passing this gate means the selected work is sufficiently bounded for planning. It does **not** mean the documentation is perfect, the implementation exists, production is healthy, or legal/privacy review is complete.
+
+## 7. Verification commands — offline checks vs release evidence
+
+Two commands, two different claims. They are not interchangeable (Task 6.1, NF-18).
+
+| Command | What it proves | Boundary |
+|---|---|---|
+| `npm test` | The **offline** suite: vitest + `astro check` for storefront and landing. | DB-coupled suites (the ledger/money suites, RLS-role tests) **SKIP with a banner** when no `<DATABASE_URL>_test` database is reachable — a green run on a laptop without Docker is not release evidence. The script prints this boundary on every run. |
+| `npm run test:release` | The **release** evidence: `verify-migrations` → `test:db` (`TEST_DB_REQUIRED=1`, a skipped DB suite is a **failure**) → `verify-rls` → `verify-rls-app` → storefront `verify` (six browser/HTTP checks). | Requires `docker compose up -d db`, a built storefront (the runner builds when stale) and Playwright chromium. Composes only scripts the repository already defines; `.github/workflows/ci.yml` runs the same set. |
+
+Stage 7 of [`TASKS.md`](../../TASKS.md) runs `npm test` first, then `npm run test:release`; a release is not evidenced by the first alone. No build script runs lint: `npm run lint` is a per-workspace script and a separate gate.
+
+Recorded run (2026-09-08, `feat/sweep-0907`, local Docker db, tree carrying other streams' uncommitted edits): **exit 1 in 45 s**. `verify-migrations` passed; `test:db` ran 146 files / 1163 tests with **no DB suite skipped** (1159 passed) and failed 3 files — `test/page-map-fresh.test.ts` (page map stale against in-flight storefront page edits), `apps/admin/lib/product-editor-controls.test.ts` (new `savedSnapshot` state not yet censused), `apps/storefront/src/lib/checkout-search-states.test.ts` — all owned by edits in progress on that branch, not by the command. The chain stops at the first red as designed, so `verify-rls`, `verify-rls-app` and storefront `verify` did not run in that invocation; run separately afterwards, `verify-rls` and `verify-rls-app` both exit 0.

@@ -203,6 +203,11 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
     done.has(f.id) ? "selesai" : f.status;
   const isTelat = (f: Followup) => f.dueDays < 0 && effStatus(f) === "menunggu";
 
+  // ⚠️ `followups` belongs in all three deps lists below. `router.refresh()` re-renders with fresh
+  // server props WITHOUT remounting, so a memo keyed only on local state kept showing rows the
+  // server no longer returns. `effStatus`/`isTelat` stay OUT (and the eslint line stays disabled):
+  // they are re-created every render, so listing them would defeat the memo entirely — `done`, the
+  // state they close over, is already listed.
   // ---- stats ----
   const stats = useMemo(() => {
     const menunggu = followups.filter((f) => effStatus(f) === "menunggu").length;
@@ -240,7 +245,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
+  }, [done, followups]);
 
   // ---- tab counts ----
   const counts = useMemo(() => {
@@ -251,7 +256,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
       selesai: followups.filter((f) => effStatus(f) === "selesai").length,
     } as Record<TabKey, number>;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
+  }, [done, followups]);
 
   // ---- filtered rows ----
   const rows = useMemo(() => {
@@ -273,7 +278,7 @@ export function FollowupClient({ followups, templates }: { followups: Followup[]
     // Overdue first, then due today, then upcoming.
     return list.sort((a, b) => a.dueDays - b.dueDays);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, typeFilter, query, done]);
+  }, [tab, typeFilter, query, done, followups]);
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">

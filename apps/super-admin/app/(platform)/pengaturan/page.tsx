@@ -1,6 +1,6 @@
 import { platformRouteGate } from "@/lib/platform-auth";
 import { RouteDenied } from "@/components/route-denied";
-import { getPaymentGateways, getCouriers, getAggregator, getPlatformAdmins, getPaymentChannels, getPlatformFinance } from "@/lib/data";
+import { getPaymentGateways, getCouriers, getAggregator, getPlatformAdmins, getPaymentChannels, getPlatformFinance, getKiriminajaProbe } from "@/lib/data";
 import { PengaturanClient } from "./pengaturan-client";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +11,14 @@ export default async function PengaturanPage() {
   const gate = await platformRouteGate("/pengaturan");
   if (!gate.ok) return <RouteDenied need={gate.need} role={gate.role} reason={gate.reason} landing={gate.landing} />;
 
-  const [gateways, couriers, channels, aggregator, team, finance] = await Promise.all([
+  const [gateways, couriers, channels, aggregator, team, finance, kaProbe] = await Promise.all([
     getPaymentGateways(),
     getCouriers(),
     getPaymentChannels(),
     getAggregator(),
     getPlatformAdmins(),
     getPlatformFinance(),
+    getKiriminajaProbe(), // Task 8.3 — cached 5 min, 4 s ceiling; see `data.ts`
   ]);
   // Who is looking — ONLY to decide whether the owner-only affordance is drawn. The boundary is
   // `platformGate("owner")` inside the action; this is so an `admin` operator is not offered a
@@ -32,6 +33,7 @@ export default async function PengaturanPage() {
       aggregator={aggregator}
       team={team}
       finance={finance}
+      kaProbe={kaProbe}
       me={{ adminId: me?.adminId ?? "", role: me?.role ?? "" }}
     />
   );

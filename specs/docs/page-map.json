@@ -115,7 +115,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/bantuan",
@@ -137,7 +139,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/actions/menus.test.ts"
+            "apps/admin/lib/actions/menus.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -159,7 +162,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/blog/baru",
@@ -196,7 +201,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -296,7 +302,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/diskon/baru",
@@ -330,7 +338,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/files",
@@ -368,7 +378,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/flash-sale/baru",
@@ -406,7 +418,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -427,7 +440,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/halaman/baru",
@@ -462,7 +477,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -615,7 +631,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/pelanggan/keranjang",
@@ -655,7 +673,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/pelanggan/segmen",
@@ -760,7 +780,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/actions/orders.test.ts"
+            "apps/admin/lib/actions/orders.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -804,7 +825,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/orders.test.ts",
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -830,7 +852,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/form-labels.test.tsx"
+            "apps/admin/lib/form-labels.test.tsx",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -891,7 +914,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/produk/kategori/baru",
@@ -932,7 +957,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -954,10 +980,12 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/app/(admin)/produk/[id]/product-editor-unsaved.test.ts",
             "apps/admin/lib/actions/inventory.test.ts",
             "apps/admin/lib/actions/menus.test.ts",
             "apps/admin/lib/form-labels.test.tsx",
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -998,7 +1026,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/promo/html/[id]",
@@ -1018,7 +1048,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/promo/html/baru",
@@ -1059,7 +1091,8 @@
           "tests": [
             "apps/admin/lib/admin-link-targets.test.ts",
             "apps/admin/lib/landing-html-gate.test.ts",
-            "apps/admin/lib/seller-entity-links.test.ts"
+            "apps/admin/lib/seller-entity-links.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -1105,7 +1138,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/admin-h1-floor.test.ts"
+            "apps/admin/lib/admin-h1-floor.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -1129,7 +1163,8 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/admin-h1-floor.test.ts"
+            "apps/admin/lib/admin-h1-floor.test.ts",
+            "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
         {
@@ -1390,6 +1425,7 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/lib/commerce-lifecycle.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
             "apps/admin/lib/public-guard.test.ts"
           ]
@@ -1412,7 +1448,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": true,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/commerce-lifecycle.test.ts"
+          ]
         },
         {
           "url": "/api/public/promo",
@@ -1751,7 +1789,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/uuid-guard.test.ts"
+          ]
         },
         {
           "url": "/tiket",
@@ -1772,6 +1812,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/uuid-guard.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
           ]
         },
@@ -1797,6 +1838,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/uuid-guard.test.ts",
             "apps/super-admin/lib/add-store-user.test.ts"
           ]
         },
@@ -1821,6 +1863,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/uuid-guard.test.ts",
             "apps/super-admin/lib/add-store-user.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
           ]
@@ -1948,7 +1991,9 @@
           "lib": [],
           "locals": true,
           "db": true,
-          "gate": [],
+          "gate": [
+            "rate-limit"
+          ],
           "setHtml": false,
           "tests": []
         },
@@ -2038,6 +2083,7 @@
             "Layout"
           ],
           "data": [
+            "catalog",
             "content"
           ],
           "lib": [
@@ -2132,10 +2178,7 @@
           ],
           "file": "apps/storefront/src/pages/feed/google.xml.ts",
           "layout": [],
-          "data": [
-            "catalog",
-            "store"
-          ],
+          "data": [],
           "lib": [
             "product-feed"
           ],
@@ -2153,10 +2196,7 @@
           ],
           "file": "apps/storefront/src/pages/feed/tiktok.xml.ts",
           "layout": [],
-          "data": [
-            "catalog",
-            "store"
-          ],
+          "data": [],
           "lib": [
             "product-feed"
           ],
@@ -2924,7 +2964,8 @@
       {
         "module": "returns.ts",
         "exports": [
-          "getReturnsByCourier"
+          "getReturnsByCourier",
+          "returnsByCourierRows"
         ]
       },
       {
@@ -3413,6 +3454,7 @@
           "getFinanceStats",
           "getGmvByCity",
           "getInvoices",
+          "getKiriminajaProbe",
           "getOpenTicketCount",
           "getPaymentChannels",
           "getPaymentGateways",
@@ -3460,6 +3502,12 @@
           "getHealthMap",
           "getStoreHealth",
           "healthFromSignals"
+        ]
+      },
+      {
+        "module": "ka-probe.ts",
+        "exports": [
+          "classifyKaProbe"
         ]
       },
       {

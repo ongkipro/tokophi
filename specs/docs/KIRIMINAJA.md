@@ -22,6 +22,42 @@ Source: the captured docs at `~/Documents/kiriminaja/documents/` — 34 pages, 1
 `Authorization: Bearer {api_key}`, `Accept: application/json`, `Content-Type: application/json`.
 **The API is otherwise identical between the two** — cutover is an endpoint swap, not a port (#145).
 
+## ⚠️ The sandbox enforces an IP ALLOW-LIST — and the platform's egress IP is the VPS IP
+
+Learned 2026-09-07, after the VPS came back from a 70-hour billing suspension (`STATUS.md`,
+`SLA-DRP.md` §2): every call to `tdev.kiriminaja.com` answered
+
+```
+401 {"status":false,"text":"Your IP address 45.77.33.112 were not allowed to access this API", ...}
+```
+
+— on `province` (the read-only connectivity check) and therefore on `shipping_price` too, so
+`/api/public/ongkir` `op:"rates"` returned `SHIPPING_QUOTE_UNAVAILABLE` and **no order could be
+placed** (the shopper string is ours by ADR 0004; the vendor's `text` only appears in the admin
+container's `console.error`). Facts established from inside the admin container:
+
+- **The key was intact and `KIRIMINAJA_ENV` was `sandbox`** — this was not a lost secret.
+- **Our egress IP is exactly the VPS IP, `45.77.33.112`** (`fetch("https://api.ipify.org")` from the
+  container). All four services share the box's one public address; Cloudflare sits in front of
+  *inbound* traffic only and does not proxy our calls out.
+- The developer sandbox keys are bound to an **IP allow-list on the KiriminAja developer portal**,
+  and that list is what refused us. Fixing it is an **owner action on the vendor side** (portal or a
+  KiriminAja support ticket); nothing in this repo can change it. Whether the list was reset by the
+  provider, expired, or was never re-entered after the box was re-provisioned is **not known** — do
+  not guess; ask KiriminAja.
+- **Consequence for any future host move (Vultr → Hetzner, `DEPLOY.md`):** a new box is a new egress
+  IP, and the sandbox — and presumably production — will refuse it until the allow-list is updated.
+  Put "register the new IP with KiriminAja" on the migration checklist, *before* DNS moves.
+
+**The probe** (run where the key already lives; it never prints the key — `DEPLOY.md` → "KiriminAja
+401 after a restart" has the full three-step version):
+```bash
+docker exec $(docker ps --format '{{.Names}}' | grep -m1 '^admin-') node --input-type=module -e 'const r=await fetch("https://tdev.kiriminaja.com/api/mitra/province",{method:"POST",headers:{Authorization:"Bearer "+process.env.KIRIMINAJA_API_KEY,"Content-Type":"application/json"},body:"{}"}); console.log(r.status, await r.text())'
+```
+`200` + `{"status":true,"datas":[…]}` = allowed. `401` + the sentence above = allow-list.
+Anything else is a different problem (key missing → `Shipping belum dikonfigurasi.` from our own
+route; network → a thrown fetch error).
+
 ## What we call today
 
 | Purpose | Path we call | Version status |

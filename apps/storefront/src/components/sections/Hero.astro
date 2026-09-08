@@ -71,7 +71,7 @@ const HEADING_CLASS =
   aria-roledescription={isCarousel ? "carousel" : undefined}
   aria-label={isCarousel ? "Sorotan koleksi" : undefined}
 >
-  <!-- Background images — full-bleed, cross-faded. A failed/missing image just reveals the `ink`
+  {/* Background images — full-bleed, cross-faded. A failed/missing image just reveals the `ink`
        section background, so the copy stays legible instead of landing on a broken frame.
 
        ⚠️ ONLY SLIDE 1 GETS A `src`. The rest carry `data-src` and are loaded by the script below,
@@ -80,7 +80,7 @@ const HEADING_CLASS =
        every slide downloaded during first paint. Measured on live: **278.6KB of hero, of which
        212.6KB was `opacity: 0`** — invisible for the first several seconds, and competing for
        bandwidth with the LCP image, which is slide 1. The carousel only advances via JS, so a
-       no-JS visitor could never reach slides 2..n anyway: nothing is lost by letting JS ask for them. -->
+       no-JS visitor could never reach slides 2..n anyway: nothing is lost by letting JS ask for them. */}
   {
     slides.map((slide, i) =>
       slide.imageUrl ? (
@@ -141,14 +141,14 @@ const HEADING_CLASS =
     )
   }
 
-  <!-- Scrim. Two layers, and they are what buys AA contrast for white text over an arbitrary
+  {/* Scrim. Two layers, and they are what buys AA contrast for white text over an arbitrary
        merchant photo: a bottom-up wash (a light sky would otherwise wash out the copy) plus, for a
        left-aligned hero, a left-to-right wash that darkens exactly the column the text occupies and
        leaves the right of the photo clean.
        The horizontal wash is DESKTOP-ONLY (`hidden md:block`): a phone is too narrow to have a
        "text column" and a "photo column", so there it would just dim the whole frame. Narrow screens
        instead drop the copy to the bottom (`items-end` above) and lean on the vertical wash, which
-       keeps the subject's face visible ABOVE the text instead of behind it. -->
+       keeps the subject's face visible ABOVE the text instead of behind it. */}
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/90 via-ink/55 to-ink/30"></div>
   {
     !centered && (
@@ -166,8 +166,8 @@ const HEADING_CLASS =
           </span>
         )
       }
-      <!-- Slides stacked in a single grid cell so the tallest one sets the height (no layout jump
-           mid-cross-fade). -->
+      {/* Slides stacked in a single grid cell so the tallest one sets the height (no layout jump
+           mid-cross-fade). */}
       <div class="grid grid-cols-1 grid-rows-1">
         {
           slides.map((slide, i) => (
