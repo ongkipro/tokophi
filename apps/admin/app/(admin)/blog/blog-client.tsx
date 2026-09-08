@@ -120,6 +120,10 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
     return map;
   }, [posts, blogs]);
 
+  // ⚠️ `posts` belongs in the deps — the same class the `counts` memo above already got right.
+  // `router.refresh()` gives this component fresh props without remounting it, so omitting `posts`
+  // left a deleted article in the table while the tab counter above it dropped: one screen, two
+  // answers about the same row.
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     return posts.filter((p) => {
@@ -127,7 +131,7 @@ export function BlogClient({ posts, blogs }: { posts: BlogPost[]; blogs: string[
       if (q && !p.title.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [search, blog]);
+  }, [search, blog, posts]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);

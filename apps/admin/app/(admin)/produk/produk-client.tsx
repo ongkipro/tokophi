@@ -196,13 +196,16 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
   const [page, setPage] = React.useState(1);
   const [expandedVariants, setExpandedVariants] = React.useState<Set<string>>(new Set());
 
+  // ⚠️ `products` belongs in both deps lists below. `router.refresh()` re-renders with fresh server
+  // props WITHOUT remounting, so `[]` froze the five tab counters at their first-paint values and
+  // the filter memo below kept an archived product in the table.
   const counts = React.useMemo(() => ({
     all: products.length,
     active: products.filter((p) => p.status === "active").length,
     draft: products.filter((p) => p.status === "draft").length,
     low: products.filter((p) => p.stock < LOW_STOCK).length,
     noGcat: products.filter((p) => !p.googleCategoryPath).length,
-  }), []);
+  }), [products]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -225,7 +228,7 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
     else if (sort === "stok-asc") sorted.sort((a, b) => a.stock - b.stock);
     else if (sort === "terlaris") sorted.sort((a, b) => b.unitsSold - a.unitsSold);
     return sorted;
-  }, [search, category, tab, sort, dateRange, gcat, nowTs]);
+  }, [search, category, tab, sort, dateRange, gcat, nowTs, products]);
 
   const TABS: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "Semua", count: counts.all },

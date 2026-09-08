@@ -2781,3 +2781,38 @@ only that).
    `current_period_end` is 2026-08-04, so `computeBilling()` returns `readOnly` and every save fails with
    `SuspendedError` ("Gagal menyimpan produk"). `seed:recent` does not touch it. Any agent driving a write path must
    move it forward and put it back. Filed; `AGENTS.md`'s seed-rot note covers charts only.
+## 2026-09-08 13:17 UTC — Main Session + subagent — FIX: a confirmed delete left the row on screen (the CLASS, 9 memos in 6 screens)
+
+**Why.** The browser verification an hour earlier found that deleting a page or a post fired the toast and removed the
+DB row while the table kept showing it until a manual reload. Root cause: a `useMemo` whose dependency array omits the
+server-supplied prop list, so `router.refresh()` delivers fresh props and the memo does not recompute.
+`diskon-client.tsx:257` already documents and fixes this exact class — it was fixed per-file, and the siblings were
+missed. **Patch the class, not the instance** (AGENTS.md).
+
+**Census, derived by AST over the directory (33 client components, 26 `useMemo`, 25 reading a prop): 9 broken in 6.**
+`halaman` (filtered) · `blog` (filtered — self-contradictory, its `counts` memo DID list `posts`, so the tab counter
+dropped while the table did not) · `crm/followup` ×3 · `pelanggan/ulasan` ×2 · `produk/kategori` · `produk` ×2 —
+including `produk`'s `counts` memo on **`[]`**, i.e. the five tab counters were frozen at first paint. Screens with a
+`ConfirmDelete` but no prop-filtering memo (segmen, crm/pipeline, crm/template, flash-sale ×2, promo/html, tema) were
+checked and need nothing.
+
+⚠️ **`crm/followup-client.tsx` was invisible to ESLint** — all three memos carry
+`// eslint-disable-next-line react-hooks/exhaustive-deps`. Only the AST sweep found them. The disable is KEPT (listing
+`effStatus`/`isTelat`, re-created every render, would defeat the memo) with `followups` added and a comment saying so.
+
+**Guard.** `apps/admin/lib/list-refresh-deps.test.ts` — 35 tests, file list walked off the DIRECTORY, one case per
+client component: if a `useMemo` body reads an identifier destructured from props, that identifier must be in the dep
+array. It parses with the TypeScript **AST**, not `codeOnly`'s lexer, and says why in its header: these are `.tsx`, i.e.
+real TS programs, so the parser subsumes the lexer's guarantees and additionally gives the dep array's STRUCTURE.
+`codeOnly` is still imported for a real purpose — the self-check demonstrates that the substring-shaped version of this
+rule is **green on the shipped bug**, so the AST choice is evidence rather than assertion. Two floor assertions
+(≥30 files, ≥10 with memos) stop it passing by matching nothing. Proved RED twice: against mutated copies, and on disk
+by reverting `halaman-client.tsx`'s dep (2 of 35 failed), then restored.
+
+**Verification.** `vitest` `list-refresh-deps` + `no-silent-delete` → **63 passed**. `tsc -p apps/admin --noEmit` →
+clean, no output. ESLint over `app/(admin)/**/*-client.tsx` → **11 warnings before, 4 after** (all 7
+`exhaustive-deps` gone; the 4 left are pre-existing `no-unused-expressions`). **Browser, admin dev on a private port,
+own throwaway rows:** `/halaman` delete → row gone in **556 ms** with no reload; the SAME click with the dep reverted →
+**still on screen at 8 s** while the DB row was gone; `/blog` → **526 ms**. The middle run is the causal proof: same
+click, same server, only the dep array differs. 0 console errors. `stores.current_period_end` was moved forward to
+drive the writes (Task 8.13) and restored byte-identical; `zz-refresh%` rows: 0 pages, 0 articles left.

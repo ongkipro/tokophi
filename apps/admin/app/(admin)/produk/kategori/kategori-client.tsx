@@ -110,11 +110,13 @@ export function KategoriClient({ collections, storefrontBase }: { collections: C
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
 
+  // ⚠️ `collections` belongs in the deps. `router.refresh()` re-renders with fresh server props
+  // WITHOUT remounting, so a memo keyed only on `search` kept a deleted kategori on screen.
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return collections;
     return collections.filter((c) => c.name.toLowerCase().includes(q));
-  }, [search]);
+  }, [search, collections]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / ADMIN_LIST_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);

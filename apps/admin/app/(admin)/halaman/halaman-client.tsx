@@ -116,6 +116,9 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("semua");
 
+  // ⚠️ `pages` belongs in the deps. `router.refresh()` re-renders this component with fresh server
+  // props WITHOUT remounting it, so a memo that lists only the local filter state never recomputes —
+  // a deleted halaman stayed in the table under a "Halaman dihapus." toast until a manual reload.
   const rows = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     return pages.filter((p: CmsPage) => {
@@ -128,7 +131,7 @@ export function HalamanClient({ pages }: { pages: CmsPage[] }) {
         (status === "terbit" ? p.published : !p.published);
       return matchesQuery && matchesStatus;
     });
-  }, [query, status]);
+  }, [query, status, pages]);
 
   const statusLabel =
     STATUS_OPTIONS.find((o) => o.key === status)?.label ?? "Semua status";

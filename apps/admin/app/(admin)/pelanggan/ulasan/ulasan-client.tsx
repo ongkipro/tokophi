@@ -98,13 +98,16 @@ export function UlasanClient({ reviews }: { reviews: Review[] }) {
   const avgLabel = avg.toFixed(1).replace(".", ",");
   const menungguCount = reviews.filter((r) => r.status === "menunggu").length;
 
+  // ⚠️ `reviews` belongs in both deps lists below. `router.refresh()` re-renders with fresh server
+  // props WITHOUT remounting, so a memo keyed only on local filter state keeps rendering a review
+  // that has already been deleted server-side.
   const counts = useMemo(() => {
     return {
       semua: reviews.length,
       terbit: reviews.filter((r) => r.status === "terbit").length,
       menunggu: menungguCount,
     } satisfies Record<TabKey, number>;
-  }, [menungguCount]);
+  }, [reviews, menungguCount]);
 
   const rows = useMemo(() => {
     let list = reviews.slice();
@@ -119,7 +122,7 @@ export function UlasanClient({ reviews }: { reviews: Review[] }) {
       );
     }
     return list;
-  }, [tab, query]);
+  }, [tab, query, reviews]);
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-5">
