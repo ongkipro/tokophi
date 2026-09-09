@@ -528,3 +528,19 @@ production booking has ever been made" until one is — but the arithmetic no lo
 
 ⚠️ **Do not fix it by truncating at send time.** An id the vendor stores in truncated form is an id we
 can never look it up by again. Shorten the CONSTRUCTION and guard the total. Task 8.20.
+
+✅ **CLOSED 2026-09-09 (Task 8.20).** The construction lives in `buildKaOrderRef`
+(`packages/lib/src/kiriminaja.ts`): the constant `PHI` is dropped — the vendor prefix already
+identifies us — and the 8-character UUID slice becomes a ONE-character base36 **attempt counter**
+(`count(*)` of the order's `shipment_bookings`, read under the reservation's own lock, so it is exact
+rather than probabilistic). `5758` → `5758-768771328ISC0` (**18**, order number intact); `TOKOPHI` →
+`TOKOPHI-68771328ISC0` (**20** exactly). `kaOrderId()` THROWS rather than trimming, and a prefix that
+would leave under 8 body characters is refused at construction. Nothing needed migrating: production
+`shipment_bookings` is **0 rows** and the 7 non-null `orders.ka_order_id` are seeded demo strings.
+
+⚠️ **The poller is still not proven.** `orders.ka_order_id` holds the vendor's **`kj_order_id`**, and
+the one authorised sandbox booking shows the vendor EXTENDING what we sent — `5758-N29` (8) came back
+as `5758-N2975e1537124` (**18**, ten characters appended). `cron/tracking` queries with that value, so
+an 18-character `order_id` of ours could still return a ~28-character `kj_order_id` and breach the same
+limit. Whether `/api/mitra/tracking` wants the id we SENT or the `kj_order_id` — and whether that
+suffix is a fixed ten characters — cannot be settled without a real booking.

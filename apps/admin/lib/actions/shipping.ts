@@ -7,7 +7,7 @@ import { normalizePhone } from "@tokophi/lib/validate";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
-import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, buildKaOrderRef, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
@@ -811,7 +811,12 @@ export async function createShipment(input: { orderNumber: string; service: stri
     };
   }
   const bookingId = crypto.randomUUID();
-  const providerReference = `${input.orderNumber.replace(/[^A-Za-z0-9]/g, "")}${bookingId.slice(0, 8)}`;
+  // ⚠️ `providerReference` is NOT built here any more (Task 8.20). It used to be
+  // `orderNumber-without-punctuation + 8 characters of this UUID`, which is 28 characters once
+  // `kiriminaja.ts` prefixes it — and `POST /api/mitra/tracking` declares `order_id`
+  // `maxLength: 20`, so every parcel we booked was one the poller could never ask about. The
+  // replacement needs the order's booking COUNT, so it is built inside the reservation below,
+  // under the same advisory lock — see `buildKaOrderRef` for the length and collision arithmetic.
 
   // Reserve the surcharge before calling KiriminAja. The same per-store advisory lock is used by
   // requestPayout(), so a withdrawal cannot race this debit.
@@ -822,6 +827,13 @@ export async function createShipment(input: { orderNumber: string; service: stri
         id: schema.orders.id,
         status: schema.orders.status,
         kaOrderId: schema.orders.kaOrderId,
+        // How many times this order has been booked before. It is the `attempt` half of the
+        // provider reference (Task 8.20): a COUNTER read under the lock, so two bookings of one
+        // order cannot mint the same id, where a random tail that short would collide constantly.
+        // Aliased, like the two `exists` below, and read in the same round trip as the row lock.
+        priorBookings: sql<number>`(
+          select count(*) from shipment_bookings sb where sb.order_id = "orders"."id"
+        )`.as("prior_bookings"),
         // Aliased for the reason spelled out at the first read of these two columns: two unaliased
         // `exists (…)` expressions collapse into ONE `exists` column and the second is lost. This is
         // the copy that actually refused the booking in the measured reproduction.
@@ -868,6 +880,21 @@ export async function createShipment(input: { orderNumber: string; service: stri
       return {
         ok: false as const,
         error: existing.status === "unknown" ? "Status booking sebelumnya belum diketahui. Jangan booking ulang; rekonsiliasikan referensi provider lebih dulu." : existing.status === "cancellation_requested" ? "Pembatalan pengiriman masih diproses kurir." : "Pengiriman sedang atau sudah dibooking. Muat ulang pesanan.",
+      };
+    }
+
+    // Built here, not before the lock: the attempt counter is only exact while the row is held.
+    // A failure is a MISCONFIGURATION (a `KIRIMINAJA_ORDER_PREFIX` too long to leave a usable
+    // reference, or a 37th booking of one order), so it is logged loudly and refused — never
+    // shortened silently into an id the vendor would store and we could never query.
+    let providerReference: string;
+    try {
+      providerReference = buildKaOrderRef(input.orderNumber, Number(locked.priorBookings ?? 0));
+    } catch (e) {
+      console.error("[shipping] cannot build a KiriminAja order_id", e);
+      return {
+        ok: false as const,
+        error: "Referensi pengiriman tidak dapat dibuat. Hubungi dukungan sebelum mencoba lagi.",
       };
     }
 
@@ -936,9 +963,10 @@ export async function createShipment(input: { orderNumber: string; service: stri
         availableAt: new Date(),
       });
     }
-    return { ok: true as const };
+    return { ok: true as const, providerReference };
   });
   if (!reservation.ok) return reservation;
+  const providerReference = reservation.providerReference;
 
   // Pickup = TOMORROW 10:00 WIB. The date must be computed in Asia/Jakarta, not in the server's
   // timezone, or a UTC box books the wrong day. 10:00 and not 15:00 because couriers enforce a

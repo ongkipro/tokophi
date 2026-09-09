@@ -11,6 +11,83 @@ const KEY = process.env.KIRIMINAJA_API_KEY ?? "";
 // order_id prefix must be REGISTERED in the KiriminAja dashboard, else request_pickup 400s.
 export const KA_ORDER_PREFIX = process.env.KIRIMINAJA_ORDER_PREFIX ?? "TOKOPHI";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// `order_id` — 20 CHARACTERS, INCLUDING THE PREFIX AND ITS HYPHEN (Task 8.20)
+//
+// The two endpoints disagree and we sat on the wrong side of it:
+//   POST /api/mitra/v6.2/request_pickup → packages[].order_id   no maxLength
+//   POST /api/mitra/tracking            → order_id              maxLength: 20
+// So a booking is ACCEPTED with an id the tracking endpoint declares it will not take — which is
+// the strongest available explanation for issue #12's "awbFilled has only ever been 0".
+//
+// ⚠️ NEVER TRUNCATE AT SEND TIME. An id the vendor stores in truncated form is an id we can never
+// look up again. `buildKaOrderRef` shortens the CONSTRUCTION and `kaOrderId` THROWS rather than
+// trimming, so a prefix change that would breach the limit fails loudly instead of silently
+// minting unqueryable parcels.
+export const KA_ORDER_ID_MAX = 20;
+/**
+ * The fewest order-identifying characters a reference may carry. The real order-number format is
+ * `PHI-<9 digits of Date.now()><3 base36>`; 8 characters keeps the whole 3-char random tail plus
+ * five timestamp digits, which is the floor at which a human can still find the order. A prefix
+ * long enough to push the body under this is a MISCONFIGURATION, not something to absorb.
+ */
+const KA_REF_MIN_BODY = 8;
+
+/** Characters left for the reference once `${prefix}-` is paid for. */
+export function kaOrderRefBudget(prefix: string = KA_ORDER_PREFIX): number {
+  return KA_ORDER_ID_MAX - prefix.length - 1;
+}
+
+/**
+ * Build the reference half of `order_id` for one booking ATTEMPT of one order.
+ *
+ * - The leading `PHI` is dropped: it is constant across every order on the platform and the vendor
+ *   prefix already identifies us, so it carried 0 bits while costing 3 of 20 characters. What is
+ *   left (`768771328ISC`) is still the order number a human can search for in `orders.number`.
+ * - `attempt` is the number of `shipment_bookings` rows this order already has, read under the same
+ *   per-store advisory lock the reservation takes — a COUNTER, not a random tail. One base36
+ *   character therefore separates 36 repeat bookings of one order EXACTLY (probability 0), where a
+ *   random character would collide on ~27% of a mere five re-bookings. `provider_reference` is
+ *   UNIQUE in the database and remains the backstop.
+ * - Different ORDERS cannot collide on the production prefix `5758`, where nothing is dropped
+ *   (`orders.number` is globally unique). On the longer `TOKOPHI` fallback one timestamp digit is
+ *   dropped from the LEFT — the slowest-varying, least identifying one — so two orders would have
+ *   to be placed exactly 10^8 ms (27,8 h) apart to the millisecond AND draw the same 1-in-46 656
+ *   tail.
+ */
+export function buildKaOrderRef(
+  orderNumber: string,
+  attempt: number,
+  prefix: string = KA_ORDER_PREFIX,
+): string {
+  if (!Number.isInteger(attempt) || attempt < 0 || attempt > 35) {
+    throw new Error(`KiriminAja order_id: booking attempt ${attempt} is outside 0..35 for ${orderNumber}`);
+  }
+  const suffix = attempt.toString(36).toUpperCase();
+  const budget = kaOrderRefBudget(prefix);
+  if (budget - suffix.length < KA_REF_MIN_BODY) {
+    throw new Error(
+      `KIRIMINAJA_ORDER_PREFIX "${prefix}" leaves only ${budget - suffix.length} characters for the order reference; ` +
+        `${KA_REF_MIN_BODY} are needed to keep an order identifiable within the ${KA_ORDER_ID_MAX}-character tracking limit`,
+    );
+  }
+  const compact = orderNumber.replace(/[^A-Za-z0-9]/g, "").toUpperCase().replace(/^PHI/, "");
+  if (!compact) throw new Error(`KiriminAja order_id: order number "${orderNumber}" carries no identifier`);
+  return compact.slice(-(budget - suffix.length)) + suffix;
+}
+
+/** The whole `order_id`. Throws — never trims — when the vendor's tracking limit would be breached. */
+export function kaOrderId(orderRef: string, prefix: string = KA_ORDER_PREFIX): string {
+  const id = `${prefix}-${orderRef}`;
+  if (id.length > KA_ORDER_ID_MAX) {
+    throw new Error(
+      `KiriminAja order_id "${id}" is ${id.length} characters; POST /api/mitra/tracking accepts ${KA_ORDER_ID_MAX}. ` +
+        `Refusing to book a parcel we could never track (Task 8.20).`,
+    );
+  }
+  return id;
+}
+
 export const kiriminajaConfigured = () => isConfigured(KEY);
 
 /** A KiriminAja reply that was not JSON at all — a gateway HTML page, an empty 502, a proxy timeout. */
@@ -171,7 +248,7 @@ export type KaItem = {
   width: number; length: number; height: number;
 };
 export type KaPackage = {
-  orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
+  orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`, ≤ 20 chars total — see buildKaOrderRef
   destName: string; destPhone: string; destAddress: string;
   destKecamatanId: number; destKelurahanId?: number | null; destZipcode?: string;
   weight: number; itemValue: number; itemName: string;
@@ -237,7 +314,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     platform_name: "mitra",
     schedule,
     packages: [{
-      order_id: `${KA_ORDER_PREFIX}-${pkg.orderRef}`,
+      order_id: kaOrderId(pkg.orderRef),
       destination_name: pkg.destName, destination_phone: pkg.destPhone, destination_address: pkg.destAddress,
       destination_kecamatan_id: pkg.destKecamatanId,
       ...(pkg.destKelurahanId ? { destination_kelurahan_id: pkg.destKelurahanId } : {}),
