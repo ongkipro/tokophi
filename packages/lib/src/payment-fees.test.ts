@@ -25,7 +25,7 @@ describe("payment fee schedule", () => {
   it("a pct fee reads the base ITS OWN schedule entry declares", () => {
     // e-wallet stays on the payable — the declared base decides, not the caller
     expect(PAYMENT_FEES.ewallet.base).toBe("payable");
-    expect(paymentFee("ewallet", { omsetIdr: 100_000, payableIdr: 120_000 })).toBe(Math.round(120_000 * 0.024));
+    expect(paymentFee("ewallet", { omsetIdr: 100_000, payableIdr: 120_000 })).toBe(Math.round(120_000 * 0.03));
   });
 
   it("the per-bank override map only carries flats that differ from the VA default", () => {

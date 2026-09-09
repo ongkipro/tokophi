@@ -38,6 +38,7 @@ import {
 } from "@tokophi/ui/dropdown-menu";
 import { cn } from "@tokophi/ui/lib/utils";
 import { initials } from "@/components/bits";
+import type { FeeComparisonRow } from "@tokophi/lib/autolaris";
 import { saveGateways, saveCouriers, savePaymentChannels, syncPaymentChannels, invitePlatformAdmin, testKiriminajaConnection, testAutolarisConnection, saveCodAllowed, syncCouriersFromKiriminaja, setSubscriptionPpn } from "@/lib/actions";
 import { resetPlatformAdminPassword } from "@/lib/actions";
 import { refused } from "@/lib/refused";
@@ -132,12 +133,20 @@ export function PengaturanClient({
   const [payPing, setPayPing] = useState<{ ok: boolean; message: string } | null>(null);
   const [payTesting, startPayPing] = useTransition();
   const [chanSyncing, startChanSync] = useTransition();
+  // Fee reconciliation from the last Sync. It is NOT persisted and NOT loaded on render: it is a
+  // statement about the moment the operator pressed the button, and a stale copy of "provider vs
+  // us" read off a page load would be a money claim with no timestamp behind it.
+  const [feeCompare, setFeeCompare] = useState<{ rows: FeeComparisonRow[]; at: number } | null>(null);
   const syncChannels = () =>
     startChanSync(async () => {
-      const no = refused(await syncPaymentChannels());
+      const r = await syncPaymentChannels();
+      const no = refused(r);
       if (no) return void toast.error(no);
-      router.refresh(); // reloads channels with fresh active/enabled from AutoLaris probe
-      toast.success("Channel disinkron dari AutoLaris.");
+      setFeeCompare(r.comparison ? { rows: r.comparison, at: r.probedAt ?? Date.now() } : null);
+      router.refresh(); // reloads channels with fresh active/enabled from list_payment
+      const off = r.comparison?.filter((c) => c.verdict === "differs").length ?? 0;
+      if (off) toast.warning(`Channel disinkron. ${off} channel punya biaya provider yang BEDA dari jadwal kami — cek tabel di bawah.`);
+      else toast.success("Channel disinkron dari AutoLaris.");
     });
   const toggleChannel = (key: string, on: boolean) =>
     setChannels((prev) => prev.map((c) => (c.key === key ? { ...c, enabled: on } : c)));
@@ -367,6 +376,8 @@ export function PengaturanClient({
                     return <ChannelGroup key={g.kind} group={g} rows={rows} onToggle={toggleChannel} />;
                   })}
                 </div>
+
+                {feeCompare && <FeeReconciliation rows={feeCompare.rows} at={feeCompare.at} />}
 
                 <div className="flex justify-end pt-4">
                   <Button className="gap-1.5" disabled={pending} onClick={savePayment}>
@@ -678,6 +689,80 @@ function ChannelGroup({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Fee reconciliation: ours vs the provider's, REPORT ONLY ────────────────────────────────────
+//
+// 🔵 The two columns are NOT the same fact, and the screen says so. "Jadwal kami" is what the
+// SHOPPER is charged at checkout — an owner ruling recorded in specs/docs/FINANCE.md
+// (@tokophi/lib/payment-fees). "Provider" is `admin`/`tipe_admin` from `GET /api/h2h/list_payment`:
+// what AutoLaris nets from the platform. They are allowed to differ — the gap is platform margin
+// or platform absorption — so a "Beda" row is information, not an error, and NOTHING here writes a
+// fee. Auto-adjusting our schedule from the provider would move what shoppers pay on a number no
+// owner approved, which is the one thing FINANCE.md exists to prevent.
+function fmtFee(f: { type: "flat" | "pct" | "unknown"; value: number | null } | null): string {
+  if (!f || f.value === null || f.type === "unknown") return "—";
+  return f.type === "pct" ? `${(f.value * 100).toLocaleString("id-ID", { maximumFractionDigits: 3 })}%` : `Rp${f.value.toLocaleString("id-ID")}`;
+}
+const VERDICT: Record<FeeComparisonRow["verdict"], { word: string; className: string }> = {
+  match: { word: "Sama", className: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400" },
+  differs: { word: "Beda", className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  "not-compared": { word: "Tidak dibandingkan", className: "bg-muted text-muted-foreground" },
+};
+
+function FeeReconciliation({ rows, at }: { rows: FeeComparisonRow[]; at: number }) {
+  if (rows.length === 0) return null;
+  const differs = rows.filter((r) => r.verdict === "differs").length;
+  return (
+    <div className="mt-4 overflow-hidden rounded-lg border">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Biaya: jadwal kami vs provider</p>
+          <p className="text-xs text-muted-foreground">
+            Dibaca dari AutoLaris {WIB.format(new Date(at))} WIB. Hanya laporan — tidak ada biaya yang diubah otomatis.
+          </p>
+        </div>
+        <Badge variant="secondary" className={cn("border-transparent", differs ? VERDICT.differs.className : VERDICT.match.className)}>
+          {differs ? `${differs} beda` : "Semua sama"}
+        </Badge>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-xs text-muted-foreground">
+              <th className="px-3 py-2 font-medium">Channel</th>
+              <th className="px-3 py-2 font-medium tabular-nums">Jadwal kami</th>
+              <th className="px-3 py-2 font-medium tabular-nums">Provider</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const v = VERDICT[r.verdict];
+              return (
+                <tr key={r.code} className="border-b last:border-0 align-top">
+                  <td className="px-3 py-2">
+                    <span className="font-medium">{r.label}</span>
+                    <span className="block text-[11px] uppercase text-muted-foreground">{r.code}</span>
+                  </td>
+                  <td className="px-3 py-2 tabular-nums">{fmtFee(r.ours)}</td>
+                  <td className="px-3 py-2 tabular-nums">
+                    {fmtFee(r.theirs)}
+                    <span className="block text-[11px] text-muted-foreground">{r.theirs.raw}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {/* WCAG 1.4.1 — the verdict is a WORD, the colour is only the second signal. */}
+                    <Badge variant="secondary" className={cn("border-transparent", v.className)}>{v.word}</Badge>
+                    <span className="mt-1 block max-w-[24rem] text-[11px] text-muted-foreground">{r.note}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

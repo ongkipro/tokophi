@@ -64,7 +64,7 @@ old "display only" note is dead.
 | **QRIS** | **0,7%** | goods **omset** (never the payable) |
 | **VA BCA** (`VABCA`) | **Rp6.500** flat | — |
 | **VA other banks** | **Rp3.500** flat | — |
-| E-Wallet | 2,4% | payable |
+| E-Wallet | **3,0%** (dinaikkan dari 2,4% — ruling owner 2026-09-09, menyamakan dengan yang ditagih provider: `list_payment` melaporkan OVO 3,0% `persen`, diukur 2026-09-09) | payable |
 | Minimarket/retail | Rp4.000 flat | — |
 
 - **`base` is part of a fee's identity.** A pct fee without a declared base is how QRIS was 1% of

@@ -8,7 +8,14 @@
 // · VA         flat per transaction, PER BANK: BCA Rp6.500, every other bank Rp3.500. The bank is a
 //              CHANNEL code (platform_payment_channels.channel, e.g. "VABCA"), so the split lives in
 //              CHANNEL_FEE_OVERRIDES — adding a bank with its own price is a data edit, not a deploy.
-// · E-wallet / retail unchanged (the ruling named only QRIS and VA).
+// · E-wallet 3,0% — RAISED from 2,4% by owner ruling 2026-09-09, to match what the provider
+//              actually charges the account: `GET /api/h2h/list_payment` reports OVO at 3,0%
+//              `persen` (measured live 2026-09-09), so 2,4% meant the platform absorbed 0,6 pp on
+//              every e-wallet sale. OVO is the ONLY e-wallet the account offers — DANA/ShopeePay/
+//              LinkAja/GoPay are absent from `list_payment` — so this is an OVO figure in practice.
+//              ⚠️ A per-channel PCT override does not exist (`CHANNEL_FEE_OVERRIDES` is flat-only);
+//              adding a second e-wallet at a different rate needs that machinery first.
+// · Retail unchanged (the 2026-08-24 ruling named only QRIS and VA).
 // · COD is NOT here — it is 3% of (goods omset + shipping) + PPN 11% on the fee, computed inside
 //   `calculateOrderFinance` (@tokophi/lib/order-finance), because it changes the ORDER total, not
 //   just the gateway line.
@@ -24,7 +31,7 @@ export type Fee = { kind: FeeKind; label: string; type: "flat" | "pct"; value: n
 // value: flat = IDR/transaksi; pct = fraction of the declared base.
 export const PAYMENT_FEES: Record<FeeKind, Fee> = {
   va: { kind: "va", label: "Virtual Account (semua bank)", type: "flat", value: 3_500, base: "payable", note: "Rp3.500 / transaksi (BCA Rp6.500)" },
-  ewallet: { kind: "ewallet", label: "E-Wallet (OVO, DANA, ShopeePay, dll)", type: "pct", value: 0.024, base: "payable", note: "2,4% / transaksi" },
+  ewallet: { kind: "ewallet", label: "E-Wallet (OVO, DANA, ShopeePay, dll)", type: "pct", value: 0.03, base: "payable", note: "3% / transaksi" },
   qris: { kind: "qris", label: "QRIS", type: "pct", value: 0.007, base: "omset", note: "0,7% dari nilai barang" },
   retail: { kind: "retail", label: "Minimarket (Indomaret, Alfamart)", type: "flat", value: 4_000, base: "payable", note: "Rp4.000 / transaksi" },
 };

@@ -3257,3 +3257,81 @@ every one of these flips.
 a future private phase closes NEW access and retracts nothing. The docs carry the production IP, the Coolify
 topology and the security reasoning behind each gate; that is a deliberate trade the owner has now made five
 times. Never flip without a new explicit order.
+
+## 2026-09-09 11:46 UTC — Main Session + subagent — AutoLaris: channels read from `list_payment`; the Advice migration REFUSED on evidence
+
+**Why.** The owner asked for a study of `ongkipro/autolaris` and for `courir_id: 1` to be confirmed. It is
+correct and has been since 2026-08-24. The study then found two divergences from the documented contract.
+
+**① `list_payment` replaces a probe that created real bills.** `alProbeChannels()` looped a hardcoded list
+and issued **one `POST /api/h2h/create_payment` per channel** — its own comment admitted *"EXPENSIVE —
+creates sandbox bills"* — to discover what one GET returns. Live read-only response: 8 channels, exactly four
+fields each (`channel_code`, `name`, `admin`, `tipe_admin`); **no `active`/`enabled` field exists**, so absence
+from `data` is the only "unavailable" signal and none was invented. ⚠️ **The old probe was WRONG, not just
+expensive:** `list_payment` reports **OVO available** while the probe had left it `active=false` on production.
+
+**Fee reconciliation — reported, never auto-applied** (the numbers are an owner ruling in `FINANCE.md`;
+changing them silently changes what shoppers pay):
+
+| channel | ours | provider | verdict |
+|---|---|---|---|
+| QRIS | 0,7% of omset | 0,7% `persen` | same |
+| VABCA | Rp6.500 | Rp6.500 `fix` | same |
+| VABNI / VABRI / VAMANDIRI / VAPERMATA | Rp3.500 | Rp3.000 `fix` | **we charge Rp500 more** → platform margin |
+| OVO | 2,4% (e-wallet) | 3,0% `persen` | **we charge 0,6 pp less** → platform absorbs |
+| COD | 3% + PPN (in `order-finance`) | Rp0 `fix` | not comparable |
+
+**② The Advice migration was REFUSED, and refusing it is the finding.** The owner asked to switch
+reconciliation to the documented `/api/h2h/advice`. Two measurements overturned the premise:
+- **`alInquirePaymentStatus` has ZERO callers.** Settlement is decided only by `api/public/pay/callback`
+  (`status === "PAID"`); no cron reconciles. There was no path to migrate. And **`/api/h2h/inquiry_payment`
+  does not exist on our account** — `404 not found` for the same ids Advice answers for. Its test stubs
+  `fetch`, so it has always been green over a path the provider never served.
+- **Advice carries no decisive paid signal.** Four real transactions: all `rc=02 ket="FAILED"` for bills our
+  DB holds as live, while the vendor's documented sample for that rc reads `"PENDING"`. No PAID answer is
+  observable at all (every `berhasil` payment is COD/seeded with no `trx_id`).
+
+So `alAdvice()` ships with a pure `classifyAdvice()` whose `ADVICE_SETTLED` list is **deliberately EMPTY**:
+`SUCCESS`, `BERHASIL`, `DELIVERED`, `PAID`, `LUNAS`, `SETTLED` → `unknown`; the default is `unknown`, never
+`paid`. **Moving settlement onto an official endpoint that says LESS would be a regression**, and a wrong
+"paid" runs `creditSaleForPayment` against money that never arrived. Adding a confirmed word later is a
+one-line data change; the question goes to the provider at go-live.
+
+**Verification.** `vitest` packages/lib + super-admin **45 files / 434 tests**; admin payment paths **67
+files / 637 tests**; tsc clean ×3; eslint 0 errors. RED proofs: restoring the `create_payment` loop fails the
+probe guard; seeding `ADVICE_SETTLED` with `DELIVERED`/`SUCCESS` fails 7 tests. **Not done:** the new
+comparison table has not been seen in a browser (needs a platform login + a live Sync).
+
+## 2026-09-09 11:49 UTC — Main Session — Owner rulings 2026-09-09: e-wallet fee raised to 3%; channel set confirmed already correct
+
+**① E-wallet fee 2,4% → 3,0% (owner ruling, this session).** `list_payment` reports the account's OVO rate as
+**3,0% `persen`** (measured live today), so at 2,4% the platform was absorbing **0,6 pp on every e-wallet
+sale**. Changed in `payment-fees.ts` with the ruling and its evidence written into the schedule block, and
+mirrored in `payment-fees.test.ts`, `FINANCE.md` and the fee summary comment in `autolaris.ts`.
+⚠️ **It is a KIND-level change because a per-channel PCT override does not exist** — `CHANNEL_FEE_OVERRIDES`
+is flat-only (that is how VABCA's Rp6.500 works). OVO is the only e-wallet the account offers (DANA,
+ShopeePay, LinkAja, GoPay are absent from `list_payment`), so kind-level and OVO-level are the same thing
+today; adding a second e-wallet at a different rate needs that machinery first, and the comment says so.
+The `compareChannelFees` test that asserted *"OVO diverges"* now asserts *"OVO matches"* — it changed because
+the fact changed, not because the guard was loosened.
+
+**② The channel set the owner asked for (QRIS + all VA + COD, OVO off) was ALREADY the production state.**
+Read before writing anything, and **nothing was written**:
+
+| kind | enabled |
+|---|---|
+| qris | QRIS ✓ |
+| va | VABCA, VABNI, VABRI, VAMANDIRI, VAPERMATA ✓ — VABSI/VACIMB/VADANAMON off (the provider does not offer them either) |
+| ewallet | all off, incl. OVO ✓ |
+| retail | all off ✓ |
+
+COD is not in that table by design — it is `platform_cod.enabled` (**true**, cap Rp2.000.000).
+
+⚠️ **The two switches must not be confused, and Task 8.18's sync makes that live.** `active` = provider
+availability (written by the sync from `list_payment`); `enabled` = the platform's own decision. After the
+sync ships, OVO becomes `active=true` because the provider does offer it — and it still will NOT appear at
+checkout, because checkout requires `enabled ∧ active` and the owner's `enabled=false` stands. The Super
+Admin table will read "available, but we switched it off", which is the truth.
+
+**A mistake of mine, caught by the tests:** I wrote the verdict literal as `same` where the type says `match`.
+One test went red immediately and I corrected it; the comparison function itself was right all along.

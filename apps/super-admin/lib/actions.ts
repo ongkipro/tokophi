@@ -8,7 +8,7 @@ import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } fro
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
-import { alTestConnection, alProbeChannels, alCreateOrder } from "@tokophi/lib/autolaris";
+import { alTestConnection, alProbeChannels, compareChannelFees, alCreateOrder, type FeeComparisonRow } from "@tokophi/lib/autolaris";
 import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
@@ -418,15 +418,38 @@ export async function setInvoiceStatus(number: string, status: "dibayar" | "menu
 }
 
 // ---- platform settings: persist gateway / courier toggles (were fake-saved before) ----
-// Live-probe AutoLaris, persist `active` per channel, and auto-enable the active ones.
-// EXPENSIVE (one create_payment per channel) — super-admin on-demand only.
-export async function syncPaymentChannels(): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Sync `platform_payment_channels` from `GET /api/h2h/list_payment`, and REPORT how the provider's
+ * per-channel fee configuration compares with our own schedule.
+ *
+ * 🔴 This used to call `alProbeChannels()` when that function looped a hardcoded 16-channel roster
+ * and fired ONE REAL `POST /api/h2h/create_payment` per code — sixteen live provider calls per
+ * click, each CREATING AN ACTUAL BILL on the platform's AutoLaris account, every one abandoned,
+ * to discover something a single GET returns. It also got the answer wrong: measured 2026-09-09,
+ * `list_payment` reports OVO as available on this account while the rc-probe had left
+ * `platform_payment_channels.OVO` at `active = false`. The probe now creates nothing.
+ *
+ * ⚠️ ON FAILURE IT WRITES NOTHING. The authoritative set is "what the response listed", so a
+ * network blip processed as an empty list would deactivate every channel — i.e. take checkout's
+ * payment options offline — and the next Sync would silently re-enable them. Bail instead.
+ *
+ * ⚠️ IT NEVER CHANGES A FEE. `@tokophi/lib/payment-fees` is an owner ruling (FINANCE.md) and drives
+ * what SHOPPERS are charged; the provider's `admin`/`tipe_admin` is what AutoLaris nets from the
+ * platform. Divergence is surfaced for a human and adjusted by nobody but the owner.
+ */
+export async function syncPaymentChannels(): Promise<{ ok: boolean; error?: string; comparison?: FeeComparisonRow[]; probedAt?: number }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  const probed = await alProbeChannels();
+  const probe = await alProbeChannels();
+  if (!probe.ok) return { ok: false, error: probe.error ?? "AutoLaris tidak menjawab." };
   const existing = await db.select({ channel: schema.platformPaymentChannels.channel }).from(schema.platformPaymentChannels);
   const have = new Set(existing.map((e) => e.channel));
-  for (const p of probed) {
+  for (const p of probe.channels) {
+    // A channel the provider lists that we have no `kind` for is REPORTED but not written: `kind`
+    // groups the settings UI and keys the fee schedule, and inventing one would file (e.g.) COD —
+    // which is platform-managed via `platform_cod`, on its own rules — as a gateway channel
+    // checkout could be told to offer. It shows up in the comparison table below either way.
+    if (!p.kind) continue;
     if (have.has(p.code)) {
       // reality → active; auto-enable active ones (platform can still toggle off after)
       await db
@@ -434,14 +457,14 @@ export async function syncPaymentChannels(): Promise<{ ok: boolean; error?: stri
         .set({ active: p.active, enabled: p.active })
         .where(eq(schema.platformPaymentChannels.channel, p.code));
     } else {
-      // roster channel not yet in the DB (e.g. added to AUTOLARIS_KNOWN_CHANNELS later) → insert it
+      // a code the provider lists that has never been recorded here → insert it
       await db
         .insert(schema.platformPaymentChannels)
         .values({ channel: p.code, label: p.label, kind: p.kind, active: p.active, enabled: p.active });
     }
   }
   revalidatePath("/pengaturan");
-  return { ok: true };
+  return { ok: true, comparison: compareChannelFees(probe.channels), probedAt: Date.now() };
 }
 
 // Persist the enable/disable toggles (what's offered at checkout).
