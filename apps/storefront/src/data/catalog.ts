@@ -236,7 +236,11 @@ const isUploadUrl = (u: string) =>
  *  (guard re-verified 2026-08-01 — sharp's `resize({fit:"inside"})` genuinely does enlarge, so that
  *  guard is what stops it, and it sits before the resize). The cost is bounded and known: the
  *  allow-list still caps one image at 7 cache keys (the original + 6 widths). */
-const WIDTHS = [200, 400, 800, 1200, 1600, 2000];
+/** Exported for the three cart-sourced thumbnails (`/keranjang`, `/checkout`, `/checkout/sukses`),
+ *  whose `<img>` is built in the BROWSER from `localStorage.cart[].image` and so cannot call
+ *  `imageSrcSet`: the pages inject this list and build the same `?w=` ladder client-side for a
+ *  merchant upload. ONE list, so a rung added here reaches them in the same commit (Task 6.12). */
+export const UPLOAD_WIDTHS = [200, 400, 800, 1200, 1600, 2000];
 
 /**
  * A `srcset` for a merchant upload, or `undefined` for anything else (seeded static images, and the
@@ -274,7 +278,7 @@ const staticSrcSet = (u: string): string | undefined => {
 };
 
 export const imageSrcSet = (u: string): string | undefined =>
-  u ? (isUploadUrl(u) ? WIDTHS.map((w) => `${u}?w=${w} ${w}w`).join(", ") : staticSrcSet(u)) : undefined;
+  u ? (isUploadUrl(u) ? UPLOAD_WIDTHS.map((w) => `${u}?w=${w} ${w}w`).join(", ") : staticSrcSet(u)) : undefined;
 
 async function loadCatalog(store: StoreInfo): Promise<Catalog> {
   const storeId = store.id;
@@ -773,6 +777,30 @@ export async function enabledPaymentChannels(): Promise<{ code: string; label: s
       .orderBy(asc(schema.platformPaymentChannels.id));
     return rows.map((r) => ({ code: r.channel, label: r.label, kind: r.kind }));
   });
+}
+
+/**
+ * The payment kinds a shopper can actually use, as words — the ONE vocabulary for both callers.
+ *
+ * ⚠️ THE TWO CALLERS NEED DIFFERENT CASING AND THAT IS WHY THIS TAKES A PARAMETER, not why it should
+ * be two maps. `index.astro` renders a badge TITLE ("Transfer Bank & QRIS"); `keranjang.astro` puts
+ * the same words mid-sentence ("Pembayaran lewat kanal resmi — transfer bank & QRIS."). They were
+ * two hand-kept copies that differed only in capitalisation — the shape where the next edit changes
+ * one and silently leaves the other making a different claim about which channels are live.
+ *
+ * An unknown kind is DROPPED rather than printed raw: a new `platform_payment_channels.kind` must be
+ * given a word here deliberately, never leaked to a shopper as a database token.
+ */
+const PAYMENT_KIND_WORDS: Record<string, { title: string; sentence: string }> = {
+  qris: { title: "QRIS", sentence: "QRIS" },
+  va: { title: "Transfer Bank", sentence: "transfer bank" },
+  ewallet: { title: "E-Wallet", sentence: "e-wallet" },
+  retail: { title: "Gerai Retail", sentence: "gerai retail" },
+};
+
+export async function paymentKindWords(style: "title" | "sentence"): Promise<string[]> {
+  const kinds = [...new Set((await enabledPaymentChannels()).map((c) => c.kind))];
+  return kinds.map((k) => PAYMENT_KIND_WORDS[k]?.[style] ?? null).filter((w): w is string => !!w);
 }
 
 // COD (bayar di tempat) — what checkout needs to decide whether to OFFER the option.

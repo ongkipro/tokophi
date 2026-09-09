@@ -21,7 +21,7 @@ import {
   type LeadStage,
   type LeadSource,
   type WaTemplate,
-} from "@/lib/mock/store";
+} from "@/lib/types/domain";
 
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";

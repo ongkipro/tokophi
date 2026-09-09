@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import type { InvoiceDetail } from "@/lib/data/ledger";
 import { IDR } from "@tokophi/lib/format";
-import type { OrderStatus } from "@/lib/mock/store";
+import type { OrderStatus } from "@/lib/types/domain";
 
 const dt = (d: Date) =>
   new Intl.DateTimeFormat("id-ID", {

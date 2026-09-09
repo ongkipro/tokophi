@@ -57,17 +57,10 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
                 <dd class="text-muted">{store.city}, Indonesia</dd>
               </div>
             </div>
-            <div class="flex items-start gap-3">
-              <svg viewBox="0 0 24 24" class="mt-0.5 h-5 w-5 shrink-0 fill-none stroke-brand-500" stroke-width="1.8" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 7v5l3.5 2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-              <div>
-                <dt class="font-medium text-ink">Jam Operasional</dt>
-                <dd class="text-muted">Senin–Jumat 09.00–17.00 WIB</dd>
-                <dd class="text-muted">Sabtu 09.00–14.00 WIB</dd>
-              </div>
-            </div>
+            {/* No "Jam Operasional" row: there is no store setting for opening hours, and one
+                container serves every merchant (ADR 0009) — a hard-coded schedule here was ONE
+                merchant's hours published as every store's (page-map SF-4). Same rule as the email
+                row above: a per-tenant fact the platform does not hold is not rendered. */}
             {email && (
               <div class="flex items-start gap-3">
                 {/* Same rule as the footer: `mailto:` and nothing else — no obfuscation. A merchant

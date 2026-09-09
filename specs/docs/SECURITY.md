@@ -283,10 +283,35 @@ architecture decision before the PostgREST cutover.
 | `tracking-retry:<storeId>` | 5 | 1 min | provider quota |
 | `tracking-test:<storeId>:<channel>` | 10 | 1 min | provider quota |
 
-🔴 **Two properties every one of these shares, and code has been written here assuming otherwise:**
-the counter is an **in-process `Map`** — it resets on every redeploy and does not span replicas — and
-it counts **IPs, not accounts**. One named merchant can be attacked at 15/min *per source address*
-with nothing recording it (§2).
+| `order:<ip>` | 10 | 1 min | the only unauthenticated WRITE surface |
+| `ongkir:<ip>` | 60 | 1 min | live courier quote (provider quota) |
+| `promo:<ip>` | 30 | 1 min | voucher lookup |
+| `chat:*:<ip>` / `chat:send:v:<visitor>` | see `LIMITS`, `apps/storefront/src/lib/chat.ts` | 1 min / 1 h / 10 min | shopper ⇄ merchant chat |
+| `loginfail:<surface>:<email>` | audit at 5/25/125… · **sign-in refused at 25** | 15 min idle | the per-ACCOUNT brake an edge rule cannot be |
+
+Over-limit answers **429** with `Retry-After` in whole seconds (`rateLimited()`,
+`apps/admin/lib/public-guard.ts`); the two login doors return a Bahasa
+`"Terlalu banyak percobaan…"` from the server action instead, since they render, not respond.
+
+✅ **THE COUNTER IS SHARED SINCE 2026-09-09** (Task 6.3 / NF-6, migration **0106**). It used to be an
+in-process `Map` that reset on every redeploy and did not span replicas, and code had been written
+here assuming otherwise. It is now one row per key in `rate_limit_counters`, bumped by a single
+atomic `insert … on conflict do update … returning` — the read, the window roll and the increment
+under one row lock, so two replicas cannot both observe the same count. It also no longer counts
+**IPs only**: `loginfail:<surface>:<email>` is keyed on the account, which is the half a Cloudflare
+rule could never do (the address lives in the POST body of a server action).
+
+⚠️ **WHAT IS STILL TRUE.** The decision is served from a process-local cache and the shared count is
+merged back **write-behind**, because every call site is `if (!rateLimit(...).ok)` and a synchronous
+function cannot do I/O. Consequences, measured: the first call for a key on a freshly started
+process is answered before the shared count is known — **one request per key per replica, where it
+used to be the whole quota, on every deploy** — and a burst inside one round-trip can overshoot by
+the number of requests in flight. `login:*` and `signup:*` fail **CLOSED** when the shared counter is
+known-broken (they already need the database on the next line, so this adds no outage); `order`,
+`ongkir`, `promo`, `paycb` and `chat` fail **OPEN**, because refusing a real shopper for a fault of
+ours is the worse bug. The list is pinned by `packages/lib/src/rate-limit.test.ts`. Cloudflare Rate
+Limiting remains the right OUTER wall — it absorbs volume before it costs a round-trip — and is a
+recommendation this repository cannot implement (zone configuration).
 
 ---
 
@@ -297,7 +322,7 @@ with nothing recording it (§2).
 | **No app-wide CSP.** Only `SVG_SANDBOX` on uploaded SVGs and `nosniff` on the uploads route. | The storefront renders no third-party HTML except `/lp/<slug>` (below). | Any user-supplied HTML on a normal page. |
 | 🔴 **`/lp/<slug>` `set:html` EXECUTES.** A `<script>` in pasted landing HTML **runs**, on the shop's origin, on the page carrying the COD order form. No sanitizer, no CSP. | Gated behind `landing:html` — **owner only** — and the admin now says so truthfully instead of claiming scripts are stripped. | A staff-writable path to it, or a real sanitizer/CSP being cheap. ⚠️ **Do not "fix" with a regex stripper** — `onerror=`, `javascript:`, `<iframe srcdoc>` and SVG handlers are not `<script>`. |
 | **No failed-login audit.** | Small operator set, 60-bit mints. | Any real user base. |
-| **In-process rate limits.** | Single replica today. | A second replica, or a redeploy-timed attack. |
+| **Write-behind rate limits.** The count is shared (0106) but the DECISION is served from a process-local cache one round-trip stale. | A redeploy now leaks one request per key per replica instead of a whole quota; production runs one replica per surface. | Making `rateLimit` async at its ~20 call sites, which turns the merge into a read-before-decide. |
 | ✅ **N1 — CLOSED 2026-08-21 (Task 4.11 / SEC-10).** The URL carried a 2-minute session-shaped JWT: verified, never spent, so REUSABLE for its whole life from history, `Referer`, proxy logs or a pasted ticket — and the session it minted lasted 7 days with no operator marker on it. | The URL now carries a 256-bit **opaque** handle backed by `impersonation_grants` (0098), spent by one atomic `update … where consumed_at is null and expires_at > now()`. Replay/tamper/expiry all match zero rows. The session is **30 minutes** and carries the signed operator identity, which `requireCapability` writes into `platform_activity` on every gated write; `/impersonate/exit` ends it on demand. | It is closed — do not reopen it by putting any signed token back in a URL. `apps/admin/lib/impersonation.test.ts` fails if `jwtVerify` returns to the route or `signImpersonation` comes back. |
 | **N16 — `tokophi_app` DML on platform tables.** | Enforced by app code today. | The PostgREST cutover. |
 | **No compliance document.** | Beta; deferred deliberately. | Leaving beta, or the first real DSAR. |

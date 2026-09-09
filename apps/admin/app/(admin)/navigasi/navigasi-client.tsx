@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
-import { type NavMenu, type NavItem } from "@/lib/mock/store";
+import { type NavMenu, type NavItem } from "@/lib/types/domain";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createMenu, saveMenu, type CreateMenuResult } from "@/lib/actions/menus";

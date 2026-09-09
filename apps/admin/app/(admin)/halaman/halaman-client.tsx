@@ -18,7 +18,7 @@ import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deletePage } from "@/lib/actions/pages";
 import { ConfirmDelete } from "@/components/admin/confirm-delete";
-import { type CmsPage } from "@/lib/mock/store";
+import { type CmsPage } from "@/lib/types/domain";
 
 import { Card, CardContent } from "@tokophi/ui/card";
 import {

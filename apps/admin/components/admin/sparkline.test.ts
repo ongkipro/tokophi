@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { sparklinePath } from "./sparkline";
 import { getSeries } from "@/lib/data/dashboard";
-import type { DayPoint } from "@/lib/mock/store";
+import type { DayPoint } from "@/lib/types/domain";
 import { codeOnly } from "../../../../test/source-code";
 
 // AN SVG PATH MADE OF NaN.

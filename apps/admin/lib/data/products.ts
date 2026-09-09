@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import type { Product } from "@/lib/mock/store";
+import type { Product } from "@/lib/types/domain";
 import { defaultLocationId } from "@/lib/inventory-location";
 
 // Flatten the normalized catalog (products ⋈ default variant ⋈ inventory ⋈ primary media)

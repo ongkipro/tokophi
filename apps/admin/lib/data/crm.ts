@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { asc, eq } from "drizzle-orm";
-import type { Lead, Followup, WaTemplate, FollowupType } from "@/lib/mock/store";
+import type { Lead, Followup, WaTemplate, FollowupType } from "@/lib/types/domain";
 
 // ⚠️ THE REAL CLOCK. This was `ADMIN_TODAY = 2026-06-30`, the seed's frame, and it made the whole
 // screen inert: a follow-up due TODAY computed `+32`, so `dueDays <= 0` — the filter behind "Perlu

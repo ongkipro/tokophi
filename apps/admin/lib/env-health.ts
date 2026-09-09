@@ -57,6 +57,7 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   PLATFORM_DEFAULT_THEME_STORE_ID: { required: false, why: "stores.id pemegang tema default platform (seed-platform-theme). Kosong = kanvas /tema kosong & storefront hanya render tema toko sendiri — keadaan sah, bukan cacat." },
 
   SIGNUP_ENABLED: { required: false, why: "KOSONG BERARTI PENDAFTARAN TERTUTUP — itu keadaan yang sah, bukan cacat. Justru variabel inilah yang gagal sampai pada 5–6 Agustus." },
+  ANTHROPIC_API_KEY: { required: false, why: "Kosong = tombol 'Generate dengan AI' di editor Promo mati dan alasannya ditulis di kartunya — keadaan sah, bukan cacat. Terisi = fitur hidup dan tiap generate memakai kuota API." },
   GOOGLE_CLIENT_ID: { required: false, why: "Kosong = tombol 'Daftar dengan Google' disembunyikan, dan itu default yang jujur." },
   GOOGLE_CLIENT_SECRET: { required: false, why: "Sepasang dengan CLIENT_ID; kosong = jalur Google mati, bukan rusak." },
   GOOGLE_REDIRECT_URI: { required: false, why: "Sepasang dengan CLIENT_ID." },

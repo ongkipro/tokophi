@@ -37,7 +37,6 @@ tokophi/
     db/             # @tokophi/db — Drizzle schema + migrations + seed + client (server-only)
     lib/            # @tokophi/lib — shared pure logic (billing, formatters, courier/PSP clients, …)
     ui/             # @tokophi/ui — shadcn-on-Base-UI components + Tailwind v4 tokens (super-admin uses these)
-    data/           # @tokophi/data — shared menu/data helpers
     sections/       # @tokophi/sections — Store Builder section registry (Puck) (ADR 0009)
   specs/docs/       # PRD, schema, architecture, this map, worklog, decisions/
   docker-compose.coolify.yml   # prod stack (Postgres + migrate + 3 apps + billing cron)
@@ -51,7 +50,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**82 tables**), `migrations/` (**0000–0105**, 106 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**83 tables**), `migrations/` (**0000–0106**, 107 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
@@ -134,7 +133,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 7. Data mapping (schema domains → SCHEMA.md)
 
-**82 tables** (diukur ulang 2026-09-07 — `grep -c 'pgTable(' packages/db/src/schema.ts`; angka 80 di sini sebelumnya dari 2026-08-12 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls` — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments, immutable order finance, shipment bookings) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform**.
+**83 tables** (diukur ulang 2026-09-09 — `grep -c 'pgTable(' packages/db/src/schema.ts`; angka 80 di sini sebelumnya dari 2026-08-12 dari `packages/db/src/schema.ts` + `drizzle/meta/_journal.json` + keluaran `npm run verify-rls` — see `SCHEMA.md` §1). Domains: **identity** (accounts, stores, store_stats, users, store_users, locations) · **catalog** (products, product_media, product_options/variants, inventory_levels, collections + membership/conditions, **media**) · **suppliers/purchasing** · **orders/fulfillment** (orders, line_items, payments, immutable order finance, shipment bookings) · **customers/CRM** (customers — `registered_at` NULL = guest, **checkout_sessions** 0044/0045, segments, leads, followups, wa_templates) · **discounts** · **content** (pages, articles, menus, **page_templates** ADR 0009) · **marketing/analytics** · **platform**.
 
 **RLS** (`0012`) on **54 of 55** store-scoped tables (keluaran `npm run verify-rls -w @tokophi/db` 2026-09-07 — angka ini DERIVED, jalankan verifier, jangan percaya kalimat ini), enforced under `tokophi_app`; the deliberate exception is `platform_activity`. 11 child tables without `store_id` (was 12 — `inventory_levels` gained a direct policy in `0100`). Owner exceptions: auth, super-admin, storefront, `/api/public/*`, cron.
 
@@ -199,6 +198,6 @@ silent outage) · `apps/storefront/src/lib/product-feed.ts` + `src/pages/feed/{g
 
 - **Live:** Vultr Singapore (`45.76.146.40`) + **Coolify v4** (Docker Compose build pack). Domains `admin.`/`super.`/`toko.45.76.146.40.sslip.io`. Deploy = push `main` → Coolify (or API `POST /api/v1/deploy?uuid=…`).
 - **Compose** (`docker-compose.coolify.yml`): `postgres` (volume `tokophi-pgdata`) + one-off `migrate` (drizzle migrate + **idempotent seed**, `SEED_FORCE=1` to force) + `admin` (volume `tokophi-uploads`) + `super-admin` + `storefront` (builds at start) + `cron` (daily billing) + `backup` (daily `pg_dump -Fc` → `tokophi-backups` volume, keeps last 7).
-- **Migrations:** `packages/db/drizzle/` — current head **0105**. `npm run generate` after schema edits; migrate runs on deploy. ⚠️ **Write every migration idempotent** (`add column if not exists`, `create index if not exists`, `do $$ … exception when duplicate_object then null; end $$` for enums): drizzle applies the whole pending batch in ONE transaction, so a single "already exists" rolls back every migration behind it — on 2026-07-30 that left 16 unapplied on the shared dev DB and printed nothing anyone noticed.
+- **Migrations:** `packages/db/drizzle/` — current head **0106**. `npm run generate` after schema edits; migrate runs on deploy. ⚠️ **Write every migration idempotent** (`add column if not exists`, `create index if not exists`, `do $$ … exception when duplicate_object then null; end $$` for enums): drizzle applies the whole pending batch in ONE transaction, so a single "already exists" rolls back every migration behind it — on 2026-07-30 that left 16 unapplied on the shared dev DB and printed nothing anyone noticed.
 - **Env** (Coolify): `DATABASE_URL`, `AUTH_SECRET`, `KIRIMINAJA_*`, `AUTOLARIS_*`, `CRON_SECRET`, `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API`.
 - **Deferred → prod:** uploads → MinIO/S3 (currently container volume, admin-served — storefront can't yet show *uploaded* product images, only seeded `/products/*.webp`) · email/WA comms (tickets/reminders audit-only now) · HTTPS + custom domain (tokophi.com in Cloudflare, DNS not pointed) · Hetzner migration (host-agnostic).

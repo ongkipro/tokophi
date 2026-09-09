@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { getSeries, getSummary, shiftMonth } from "./dashboard";
-import type { DayPoint } from "@/lib/mock/store";
+import type { DayPoint } from "@/lib/types/domain";
 import type { HourPoint } from "./analytics";
 import type { Tx } from "@/lib/tenant";
 import type { ReconciliationMismatch } from "./reconciliation";

@@ -3,6 +3,7 @@ import { db } from "@tokophi/db";
 import { sql } from "drizzle-orm";
 import { KaTransportError, kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
+import { isNotFoundReply } from "@/lib/cancel-reconcile";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 import { cronAuthorized } from "@/lib/cron-auth";
 
@@ -98,6 +99,14 @@ export async function GET(req: NextRequest) {
         ka_order_id as "kaOrderId",
         awb,
         store_id::text as "storeId",
+        -- Task 5.1: a merchant asked the courier to void this shipment and the vendor only QUEUED it.
+        -- Such orders are already in the poll set (still diproses/dikirim, ka_order_id still set);
+        -- the flag is what lets a FAILED pull reach the reconciler, which a healthy pull reaches on
+        -- its own inside syncOrderFromKa.
+        exists (
+          select 1 from shipment_bookings b
+           where b.order_id = orders.id and b.status = 'cancellation_requested'
+        ) as "pendingCancel",
         row_number() over (
           partition by store_id
           order by (problem_at is not null), (awb is not null), placed_at, id
@@ -106,16 +115,17 @@ export async function GET(req: NextRequest) {
       where ka_order_id is not null
         and status in ('diproses', 'dikirim')
     )
-    select number, "kaOrderId", awb, "storeId"
+    select number, "kaOrderId", awb, "storeId", "pendingCancel"
     from ranked
     where poll_round <= ${PER_STORE_BATCH}
     order by poll_round, "storeId"
-  `)) as unknown as { number: string; kaOrderId: string; awb: string | null; storeId: string }[];
+  `)) as unknown as { number: string; kaOrderId: string; awb: string | null; storeId: string; pendingCancel: boolean }[];
 
   let advanced = 0;
   let awbFilled = 0;
   let problems = 0;
   let problemsCleared = 0;
+  let cancelsReconciled = 0;
   const errors: string[] = [];
   const flagPermanentError = async (orderNumber: string, httpStatus: number, detail?: string) => {
     problems++;
@@ -168,6 +178,18 @@ export async function GET(req: NextRequest) {
       if (r.httpStatus >= 400 && r.httpStatus < 500 && !RETRYABLE_4XX[r.httpStatus]) {
         const detail = short(r.error);
         await flagPermanentError(o.number, r.httpStatus, typeof detail === "string" ? detail : undefined);
+      } else if (o.pendingCancel && isNotFoundReply(r.httpStatus, r.error)) {
+        // A void was requested and the vendor now says it does not know the package. Whether that
+        // is the void completing or a lost booking, the reconciler cannot tell — it raises the
+        // order's problem flag so a merchant looks, instead of "diminta" sitting silent forever.
+        // Any other failure shape is `down` → wait, which is what `continue` already does.
+        try {
+          const s = await syncOrderFromKa(o.number, null, null, null, { kind: "not_found" });
+          if (s.changed.some((c) => c.startsWith("cancel:"))) cancelsReconciled++;
+        } catch (err) {
+          console.error("[cron/tracking] cancel reconcile failed", o.number, err);
+          errors.push(o.number);
+        }
       }
       continue;
     }
@@ -208,6 +230,8 @@ export async function GET(req: NextRequest) {
     });
 
     if (!realAwb && !outcome) continue;
+    // A pending cancellation reaches the reconciler through the SAME sync call — it is keyed on the
+    // booking row, not on this flag, so the healthy path needs nothing extra here.
     // A stuck/problem parcel is not a state change but it IS something a merchant must act on. It now
     // reaches the seller as a real flag on the order (`orders.problem_at`/`problem_note`, migration
     // 0062) — shown on the order detail and in the Pesanan list — instead of dying in this log.
@@ -225,6 +249,8 @@ export async function GET(req: NextRequest) {
       // A parcel that started moving again. Worth its own number: it is how you tell "3 problems"
       // meaning "3 parcels are stuck right now" from "3 parcels hiccuped and recovered".
       if (s.changed.includes("problem:cleared")) problemsCleared++;
+      // voided / reverted / attention — the three writes a pending cancellation can produce.
+      if (s.changed.some((c) => c.startsWith("cancel:"))) cancelsReconciled++;
     } catch (err) {
       console.error("[cron/tracking] sync failed", o.number, err);
       errors.push(o.number);
@@ -234,7 +260,7 @@ export async function GET(req: NextRequest) {
   // The SAME summary is returned to the caller and stored. `docker logs` keeps its line; the row is
   // what a human sees without going looking. Storing the counts, not just the timestamp, is the half
   // that matters here: `awbFilled` was 0 for a week and "the cron ran" would have been true all week.
-  const summary = { scanned: orders.length, advanced, awbFilled, problems, problemsCleared, errors: errors.length };
+  const summary = { scanned: orders.length, advanced, awbFilled, problems, problemsCleared, cancelsReconciled, errors: errors.length };
   // ⚠️ `ok` IS DERIVED FROM `errors`, NOT HARD-CODED. It was `ok: true`, so a tick in which every
   // single sync threw wrote a GREEN `cron_runs` row — over the one job whose week-long silence is
   // the reason this table exists at all. `order-expiry` beside it already computes

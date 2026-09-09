@@ -3,7 +3,7 @@ import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { likeContains } from "@tokophi/lib/like";
 import { desc, eq, sql, type SQL } from "drizzle-orm";
-import type { Order } from "@/lib/mock/store";
+import type { Order } from "@/lib/types/domain";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
 
 // ⚠️ THE REAL CLOCK for "x menit lalu" (both call sites below). This was `TODAY = 2026-07-02`, the

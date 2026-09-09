@@ -20,7 +20,7 @@ import { Label } from "@tokophi/ui/label";
 import { Badge } from "@tokophi/ui/badge";
 import { Separator } from "@tokophi/ui/separator";
 import { IDR, num } from "@tokophi/lib/format";
-import { type Discount, type DiscountType } from "@/lib/mock/store";
+import { type Discount, type DiscountType } from "@/lib/types/domain";
 
 // ---- option metadata ----
 const TYPE_OPTIONS: {

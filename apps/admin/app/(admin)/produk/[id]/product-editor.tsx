@@ -21,7 +21,7 @@ import {
   Archive,
 } from "lucide-react";
 
-import { type Product } from "@/lib/mock/store";
+import { type Product } from "@/lib/types/domain";
 import { toast } from "sonner";
 import { IDR, NO_FIGURE, num, share } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";

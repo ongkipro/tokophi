@@ -232,14 +232,6 @@ export async function getAbandonedCarts(withPhoneLimit = 100, anonymousLimit = 4
   });
 }
 
-// One cart, for the recovery action (server-side, so the message text is never client-supplied).
-export async function getAbandonedCart(id: string) {
-  return withCurrentTenant(async (db) => {
-    const [r] = await db.select().from(schema.checkoutSessions).where(eq(schema.checkoutSessions.id, id)).limit(1);
-    return r ?? null;
-  });
-}
-
 export { cartMessage };
 
 export const digits = (s: string) => s.replace(/\D/g, "");

@@ -19,7 +19,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@tokophi/lib/format";
-import { type Product } from "@/lib/mock/store";
+import { type Product } from "@/lib/types/domain";
 import { type InventoryReceiptFact } from "@/lib/data/inventory";
 import { exportCsv } from "@/lib/csv";
 import { cn } from "@tokophi/ui/lib/utils";

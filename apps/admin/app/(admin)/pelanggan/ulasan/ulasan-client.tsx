@@ -33,7 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@tokophi/ui/dropdown-menu";
-import { type Review, type ReviewStatus } from "@/lib/mock/store";
+import { type Review, type ReviewStatus } from "@/lib/types/domain";
 import { num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { SearchInput } from "@/components/admin/search-input";

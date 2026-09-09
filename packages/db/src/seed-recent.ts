@@ -28,10 +28,46 @@
 // - The ledger is DERIVED from `payments`, using the same SQL shape as seed.ts. It is never written
 //   beside the orders: two sources for one balance is two versions of the truth about money.
 // - Deterministic (mulberry32, never Math.random) so the same gap always produces the same orders.
+import { pathToFileURL } from "node:url";
 import { db, client } from "./client";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 const SLUG = "batiknusantara";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// stores.current_period_end — the ONE column whose rot blocks WRITES, not charts (Task 8.13).
+//
+// The main seed writes it `fromNow(20)` (relative to the real clock, not the TODAY anchor), so a
+// fresh seed is fine — but a database seeded 20 days ago holds a period end that has passed, and
+// `computeBilling()` (`@tokophi/lib/billing`) then returns `readOnly` once the 3-day grace is over.
+// Every admin write goes through that gate and throws `SuspendedError`, surfacing as "Gagal
+// menyimpan produk" on a store nobody suspended. Two browser agents lost an afternoon to it on
+// 2026-09-08 and both had to hand-edit `stores` to drive any write path at all.
+//
+// This is the ONE UPDATE in this script that touches a row it did not insert. Contract: only a
+// period end that has ALREADY LAPSED is moved (`< now()`), only for the anchor store, to
+// `now() + 30 days` — the same window the promo vouchers above get. A future period end is left
+// exactly as it is, a NULL one (trial) is left NULL (trial stays trial — the dates are the
+// schedule, `nonaktif`-style), and an operator suspension (`suspended_at`) is a separate fact this
+// does not touch (AGENTS.md → "AN OPERATOR SUSPENSION IS A SEPARATE FACT FROM BILLING"). Idempotent
+// by the WHERE: the second run matches zero rows.
+//
+// Exported, and takes its executor as a parameter, so `seed-recent-billing.test.ts` can run the
+// real statement inside a rolled-back transaction against the throwaway `_test` database.
+// ─────────────────────────────────────────────────────────────────────────────
+export const RECENT_PERIOD_DAYS = 30;
+type Exec = { execute(q: SQL): Promise<unknown> };
+
+/** Pushes a LAPSED `current_period_end` to now()+30d. Returns the new end (WIB date) or null if untouched. */
+export async function seedBillingPeriod(exec: Exec, storeId: string): Promise<string | null> {
+  const rows = (await exec.execute(sql`
+    update stores
+       set current_period_end = now() + (${RECENT_PERIOD_DAYS} || ' days')::interval
+     where id = ${storeId} and current_period_end < now()
+     returning to_char(current_period_end at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as until
+  `)) as Row[];
+  return rows.length ? String(rows[0].until) : null;
+}
 
 function mulberry32(seed: number) {
   return function () {
@@ -525,6 +561,15 @@ async function main() {
   if (!store) throw new Error(`Store ${SLUG} not found — nothing to top up.`);
   const storeId = String(store.id);
 
+  // BILLING FIRST — a lapsed period makes every admin write fail (Task 8.13), and that is the one
+  // symptom of seed rot this script used to leave in place. One row, printed once, no-op when current.
+  const until = await seedBillingPeriod(db, storeId);
+  console.log(
+    until
+      ? `✓ Langganan ${store.name} sudah kedaluwarsa — current_period_end dimajukan ke ${until} (+${RECENT_PERIOD_DAYS} hari).`
+      : `✓ Langganan ${store.name} masih aktif — current_period_end tidak disentuh.`,
+  );
+
   // PROMO demo (PROMO P5) — runs BEFORE the order top-up's early return so the /promo hub is always
   // populated, even when there are no empty order days. All now()-relative (the anchored main seed
   // can't make a flash sale that is live TODAY) and idempotent, so it is safe on prod.
@@ -536,9 +581,13 @@ async function main() {
   await seedCheckoutSessions(storeId);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exitCode = 1;
-  })
-  .finally(() => client.end());
+// Entrypoint guard (same shape as `verify-ledger.ts`): `seedBillingPeriod` is imported by a test,
+// and importing this module must NOT run the top-up against whatever DATABASE_URL is in scope.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exitCode = 1;
+    })
+    .finally(() => client.end());
+}

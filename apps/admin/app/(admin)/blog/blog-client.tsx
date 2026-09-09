@@ -17,7 +17,7 @@ import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteArticle } from "@/lib/actions/articles";
 import { ConfirmDelete } from "@/components/admin/confirm-delete";
-import type { BlogPost } from "@/lib/mock/store";
+import type { BlogPost } from "@/lib/types/domain";
 
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";

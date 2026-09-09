@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
-import type { Activity } from "@/lib/mock/store";
+import type { Activity } from "@/lib/types/domain";
 
 // Real "live activity" feed for the CURRENT store (RLS-scoped): recent orders, signups,
 // reviews, and low-stock alerts — replacing the static mock so it reflects the actual store

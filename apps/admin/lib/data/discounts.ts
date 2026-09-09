@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { and, asc, eq, ne, sql } from "drizzle-orm";
-import type { Discount } from "@/lib/mock/store";
+import type { Discount } from "@/lib/types/domain";
 
 // Admin display status is derived from the dates (real terjadwal / aktif / kadaluarsa).
 const KIND_TO_TYPE = { persen: "persen", nominal: "nominal", gratis_ongkir: "ongkir" } as const;

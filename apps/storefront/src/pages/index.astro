@@ -9,7 +9,7 @@ import SectionHeading from "../components/SectionHeading.astro";
 import SectionRenderer from "../components/sections/SectionRenderer.astro";
 import Hero from "../components/sections/Hero.astro";
 import { heroSlides, type HeroConfig } from "@tokophi/sections";
-import { storeCodEnabled, enabledPaymentChannels, mediaUrl } from "../data/catalog";
+import { storeCodEnabled, mediaUrl, imageSrcSet, paymentKindWords } from "../data/catalog";
 import { ldScript } from "../lib/breadcrumb";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
@@ -28,15 +28,7 @@ const COD_ENABLED = await storeCodEnabled(store.id);
 // real data. It was also silent about Virtual Account, which is 5 of the 6 channels that DO work.
 //
 // Derived from the same list checkout offers, so the two can never drift apart.
-const KIND_LABEL: Record<string, string> = {
-  qris: "QRIS",
-  va: "Transfer Bank",
-  ewallet: "E-Wallet",
-  retail: "Gerai Retail",
-};
-const PAY_KINDS = [...new Set((await enabledPaymentChannels()).map((c) => c.kind))]
-  .map((k) => KIND_LABEL[k] ?? null)
-  .filter((l): l is string => !!l);
+const PAY_KINDS = await paymentKindWords("title");
 // No live channel ⇒ no claim. The badge falls back to the one thing that is true regardless.
 const PAY_BADGE = PAY_KINDS.length
   ? { Icon: QrCode, title: PAY_KINDS.join(" & "), text: "Bayar praktis, tanpa ribet." }
@@ -91,6 +83,14 @@ const collections = catalog.collections.map((c) => {
   const items = catalog.byCollection(c.handle);
   return { ...c, image: items[0]?.image, count: items.length };
 });
+// `sizes` for a category tile, derived from ITS grid (Task 6.12): section `max-w-7xl px-4 sm:px-6`,
+// grid `grid-cols-2 gap-x-4 sm:grid-cols-3 lg:grid-cols-4` (column gap 16 at every breakpoint):
+//   <640      (100vw − 32 − 16) / 2 = (100vw − 48) / 2
+//   640–1023  (100vw − 48 − 32) / 3 = (100vw − 80) / 3
+//   1024–1279 (100vw − 48 − 48) / 4 = (100vw − 96) / 4
+//   ≥1280     (1280  − 96)      / 4 = 296            — the same 296 the product grid below derives
+const TILE_SIZES =
+  "(min-width: 1280px) 296px, (min-width: 1024px) calc((100vw - 96px) / 4), (min-width: 640px) calc((100vw - 80px) / 3), calc((100vw - 48px) / 2)";
 
 // The meta description is the highest-visibility text this store has — it IS the SERP snippet — so it
 // must describe THIS store. It used to be hardcoded to the demo's vertical: "Belanja dress, atasan,
@@ -250,6 +250,8 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
             {c.image ? (
               <img
                 src={c.image}
+                srcset={imageSrcSet(c.image)}
+                sizes={imageSrcSet(c.image) ? TILE_SIZES : undefined}
                 alt={c.name}
                 loading="lazy"
                 class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"

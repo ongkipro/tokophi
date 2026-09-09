@@ -34,7 +34,6 @@ TokoΦ is an npm-workspaces monorepo. Four deployable surfaces, five shared pack
 | `@tokophi/lib` | `format` (IDR/num/timeAgo), `billing`, `autolaris` (PSP client), `kiriminaja` (courier client), `cache` (+ in-process `rateLimit`), `colors`, `couriers`, `totp`, `integration-status`, `payment-fees`. | admin, super-admin, storefront |
 | `@tokophi/ui` | 22 shadcn primitives on **Base UI** (not Radix) + Tailwind v4 tokens. | super-admin (admin still has its own local copy) |
 | `@tokophi/sections` | **Types only, zero runtime.** The Store-Builder section contract (`SECTION_TYPES`, `SECTION_DEFAULTS`, `StoredTemplateData` = the shape of `page_templates.sections`). | admin (Puck editor) **and** storefront (Astro renderer) — this is what stops the two from drifting. |
-| `@tokophi/data` | Small shared menu/nav data. | admin, storefront |
 
 ### 1.1 The whole system
 

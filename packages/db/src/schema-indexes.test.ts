@@ -97,6 +97,7 @@ const INDEX_CENSUS: Record<string, Census> = {
   analytics_events_store_ts_idx: "sql-only: index pencarian polos (store_id, ts)",
   chat_visitors_store_customer_idx: "sql-only: index pencarian polos",
   checkout_sessions_store_status_idx: "sql-only: index pencarian polos",
+  rate_limit_counters_expires_idx: "drizzle",
   conversation_messages_conv_created_idx: "sql-only: index pencarian polos",
   conversations_store_last_msg_idx: "sql-only: index pencarian polos",
   conversations_store_status_idx: "sql-only: index pencarian polos",

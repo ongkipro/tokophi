@@ -1,4 +1,4 @@
-import type { NavItem } from "@/lib/mock/store";
+import type { NavItem } from "@/lib/types/domain";
 
 // Pure, immutable transforms for the 2-level navigation tree
 // (top-level items + one level of children). Every function returns a NEW

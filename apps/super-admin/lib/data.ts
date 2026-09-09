@@ -874,13 +874,15 @@ export async function getPlatformAdmins(): Promise<PlatformAdminRow[]> {
   return rows.map((r) => ({ id: r.id, name: r.name ?? r.email, email: r.email, role: r.role }));
 }
 
-export async function getAggregator(): Promise<{ provider: string; enabled: boolean; env: string }> {
+// `enabled` is deliberately NOT returned (Task 8.12): `shipping_aggregator.enabled` is a record no
+// shipping path reads, and its only consumer was a status light — see the Kurir card's comment.
+export async function getAggregator(): Promise<{ provider: string; env: string }> {
   const agg = (await db.select().from(schema.shippingAggregator))[0];
   const PROVIDER_NAME: Record<string, string> = { biteship: "Biteship", rajaongkir: "RajaOngkir", shipper: "Shipper", kiriminaja: "KiriminAja" };
   // N35: the card said WHICH aggregator but never WHICH KEY. "Terhubung" against the sandbox and
   // "Terhubung" against production read identically, and only one of them moves a real parcel — the
   // operator had to press Test koneksi (whose message carries it) or leave for Analitik to find out.
-  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", enabled: agg?.enabled ?? false, env: kaEnvName() };
+  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", env: kaEnvName() };
 }
 
 // Single-row platform finance config (0101). Missing row = the migration default: PPN OFF —

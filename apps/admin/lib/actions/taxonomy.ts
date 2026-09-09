@@ -4,10 +4,16 @@
 import { db, schema } from "@tokophi/db";
 import { and, asc, ilike, sql } from "drizzle-orm";
 import { likeContains } from "@tokophi/lib/like";
+import { getSession } from "@/lib/auth";
 
 export type TaxonomyOption = { id: number; path: string; name: string; isLeaf: boolean };
 
 export async function searchTaxonomy(query: string): Promise<TaxonomyOption[]> {
+  // Reference data, not tenant data — but it is still a `"use server"` door reachable by anyone who
+  // can POST to the app, and the middleware's JWT check is the only thing in front of it. Bail on a
+  // missing session the way every other read does (page-map AD-6), so the rule "no action runs
+  // without a session" has no exception to remember.
+  if (!(await getSession())) return [];
   const q = query.trim();
   if (q.length < 2) return [];
   // Match paths containing EVERY typed word (so "dress wanita" narrows), shortest path first so the

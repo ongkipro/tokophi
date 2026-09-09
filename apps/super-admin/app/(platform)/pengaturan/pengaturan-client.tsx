@@ -89,7 +89,7 @@ export function PengaturanClient({
   gateways: Toggle[];
   couriers: CourierRow[];
   channels: PaymentChannelRow[];
-  aggregator: { provider: string; enabled: boolean; env: string };
+  aggregator: { provider: string; env: string };
   team: TeamMember[];
   finance: { subscriptionPpnEnabled: boolean };
   kaProbe: KaProbe;
@@ -408,9 +408,19 @@ export function PengaturanClient({
                       >
                         {aggregator.env}
                       </Badge>
-                      {aggregator.enabled && (
-                        <Badge variant="secondary" className="border-transparent bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">Aktif</Badge>
-                      )}
+                      {/* ⚠️ NO "Aktif" BADGE HERE, DELIBERATELY (Task 8.12, 2026-09-09 — the same ruling
+                          as the payment banner above, 2026-08-20). It used to render from
+                          `aggregator.enabled`, i.e. `shipping_aggregator.enabled` — a column NO
+                          shipping path consults. `shipping-quote.ts`, `api/public/ongkir` and
+                          `actions/shipping.ts` gate on `platform_couriers.enabled` ∩
+                          `store_shipping_methods.enabled` (+ `platform_cod.enabled` for COD), so a
+                          green "Aktif" sat directly beside the red "Ditolak" of a real upstream 401 —
+                          the control plane saying "on" over an aggregator that cannot price a single
+                          parcel. There is no Switch for it either, so it was a status light wired to
+                          nothing. The courier counter and the probe badge beside it ARE the enforced
+                          and the measured facts and stay. If a platform-wide aggregator kill-switch is
+                          ever wanted, it has to be ENFORCED at `shipping-quote.ts` first — the way
+                          `platform_cod.enabled` is — and only then surfaced. */}
                       {/* Task 8.3 — the LIVE state, not the key's presence. Glyph + word, never colour
                           alone; the time is when the cached probe last ran (≤5 min old), not now. */}
                       <KaProbeBadge probe={kaProbe} />

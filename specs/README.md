@@ -23,7 +23,8 @@ Start from the authority map below. Verify dated claims against code and the tar
 | Accepted architectural decisions | [`decisions/`](decisions/) |
 | Verifiable behavior and requirement status | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) |
 | Current audit evidence and release blockers | [`docs/AUDIT-SUMMARY.md`](docs/AUDIT-SUMMARY.md) |
-| Active remediation queue and release gate | Repository-root [`TASKS.md`](../TASKS.md) |
+| Active remediation queue and release gate | Repository-root [`TASKS.md`](../TASKS.md) — **the one execution queue** |
+| Historical epic ledger (evidence only — not a queue) | [`docs/TASKS.md`](docs/TASKS.md) |
 | Runtime, seeded-data, and environment status | [`docs/STATUS.md`](docs/STATUS.md) |
 | Deployment procedure | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | Security posture | [`docs/SECURITY.md`](docs/SECURITY.md) |
@@ -35,10 +36,10 @@ Supporting domain references:
 - [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) explains the surfaces, the tenant boundary and the cross-surface edges (dated; see its header for what is stale).
 - [`docs/FLOWS.md`](docs/FLOWS.md) and [`docs/UML.md`](docs/UML.md) describe critical flows and state machines.
 - [`docs/SCHEMA.md`](docs/SCHEMA.md) is a dated schema snapshot; query the target database before relying on counts.
-- [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) records engineering applicability, open policy owners, and legal-review gates.
-- [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) records current signals, blind spots, proposed SLIs, and runbooks.
+- [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) is a **stub** (NOT WRITTEN on `main` — Task 5.8 owner decision; a draft sits on the unmerged `feature/buyer-account-local`). Today's data-handling rules are in `docs/SECURITY.md`.
+- [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) is a **pointer stub**: the probe contract is repository-root [`OBSERVABILITY.md`](../OBSERVABILITY.md); SLI/SLO, RTO/RPO and the recovery runbook are in [`docs/SLA-DRP.md`](docs/SLA-DRP.md).
 - [`openapi/storefront-api.yaml`](openapi/storefront-api.yaml) and [`openapi/admin-api.yaml`](openapi/admin-api.yaml) describe observed HTTP boundaries.
-- [`docs/HEADLESS_STOREFRONT_SPEC.md`](docs/HEADLESS_STOREFRONT_SPEC.md), [`openapi/headless.yaml`](openapi/headless.yaml), [`docs/TOKOPHI_ACCOUNT_SPEC.md`](docs/TOKOPHI_ACCOUNT_SPEC.md), and [`openapi/account.yaml`](openapi/account.yaml) are proposed contracts; they are not deployed behavior.
+- [`docs/HEADLESS_STOREFRONT_SPEC.md`](docs/HEADLESS_STOREFRONT_SPEC.md), [`openapi/headless.yaml`](openapi/headless.yaml), [`docs/TOKOPHI_ACCOUNT_SPEC.md`](docs/TOKOPHI_ACCOUNT_SPEC.md), and [`openapi/account.yaml`](openapi/account.yaml) are **stubs marked NOT WRITTEN — Task 5.8 owner decision**. They are not deployed behavior and not accepted contracts; each stub says where its draft (if any) lives. `npm run verify:doc-authority` keeps these links resolving; `npm run verify:openapi` skips the two YAML stubs by their `x-tokophi-status`.
 
 Historical audits, `docs/BACKLOG.md`, `docs/WORKLOG.md`, `docs/TASKS.md`, and `docs/tasks/NEXT.md` remain evidence only. [`docs/tasks/OPEN.md`](docs/tasks/OPEN.md) is a concise navigation handoff; it does not own work beside root `TASKS.md`.
 
@@ -136,7 +137,7 @@ when the task depends on the provider's current roster.
 | [0013](decisions/0013-stable-catalog-product-ids.md) | Stable catalog product IDs |
 | [0014](decisions/0014-platform-absorbs-cod-shipping.md) | **Superseded by ADR 0015** — former platform-absorbed COD shipping rule |
 | [0015](decisions/0015-net-seller-proceeds-and-shipping-reconciliation.md) | **Accepted** — Net Seller proceeds and shipping reconciliation (supersedes ADR 0014) |
-| [0016](decisions/0016-global-buyer-account.md) | **Accepted direction** — Global buyer identity with isolated per-store customer projections; runtime not deployed |
+| [0016](decisions/0016-global-buyer-account.md) | **NOT WRITTEN — stub** (Task 5.8 owner decision). Draft "Global buyer identity with isolated per-store customer projections" on unmerged `feature/buyer-account-local`; nothing accepted, runtime not deployed |
 
 ---
 

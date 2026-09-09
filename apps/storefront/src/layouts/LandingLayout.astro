@@ -10,6 +10,7 @@ import MarketingPixels from "../components/MarketingPixels.astro";
 import ImageFallback from "../components/ImageFallback.astro";
 import ThemeTokens from "../components/ThemeTokens.astro";
 import { mediaUrl } from "../data/catalog";
+import { clamp } from "../lib/text";
 
 interface Props {
   title: string;
@@ -23,13 +24,7 @@ const { title, description = store.tagline, image, robots } = Astro.props;
 
 const fullTitle = `${title} - ${store.name}`;
 
-const clamp = (text: string, max = 155) => {
-  const t = (text ?? "").replace(/\s+/g, " ").trim();
-  if (t.length <= max) return t;
-  const cut = t.slice(0, max);
-  return cut.slice(0, cut.lastIndexOf(" ")).trimEnd() + "…";
-};
-const desc = clamp(description ?? "");
+const desc = clamp(description);
 const canonical = new URL(Astro.url.pathname, origin).href;
 const favicon = store.faviconUrl ? mediaUrl(store.faviconUrl) : null;
 const ogImage = (() => {

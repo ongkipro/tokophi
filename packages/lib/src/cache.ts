@@ -1,5 +1,7 @@
 import "server-only";
 import { emailError } from "./validate";
+import { type Window, bump, decide, mergeShared, onBackendFailure } from "./rate-limit";
+import { backendDegraded, scheduleBump, scheduleClear } from "./rate-limit-store";
 
 // Simple in-process TTL cache. Cuts repeated live calls (e.g. KiriminAja pricing) + latency.
 // PROD SWAP: replace this module with Cloudflare Workers KV (edge) or Redis — same get/set/cached
@@ -35,20 +37,50 @@ export async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>
   return val;
 }
 
-// Fixed-window rate limit. Returns {ok:false} once `limit` hits are reached within `windowMs`.
-// PROD SWAP: Cloudflare Rate Limiting (edge) / Workers KV / Upstash — same intent.
-const hits = new Map<string, { count: number; reset: number }>();
+// ── THE RATE LIMIT: DECIDED LOCALLY, COUNTED SHARED (Task 6.3 / NF-6) ───────────────────────────
+//
+// This used to be a `Map` and nothing else, and its own comment admitted the two holes: the count
+// reset on every redeploy (measured cadence: several a day, so an attacker's quota was refilled for
+// them) and it did not span replicas. `packages/lib/src/rate-limit-store.ts` now keeps the real
+// count in one Postgres row per key. The Map stays — as the SYNCHRONOUS answer and as a cache of the
+// shared one, not as the source of truth.
+//
+// ⚠️ WHY IT IS NOT SIMPLY `await`ed. Every one of the ~20 call sites is `if (!rateLimit(...).ok)` and
+// a JavaScript function cannot do I/O synchronously. Making this async is a one-word edit at each
+// site and is the shape to move to; until then the shared count is applied WRITE-BEHIND: the local
+// map answers now, one atomic upsert runs in the background, and its authoritative count is merged
+// back into the local entry as `max(local, shared)`. Because every call bumps both, the two stay in
+// lockstep whenever requests are spaced further apart than one round-trip — which is every human,
+// every script and every alternating pair of replicas.
+//
+// ⚠️ WHAT THIS DOES NOT FIX, STATED PLAINLY. The FIRST call for a key on a freshly started process
+// is answered before the shared count is known, so a redeploy leaks exactly one request per key per
+// replica. Before this change it leaked the entire quota, on every deploy. A burst arriving inside one round-trip is counted
+// locally and reconciled after, so it can overshoot by the number of requests in flight; that is
+// inherent to any non-blocking limiter and is the trade being made for not putting a database
+// round-trip in front of every public request.
+const hits = new Map<string, Window>();
+
 export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; remaining: number; retryAfterMs: number } {
   const now = Date.now();
-  const e = hits.get(key);
-  if (!e || now > e.reset) {
-    hits.set(key, { count: 1, reset: now + windowMs });
-    if (hits.size > 10000) for (const [k, v] of hits) if (now > v.reset) hits.delete(k);
-    return { ok: true, remaining: limit - 1, retryAfterMs: 0 };
+
+  // Fail-closed buckets (login, signup) refuse once the shared counter is known-broken — see the
+  // long note in `rate-limit.ts`. It never fires before the counter has worked at least once in this
+  // process, so a machine without a database is the old in-process limiter and nothing worse.
+  if (backendDegraded(now) && onBackendFailure(key) === "closed") {
+    return { ok: false, remaining: 0, retryAfterMs: windowMs };
   }
-  e.count++;
-  if (e.count > limit) return { ok: false, remaining: 0, retryAfterMs: e.reset - now };
-  return { ok: true, remaining: limit - e.count, retryAfterMs: 0 };
+
+  const next = bump(hits.get(key), windowMs, now);
+  hits.set(key, next);
+  if (hits.size > 10000) for (const [k, v] of hits) if (now > v.windowStart + windowMs) hits.delete(k);
+
+  scheduleBump(key, windowMs, now, (shared) => {
+    const cur = hits.get(key);
+    if (cur) hits.set(key, mergeShared(cur, shared, windowMs, Date.now()));
+  });
+
+  return decide(next, limit, windowMs, now);
 }
 
 // ── Failed sign-ins, counted PER ACCOUNT ──────────────────────────────────────────────────────────
@@ -61,13 +93,17 @@ export function rateLimit(key: string, limit: number, windowMs: number): { ok: b
 // was written to no table, no log and no screen, so a slow distributed grind against a named account
 // was invisible on every surface we own.
 //
-// ⚠️ THE SAME IN-PROCESS LIMITATION AS `rateLimit`, WRITTEN DOWN RATHER THAN HIDDEN. This `Map` is
-// per process: it resets on every redeploy and does not span replicas. So a count in an audit row is
-// a FLOOR, never a measurement — the real burst can be larger, and one spread thin enough across
-// replicas may never reach the threshold at all. This is not a detector; it is a witness that
-// produces evidence when it happens to see enough of one. PROD SWAP is the same one the two caches
-// above name (Redis / Workers KV / a `login_attempts` table), and only that swap makes the number
-// true.
+// ⚠️ THE COUNT IS SHARED NOW, AND IT IS STILL A FLOOR (Task 6.3, 2026-09-09). This `Map` used to be
+// the whole story — per process, gone on redeploy, blind to the replica next door — so a count in an
+// audit row could be arbitrarily far under the truth and a grind spread thin enough across replicas
+// might never reach a threshold at all. The streak is now bumped into the same shared Postgres row
+// per key that `rateLimit` uses (`loginfail:<surface>:<email>`), write-behind, and merged back as
+// `max(local, shared)`. That makes the number true across replicas and across a redeploy, which is
+// what makes the per-ACCOUNT LOCK below actually hold instead of resetting under an attacker's feet.
+// It stays a floor for two reasons worth naming: the shared row rolls on a FIXED 15-minute window
+// while the local streak uses an IDLE one, so a slow grinder is undercounted by the shared half (the
+// merge takes the larger, so it can only ever raise the floor, never lower it); and the merge lands
+// one round-trip late. A witness, still — but now one that survives the deploy it was watching.
 //
 // ── WHY FIVE, AND WHY A 15-MINUTE *IDLE* WINDOW ──
 // Somebody mistyping their own password two or three times is ORDINARY, and an audit row for it is
@@ -121,6 +157,12 @@ export function recordFailedLogin(surface: LoginSurface, email: string): string 
   e.count++;
   e.idleUntil = now + FAILED_LOGIN_IDLE_MS;
   failures.set(key, e);
+  // The shared half. Bucket `loginfail` is deliberately NOT in the fail-closed list: a broken counter
+  // must never be able to LOCK someone out — the local streak is the fallback, exactly as before.
+  scheduleBump(`loginfail:${key}`, FAILED_LOGIN_IDLE_MS, now, (shared) => {
+    const cur = failures.get(key);
+    if (cur && shared.count > cur.count) cur.count = shared.count;
+  });
   if (failures.size > 10000) for (const [k, v] of failures) if (now > v.idleUntil) failures.delete(k);
   if (e.count < e.nextReport) return null;
   e.nextReport *= FAILED_LOGIN_ESCALATION;
@@ -129,7 +171,9 @@ export function recordFailedLogin(surface: LoginSurface, email: string): string 
 
 /** A sign-in that succeeded ends the streak — "berturut-turut" has to mean it. */
 export function clearFailedLogins(surface: LoginSurface, email: string): void {
-  failures.delete(failedLoginKey(surface, email));
+  const key = failedLoginKey(surface, email);
+  failures.delete(key);
+  scheduleClear(`loginfail:${key}`);
 }
 
 // ── N62, SECOND HALF: THE ACCOUNT-KEYED BRAKE THE IP LIMITER CANNOT BE ──

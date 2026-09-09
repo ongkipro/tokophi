@@ -2,7 +2,7 @@ import "server-only";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { sql } from "drizzle-orm";
 import { dayKey, dayOf, hourOf, today, midnightDaysAgo } from "@/lib/data/day-bucket";
-import type { DayPoint } from "@/lib/mock/store";
+import type { DayPoint } from "@/lib/types/domain";
 
 // ---------------------------------------------------------------------------
 // 🔴 `analytics_daily` IS RETIRED. THE SERIES IS DERIVED FROM `orders`, LIVE. (2026-08-03)

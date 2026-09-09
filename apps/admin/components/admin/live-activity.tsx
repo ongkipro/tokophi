@@ -1,5 +1,5 @@
 import { ShoppingBag, Eye, Star, PackageMinus, UserPlus } from "lucide-react";
-import type { Activity } from "@/lib/mock/store";
+import type { Activity } from "@/lib/types/domain";
 import { timeAgo } from "@tokophi/lib/format";
 
 const ICON: Record<Activity["kind"], typeof Eye> = {

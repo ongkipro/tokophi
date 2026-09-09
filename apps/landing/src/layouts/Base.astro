@@ -4,7 +4,11 @@ import "../styles/global.css";
 // The apex's one <head>. Extracted when the landing grew past a single page (privasi, kontak, 404):
 // four copies of the og/twitter/canonical block is four places for one of them to drift.
 interface Props {
-  /** Full <title>. This is the most-indexed string on the platform — see the naming rule in AGENTS.md. */
+  /**
+   * Full <title>. This is the most-indexed string on the platform. The rule, stated here because it
+   * lives nowhere else: a sub-page carries the ` | TokoΦ` suffix; the homepage and a title that
+   * already names Tokophi in its words do not (the brand also travels in og:site_name).
+   */
   title: string;
   description: string;
   /** Path with a leading and trailing slash, e.g. "/privasi/". Used for canonical + og:url. */
@@ -50,7 +54,7 @@ const ogImage = new URL("/og.png", `${site}/`).href;
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:alt" content="TokoΦ, seluruh toko Anda dalam satu panel." />
 
-    <!-- summary_large_image, not summary: with a 1200x630 card the small variant crops it to a square. -->
+    {/* summary_large_image, not summary: with a 1200x630 card the small variant crops it to a square. */}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />

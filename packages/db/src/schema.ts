@@ -1940,6 +1940,31 @@ export const cronRuns = pgTable("cron_runs", {
   result: jsonb(),
 });
 
+// Rate limits, counted ACROSS replicas and ACROSS restarts (Task 6.3 / NF-6, migration 0106).
+//
+// One row per limiter key ("<bucket>:<subject>", e.g. `login:admin:1.2.3.4`), bumped by a single
+// `insert ... on conflict do update ... returning` so the read, the window roll and the increment
+// are atomic under the row lock. The statement itself lives in
+// `packages/lib/src/rate-limit-store.ts` — drizzle has no expression for that upsert, and splitting
+// it into a select then an update restores the race `markPayoutPaid` already paid for. This table is
+// modelled here for schema parity only; nothing queries it through drizzle.
+//
+// NO `store_id`, and that is correct: an unauthenticated shopper, a sign-in that has not happened yet
+// and a payment callback have no tenant. RLS is ENABLED WITH NO POLICY (same setting as
+// `impersonation_grants`, 0098) — the owner connection is the only writer and `tokophi_app` has no
+// business reading anyone's counter. That is also why `verify-rls` check 6 does not flag it.
+export const rateLimitCounters = pgTable(
+  "rate_limit_counters",
+  {
+    key: text().primaryKey(),
+    windowStart: ts().notNull(),
+    count: integer().notNull().default(0),
+    /** Only for the opportunistic sweep. A live key's expiry is pushed forward on every bump. */
+    expiresAt: ts().notNull(),
+  },
+  (t) => [index("rate_limit_counters_expires_idx").on(t.expiresAt)],
+);
+
 // Platform operators (US) — the super-admin's own login, separate from store `users`.
 export const platformAdmins = pgTable("platform_admins", {
   id: pk(),
@@ -2241,3 +2266,4 @@ export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type NewConversationMessage = typeof conversationMessages.$inferInsert;
+export type RateLimitCounter = typeof rateLimitCounters.$inferSelect;

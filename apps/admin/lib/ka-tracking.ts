@@ -1,8 +1,9 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { applyOrderStatusChange, type OrderStatus } from "./order-status";
 import { kaTrack } from "@tokophi/lib/kiriminaja";
+import { decideCancelReconcile, type CancelVendorReply } from "./cancel-reconcile";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KiriminAja shipment tracking → order state (BACKLOG shipping #1 + #2).
@@ -106,6 +107,13 @@ export async function syncOrderFromKa(
   awb?: string | null,
   /** Merchant-facing Indonesian reason, stored on `orders.problem_note` when outcome is `problem`. */
   problemNote?: string | null,
+  /**
+   * How the vendor answered, for the CANCELLATION reconciler (Task 5.1). Only consulted when the
+   * order's booking is `cancellation_requested`. Defaults to `{ kind: "tracked", outcome }`, so an
+   * ordinary caller need not know the reconciler exists; the poller passes `{ kind: "not_found" }`
+   * explicitly on a failed pull, because that branch never reaches here otherwise.
+   */
+  cancelReply?: CancelVendorReply,
 ): Promise<KaSyncResult> {
   const changed: string[] = [];
   let found = true;
@@ -134,6 +142,80 @@ export async function syncOrderFromKa(
     if (!order) {
       found = false;
       return;
+    }
+
+    // ── A PENDING CANCELLATION IS RECONCILED BEFORE ANYTHING ELSE (Task 5.1 / F-S12) ─────────
+    // `cancelShipment` recorded the merchant's intent as `shipment_bookings.status =
+    // 'cancellation_requested'`; the vendor only QUEUED the void. This is the one place that reads
+    // it back. It sits above the ordinary mapping on purpose: tracking code 300/302 maps to outcome
+    // `canceled` → `batal`, which for a courier-side cancellation nobody asked for is right — but
+    // for a void the MERCHANT requested it would restore stock and claw back the sale on an order
+    // they mean to re-ship. The decision itself is pure (`cancel-reconcile.ts`); this block only
+    // applies it, inside the same row lock every other tracking write takes.
+    const [pendingCancel] = await tx
+      .select({ id: schema.shipmentBookings.id })
+      .from(schema.shipmentBookings)
+      .where(
+        and(
+          eq(schema.shipmentBookings.orderId, order.id),
+          eq(schema.shipmentBookings.status, "cancellation_requested"),
+        ),
+      )
+      .limit(1);
+    if (pendingCancel) {
+      const decision = decideCancelReconcile(cancelReply ?? { kind: "tracked", outcome });
+      if (decision.action === "void") {
+        // The vendor confirmed the void. The booking is closed, the order drops its provider ids —
+        // `createShipment` refuses while `ka_order_id` is set, and the poller's own query would keep
+        // pulling 300 forever — and a `dikirim` order goes back to `diproses`, the transition the
+        // ALLOWED table documents as "the shipment was VOIDED and the order needs (re)booking".
+        // `diproses` moves no stock and books no money (`applyOrderStatusChange`'s own comment).
+        // ⚠️ The seller's shipping debit on the booking is NOT reversed here: a confirmed void is
+        // not a confirmed REFUND (`shipment_booking_status` has a separate `refunded` for that, and
+        // nothing observes it yet). Reversing on a guess would hand back money the courier may keep.
+        await tx
+          .update(schema.shipmentBookings)
+          .set({
+            status: "voided",
+            voidedAt: new Date(),
+            failureNote: "Kurir mengonfirmasi pembatalan. Pesanan bisa dibooking ulang.",
+          })
+          .where(eq(schema.shipmentBookings.id, pendingCancel.id));
+        await tx
+          .update(schema.orders)
+          .set({ awb: null, kaOrderId: null, problemAt: null, problemNote: null })
+          .where(eq(schema.orders.id, order.id));
+        changed.push("cancel:voided");
+        if (order.status === "dikirim") {
+          const result = await applyOrderStatusChange(
+            tx as unknown as Parameters<typeof applyOrderStatusChange>[0],
+            { storeId: order.storeId, order: { id: order.id, status: "dikirim" }, status: "diproses" },
+          );
+          if (result.applied) changed.push("status:dikirim→diproses");
+        }
+        // Nothing below applies: the AWB was just cleared and the forward mapping (300 → batal) is
+        // exactly what this block exists to pre-empt.
+        return;
+      }
+      if (decision.action === "attention") {
+        // Same shape as the `problem` flag below: stamp once, refresh the note, never re-age it.
+        await tx
+          .update(schema.orders)
+          .set({ problemAt: order.problemAt ?? new Date(), problemNote: decision.note })
+          .where(eq(schema.orders.id, order.id));
+        changed.push("cancel:attention");
+        return;
+      }
+      if (decision.action === "revert") {
+        // The parcel moved, so the cancellation did not happen. The booking stands again and the
+        // ordinary mapping below carries the order wherever the courier says it is.
+        await tx
+          .update(schema.shipmentBookings)
+          .set({ status: "accepted", failureNote: decision.note })
+          .where(eq(schema.shipmentBookings.id, pendingCancel.id));
+        changed.push("cancel:reverted");
+      }
+      // `wait`: fall through — a `booked` outcome cannot move a `diproses`/`dikirim` order anyway.
     }
 
     // AWB: a booking returns awb: null; the waybill exists only once a courier accepts the pickup.

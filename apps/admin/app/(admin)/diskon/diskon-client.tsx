@@ -23,7 +23,7 @@ import { useCan } from "@/components/admin/permissions";
 import { toast } from "sonner";
 import { deleteDiscount } from "@/lib/actions/discounts";
 import { ConfirmDelete } from "@/components/admin/confirm-delete";
-import { type Discount, type DiscountType } from "@/lib/mock/store";
+import { type Discount, type DiscountType } from "@/lib/types/domain";
 
 import { Card, CardContent } from "@tokophi/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";

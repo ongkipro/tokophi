@@ -6,7 +6,7 @@ import { requireCapability } from "@/lib/rbac";
 import { withTenant, withCurrentTenant } from "@/lib/tenant";
 import type { PromoConfig, PromoContent } from "@/lib/data/promo";
 import { resolveFormConfig } from "@tokophi/lib/form-config";
-import { generateLandingCopy } from "@/lib/promo-ai";
+import { generateLandingCopy, promoAiEnabled, PROMO_AI_DISABLED_ID } from "@/lib/promo-ai";
 
 // Clean a bullet/chip list: trim, drop blanks, cap the count and each length so a runaway paste can't
 // bloat the row or the landing page.
@@ -88,6 +88,11 @@ export type GeneratedDraft = Partial<Pick<PromoConfig, "headline" | "subheadline
 
 export async function generatePromoContent(productId: string): Promise<{ ok: boolean; error?: string; draft?: GeneratedDraft }> {
   await requireCapability("content:write");
+
+  // The editor already hides the button when the key is absent (Task 8.7). This is the boundary:
+  // a server action takes its input from the client, so "the UI does not offer it" is never the gate.
+  // Refused HERE, before the product read, so a disabled feature costs no query.
+  if (!promoAiEnabled()) return { ok: false, error: PROMO_AI_DISABLED_ID };
 
   const product = await withCurrentTenant(async (db, storeId) => {
     const [p] = await db

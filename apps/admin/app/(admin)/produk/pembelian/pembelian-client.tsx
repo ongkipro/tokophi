@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/admin/page-header";
 import { IDR, num } from "@tokophi/lib/format";
-import { type PurchaseOrder, type POStatus } from "@/lib/mock/store";
+import { type PurchaseOrder, type POStatus } from "@/lib/types/domain";
 import { type POProduct } from "@/lib/data/purchases";
 import { createPurchaseOrder, receivePurchaseOrder, cancelPurchaseOrder, unreceivePurchaseOrder } from "@/lib/actions/purchases";
 import { useCan } from "@/components/admin/permissions";

@@ -50,7 +50,7 @@ import {
   type FollowupType,
   type FollowupStatus,
   type WaTemplate,
-} from "@/lib/mock/store";
+} from "@/lib/types/domain";
 import { num, waLink, fillTemplate } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { SearchInput } from "@/components/admin/search-input";

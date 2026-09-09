@@ -5,6 +5,7 @@
 # Build-time env (baked into the HTML, PUBLIC_* only):
 #   PUBLIC_LOGIN_URL  (default https://app.tokophi.com/login)
 #   PUBLIC_SIGNUP_URL (default https://app.tokophi.com/daftar)
+#   PUBLIC_DEMO_URL   (default https://batiknusantara.tokophi.id) — the "Buka demo" store
 #   PUBLIC_LEGAL_NAME / PUBLIC_LEGAL_ADDRESS / PUBLIC_CONTACT_EMAIL / PUBLIC_CONTACT_WHATSAPP
 #     — the operating entity and how to reach it. NO DEFAULTS ON PURPOSE: nothing in this repo
 #     establishes them, and /privasi + /kontak print an explicit "belum dicantumkan" notice while
@@ -20,8 +21,10 @@ RUN npm ci
 # which is not `undefined` — the page's fallback would not fire and the CTAs would render href="".
 ARG PUBLIC_LOGIN_URL=https://app.tokophi.com/login
 ARG PUBLIC_SIGNUP_URL=https://app.tokophi.com/daftar
+ARG PUBLIC_DEMO_URL=https://batiknusantara.tokophi.id
 ENV PUBLIC_LOGIN_URL=${PUBLIC_LOGIN_URL}
 ENV PUBLIC_SIGNUP_URL=${PUBLIC_SIGNUP_URL}
+ENV PUBLIC_DEMO_URL=${PUBLIC_DEMO_URL}
 # Identity: empty by design (see the header). An empty value here is exactly what the page treats
 # as "not supplied" — that is the whole contract, so do NOT invent defaults for these four.
 ARG PUBLIC_LEGAL_NAME=

@@ -1178,44 +1178,118 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
     };
   }
 
+  // ── ① RECORD THE INTENT BEFORE THE VENDOR CALL (Task 5.1 / F-S12) ─────────────────────────
+  // The local write used to come AFTER `kaCancelShipment`. A crash between the vendor accepting and
+  // that write left the courier with a queued void the database knew nothing about — the fact was
+  // lost, not merely late. Now the booking flips to `cancellation_requested` first, under the same
+  // advisory lock + row lock as every other booking write, so whatever happens next the row says a
+  // cancellation is in flight. The reconciler (`ka-tracking.ts` → `cancel-reconcile.ts`) reads it
+  // back on every tracking tick and resolves it from what the courier actually reports.
+  const intent = await withTenant(storeId, async (db) => {
+    await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
+    const [booking] = await db
+      .select({ id: schema.shipmentBookings.id, status: schema.shipmentBookings.status })
+      .from(schema.shipmentBookings)
+      .where(
+        sql`${schema.shipmentBookings.orderId} = ${o.id}
+          and ${schema.shipmentBookings.status} in ('accepted', 'cancellation_requested')`,
+      )
+      .limit(1)
+      .for("update");
+    // Two clicks: the pre-guard above read `cancellationPending` outside this lock, so the loser
+    // lands here and must not send a second request to the courier.
+    if (booking?.status === "cancellation_requested") return { kind: "pending" as const };
+    // Orders booked before `shipment_bookings` existed (0094) have no row to carry the intent. They
+    // still get the vendor call — refusing them is a regression — but nothing durable can be
+    // recorded, so the reconciler cannot see them and the poller's ordinary 300 → `batal` applies.
+    if (!booking) return { kind: "legacy" as const };
+    await db
+      .update(schema.shipmentBookings)
+      .set({
+        status: "cancellation_requested",
+        failureNote: "Pembatalan sedang diminta ke kurir; jawaban kurir belum tercatat.",
+      })
+      .where(eq(schema.shipmentBookings.id, booking.id));
+    return { kind: "recorded" as const, bookingId: booking.id };
+  });
+  if (intent.kind === "pending") {
+    return { ok: false, error: "Permintaan pembatalan sebelumnya masih diproses kurir." };
+  }
+
+  // ── ② THE VENDOR CALL ──────────────────────────────────────────────────────────────────────
   const ref = o.awb;
   let result: Awaited<ReturnType<typeof kaCancelShipment>>;
   try {
     result = await kaCancelShipment(ref, reason);
   } catch (error) {
     console.error("[shipping] cancellation request outcome unknown", orderNumber, error instanceof Error ? error.name : "UnknownError");
+    // The request MAY have reached the courier. The intent stays recorded (`cancellation_requested`)
+    // rather than being rolled back: if the void does land, tracking reports 300/302 and the
+    // reconciler voids the booking; if the parcel moves instead, it reverts to `accepted`. Rolling
+    // the row back here would be the lost fact this task exists to prevent.
+    await recordCancelAnswer(storeId, intent, {
+      status: "cancellation_requested",
+      failureNote: "Respons kurir terputus saat meminta pembatalan; permintaan mungkin sudah diterima. Hasilnya diperiksa otomatis lewat pelacakan.",
+    });
+    revalidatePath(`/pesanan/${orderNumber}`);
     return {
       ok: false,
-      error: "Respons kurir terputus saat meminta pembatalan. Status pengiriman tidak diubah; periksa tracking sebelum mencoba lagi.",
+      pending: intent.kind === "recorded",
+      error:
+        "Respons kurir terputus saat meminta pembatalan. Permintaan tercatat dan hasilnya diperiksa otomatis lewat pelacakan; " +
+        "periksa tracking sebelum mencoba lagi.",
     };
   }
   if (!result.ok) {
+    // The courier refused: the shipment stands, so the booking goes back to `accepted`. The vendor's
+    // wording is kept — this is the SELLER's screen, and "sudah melewati jam cut-off" is what they
+    // act on (ADR 0004 hides provider text from SHOPPERS, not merchants).
+    await recordCancelAnswer(storeId, intent, {
+      status: "accepted",
+      failureNote: `Kurir menolak pembatalan: ${(result.error ?? "gagal").slice(0, 400)}`,
+    });
+    revalidatePath(`/pesanan/${orderNumber}`);
     return {
       ok: false,
       error: `KiriminAja menolak pembatalan: ${result.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.`,
     };
   }
 
-  await withTenant(storeId, async (db) => {
-    await db.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
-    const [current] = await db.select({ id: schema.orders.id }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1).for("update");
-    if (!current) return;
-
-    // KiriminAja status=true means the request was queued, not that the shipment cost was voided.
-    // Preserve the AWB/provider ids and every debit until a provider reconciliation confirms refund.
-    await db
-      .update(schema.shipmentBookings)
-      .set({
-        status: "cancellation_requested",
-        failureNote: "Pembatalan diminta; menunggu konfirmasi void/refund provider.",
-      })
-      .where(
-        sql`${schema.shipmentBookings.orderId} = ${current.id}
-          and ${schema.shipmentBookings.status} = 'accepted'`,
-      );
+  // ── ③ THE VENDOR'S ANSWER, RECORDED AFTER ────────────────────────────────────────────────
+  // `status: true` means the request was QUEUED, not that the shipment was voided or its cost
+  // refunded. The AWB, the provider ids and every debit stay until the reconciler confirms.
+  await recordCancelAnswer(storeId, intent, {
+    status: "cancellation_requested",
+    failureNote: "Pembatalan diterima kurir; menunggu konfirmasi void/refund provider.",
   });
   revalidatePath(`/pesanan/${orderNumber}`);
   return { ok: true, pending: true };
+}
+
+/**
+ * Best-effort: the durable fact (`cancellation_requested`) was written BEFORE the vendor call, so a
+ * failure here loses only the note, never the state — which is why it logs instead of throwing. A
+ * legacy order (no booking row) has nothing to update.
+ */
+async function recordCancelAnswer(
+  storeId: string,
+  intent: { kind: "recorded"; bookingId: string } | { kind: "legacy" },
+  patch: { status: "accepted" | "cancellation_requested"; failureNote: string },
+): Promise<void> {
+  if (intent.kind !== "recorded") return;
+  try {
+    await withTenant(storeId, async (db) => {
+      await db
+        .update(schema.shipmentBookings)
+        .set(patch)
+        .where(
+          sql`${schema.shipmentBookings.id} = ${intent.bookingId}
+            and ${schema.shipmentBookings.status} = 'cancellation_requested'`,
+        );
+    });
+  } catch (error) {
+    console.error("[shipping] cancel answer not recorded; intent row stands", intent.bookingId, error instanceof Error ? error.name : "UnknownError");
+  }
 }
 
 // ---- Track a shipment → the real KiriminAja response; syncs the courier AWB the moment it exists ----
