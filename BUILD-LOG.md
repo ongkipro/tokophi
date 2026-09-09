@@ -3238,3 +3238,22 @@ remains unproven and needs one authorised booking.
 
 **Tests.** `kiriminaja-v62.test.ts` 7 → 12 (7 mutations, 7 reds), new `shipping-manifest.test.ts` (5, each
 claim with its own mutation self-check), new `webhook/route.auth.test.ts` (11).
+
+## 2026-09-09 10:37 UTC — Main Session — Repository flipped to PUBLIC (owner order, fifth flip)
+
+`gh api repos/ongkipro/tokophi --jq .visibility` → **public**, verified after the change; `git ls-remote`
+still resolves `main`, so nothing about the remote broke.
+
+**Pre-flight before opening it, because "already indexed" is not a reason to skip the check:**
+`no-published-credentials.test.ts` + `password.test.ts` → **12 passed**, and `git grep` for the KiriminAja
+key confirmed it never entered a tracked file (it lived only in a 0600 scratchpad file outside the repo and
+went to Coolify through Artisan).
+
+**Why it matters operationally:** public restores FREE GitHub Actions minutes, and this repo's CI now runs
+the four-surface build matrix on every PR (Task 5.12) on top of the 163-file suite — that is the lever behind
+every one of these flips.
+
+⚠️ **Standing caveat, unchanged:** the contents have been publicly indexable since the 2026-08-27 window, so
+a future private phase closes NEW access and retracts nothing. The docs carry the production IP, the Coolify
+topology and the security reasoning behind each gate; that is a deliberate trade the owner has now made five
+times. Never flip without a new explicit order.
