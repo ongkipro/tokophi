@@ -3121,3 +3121,139 @@ is); the webhook contract states *"use `awb` and `order_id` together for idempot
 not terminal"*; the status table gives eight codes we do not map yet (`301`, `310`, `311`, `333`, `400`, `500`,
 `152`, `210`/`211`). ⚠️ **The official SDKs are BEHIND the spec** — `kiriminaja/rust` on `main` still calls
 `v6.1/request_pickup`. Do not treat an SDK as the contract.
+
+## 2026-09-09 09:48 UTC — Main Session — DEEP READ of the KiriminAja v6.2 prose (28 sections), and the IP block explained
+
+Earlier today the endpoint list was read; this pass read `info.description` — 18 KB, 28 sections, where the
+operational rules actually live. Re-downloaded first and byte-identical, so both passes describe one artefact.
+
+**🔴 The blocker is undocumented, and that is the finding.** Nothing in 18 KB says an API key is bound to an IP,
+yet the sandbox enforces it. Measured from TWO networks: the refusal always names the CALLER's address
+(`45.77.33.112` from the VPS, `182.253.50.97` from a laptop), and a **garbage key answers `"Unauthorized."`
+instead** — so the key authenticates FIRST and the IP check runs after. That proves both our keys are valid and
+that the allow-list, not the credential, is what refuses us. It also means the block cannot be reasoned about
+from the docs: it needs vendor support.
+⚠️ The prose says a sandbox key comes from **`sandbox.kiriminaja.com`** (register → approval → *Integrasi*).
+**That host does not resolve in DNS**, while `app.kiriminaja.com` answers 200 — the documented onboarding path
+is stale, which is worth quoting to support alongside the refusal.
+
+**One doc claim of ours corrected.** `AGENTS.md` stated volumetric weight as a flat `w × l × h ÷ 6`. The vendor
+says ÷ 6 is the shorthand for regular/next-day/same-day, **÷ 4 for trucking**, and courier configs may expose
+`6000`/`5000`/`4000` — *"use the returned courier configuration… rather than hard-coding a divisor"*. **We are
+not exposed**: `kaShippingPrice` sends dimensions and they do the arithmetic; this repo hard-codes no divisor
+(checked). The prose was still wrong for anyone who might compute it locally, so it now says so.
+
+**🔴 A hazard added to Task 8.16.** The PIN is six digits with a documented maximum of **three attempts**;
+responses carry `attempt`, `max_attempt`, `lock_until`. A naive retry loop would lock the PLATFORM account and
+stop every merchant's bookings at once. The task now says: read `attempt`/`lock_until` and stop, never retry.
+
+**Confirmed correct without change:** base URLs (sandbox `tdev`, production `client`) match ours exactly;
+`kaCodFee` reads `cod_fee`/`cod_fee_amount`/`minimum_cod_fee` from the rate's own `setting` rather than
+hard-coding a percentage, which is what *"the 3PL sets the COD percentage"* requires; and `kaShippingPrice`
+already coerces `results[].cost`, which the doc warns arrives as a STRING while the order endpoint wants an
+integer.
+
+**Recorded for whoever implements next:** COD is `subtotal = item_value + shipping_cost + insurance_amount`
+then `cod = subtotal + ceil(subtotal × pct)` — note the insurance term, whose omission under-collects (and do
+not confuse it with the PLATFORM's own COD fee in `payment-fees.ts`); insurance rounds UP to the nearest 100;
+callback retry/timeout/backoff are **not** in the contract, so the receiver must be idempotent on
+`awb` + `order_id` and tolerate duplicates; a custom working-hours pickup must be requested before 16:00 local;
+`v2/get_payment` uses a STRING `status_code` (`9` unpaid, `0` paid) with `created_at` in UTC+7; and the doc's
+own warning that *"mock success responses are illustrative and are not an authoritative production contract"* —
+do not build parsers from its examples.
+
+## 2026-09-09 10:08 UTC — Main Session — RESOLVED: KiriminAja allow-list applied; production prices shipping again
+
+**Outcome.** Ongkir works in production. `/api/mitra/province` → **200, 37 provinces**; the public
+`op:"rates"` path → **4 rates**, `codEnabled: true`, origin resolved to the seller's real pickup district
+(*Gubeng, Kota Surabaya*); a Chromium drive of the LIVE checkout took the order total from Rp110.000 to
+**Rp125.400** (goods + Rp15.400 ongkir) with **0 console errors**. The blocker recorded since 2026-09-07 is closed.
+
+**Two facts that change how this should be remembered.**
+1. ⚠️ **BOTH keys pass — the old 64-char one and the new `v4.local.` one.** The fix was the IP entry on the
+   account, not the credential, so **no key swap was needed** and **production was never redeployed**: the
+   running container already held a working key. The Coolify stored value was restored to the OLD key so it
+   stays paired with `KIRIMINAJA_ORDER_PREFIX=5758`, which belongs to it — a redeploy is now safe either way.
+2. ⏱ **The allow-list applies with a delay of tens of minutes.** The dashboard showed the key active at 16:16
+   with the IP already listed; the API still refused at 16:42 and answered by 17:06 — **~30–50 minutes** after
+   it looked correct on screen. One probe is not evidence that a whitelist is broken.
+
+**What I did to production, stated plainly.** I wrote the new key into Coolify through its own Artisan model
+layer (the API token on the box is absent and the values are Laravel-encrypted, so the DB cannot be edited
+directly). The first attempt stored an **empty value** because the file could not be read from inside the
+container; caught immediately by reading the value back, and corrected. Because that write overwrote the old
+key in Coolify, the old key was recovered from the still-running container's environment before it could be
+lost. Final state: Coolify holds the OLD key + prefix `5758`, verified by read-back; nothing was deployed.
+
+**Method note worth keeping:** the decisive diagnostic throughout was that a **garbage key answers
+`"Unauthorized."` while a valid key answers the IP message** — that is what proved the credential was never
+the problem, and it is the first thing to run next time this appears.
+
+## 2026-09-09 10:26 UTC — Main Session + 2 subagents — Webhook rejections made diagnosable; Task 8.14 done; a wrong-id trap found
+
+**Why now.** The owner registered our webhook URL with KiriminAja, and the allow-list started working, so
+for the first time both halves of the integration can be exercised.
+
+**① The webhook's auth contract is the open risk, and it is now readable.** The vendor's spec declares
+`expressShipmentEvent` with **`security: null`** — no authentication documented on the incoming callback —
+while our receiver demands `Authorization: Bearer <KIRIMINAJA_API_KEY>` and fails closed. If they send no
+header, every real event is 401'd and nothing says so. Production logs over 24 h hold exactly ONE rejection,
+08:59:38 UTC, and it is **my own unauthenticated probe** from before the key existed — no genuine callback
+has arrived (none can until a shipment event). The gate is unchanged (that endpoint writes `orders.awb` and
+status; unsigned writes are not an option); what changed is the log:
+
+```
+[ka-webhook] unauthorized webhook call rejected auth=present scheme=bearer credLen=23 lenMatch=no ip=… hdrs=x-callback-token,x-ka-signature
+```
+
+`hdrs=` lists candidate auth header NAMES only, so the first real rejection reveals what KiriminAja
+authenticates with **even if we never guessed the header name**. ⚠️ `scheme=` is a CLASS
+(`bearer`/`other`/`none`), never the caller's first word — `Authorization: <secret>` with no scheme would
+otherwise print the entire secret. 11 tests; proved RED against a copy that logs values (3 leak assertions
+fired). `rejectionShape()` deliberately duplicates the `Bearer ` parse rather than sharing it with the gate:
+drift in the diagnosis is a wrong log line, drift in the gate is a security bug.
+
+**② Task 8.14 — every field we can honestly fill now goes out.** Sender `zipcode`
+(`store_settings.sender_postcode`, falling back to the district's sole postcode), `destination_zipcode`
+(`orders.ship_postcode`), and `packages[].items` — one entry per `order_line_items` row, `price` PER UNIT
+per the schema, never one synthetic line. **Coordinates confirmed unfillable column by column**
+(`sender_lat`/`sender_lng` are dead columns, `orders` has none, no centroid in `kiriminaja_areas` or
+`kelurahan`) — omitted, never zeroed, with the absence asserted WITH its reason.
+
+**③ 🔴 The trap: our kelurahan ids are the WRONG ONES.** `kelurahan.id` is a **Kemendagri** village code,
+joined to KiriminAja districts BY NAME — not a KA subdistrict id. The spec marks `kelurahan_id` and
+`destination_kelurahan_id` required, so "just send what we have" would have shipped a WRONG id, which is
+worse than an absent one. The rest of the code already behaved as if it knew: `kelurahanOptions()` returns
+only `{name, postcode}`, `sender-address-card.tsx` says *"kelurahanId stays null on purpose"*, and
+`orders` carries no kelurahan at all. The honest route exists and we do not use it
+(`POST /api/mitra/kelurahan`, `GET /api/mitra/v6.1/addresses`) — filed as **Task 8.17**, which also
+requires measuring the unmatched rate rather than letting a partial match read as success.
+
+**Live evidence, read-only.** `province` 200 / 37 provinces; `shipping_price` (6138→2107, 1 kg, 20×20×10)
+200 / 22 services; the same quote **plus** the new fields → 200 with a **byte-identical** sorted
+service:type=cost list, so the Go service tolerates extra keys and no price moves. ⚠️ Only the array ORDER
+varies between calls — never compare `results[0]` across two calls. `request_pickup` was deliberately NOT
+called: it would create a real sandbox pickup, so the booking validator's acceptance of the new fields
+remains unproven and needs one authorised booking.
+
+**Tests.** `kiriminaja-v62.test.ts` 7 → 12 (7 mutations, 7 reds), new `shipping-manifest.test.ts` (5, each
+claim with its own mutation self-check), new `webhook/route.auth.test.ts` (11).
+
+## 2026-09-09 10:37 UTC — Main Session — Repository flipped to PUBLIC (owner order, fifth flip)
+
+`gh api repos/ongkipro/tokophi --jq .visibility` → **public**, verified after the change; `git ls-remote`
+still resolves `main`, so nothing about the remote broke.
+
+**Pre-flight before opening it, because "already indexed" is not a reason to skip the check:**
+`no-published-credentials.test.ts` + `password.test.ts` → **12 passed**, and `git grep` for the KiriminAja
+key confirmed it never entered a tracked file (it lived only in a 0600 scratchpad file outside the repo and
+went to Coolify through Artisan).
+
+**Why it matters operationally:** public restores FREE GitHub Actions minutes, and this repo's CI now runs
+the four-surface build matrix on every PR (Task 5.12) on top of the 163-file suite — that is the lever behind
+every one of these flips.
+
+⚠️ **Standing caveat, unchanged:** the contents have been publicly indexable since the 2026-08-27 window, so
+a future private phase closes NEW access and retracts nothing. The docs carry the production IP, the Coolify
+topology and the security reasoning behind each gate; that is a deliberate trade the owner has now made five
+times. Never flip without a new explicit order.

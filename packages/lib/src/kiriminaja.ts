@@ -137,11 +137,38 @@ export async function kaShippingPrice(p: {
 }
 
 // create an express shipment (pickup request) → returns AWB / KiriminAja order id
-// No lat/lng: the pickup point is identified by kecamatan/kelurahan + the written address. The
-// coordinate pair only ever existed for the (removed) instant couriers.
+//
+// 🔴 WHAT THE v6.2 SPEC MARKS REQUIRED AND WE STILL DO NOT SEND — Task 8.14, 2026-09-09.
+// The vendor's OpenAPI (`info.version 6.2.0`) lists `latitude`/`longitude` on the sender and
+// `destination_latitude`/`destination_longitude` on every package as REQUIRED. **We do not have
+// them, and we never send a placeholder.** `op === "instant"` was removed and its own note records
+// that it was the only consumer of coordinates, so NOTHING in this product geocodes anything:
+// `store_settings.sender_lat/sender_lng` are dead columns (nothing reads or writes them), the
+// orders table has no coordinate columns, and `kiriminaja_areas`/`kelurahan` carry no centroid —
+// checked column by column, not assumed. A zero pair is not "no data" to a courier, it is a point
+// in the Gulf of Guinea that a dispatcher would route on, so the fields are OMITTED and their
+// absence is asserted by `kiriminaja-v62.test.ts`. Filling them is a data-model change (a geocode
+// at Pengaturan → Alamat and one per destination district), not a client edit.
+//
+// 🔴 AND `kelurahan_id` / `destination_kelurahan_id` CANNOT BE FILLED FROM OUR DATA EITHER — the
+// ids we hold are the WRONG ONES. `kelurahan.id` is a **Kemendagri** village code (text, from
+// `packages/db/scripts/build-kelurahan.mjs`, joined to KiriminAja's districts BY NAME); it is not a
+// KiriminAja subdistrict id and sending it as one would be a wrong id, which is worse than an
+// absent one. That is why `kelurahanOptions()` returns only `{name, postcode}` and the Seller's
+// pickup form deliberately leaves `sender_kelurahan_id` NULL. `orders` carries no kelurahan at all
+// (the checkout collects one to derive the kodepos and `/api/public/order` ignores it). The honest
+// route is the vendor's own `kelurahan` endpoint, which we do not integrate — a separate task.
+// `kelurahanId` stays on the type because the column exists and a real KA id may arrive one day.
 export type KaSender = {
   name: string; phone: string; address: string;
   kecamatanId: number; kelurahanId?: number | null;
+  /** Sender postal code (`store_settings.sender_postcode`). Spec-required; omitted when we have none. */
+  zipcode?: string | null;
+};
+/** One line of the parcel, as the v6.2 `packages[].items` schema wants it. `price` is PER UNIT. */
+export type KaItem = {
+  name: string; price: number; weight: number; qty: number;
+  width: number; length: number; height: number;
 };
 export type KaPackage = {
   orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`
@@ -152,6 +179,13 @@ export type KaPackage = {
   cod?: number; // COD amount to collect (0 = non-COD)
   insuranceAmount?: number; // 0/undefined = no insurance
   qty?: number; width?: number; length?: number; height?: number; packageTypeId?: number;
+  /**
+   * The order's real lines. REQUIRED on the type, not optional: the spec requires the field, and a
+   * caller that forgets it must fail `tsc` rather than silently book a parcel with no manifest
+   * (same reasoning as `StoreBillingRow.suspendedAt`). Empty is legal only for a caller that
+   * genuinely has no lines — the spec says `minItems: 1`, so we omit the key rather than send `[]`.
+   */
+  items: KaItem[];
 };
 export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: string): Promise<{
   ok: boolean; awb?: string; kaOrderId?: string; pickupNumber?: string;
@@ -194,6 +228,12 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     name: sender.name, phone: sender.phone, address: sender.address,
     kecamatan_id: sender.kecamatanId,
     ...(sender.kelurahanId ? { kelurahan_id: sender.kelurahanId } : {}),
+    // Spec-required (Task 8.14). It has always been in `store_settings.sender_postcode` and rode
+    // only inside the written pickup `address`; it is now ALSO its own field, which is what the
+    // vendor documents. Omitted, never sent as `""`/`0`, when the seller has no kelurahan-derived
+    // postcode — an empty string is not a postal code and today's lenient server accepts the
+    // omission, so inventing a value could only make a real booking worse.
+    ...(sender.zipcode ? { zipcode: sender.zipcode } : {}),
     platform_name: "mitra",
     schedule,
     packages: [{
@@ -214,6 +254,12 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       drop: false,
       ...(pkg.insuranceAmount ? { insurance_amount: pkg.insuranceAmount } : {}),
       ...(pkg.destZipcode ? { destination_zipcode: pkg.destZipcode } : {}),
+      // Spec-required (Task 8.14): the parcel's real manifest, one entry per `order_line_items`
+      // row — never one synthetic line, which is what `item_name` ("Pesanan INV-…") already is.
+      // `price` is PER UNIT per the schema, and every numeric field carries `minimum: 1`, so the
+      // caller floors them; see `createShipment` for where each number comes from. Omitted rather
+      // than sent as `[]` when a caller genuinely has no lines — the schema says `minItems: 1`.
+      ...(pkg.items.length ? { items: pkg.items.map((i) => ({ name: i.name, price: i.price, weight: i.weight, qty: i.qty, width: i.width, length: i.length, height: i.height })) } : {}),
     }],
   });
   const d = r.details?.[0];
