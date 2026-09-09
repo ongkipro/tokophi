@@ -3121,3 +3121,43 @@ is); the webhook contract states *"use `awb` and `order_id` together for idempot
 not terminal"*; the status table gives eight codes we do not map yet (`301`, `310`, `311`, `333`, `400`, `500`,
 `152`, `210`/`211`). ⚠️ **The official SDKs are BEHIND the spec** — `kiriminaja/rust` on `main` still calls
 `v6.1/request_pickup`. Do not treat an SDK as the contract.
+
+## 2026-09-09 09:48 UTC — Main Session — DEEP READ of the KiriminAja v6.2 prose (28 sections), and the IP block explained
+
+Earlier today the endpoint list was read; this pass read `info.description` — 18 KB, 28 sections, where the
+operational rules actually live. Re-downloaded first and byte-identical, so both passes describe one artefact.
+
+**🔴 The blocker is undocumented, and that is the finding.** Nothing in 18 KB says an API key is bound to an IP,
+yet the sandbox enforces it. Measured from TWO networks: the refusal always names the CALLER's address
+(`45.77.33.112` from the VPS, `182.253.50.97` from a laptop), and a **garbage key answers `"Unauthorized."`
+instead** — so the key authenticates FIRST and the IP check runs after. That proves both our keys are valid and
+that the allow-list, not the credential, is what refuses us. It also means the block cannot be reasoned about
+from the docs: it needs vendor support.
+⚠️ The prose says a sandbox key comes from **`sandbox.kiriminaja.com`** (register → approval → *Integrasi*).
+**That host does not resolve in DNS**, while `app.kiriminaja.com` answers 200 — the documented onboarding path
+is stale, which is worth quoting to support alongside the refusal.
+
+**One doc claim of ours corrected.** `AGENTS.md` stated volumetric weight as a flat `w × l × h ÷ 6`. The vendor
+says ÷ 6 is the shorthand for regular/next-day/same-day, **÷ 4 for trucking**, and courier configs may expose
+`6000`/`5000`/`4000` — *"use the returned courier configuration… rather than hard-coding a divisor"*. **We are
+not exposed**: `kaShippingPrice` sends dimensions and they do the arithmetic; this repo hard-codes no divisor
+(checked). The prose was still wrong for anyone who might compute it locally, so it now says so.
+
+**🔴 A hazard added to Task 8.16.** The PIN is six digits with a documented maximum of **three attempts**;
+responses carry `attempt`, `max_attempt`, `lock_until`. A naive retry loop would lock the PLATFORM account and
+stop every merchant's bookings at once. The task now says: read `attempt`/`lock_until` and stop, never retry.
+
+**Confirmed correct without change:** base URLs (sandbox `tdev`, production `client`) match ours exactly;
+`kaCodFee` reads `cod_fee`/`cod_fee_amount`/`minimum_cod_fee` from the rate's own `setting` rather than
+hard-coding a percentage, which is what *"the 3PL sets the COD percentage"* requires; and `kaShippingPrice`
+already coerces `results[].cost`, which the doc warns arrives as a STRING while the order endpoint wants an
+integer.
+
+**Recorded for whoever implements next:** COD is `subtotal = item_value + shipping_cost + insurance_amount`
+then `cod = subtotal + ceil(subtotal × pct)` — note the insurance term, whose omission under-collects (and do
+not confuse it with the PLATFORM's own COD fee in `payment-fees.ts`); insurance rounds UP to the nearest 100;
+callback retry/timeout/backoff are **not** in the contract, so the receiver must be idempotent on
+`awb` + `order_id` and tolerate duplicates; a custom working-hours pickup must be requested before 16:00 local;
+`v2/get_payment` uses a STRING `status_code` (`9` unpaid, `0` paid) with `created_at` in UTC+7; and the doc's
+own warning that *"mock success responses are illustrative and are not an authoritative production contract"* —
+do not build parsers from its examples.

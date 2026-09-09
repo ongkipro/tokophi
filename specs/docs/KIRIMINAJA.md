@@ -348,3 +348,93 @@ terminal; wait for a later finished event"**.
 
 ⚠️ The official SDKs are BEHIND the spec: `kiriminaja/rust` (main) still calls
 `/api/mitra/v6.1/request_pickup`. Do not treat an SDK as the contract.
+
+## Deep read of the v6.2 spec prose — 2026-09-09 (28 sections, `info.description` ≈ 18 KB)
+
+The endpoint list was read earlier the same day; this is the PROSE, which is where the operational
+rules live. Re-downloaded and byte-identical, so the two passes describe one artefact.
+
+### 🔴 The docs never mention the IP allow-list that is currently blocking us
+
+`## Environments`, `## Authentication` and `## Rate Limits` describe base URLs, the Bearer header and
+429s. **Nothing anywhere in 18 KB of prose says an API key is bound to an IP address**, yet the sandbox
+enforces exactly that (`401 "Your IP address <ip> were not allowed to access this API. #1"`). Measured
+2026-09-09 from two different networks: the message always names the CALLER's address, and a garbage
+key answers `"Unauthorized."` instead — so the key authenticates first and the IP check runs after it.
+Treat the allow-list as an undocumented, vendor-side gate: it cannot be reasoned about from the docs
+and it must be confirmed with support.
+
+⚠️ The prose also says a sandbox key comes from **`https://sandbox.kiriminaja.com`** (register → wait
+for approval → *Integrasi*). **That host does not resolve in DNS** (checked 2026-09-09), while
+`app.kiriminaja.com` answers 200. The documented sandbox onboarding path is therefore stale; keys in
+practice come from the main dashboard with a *Sandbox* environment badge.
+
+### Environments — our base URLs are confirmed correct
+
+| Environment | Base URL |
+|---|---|
+| Sandbox | `https://tdev.kiriminaja.com` |
+| Production | `https://client.kiriminaja.com` |
+
+Exactly what `packages/lib/src/kiriminaja.ts` uses.
+
+### ⚠️ The volumetric divisor is NOT a constant — correct any doc that says "÷ 6"
+
+*"The documented shorthand is `width * length * height / 6` for regular, next-day, and same-day
+services and `/ 4` for trucking. Courier service responses may expose divisors such as `6000`, `5000`,
+or `4000`; use the returned courier configuration and its documented units rather than hard-coding a
+divisor."*
+
+**We are not exposed**: `kaShippingPrice` sends the dimensions and KiriminAja does the arithmetic —
+this repo hard-codes no divisor anywhere (checked). But `AGENTS.md` stated a flat "÷ 6" as if it were
+the rule, which would mislead anyone who ever decides to compute it locally. Corrected there.
+
+### Money rules, in the vendor's words
+
+- **Insurance:** `insurance_amount = item_value × insurance_percentage`, rounded UP to the nearest 100.
+  The 3PL sets the percentage.
+- **COD:** `subtotal = item_value + shipping_cost + insurance_amount`; `add_cost = subtotal ×
+  cod_fee_percentage` rounded up; `cod = subtotal + add_cost`. ⚠️ Note the insurance term — a COD total
+  that omits it under-collects. Our `kaCodFee` reads `cod_fee` / `cod_fee_amount` / `minimum_cod_fee`
+  from the RATE's own `setting` rather than hard-coding a percentage, which is what *"the 3PL sets the
+  COD percentage"* requires. ⚠️ Do not confuse this with the PLATFORM's own COD fee to the merchant
+  (`@tokophi/lib/payment-fees`, `FINANCE.md`) — different money, different payer.
+- **Pricing returns `results[].cost` as a STRING** while order creation takes an integer
+  `shipping_cost`: *"parse the numeric value before sending it… rather than blindly copying a JSON
+  string."* `kaShippingPrice` already coerces (its comment says numbers arrive as strings sometimes).
+
+### 🔴 PIN: six digits, THREE attempts, then a lock
+
+*"The PIN is six digits. The documented maximum is three attempts. Validation responses expose
+`attempt`, `max_attempt`, and `lock_until`."* KA Credit deducts the shipping cost automatically after a
+successful pickup, and the flow is: validate the PIN, confirm the balance covers the cost, then book.
+**A naive retry loop around PIN validation can LOCK the platform account** — which would stop every
+merchant's bookings at once. Any implementation of Task 8.16 must read `attempt`/`lock_until` and stop,
+never retry blindly. Term-of-Payment accounts use neither KA Credit nor the PIN.
+
+### Callback delivery — duplicates are guaranteed, retries are not documented
+
+*"Delivery retry count, timeout, and backoff are not part of the documented contract, so integrations
+must be idempotent and tolerate duplicate events."* Plus the earlier rule: *"use `awb` and `order_id`
+together for idempotency"*. One publicly reachable URL per account, A/AAAA record required, a new
+registration REPLACES the old one, and the vendor asks to be told before it changes (Task 8.15).
+
+### Pickup schedule
+
+`clock` = start datetime, local zone, `YYYY-MM-DD HH:mm:ss`; `until` = window end `HH:mm`; `expired` =
+Unix timestamp after which the option is dead; `libur: true` = holiday. A custom working-hours pickup
+is allowed only when requested **before 16:00 local**.
+
+### Payments (`v2/get_payment`)
+
+Express uses `data`, instant uses `result`. Express `status_code` is commonly a STRING: `9` unpaid,
+`0` paid. `qr_content` is a payload the client renders into a QR image and may be null when QR is not
+applicable or already paid. Express `created_at` is **UTC+7**.
+
+### Other operational limits worth knowing
+
+Sandbox is rate-limited and may answer 429; production limits are per-account and must be asked for.
+Instant delivery (removed from this product) caps at 40.000 g and supports GoSend, Grab Express, Borzo.
+Phone values are normalised by stripping spaces and hyphens; `08`, `+628` and `02` landlines are
+accepted. *"Current mock success responses are illustrative and are not an authoritative production
+response contract"* — do not build parsers from the doc's examples alone.
