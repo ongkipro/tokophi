@@ -3257,3 +3257,222 @@ every one of these flips.
 a future private phase closes NEW access and retracts nothing. The docs carry the production IP, the Coolify
 topology and the security reasoning behind each gate; that is a deliberate trade the owner has now made five
 times. Never flip without a new explicit order.
+
+## 2026-09-09 11:46 UTC — Main Session + subagent — AutoLaris: channels read from `list_payment`; the Advice migration REFUSED on evidence
+
+**Why.** The owner asked for a study of `ongkipro/autolaris` and for `courir_id: 1` to be confirmed. It is
+correct and has been since 2026-08-24. The study then found two divergences from the documented contract.
+
+**① `list_payment` replaces a probe that created real bills.** `alProbeChannels()` looped a hardcoded list
+and issued **one `POST /api/h2h/create_payment` per channel** — its own comment admitted *"EXPENSIVE —
+creates sandbox bills"* — to discover what one GET returns. Live read-only response: 8 channels, exactly four
+fields each (`channel_code`, `name`, `admin`, `tipe_admin`); **no `active`/`enabled` field exists**, so absence
+from `data` is the only "unavailable" signal and none was invented. ⚠️ **The old probe was WRONG, not just
+expensive:** `list_payment` reports **OVO available** while the probe had left it `active=false` on production.
+
+**Fee reconciliation — reported, never auto-applied** (the numbers are an owner ruling in `FINANCE.md`;
+changing them silently changes what shoppers pay):
+
+| channel | ours | provider | verdict |
+|---|---|---|---|
+| QRIS | 0,7% of omset | 0,7% `persen` | same |
+| VABCA | Rp6.500 | Rp6.500 `fix` | same |
+| VABNI / VABRI / VAMANDIRI / VAPERMATA | Rp3.500 | Rp3.000 `fix` | **we charge Rp500 more** → platform margin |
+| OVO | 2,4% (e-wallet) | 3,0% `persen` | **we charge 0,6 pp less** → platform absorbs |
+| COD | 3% + PPN (in `order-finance`) | Rp0 `fix` | not comparable |
+
+**② The Advice migration was REFUSED, and refusing it is the finding.** The owner asked to switch
+reconciliation to the documented `/api/h2h/advice`. Two measurements overturned the premise:
+- **`alInquirePaymentStatus` has ZERO callers.** Settlement is decided only by `api/public/pay/callback`
+  (`status === "PAID"`); no cron reconciles. There was no path to migrate. And **`/api/h2h/inquiry_payment`
+  does not exist on our account** — `404 not found` for the same ids Advice answers for. Its test stubs
+  `fetch`, so it has always been green over a path the provider never served.
+- **Advice carries no decisive paid signal.** Four real transactions: all `rc=02 ket="FAILED"` for bills our
+  DB holds as live, while the vendor's documented sample for that rc reads `"PENDING"`. No PAID answer is
+  observable at all (every `berhasil` payment is COD/seeded with no `trx_id`).
+
+So `alAdvice()` ships with a pure `classifyAdvice()` whose `ADVICE_SETTLED` list is **deliberately EMPTY**:
+`SUCCESS`, `BERHASIL`, `DELIVERED`, `PAID`, `LUNAS`, `SETTLED` → `unknown`; the default is `unknown`, never
+`paid`. **Moving settlement onto an official endpoint that says LESS would be a regression**, and a wrong
+"paid" runs `creditSaleForPayment` against money that never arrived. Adding a confirmed word later is a
+one-line data change; the question goes to the provider at go-live.
+
+**Verification.** `vitest` packages/lib + super-admin **45 files / 434 tests**; admin payment paths **67
+files / 637 tests**; tsc clean ×3; eslint 0 errors. RED proofs: restoring the `create_payment` loop fails the
+probe guard; seeding `ADVICE_SETTLED` with `DELIVERED`/`SUCCESS` fails 7 tests. **Not done:** the new
+comparison table has not been seen in a browser (needs a platform login + a live Sync).
+
+## 2026-09-09 11:49 UTC — Main Session — Owner rulings 2026-09-09: e-wallet fee raised to 3%; channel set confirmed already correct
+
+**① E-wallet fee 2,4% → 3,0% (owner ruling, this session).** `list_payment` reports the account's OVO rate as
+**3,0% `persen`** (measured live today), so at 2,4% the platform was absorbing **0,6 pp on every e-wallet
+sale**. Changed in `payment-fees.ts` with the ruling and its evidence written into the schedule block, and
+mirrored in `payment-fees.test.ts`, `FINANCE.md` and the fee summary comment in `autolaris.ts`.
+⚠️ **It is a KIND-level change because a per-channel PCT override does not exist** — `CHANNEL_FEE_OVERRIDES`
+is flat-only (that is how VABCA's Rp6.500 works). OVO is the only e-wallet the account offers (DANA,
+ShopeePay, LinkAja, GoPay are absent from `list_payment`), so kind-level and OVO-level are the same thing
+today; adding a second e-wallet at a different rate needs that machinery first, and the comment says so.
+The `compareChannelFees` test that asserted *"OVO diverges"* now asserts *"OVO matches"* — it changed because
+the fact changed, not because the guard was loosened.
+
+**② The channel set the owner asked for (QRIS + all VA + COD, OVO off) was ALREADY the production state.**
+Read before writing anything, and **nothing was written**:
+
+| kind | enabled |
+|---|---|
+| qris | QRIS ✓ |
+| va | VABCA, VABNI, VABRI, VAMANDIRI, VAPERMATA ✓ — VABSI/VACIMB/VADANAMON off (the provider does not offer them either) |
+| ewallet | all off, incl. OVO ✓ |
+| retail | all off ✓ |
+
+COD is not in that table by design — it is `platform_cod.enabled` (**true**, cap Rp2.000.000).
+
+⚠️ **The two switches must not be confused, and Task 8.18's sync makes that live.** `active` = provider
+availability (written by the sync from `list_payment`); `enabled` = the platform's own decision. After the
+sync ships, OVO becomes `active=true` because the provider does offer it — and it still will NOT appear at
+checkout, because checkout requires `enabled ∧ active` and the owner's `enabled=false` stands. The Super
+Admin table will read "available, but we switched it off", which is the truth.
+
+**A mistake of mine, caught by the tests:** I wrote the verdict literal as `same` where the type says `match`.
+One test went red immediately and I corrected it; the comparison function itself was right all along.
+
+## 2026-09-09 11:58 UTC — Main Session — ISSUE AUDIT (5 open) + 🔴 a confirmed defect the audit surfaced: `order_id` is 28 chars, tracking allows 20
+
+**The five open issues were re-verified against CODE, not prose.** Outcome: **#16 closable** (all ten
+findings, the three missing routes and every "celah fitur besar" — search, filters, URL sorting,
+pagination, category `og:image` — verified shipped; four small residues to carry over: `ProductGrid`
+"2 kolom" is 2 columns at every width, breadcrumb tap targets, two unguarded hover-lifts, and the qty
+button at the 44 px borderline). **#21, #14, #13, #12 stay open**, each with a precise statement of what
+is actually left so the next reader does not re-audit from zero. Nothing was closed or commented on —
+the repo is public now, so the drafts wait for the owner.
+
+Two things the audit marked "unverified" rather than guessed, both invisible from the repo: whether the
+two Cloudflare Cache Rules in `CLOUDFLARE-PERF.md` §2 exist in the zone, and whether
+`ops/tokophi-probe.sh` is installed in any host's cron.
+
+**🔴 And it surfaced a real defect, confirmed from the vendor's own schema.** Issue #12's 2026-07-20
+suspicion — *"`TOKOPHI-<ref>` may exceed max:20"* — is now measured, not suspected:
+
+| endpoint | field | constraint |
+|---|---|---|
+| `v6.2/request_pickup` | `packages[].order_id` | **no `maxLength`** |
+| `tracking` | `order_id` | **`maxLength: 20`** |
+
+**A booking is accepted with an id tracking says it will not take.** With a REAL production order number
+(`PHI-768771328ISC`, 16 chars), `shipping.ts:814` builds the reference and `kiriminaja.ts` prefixes it:
+**28 characters** with the configured prefix `5758`, **31** with the code's `TOKOPHI` fallback. The limit
+is 20 — over by 8 and 11.
+
+This is the strongest available explanation for *"`awbFilled` has only ever been 0"*: the poller asks
+tracking for an id longer than tracking accepts. It cannot be fully separated from "no production
+booking has ever been made" until one is — but the arithmetic no longer needs a booking to be believed.
+Filed as **Task 8.20**, with an explicit ⚠️ **do not truncate at send time**: an id the vendor stores
+truncated is an id we can never look up again. Shorten the CONSTRUCTION and guard the total.
+
+---
+
+### [2026-09-09 12:20 UTC] — SHIPPING · Task 8.20: our `order_id` was 28 characters against a documented 20
+
+**Executor:** Sub-agent (KiriminAja `order_id` stream) · **Scope ID:** `8.20`
+
+**The defect, re-verified from the vendor's OpenAPI (`info.version 6.2.0`) before touching anything:**
+`POST /api/mitra/v6.2/request_pickup` → `packages[].order_id` declares **no `maxLength`**;
+`POST /api/mitra/tracking` → `order_id` declares **`maxLength: 20`**. So a booking is accepted with
+an id the tracking endpoint says it will not take. Arithmetic re-derived with the real production
+order-number format `PHI-<9 digits><3 base36>` (16 chars, e.g. `PHI-768771328ISC`):
+`shipping.ts` built `orderNumber.replace(/[^A-Za-z0-9]/g,"") + bookingId.slice(0,8)` = 15 + 8 = **23**,
+and `kiriminaja.ts` prefixed it — **`5758` → 28** (8 over), **`TOKOPHI` → 31** (11 over).
+
+**Production, READ ONLY, before relying on "no migration needed":**
+`select count(*) from shipment_bookings` → **0**. `orders` holds 7 non-null `ka_order_id` and 4
+non-null `awb`, and every one is seeded demo data — `5758-PHI196227493HGZ` … and `DEMO1747982DWR`
+waybills, no `shipment_bookings` parent. **No real booking has ever been made**, so nothing stored
+needed rewriting.
+
+**The new construction** (`packages/lib/src/kiriminaja.ts`, `buildKaOrderRef` + `kaOrderId`):
+- The constant leading `PHI` is **dropped** — it is identical on every order on the platform and the
+  vendor prefix already says who we are, so it carried 0 bits of identity for 3 of the 20 characters.
+- The 8-character UUID slice is replaced by a **one-character base36 attempt counter**: `count(*)` of
+  the order's `shipment_bookings`, read as a correlated sub-select in the same locked `select` the
+  reservation already takes (validated against Postgres — a scalar sub-select is legal beside
+  `for update`). Under the per-store advisory lock it is EXACT: 36 repeat bookings of one order, zero
+  collision probability, `provider_reference`'s unique index still the backstop. A random character
+  that short would collide on ~27% of a mere five re-bookings, which is why this is a counter.
+- Different ORDERS cannot collide on the production prefix — `orders.number` is globally unique and
+  nothing is dropped there. On the longer `TOKOPHI` fallback one timestamp digit is dropped from the
+  LEFT (the slowest-varying), so two orders would have to be placed exactly 10^8 ms = 27,8 h apart to
+  the millisecond AND draw the same 1-in-46 656 tail.
+
+| prefix | id | length |
+|---|---|---|
+| `5758` (production) | `5758-768771328ISC0` | **18** — the order number survives whole |
+| `TOKOPHI` (code fallback) | `TOKOPHI-68771328ISC0` | **20** exactly |
+
+**Guards — loud at construction, never a silent trim.** `kaOrderId()` builds the payload field and
+**throws** when `${prefix}-${ref}` exceeds 20; `buildKaOrderRef()` throws when a prefix leaves fewer
+than 8 body characters (a prefix over 10 chars) or when the attempt is outside 0..35. `createShipment`
+catches, `console.error`s and refuses the booking rather than proceeding.
+
+**Files:** `packages/lib/src/kiriminaja.ts`, `apps/admin/lib/actions/shipping.ts`,
+`packages/lib/src/ka-order-id.test.ts` (new).
+
+**Verification.** `npx vitest run apps/admin/lib packages/lib` → **97 files / 956 tests passed**
+(15 of them new). `npx tsc -p apps/admin --noEmit` → 0. `npx tsc -p packages/lib --noEmit` → 0.
+`npx eslint lib/actions/shipping.ts` from `apps/admin` → 0.
+**RED proved twice against the shipped code, not assumed:** restoring
+`` order_id: `${KA_ORDER_PREFIX}-${pkg.orderRef}` `` failed *"throws — and never calls the vendor — for
+the old 28-character construction"*; restoring the `bookingId.slice(0, 8)` expression in
+`shipping.ts` failed *"createShipment asks buildKaOrderRef rather than concatenating a UUID slice"*.
+Both were then put back and the suite re-run green. The source claim also carries its own mutation
+self-check, because `codeOnly` inerts the **regex literal** as well as strings — the pattern matches
+the identifiers around it, and the self-check is what proves it can still fire.
+
+**⚠️ Left open — item 5 of the task, and it is now the stronger suspect for `awbFilled = 0`.**
+`orders.ka_order_id` stores the vendor's **`kj_order_id`**, not the `order_id` we sent, and the one
+authorised sandbox booking shows the vendor **extending** it: we sent `5758-N29` (8) and got back
+`5758-N2975e1537124` (**18**) — ten characters appended. `cron/tracking` and `trackShipment` both
+query tracking with `o.kaOrderId ?? o.awb`, so our now-legal 18-character `order_id` would come back
+as a ~28-character `kj_order_id` and breach the same limit again. Unanswerable without a real booking:
+does `/api/mitra/tracking` want the id we SENT (in which case the poller has always passed the wrong
+identifier) or the `kj_order_id`, and is the ten-character suffix fixed? Not touched here —
+`api/cron/tracking/route.ts` was outside this pass's writable surface.
+
+## 2026-09-09 12:20 UTC — Main Session + subagent — Task 8.20 fixed; the vendor EXTENDS our id (8.21); Super Admin update log refreshed
+
+**Task 8.20 — the id now fits, and how it fits is stated, not silent.** Two changes to the construction:
+the leading `PHI` is dropped (identical on every order platform-wide, and the vendor prefix already says
+who we are — 0 bits of identity for 3 of 20 characters), and `bookingId.slice(0,8)` becomes a **one-character
+base36 attempt counter**, read as a correlated sub-select inside the SAME locked `select` the reservation
+already runs.
+
+| prefix | id | length |
+|---|---|---|
+| `5758` (production) | `5758-768771328ISC0` | **18** — the order number survives intact |
+| `TOKOPHI` (code fallback) | `TOKOPHI-68771328ISC0` | **20** exactly |
+| old | `5758-PHI768771328ISCe1537124` | 28 (31 with `TOKOPHI`) |
+
+⚠️ **The counter is not merely "shorter than random" — it is exact.** Under the lock, 36 re-bookings are
+distinguished with certainty; a 1-character RANDOM tail would collide on ~27% of just five re-bookings
+(5·4/2/36). A 37th booking throws rather than wrapping to `0` and reusing an earlier parcel's id, and
+`provider_reference`'s unique index stays the backstop. `kaOrderId()` **throws** when the total exceeds 20 —
+it never trims, because an id the vendor stores truncated can never be looked up again.
+
+Production, read-only: `shipment_bookings` = **0 rows**; the 7 non-null `ka_order_id` and 4 `awb` are seeded
+demo strings. **No real booking exists, so nothing needed migrating.**
+
+**🔴 Task 8.21 — and this is the bigger finding.** `orders.ka_order_id` does **not** store what we sent: it
+stores the vendor's `kj_order_id`, and **the vendor appends to it.** The one authorised sandbox booking sent
+`5758-N29` (8 chars) and got back `5758-N2975e1537124` (**18** — ten characters appended). So our newly-legal
+18-character id may come back as ~28 and breach the same `maxLength: 20` again — and `cron/tracking` queries
+with exactly that stored value. Two questions only a real booking can settle: does tracking want the id we
+SENT or the `kj_order_id` (if the former, the poller has always passed the wrong identifier — issue #12 Q1),
+and is the ten-character suffix fixed? Filed with an explicit **do not shorten further to "make room"**, which
+would be guessing at the vendor's behaviour.
+
+**Super Admin update log** gained `v1.3.0` (the release gate running for the first time; 29 queue items) and
+`v1.4.0` (KiriminAja unblocked, AutoLaris read against its own contract, the two wrong-id traps). The header
+figures are derived from the entries, so they cannot rot.
+
+**Gate:** lint 0, verify:guards 0, **test:release 166 files / 1462 tests**, RLS 54/55, storefront 8/8.
+RED-proved twice against the shipped construction. Worth keeping: `codeOnly` inerts a **regex literal** too,
+so `/[^A-Za-z0-9]/g` is unmatchable and a source claim must key on the identifiers around it.

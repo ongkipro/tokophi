@@ -25,6 +25,30 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.4.0-kiriminaja-unblocked-autolaris-contract",
+    version: "v1.4.0",
+    date: "2026-09-09",
+    title: "KiriminAja Unblocked, AutoLaris Read From Its Own Contract, And Two Wrong-Id Traps Caught",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Payments", "Super Admin", "Seller Admin"],
+    summary: "Shipping quotes work in production again after the courier's IP allow-list was corrected, and the checkout total moved from Rp110.000 to Rp125.400 in a live browser drive. Both provider integrations were then read against their published specs rather than against our assumptions, which confirmed three things we had only measured, and caught two id defects before either could reach a real parcel or a real bill.",
+    problem: "Ordering was impossible for two days: the courier answered every rate request with 401 naming our server IP, so no ongkir meant no COD and no order at all. Separately, the payment integration discovered which channels were live by creating one real bill per channel — its own comment admitted it created sandbox bills — and its answer was wrong, reporting OVO unavailable when the provider offers it. And the courier order id we generate is 28 characters while the courier's own tracking schema declares a maximum of 20.",
+    solution: "The allow-list fix was the merchant's; what made it diagnosable was proving the credential was never at fault — a garbage key answers Unauthorized while ours answers the IP message, so authentication passes and the IP check runs after it. The channel probe now reads GET list_payment, one request, no bills. The webhook receiver keeps its closed gate but now logs the SHAPE of a rejected call — header present, scheme class, credential length, caller IP, candidate header names, never a value — so the first genuine rejection reveals what the courier actually sends. Two id traps were filed rather than papered over: our kelurahan ids are Kemendagri codes joined by name, not courier subdistrict ids, so sending them would be a wrong id rather than a missing one; and the 28-character order id is fixed at construction, never truncated at send time, because an id the provider stores truncated can never be looked up again.",
+    verification: "Live in production: province 200 with 37 provinces, the public rates path 4 rates with COD enabled and the origin resolved to the seller's real pickup district, and a Chromium drive of the live checkout showing the total include Rp15.400 ongkir with zero console errors. Release gate green: lint 0 errors, verify:guards 0, test:release 165 files and 1447 tests, RLS 54/55, storefront 8/8. The payment reconciliation migration was deliberately REFUSED on evidence — the endpoint we used does not exist on our account and answers 404, while the documented replacement returns no decisive paid signal, so the settled-status list ships deliberately EMPTY and nothing can mark an order paid by guessing."
+  },
+  {
+    id: "v1.3.0-release-gate-runnable",
+    version: "v1.3.0",
+    date: "2026-09-08",
+    title: "The Release Gate Runs For The First Time, And 29 Queue Items Close",
+    category: "major",
+    surfaces: ["Seller Admin", "Super Admin", "Storefront", "Database & RLS"],
+    summary: "Stage 7 had never been executed because three of its steps named commands that did not exist. Those commands were built and the gate ran: lint, the full release suite, four production builds, and six verification guards, all green. Twenty-nine queue items closed across two sweeps.",
+    problem: "The development map disagreed with the code in both directions. Nineteen tasks carried no status at all, five super-admin epics were listed as open although they had shipped weeks earlier, the UI inventory called every super-admin route a mock, and the root status files told a reader the project was un-started. Underneath that, a confirmed delete left the row on screen, eight detail pages answered 500 instead of 404 on a malformed id, and eighty-two internal comments were being served to shoppers.",
+    solution: "Every task now carries a status line naming the check that was run, and seventeen tasks were added for work nobody had filed. Four new guards make the gate real: an OpenAPI coverage check, a documentation-authority check, a requirement-to-evidence traceability check, and a source-size ceiling. On the product side: confirm dialogs on fourteen destructive screens with the dialog naming what truly happens, a shared isUuid on eight pages, honest per-courier returns that count unattributed orders separately instead of inventing a courier, a live courier health probe replacing a key-presence check that stayed green through the outage, and a shared rate limiter that survives a redeploy.",
+    verification: "Stage 7: lint 0 errors, test:release 161 files and 1369 tests with RLS 54/55 and storefront 8/8, build:all four surfaces, verify:guards all green. Steps 4 and 6 are NOT met and are not claimed, so the gate stays partial. A stale-list defect was swept as a class by AST rather than patched twice: 9 broken memos across 6 screens, including tab counters frozen since first paint, proved causally by reverting one dependency and watching the row stay on screen for 8 seconds."
+  },
+  {
     id: "v1.2.2-tema-saldo-ux",
     version: "v1.2.2",
     date: "2026-08-24",
