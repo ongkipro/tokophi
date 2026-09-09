@@ -92,11 +92,33 @@ async function packageRows(db: Tx, orderId: string) {
       l: schema.products.lengthCm,
       w: schema.products.widthCm,
       h: schema.products.heightCm,
+      // For the booking's `packages[].items` manifest (Task 8.14). `getShippingRates` ignores both;
+      // they cost nothing here and keep ONE definition of "the rows this parcel is made of", so the
+      // quote and the booking cannot describe different contents (the N30 lesson, one level down).
+      title: schema.orderLineItems.title,
+      unitPrice: schema.orderLineItems.priceIdr,
     })
     .from(schema.orderLineItems)
     .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
     .leftJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
     .where(eq(schema.orderLineItems.orderId, orderId));
+}
+
+/**
+ * The postal code of a district when — and only when — our kelurahan snapshot leaves no doubt
+ * (Task 8.14). A kodepos belongs to a kelurahan, not to a kecamatan, but 82% of KiriminAja's
+ * districts have exactly ONE across every kelurahan in them; for those the district determines the
+ * answer and there is nothing to guess. This is the same derivation the storefront checkout already
+ * makes for the shopper (`checkout.astro`), used here for the two spec-required zipcodes when the
+ * stored one is missing: a pre-2026-08-03 order (kodepos was not required then) or a seller whose
+ * pickup district has no kelurahan data (~4%).
+ *
+ * More than one postcode ⇒ `null`, never the first row. A wrong postal code goes on a real parcel.
+ */
+async function soleDistrictPostcode(districtId: number | null | undefined): Promise<string | null> {
+  if (!districtId) return null;
+  const codes = new Set((await kelurahanForDistrict(districtId)).map((k) => k.postcode));
+  return codes.size === 1 ? [...codes][0] : null;
 }
 
 // Live shipping rates from KiriminAja for an order's destination.
@@ -937,6 +959,28 @@ export async function createShipment(input: { orderNumber: string; service: stri
   const width = Math.max(0, ...pkgRows.map((r) => r.w ?? 0)) || undefined;
   const height = Math.max(0, ...pkgRows.map((r) => r.h ?? 0)) || undefined;
 
+  // ── The v6.2 spec-required fields we can honestly produce (Task 8.14) ───────────────────────
+  // Both zipcodes: the stored one first — the shopper's kodepos has been REQUIRED at checkout
+  // since 2026-08-03 and the seller's comes from the kelurahan they picked — then the district's
+  // own postcode when that district has exactly one. Never a placeholder: a missing postal code is
+  // omitted from the payload, because "00000" is a value a sorting hub would act on.
+  const senderZipcode = s.senderPostcode?.trim() || (await soleDistrictPostcode(s.senderKecamatanId));
+  const destZipcode = o.shipPostcode?.trim() || (await soleDistrictPostcode(destDistrictId));
+  // The manifest, one entry per order line — the spec requires `items` and `minItems: 1`, and a
+  // single synthetic "Pesanan INV-…" line is what `item_name` already says. Every numeric field in
+  // that schema carries `minimum: 1`, so each is floored: a line whose variant has no weight sends
+  // 1 g rather than 0 (the PACKAGE weight above is the real, priced one), and the box dimensions
+  // fall back to the same values the package declares, so a line can never contradict its parcel.
+  const items = pkgRows.map((row) => ({
+    name: row.title?.trim() || "Barang",
+    price: Math.max(0, Number(row.unitPrice ?? 0)),
+    weight: Math.max(1, row.weight ?? 0),
+    qty: Math.max(1, row.qty ?? 1),
+    width: Math.max(1, row.w ?? width ?? 10),
+    length: Math.max(1, row.l ?? length ?? 10),
+    height: Math.max(1, row.h ?? height ?? 10),
+  }));
+
   let r: Awaited<ReturnType<typeof kaCreateOrder>>;
   try {
     r = await kaCreateOrder(
@@ -951,6 +995,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
           }) || "-",
         kecamatanId: s.senderKecamatanId,
         kelurahanId: s.senderKelurahanId,
+        zipcode: senderZipcode,
       },
       {
         orderRef: providerReference,
@@ -958,7 +1003,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
         destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
         destAddress,
         destKecamatanId: destDistrictId,
-        destZipcode: o.shipPostcode?.trim() || undefined,
+        destZipcode: destZipcode || undefined,
         weight,
         width,
         length,
@@ -970,6 +1015,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
         shippingCost: serverCost,
         cod: o.isCod ? o.total || o.subtotal || 0 : 0,
         insuranceAmount: input.insurance ? o.subtotal || o.total || 0 : 0,
+        items,
       },
       schedule,
     );

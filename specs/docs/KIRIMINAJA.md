@@ -301,7 +301,35 @@ Other codes the table gives, none of which we map yet: `301` recipient refused �
 disputes or will not pay · `333` destroyed by courier · `400` successfully returned · `500` package has
 issues · `152` re-delivery · `210`/`211` SOP violation.
 
-### What the spec says we are NOT sending — and we book successfully anyway
+### ✅ Mostly closed 2026-09-09 (Task 8.14) — and one field turned out to be a TRAP
+
+Now sent unconditionally: sender `zipcode` (`store_settings.sender_postcode`, falling back to the
+district's own postcode when that district has exactly one), `destination_zipcode`
+(`orders.ship_postcode`, required at checkout since 2026-08-03), and `packages[].items` — one entry per
+`order_line_items` row, `price` PER UNIT per the schema, never one synthetic line.
+
+🔴 **The kelurahan ids we hold are the WRONG ONES, so sending them would be worse than omitting them.**
+`kelurahan.id` is a **Kemendagri** village code (text, built by `packages/db/scripts/build-kelurahan.mjs`
+and joined to KiriminAja's districts BY NAME) — not a KiriminAja subdistrict id. The rest of the code
+already behaves as if it knows this: `kelurahanOptions()` returns only `{name, postcode}`,
+`sender-address-card.tsx` says *"kelurahanId stays null on purpose"*, `store_settings.sender_kelurahan_id`
+is NULL for every store, and `orders` carries no kelurahan at all (checkout collects one only to derive
+the kodepos; `/api/public/order` ignores it). **The honest route exists and we do not use it:**
+`POST /api/mitra/kelurahan` (`kecamatan_id` → subdistrict list) and `GET /api/mitra/v6.1/addresses`.
+Filed as Task 8.17 — it needs a real integration and a column for the KA id, not a cast.
+
+⚠️ **Coordinates: confirmed unfillable, column by column.** `store_settings.sender_lat`/`sender_lng` are
+dead columns (nothing reads or writes them), `orders` has no coordinate columns, and neither
+`kiriminaja_areas` nor `kelurahan` carries a centroid. Omitted, never zeroed.
+
+**Measured against the live sandbox, read-only (no booking):** `shipping_price` 6138→2107, 1 kg,
+20×20×10 → HTTP 200, 22 services; the same quote plus `zipcode`, `destination_zipcode` and a real
+`items[]` → HTTP 200 with a **byte-identical sorted service:type=cost list**. So the Go service tolerates
+extra keys and the added fields change no price. ⚠️ Only the array ORDER varies between calls — never
+compare `results[0]` across two calls. `request_pickup` was NOT called, so nothing yet proves the
+booking validator accepts these; that needs a real sandbox pickup and the owner's say-so.
+
+### What the spec originally said we were NOT sending
 
 `v6.2/request_pickup` marks these **required**, and `kaCreateOrder` omits them or sends them
 conditionally. Sandbox bookings succeed regardless (measured 2026-08-20, `5758-…`), so the server is
@@ -427,6 +455,30 @@ successful pickup, and the flow is: validate the PIN, confirm the balance covers
 **A naive retry loop around PIN validation can LOCK the platform account** — which would stop every
 merchant's bookings at once. Any implementation of Task 8.16 must read `attempt`/`lock_until` and stop,
 never retry blindly. Term-of-Payment accounts use neither KA Credit nor the PIN.
+
+### 🔴 The callback's AUTHENTICATION is undeclared — and our receiver fails closed on it
+
+The spec declares `expressShipmentEvent` with **`security: null`**: no authentication documented on the
+incoming callback. Our receiver (`apps/admin/app/api/public/kiriminaja/webhook`) requires
+`Authorization: Bearer <KIRIMINAJA_API_KEY>` and REFUSES anything else — correctly, because that endpoint
+writes `orders.awb` and advances status, so an unsigned write is not an option.
+
+**If the vendor really sends no header, every genuine event is 401'd and nothing says so.** That is the
+open question. Registered 2026-09-09 by the owner; as of that date **no genuine callback has arrived**
+(one can only fire on a shipment event) — the single rejection in 24 h of production logs, at 08:59:38
+UTC, was an unauthenticated probe of our own.
+
+So the rejection log now records the SHAPE of what was presented and never a value:
+
+```
+[ka-webhook] unauthorized webhook call rejected auth=present scheme=bearer credLen=23 lenMatch=no ip=… hdrs=x-callback-token,x-ka-signature
+```
+
+`hdrs=` lists candidate auth header NAMES only, so a real call reveals what KiriminAja authenticates
+with **even if we never guessed the header name**. Four readings of the first genuine rejection, with
+the action for each, are written above the function. ⚠️ `scheme=` is a CLASS (`bearer`/`other`/`none`),
+never the caller's first word: `Authorization: <secret>` with no scheme would otherwise print the whole
+secret.
 
 ### Callback delivery — duplicates are guaranteed, retries are not documented
 

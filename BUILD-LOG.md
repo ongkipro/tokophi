@@ -3188,3 +3188,53 @@ lost. Final state: Coolify holds the OLD key + prefix `5758`, verified by read-b
 **Method note worth keeping:** the decisive diagnostic throughout was that a **garbage key answers
 `"Unauthorized."` while a valid key answers the IP message** — that is what proved the credential was never
 the problem, and it is the first thing to run next time this appears.
+
+## 2026-09-09 10:26 UTC — Main Session + 2 subagents — Webhook rejections made diagnosable; Task 8.14 done; a wrong-id trap found
+
+**Why now.** The owner registered our webhook URL with KiriminAja, and the allow-list started working, so
+for the first time both halves of the integration can be exercised.
+
+**① The webhook's auth contract is the open risk, and it is now readable.** The vendor's spec declares
+`expressShipmentEvent` with **`security: null`** — no authentication documented on the incoming callback —
+while our receiver demands `Authorization: Bearer <KIRIMINAJA_API_KEY>` and fails closed. If they send no
+header, every real event is 401'd and nothing says so. Production logs over 24 h hold exactly ONE rejection,
+08:59:38 UTC, and it is **my own unauthenticated probe** from before the key existed — no genuine callback
+has arrived (none can until a shipment event). The gate is unchanged (that endpoint writes `orders.awb` and
+status; unsigned writes are not an option); what changed is the log:
+
+```
+[ka-webhook] unauthorized webhook call rejected auth=present scheme=bearer credLen=23 lenMatch=no ip=… hdrs=x-callback-token,x-ka-signature
+```
+
+`hdrs=` lists candidate auth header NAMES only, so the first real rejection reveals what KiriminAja
+authenticates with **even if we never guessed the header name**. ⚠️ `scheme=` is a CLASS
+(`bearer`/`other`/`none`), never the caller's first word — `Authorization: <secret>` with no scheme would
+otherwise print the entire secret. 11 tests; proved RED against a copy that logs values (3 leak assertions
+fired). `rejectionShape()` deliberately duplicates the `Bearer ` parse rather than sharing it with the gate:
+drift in the diagnosis is a wrong log line, drift in the gate is a security bug.
+
+**② Task 8.14 — every field we can honestly fill now goes out.** Sender `zipcode`
+(`store_settings.sender_postcode`, falling back to the district's sole postcode), `destination_zipcode`
+(`orders.ship_postcode`), and `packages[].items` — one entry per `order_line_items` row, `price` PER UNIT
+per the schema, never one synthetic line. **Coordinates confirmed unfillable column by column**
+(`sender_lat`/`sender_lng` are dead columns, `orders` has none, no centroid in `kiriminaja_areas` or
+`kelurahan`) — omitted, never zeroed, with the absence asserted WITH its reason.
+
+**③ 🔴 The trap: our kelurahan ids are the WRONG ONES.** `kelurahan.id` is a **Kemendagri** village code,
+joined to KiriminAja districts BY NAME — not a KA subdistrict id. The spec marks `kelurahan_id` and
+`destination_kelurahan_id` required, so "just send what we have" would have shipped a WRONG id, which is
+worse than an absent one. The rest of the code already behaved as if it knew: `kelurahanOptions()` returns
+only `{name, postcode}`, `sender-address-card.tsx` says *"kelurahanId stays null on purpose"*, and
+`orders` carries no kelurahan at all. The honest route exists and we do not use it
+(`POST /api/mitra/kelurahan`, `GET /api/mitra/v6.1/addresses`) — filed as **Task 8.17**, which also
+requires measuring the unmatched rate rather than letting a partial match read as success.
+
+**Live evidence, read-only.** `province` 200 / 37 provinces; `shipping_price` (6138→2107, 1 kg, 20×20×10)
+200 / 22 services; the same quote **plus** the new fields → 200 with a **byte-identical** sorted
+service:type=cost list, so the Go service tolerates extra keys and no price moves. ⚠️ Only the array ORDER
+varies between calls — never compare `results[0]` across two calls. `request_pickup` was deliberately NOT
+called: it would create a real sandbox pickup, so the booking validator's acceptance of the new fields
+remains unproven and needs one authorised booking.
+
+**Tests.** `kiriminaja-v62.test.ts` 7 → 12 (7 mutations, 7 reds), new `shipping-manifest.test.ts` (5, each
+claim with its own mutation self-check), new `webhook/route.auth.test.ts` (11).
