@@ -3476,3 +3476,20 @@ figures are derived from the entries, so they cannot rot.
 **Gate:** lint 0, verify:guards 0, **test:release 166 files / 1462 tests**, RLS 54/55, storefront 8/8.
 RED-proved twice against the shipped construction. Worth keeping: `codeOnly` inerts a **regex literal** too,
 so `/[^A-Za-z0-9]/g` is unmatchable and a source claim must key on the identifiers around it.
+
+## 2026-09-09 16:04 UTC — Main Session — Repository back to PRIVATE (owner order, sixth flip, same day as the fifth)
+
+`gh api repos/ongkipro/tokophi --jq .visibility` → **private**, verified after the change; `git ls-remote`
+still resolves `main` at `9d71640`, so nothing about the remote broke.
+
+**Consequence, the same lever every time:** GitHub Actions minutes are metered again. Today's CI is not cheap
+— every PR runs the four-surface `build` matrix on top of a 166-file / 1462-test suite, and this session
+alone put four PRs through it. If PR checks quietly stop running, this is the first thing to look at.
+
+⚠️ **What a private phase does NOT do:** retract anything already published. The five issue-audit comments
+(#21, #16, #14, #13, #12) and new issue **#388** were posted while the repository was public, and the repo's
+contents have been publicly indexable since the 2026-08-27 window. Private closes NEW access only.
+
+No pre-flight was needed in this direction — closing access exposes nothing. (The credential sweep was run
+in the OTHER direction, when it was opened earlier today: 12 guards green, and `git grep` confirmed the
+KiriminAja key never entered a tracked file.)
