@@ -23,7 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { type CollectionDetail, type Product } from "@/lib/mock/store";
+import { type CollectionDetail, type Product } from "@/lib/types/domain";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";

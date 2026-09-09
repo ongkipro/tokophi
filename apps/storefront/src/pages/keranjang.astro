@@ -17,6 +17,7 @@ import { type Crumb } from "../lib/breadcrumb";
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import { getPages } from "../data/content";
+import { UPLOAD_WIDTHS, paymentKindWords } from "../data/catalog";
 
 const { store, catalog } = Astro.locals;
 // The return-policy trust line linked to /halaman/kebijakan-pengembalian and asserted "7 hari" — both
@@ -28,6 +29,20 @@ const returnPage = (await getPages(store.id)).find((p) => p.handle === "kebijaka
 // 4-up row. It now sorts the whole catalogue by units_sold, so the first 4 are always there and are
 // actually the top 4 — the workaround was treating the symptom.
 const recommended = catalog.bestsellers().slice(0, 4);
+
+// ── THE PAYMENT TRUST LINE IS DERIVED, NOT WRITTEN (page-map report SF-4) ────────────────────────
+//
+// It read "transfer bank & QRIS" — a hard-coded claim about which channels the PLATFORM has live,
+// on the last page before checkout. Every `kind='ewallet'` row is `enabled=f, active=f` (the live
+// gateway probe refused them), so the same sentence class had already put a refused method on the
+// homepage; `index.astro` derives its badge from this list for exactly that reason. Derived from
+// the same list checkout offers, so the cart and the checkout can never disagree.
+//
+const payKinds = await paymentKindWords("sentence");
+// No live channel ⇒ no claim. The line falls back to the half that is true regardless.
+const PAY_TRUST = payKinds.length
+  ? `Pembayaran lewat kanal resmi — ${payKinds.join(" & ")}.`
+  : "Pembayaran lewat kanal resmi.";
 
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
@@ -130,7 +145,7 @@ const CRUMBS: Crumb[] = [
         <ul class="mt-5 space-y-2 border-t border-line pt-4 text-xs text-muted">
           <li class="flex items-start gap-2">
             <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
-            <span>Pembayaran lewat kanal resmi — transfer bank &amp; QRIS.</span>
+            <span>{PAY_TRUST}</span>
           </li>
           <li class="flex items-start gap-2">
             <Truck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
@@ -174,7 +189,8 @@ const CRUMBS: Crumb[] = [
   }
 </Layout>
 
-<script is:inline>
+{/* The thumbnail is `h-24 w-20` inside a `shrink-0` cell: 80 px at every viewport (Task 6.12). */}
+<script is:inline define:vars={{ UPLOAD_WIDTHS, THUMB_SIZES: "80px" }}>
   (function () {
     var itemsEl = document.getElementById("cart-items");
     var bodyEl = document.getElementById("cart-body");
@@ -211,6 +227,23 @@ const CRUMBS: Crumb[] = [
       });
     }
 
+    // ── srcset for a cart thumbnail (Task 6.12) ──
+    // The line comes from localStorage, so this runs in the browser and cannot call `imageSrcSet`.
+    // A MERCHANT UPLOAD (`/api/uploads/*`, served by the Seller app) takes `?w=`, and its ladder is
+    // UPLOAD_WIDTHS — the same list `imageSrcSet` uses, injected by the server, never a copy typed
+    // here. A seeded `/products/*.webp` has real width files beside it, but WHICH rungs exist is only
+    // known to the 5 KB generated manifest, and shipping that to every visitor to serve a few
+    // thumbnails would cost more than it saves — so a static seed image stays bare, deliberately.
+    // Empty string ⇒ no attribute at all, the same shape the server helper renders.
+    function srcsetFor(u) {
+      if (!/^(https?:\/\/[^/]+)?\/api\/uploads\//.test(u)) return "";
+      return UPLOAD_WIDTHS.map(function (w) { return u + "?w=" + w + " " + w + "w"; }).join(", ");
+    }
+    function srcsetAttr(u, sizes) {
+      var s = srcsetFor(u);
+      return s ? ' srcset="' + esc(s) + '" sizes="' + sizes + '"' : "";
+    }
+
     function row(item, idx) {
       var sub = item.price * item.qty;
       var variant = item.variant || item.size || "";
@@ -232,7 +265,7 @@ const CRUMBS: Crumb[] = [
         (href
           ? '<a href="' + href + '" tabindex="-1" aria-hidden="true" class="row-span-3 shrink-0 rounded-lg sm:row-span-1">'
           : '<span class="row-span-3 shrink-0 sm:row-span-1">') +
-        '<img src="' + esc(item.image) + '" alt="" loading="lazy" class="h-24 w-20 rounded-lg bg-brand-50 object-cover" />' +
+        '<img src="' + esc(item.image) + '"' + srcsetAttr(item.image, THUMB_SIZES) + ' alt="" loading="lazy" class="h-24 w-20 rounded-lg bg-brand-50 object-cover" />' +
         (href ? "</a>" : "</span>") +
         // Product info
         '<div class="min-w-0">' +

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-import type { NavItem, NavItemType } from "@/lib/mock/store";
+import type { NavItem, NavItemType } from "@/lib/types/domain";
 import { TYPE_META, TYPE_OPTIONS, TARGET_PLACEHOLDER } from "./nav-meta";
 
 import { Button } from "@tokophi/ui/button";

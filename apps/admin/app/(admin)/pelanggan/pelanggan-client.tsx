@@ -44,7 +44,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from "@tokophi/ui/dialog";
-import { type Segment } from "@/lib/mock/store";
+import { type Segment } from "@/lib/types/domain";
 import type { CustomerRow } from "@/lib/data/customers";
 import { IDR, NO_FIGURE, num, share } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";

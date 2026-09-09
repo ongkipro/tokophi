@@ -1,17 +1,31 @@
 import "server-only";
-import { execFile } from "node:child_process";
 import type { PromoContent } from "@/lib/data/promo";
 
 // Claude-generated direct-response sales copy for a single-product COD landing. Called from the
 // generatePromoContent action; the draft is handed to the editor, never auto-saved.
 //
-// Uses the local **Claude Code CLI** (`claude -p`), NOT the Anthropic API — no API key to store, the
-// CLI carries its own auth. Server-only, and `execFile` (args array, no shell) so a product name with
-// shell metacharacters can never be interpreted as a command.
+// 🔴 IT USED TO `execFile("claude", …)` — THE CLI, WHICH EXISTS ON A DEVELOPER'S LAPTOP AND NOT IN
+// THE PRODUCTION CONTAINER (Task 8.7). The feature therefore READ as implemented — a Generate
+// button, a prompt builder, an output parser, a toast — while every press in production came back
+// "Claude CLI tidak ditemukan di server." for as long as the button has existed. A shipped control
+// whose only possible outcome is an error message is not a degraded feature, it is a dead one; the
+// old comment here called the missing binary "graceful degradation", which is the sentence that let
+// it sit. There is no `child_process` on this path any more, and `promo-ai.test.ts` fails if one
+// comes back.
 //
-// ⚠️ This depends on the `claude` binary being on the server's PATH. That is true on the dev box and
-// wherever the CLI is installed; a plain VPS without it degrades gracefully ("Claude CLI tidak
-// ditemukan"), same posture as the missing-KiriminAja-key path.
+// It is a plain `fetch` to the Anthropic Messages API — no SDK dependency added for one POST, which
+// is the repo's standing rule about new deps. The key comes from the environment and NOTHING else;
+// it is never logged, never returned to the client, and never rendered.
+//
+// ⚠️ WITH THE KEY UNSET THE FEATURE IS OFF, NOT BROKEN. `promoAiEnabled()` is the one answer, the
+// editor hides the button behind it and says why in Indonesian, and this module still refuses
+// server-side — the UI is the courtesy, this is the boundary. Same posture as `googleEnabled()`.
+// Read at CALL TIME: a module-scope read gets baked in at build time, when the env is empty.
+
+const MODEL = "claude-opus-5";
+const API = "https://api.anthropic.com/v1/messages";
+const API_VERSION = "2023-06-01";
+const TIMEOUT_MS = 120_000;
 
 type ProductInput = { name: string; description: string; category: string; priceIdr: number };
 export type GeneratedDraft = {
@@ -22,6 +36,14 @@ export type GeneratedDraft = {
   idealFor?: string[];
   content?: PromoContent;
 };
+
+/** The single source of "may this feature run at all?". Read by the editor page and by the action. */
+export function promoAiEnabled(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+/** Shown wherever the feature is off. One sentence, Indonesian, says what is missing and to whom. */
+export const PROMO_AI_DISABLED_ID = "Generate AI belum aktif — kunci API belum dipasang di server. Hubungi admin TokoΦ.";
 
 const IDR = (n: number) => "Rp" + Number(n || 0).toLocaleString("id-ID");
 
@@ -50,35 +72,68 @@ Balas HANYA dengan satu objek JSON valid (tanpa penjelasan, tanpa markdown), ske
 }`;
 }
 
-/** Run `claude -p <prompt> --output-format json` and return its stdout, or an error. */
-function runClaude(prompt: string): Promise<{ ok: true; stdout: string } | { ok: false; error: string }> {
-  return new Promise((resolve) => {
-    execFile(
-      "claude",
-      ["-p", prompt, "--output-format", "json"],
-      { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) {
-          const e = err as NodeJS.ErrnoException & { killed?: boolean };
-          if (e.code === "ENOENT") return resolve({ ok: false, error: "Claude CLI tidak ditemukan di server." });
-          if (e.killed) return resolve({ ok: false, error: "Generate memakan waktu terlalu lama. Coba lagi." });
-          return resolve({ ok: false, error: "Claude CLI gagal dijalankan." });
-        }
-        resolve({ ok: true, stdout });
-      },
-    );
-  });
-}
+/**
+ * POST the prompt and return the model's answer text.
+ *
+ * ⚠️ THE PROVIDER'S OWN ERROR TEXT NEVER REACHES THE MERCHANT — the same rule the public routes
+ * carry (ADR 0004). An Anthropic 401/429 body is written by someone else, is unbounded, and can name
+ * the vendor and the account; it goes to `console.error` and the merchant gets one of ours.
+ * ⚠️ And the key is not in the message either: the status code is, the response body is not.
+ */
+async function askClaude(prompt: string): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) return { ok: false, error: PROMO_AI_DISABLED_ID };
 
-/** Pull the model's answer text out of the CLI's JSON envelope (`{result: "..."}`), or use it raw. */
-function resultText(stdout: string): string {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   try {
-    const env = JSON.parse(stdout);
-    if (env && typeof env.result === "string") return env.result;
-  } catch {
-    /* not the JSON envelope — treat stdout as the text itself */
+    const res = await fetch(API, {
+      method: "POST",
+      signal: ctl.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": API_VERSION,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 16000,
+        // Copywriting from four short fields is routine work; `low` is the cheap end of the same
+        // model rather than a weaker one. Thinking is on by default on this model — leave it there.
+        output_config: { effort: "low" },
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[promo-ai] Anthropic HTTP", res.status, await res.text().catch(() => ""));
+      return { ok: false, error: "Layanan AI sedang tidak bisa dihubungi. Coba lagi sebentar lagi." };
+    }
+
+    const body = (await res.json()) as {
+      stop_reason?: string;
+      content?: Array<{ type: string; text?: string }>;
+    };
+    // A safety decline is HTTP 200 with `stop_reason: "refusal"` and no usable text — check it
+    // BEFORE reading content, or the merchant gets "tidak bisa dibaca" for a refusal.
+    if (body.stop_reason === "refusal") {
+      return { ok: false, error: "AI menolak membuat teks untuk produk ini. Coba perbaiki deskripsi produknya." };
+    }
+    // `content` is a list of blocks; with thinking on, the answer is not block 0.
+    const text = (body.content ?? [])
+      .filter((b) => b.type === "text" && typeof b.text === "string")
+      .map((b) => b.text as string)
+      .join("\n")
+      .trim();
+    if (!text) return { ok: false, error: "Balasan AI kosong. Coba lagi." };
+    return { ok: true, text };
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") return { ok: false, error: "Generate memakan waktu terlalu lama. Coba lagi." };
+    console.error("[promo-ai] fetch failed", e);
+    return { ok: false, error: "Layanan AI sedang tidak bisa dihubungi. Coba lagi sebentar lagi." };
+  } finally {
+    clearTimeout(timer);
   }
-  return stdout;
 }
 
 /** Extract the first JSON object from the answer (handles ```json fences and stray prose). */
@@ -96,10 +151,10 @@ function parseJson(text: string): Record<string, unknown> | null {
 }
 
 export async function generateLandingCopy(p: ProductInput): Promise<{ ok: true; draft: GeneratedDraft } | { ok: false; error: string }> {
-  const run = await runClaude(buildPrompt(p));
+  const run = await askClaude(buildPrompt(p));
   if (!run.ok) return run;
 
-  const obj = parseJson(resultText(run.stdout));
+  const obj = parseJson(run.text);
   if (!obj) return { ok: false, error: "Balasan AI tidak bisa dibaca. Coba lagi." };
 
   const s = (k: string) => (typeof obj[k] === "string" ? (obj[k] as string) : undefined);

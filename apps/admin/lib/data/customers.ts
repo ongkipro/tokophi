@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq, sql } from "drizzle-orm";
-import type { Customer, Order } from "@/lib/mock/store";
+import type { Customer, Order } from "@/lib/types/domain";
 
 // ⚠️ THE REAL CLOCK, in both places below. These were frozen to the seed's frames (`2026-06-30` for
 // the customer, `2026-07-02` to "match the Pesanan screens"), so the detail page rendered "Pelanggan

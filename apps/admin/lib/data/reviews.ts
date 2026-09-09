@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
-import type { Review } from "@/lib/mock/store";
+import type { Review } from "@/lib/types/domain";
 
 // ⚠️ THE REAL CLOCK. This was `ADMIN_TODAY = 2026-06-30`, the seed's frame, so anything created or
 // touched after the seed was written rendered a NEGATIVE age. The seed may be anchored; the app is not.

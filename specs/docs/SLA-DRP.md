@@ -139,6 +139,7 @@ daily), 1 h for a logical/corruption event (retained hourly for 48 h, daily for 
 | disk full | L1b prune, then redeploy | **Observed** the 2026-07-18 case ran **~2 h** *before* L1b existed |
 | bad release | `git revert` + push + rebuild | **Derived** ~9–11 min, from the 10 deploys measured |
 | logical corruption / bad migration | `pg_restore` the newest dump | **Derived** minutes — the dump is 1,2 MB / 621 objects. ⚠️ **Untested.** |
+| **routine deploy (every merge to `main`)** | Coolify tears the compose stack down and brings the new one up; no rolling update for compose apps | **7,0–8,3 s per surface, measured deploy 524 (2026-08-28)** — was 15 min (≤ 2026-08-19), then 81 s. Structural record: ADR 0017. This is part of the availability budget: ~40 merges/month × 8 s ≈ 5,3 min/month ≈ 99,99 % on its own. The two levers that would take it to ~0 are outside the repo and undecided (ADR 0017 §5) |
 | **hosting billing lapse (instance suspended)** | top up → instance auto-resumes → containers self-start | **Observed 2026-09-07:** minutes after payment — but the *outage* was **70 h 20 min** because nothing detected it (§2). RTO here = time-to-notice, not time-to-fix |
 | **total VPS loss** | provision + Coolify install + deploy + restore | **Gap — unknown and untested.** Coolify install alone is ~10 min; realistically 1–3 h, and **there is no offsite dump to restore from** (§3) | ⚠️ `backup-offsite` exists since 2026-09-02 but is **INERT** until the R2 credentials are set (below, §6) |
 

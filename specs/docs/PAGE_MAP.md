@@ -83,10 +83,10 @@
 | `/produk/kategori` | page | `apps/admin/app/(admin)/produk/kategori/page.tsx` | `kategori-client.tsx` | `collections` `domain` `store` | `collections` | `session` | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk` | page | `apps/admin/app/(admin)/produk/page.tsx` | `produk-client.tsx` | `products` | `products` | — | — | ✓ | `apps/admin/app/(admin)/produk/[id]/product-editor-unsaved.test.ts` `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/actions/menus.test.ts` `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/pembelian` | page | `apps/admin/app/(admin)/produk/pembelian/page.tsx` | `pembelian-client.tsx` | `purchases` | `purchases` | — | — | ✓ | — |
-| `/promo/[id]` | page | `apps/admin/app/(admin)/promo/[id]/page.tsx` | `promo-editor-client.tsx` | `promo` | `promo` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/promo/[id]` | page | `apps/admin/app/(admin)/promo/[id]/page.tsx` | `promo-editor-client.tsx` | `promo` | `promo` | — | — | ✓ | `apps/admin/lib/promo-ai.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/promo/html/[id]` | page | `apps/admin/app/(admin)/promo/html/[id]/page.tsx` | `landing-editor-client.tsx` | `landing` | `landing` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/promo/html/baru` | page | `apps/admin/app/(admin)/promo/html/baru/page.tsx` | — | `landing` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` |
-| `/promo` | page | `apps/admin/app/(admin)/promo/page.tsx` | `promo-list-client.tsx` | `landing` `promo` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/promo` | page | `apps/admin/app/(admin)/promo/page.tsx` | `promo-list-client.tsx` | `landing` `promo` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` `apps/admin/lib/promo-ai.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/saldo` | page | `apps/admin/app/(admin)/saldo/page.tsx` | `saldo-client.tsx` | `ledger` | `ledger` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
 | `/tema/[id]` | page | `apps/admin/app/(admin)/tema/[id]/page.tsx` | `builder-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/tema` | page | `apps/admin/app/(admin)/tema/page.tsx` | `tema-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
@@ -107,7 +107,7 @@
 | `/api/cron/domains` | GET | `apps/admin/app/api/cron/domains/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/order-expiry` | GET | `apps/admin/app/api/cron/order-expiry/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/tracking-events` | GET | `apps/admin/app/api/cron/tracking-events/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
-| `/api/cron/tracking` | GET | `apps/admin/app/api/cron/tracking/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
+| `/api/cron/tracking` | GET | `apps/admin/app/api/cron/tracking/route.ts` | `cron` | ✓ | `apps/admin/lib/cancel-reconcile.test.ts` `apps/admin/lib/cron-auth.test.ts` |
 | `/api/health/env` | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | — |
@@ -132,7 +132,7 @@
 | `/` | page | `apps/super-admin/app/(platform)/page.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `route:/` | — | ✓ | — |
 | `/paket` | page | `apps/super-admin/app/(platform)/paket/page.tsx` | `paket-client.tsx` | `data` | `actions` | `route:/paket` | — | ✓ | `apps/super-admin/lib/invoice-flip-is-bookkeeping.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/pencairan` | page | `apps/super-admin/app/(platform)/pencairan/page.tsx` | `pencairan-client.tsx` | `data` | `actions` | `route:/pencairan` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
-| `/pengaturan` | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `pengaturan-client.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/pengaturan` | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `pengaturan-client.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/aggregator-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/tiket/[id]` | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/tiket` | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/toko/[id]` | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` |
@@ -159,13 +159,13 @@
 | `/blog/[handle]` | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
-| `/checkout` | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` | `cart-variant` `recovery` | ✓ |  | — |
-| `/checkout/sukses` | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | — | — | ✓ |  | — |
+| `/checkout` | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` | ✓ |  | — |
+| `/checkout/sukses` | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | — | ✓ |  | — |
 | `/halaman/[handle]` | `apps/storefront/src/pages/halaman/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/` | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
 | `/kategori/[handle]` | `apps/storefront/src/pages/kategori/[handle].astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
-| `/kategori` | `apps/storefront/src/pages/kategori/index.astro` | `Layout` | — | `breadcrumb` | ✓ |  | `apps/storefront/src/lib/safe-href.test.ts` |
-| `/keranjang` | `apps/storefront/src/pages/keranjang.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
+| `/kategori` | `apps/storefront/src/pages/kategori/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | `apps/storefront/src/lib/safe-href.test.ts` |
+| `/keranjang` | `apps/storefront/src/pages/keranjang.astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/kontak` | `apps/storefront/src/pages/kontak.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
 | `/lp/[slug]` | `apps/storefront/src/pages/lp/[slug].astro` | `LandingLayout` | `catalog` `landing` | `packages` | ✓ | ✓ | — |
 | `/produk/[handle]` | `apps/storefront/src/pages/produk/[handle].astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | `apps/storefront/src/components/product-ratio-locked.test.ts` |
@@ -227,8 +227,8 @@
 | `bulk-labels.ts` | `bulkLabels` `getBulkLabels` |
 | `bulk-shipping.ts` | `getBulkShipping` |
 | `chat.ts` | `canReadChat` `getMessagesSince` `getThread` `getThreads` `getUnreadTotal` `requireChatRead` |
-| `checkout.ts` | `digits` `getAbandonedCart` `getAbandonedCarts` `getCheckoutMetrics` |
-| `collections.ts` | `getCollection` `getCollectionDetail` `getCollections` |
+| `checkout.ts` | `digits` `getAbandonedCarts` `getCheckoutMetrics` |
+| `collections.ts` | `getCollectionDetail` `getCollections` |
 | `crm.ts` | `getFollowups` `getLeads` `getWaTemplates` |
 | `customers.ts` | `getCustomer` `getCustomerOrders` `getCustomers` |
 | `dashboard.ts` | `LOW_STOCK` `RANGE_OPTIONS` `getActionQueue` `getActivities` `getChannels` `getConversionKpi` `getDeviceSplit` `getFunnel` `getMoneyTiles` `getRecentOrders` `getReturnSummary` `getSeries` `getStatusCounts` `getStuckMoney` `getSummary` `getTopProducts` `getVisitsKpi` `rangeDates` `rangeLabel` `shiftMonth` |
@@ -248,7 +248,6 @@
 | `order-payment.ts` | `latestPaymentFirst` |
 | `orders.ts` | `getOrder` `getOrderList` `getOrders` `getPerluDikirimCount` |
 | `pages.ts` | `getPage` `getPages` |
-| `payments.ts` | `getOrderPayment` |
 | `platform-finance.ts` | `getSubscriptionPpnEnabled` |
 | `products.ts` | `getProduct` `getProducts` `productNumberById` `resolveProductIdByNumber` `serverNowTs` |
 | `promo.ts` | `getPromoEditor` `listPromoPages` |
@@ -260,7 +259,7 @@
 | `segments.ts` | `getSegments` |
 | `store.ts` | `getStoreName` `getStoreSlug` `getStorefrontHost` |
 | `support.ts` | `getMyTickets` `getTicket` |
-| `theme.ts` | `TEMPLATE_TYPES` `TEMPLATE_TYPE_LABELS` `getBrandColor` `getCollectionAssignments` `getDefaultHomepage` `getPlatformDefaultSections` `getProductAssignments` `getProductGalleryLayout` `getStoreTheme` `getTemplate` `getTemplatesByType` `listTemplates` |
+| `theme.ts` | `TEMPLATE_TYPES` `TEMPLATE_TYPE_LABELS` `getBrandColor` `getCollectionAssignments` `getPlatformDefaultSections` `getProductAssignments` `getProductGalleryLayout` `getStoreTheme` `getTemplate` `listTemplates` |
 | `topbar.ts` | `getTopbarData` |
 | `tracking.ts` | `emptyTrackingConfig` `emptyTrackingHealth` `getTrackingConfig` `getTrackingHealth` `getTrackingStatus` |
 
@@ -336,7 +335,8 @@
 | module | exports |
 |---|---|
 | `cache.ts` | `cacheClear` `cached` `ttlMs` |
-| `catalog.ts` | `ADMIN_BASE` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `productImages` `promoHub` `randomProducts` `recentProducts` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
+| `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
+| `checkout.ts` | `getRecoveredCheckout` |
 | `content.ts` | `formatDate` `getArticle` `getArticles` `getPage` `getPages` `parseBody` `readMinutes` |
 | `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` |
 | `landing.ts` | `getLandingPage` |

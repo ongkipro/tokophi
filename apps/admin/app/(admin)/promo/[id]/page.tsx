@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { isUuid } from "@/lib/uuid";
 import { getPromoEditor } from "@/lib/data/promo";
+import { promoAiEnabled } from "@/lib/promo-ai";
 import { PromoEditorClient } from "./promo-editor-client";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +15,6 @@ export default async function PromoEditorPage({ params }: { params: Promise<{ id
   if (!isUuid(id)) notFound();
   const editor = await getPromoEditor(id);
   if (!editor) notFound();
-  return <PromoEditorClient editor={editor} />;
+  // Task 8.7 — the key never crosses to the client, only the boolean does.
+  return <PromoEditorClient editor={editor} aiEnabled={promoAiEnabled()} />;
 }

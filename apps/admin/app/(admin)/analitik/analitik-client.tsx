@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Wallet, ShoppingBag, Users, Receipt, Download, MapPin, Smartphone, Filter } from "lucide-react";
-import type { DayPoint, Product } from "@/lib/mock/store";
+import type { DayPoint, Product } from "@/lib/types/domain";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Separator } from "@tokophi/ui/separator";

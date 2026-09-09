@@ -40,29 +40,9 @@ export type TemplateAssignment = { id: string; name: string; templateId: string 
 // structure, so we don't re-encode it — the storefront renderer (apps/storefront) walks
 // `data.content` directly. See lib/actions/theme.ts for the write side.
 
-export async function getTemplatesByType(type: TemplateType): Promise<PageTemplate[]> {
-  return withCurrentTenant(async (db) =>
-    db.select().from(schema.pageTemplates).where(eq(schema.pageTemplates.type, type)),
-  );
-}
-
 export async function getTemplate(id: string): Promise<PageTemplate | null> {
   return withCurrentTenant(async (db) => {
     const [row] = await db.select().from(schema.pageTemplates).where(eq(schema.pageTemplates.id, id)).limit(1);
-    return row ?? null;
-  });
-}
-
-// The store's single active homepage template, or null if the merchant hasn't saved one
-// yet — the /tema page falls back to a blank Puck canvas in that case. Reads never write
-// (see lib/tenant.ts); the first Save is what actually creates the row (lib/actions/theme.ts).
-export async function getDefaultHomepage(): Promise<PageTemplate | null> {
-  return withCurrentTenant(async (db) => {
-    const [row] = await db
-      .select()
-      .from(schema.pageTemplates)
-      .where(and(eq(schema.pageTemplates.type, "homepage"), eq(schema.pageTemplates.isDefault, true)))
-      .limit(1);
     return row ?? null;
   });
 }

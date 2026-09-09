@@ -21,6 +21,8 @@ tags:
     description: Destination lookup and shipping-rate quotes.
   - name: Payment callbacks
     description: Secured callbacks from the payment provider.
+  - name: Shipping callbacks
+    description: Secured tracking pushes from the shipping aggregator (hints only).
 security: []
 paths:
   /api/public/order:
@@ -191,9 +193,11 @@ paths:
         Authorized callbacks are acknowledged with HTTP 200 even when no record
         or supported transition matches.
       security:
+        - callbackSignedRef: []
         - callbackHeaderAuth: []
         - callbackQueryAuth: []
       parameters:
+        - $ref: '#/components/parameters/CallbackSignedRefQuery'
         - $ref: '#/components/parameters/CallbackTokenQuery'
       requestBody:
         required: false
@@ -224,19 +228,144 @@ paths:
                     const: false
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/public/kiriminaja/webhook:
+    post:
+      operationId: receiveShipmentWebhook
+      tags: [Shipping callbacks]
+      summary: Accept a courier-aggregator tracking push as a hint
+      description: |
+        Server-to-server push from the shipping aggregator (registered once per
+        account at the provider's set-callback endpoint). The body is a HINT,
+        never a fact: the provider signs nothing, so the receiver extracts at
+        most 50 `data[].order_id` values and runs a verified pull of the
+        tracking endpoint for each. A forged request can only make the platform
+        re-check truth its 15-minute poller would have fetched anyway. Always
+        acknowledged with HTTP 200 once authorized — a foreign or stale id is
+        not this platform's delivery failure, and a non-2xx would put the
+        provider into a retry storm. No CORS headers: there is no browser caller.
+      security:
+        - shipmentWebhookBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipmentWebhookRequest'
+      responses:
+        '200':
+          description: Hints accepted; `known` counts ids that matched an order, `changed` the orders whose tracking moved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentWebhookResult'
+        '400':
+          description: Body is not JSON.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, error]
+                properties:
+                  ok: { const: false }
+                  error: { type: string }
+        '401':
+          description: Bearer token absent or not the configured aggregator key. Fails CLOSED when no key is configured.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { const: false }
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+# Public routes that are deliberately NOT part of this contract. Task 5.13 / NF-15: `npm run
+# verify:openapi` fails on any public route that is neither documented above nor listed here, so an
+# exclusion is a decision recorded in the spec's own diff. Every entry needs a `reason`; an entry
+# that matches no route on disk, or a route that is not public, is reported as stale.
+x-tokophi-route-exemptions:
+  - app: apps/storefront
+    path: /api/chat/poll
+    methods: [GET, POST]
+    reason: Same-origin poll used only by the storefront's own inline chat widget on `<slug>.tokophi.com`; tenant from the Host header, rate-limited. POST is a 405 stub. Not a third-party contract.
+  - app: apps/storefront
+    path: /api/chat/read
+    methods: [GET, POST]
+    reason: Same-origin read-receipt beacon of the storefront's own chat widget; GET is a 405 stub. Not a third-party contract.
+  - app: apps/storefront
+    path: /api/chat/send
+    methods: [GET, POST]
+    reason: Same-origin message send of the storefront's own chat widget; GET is a 405 stub. Not a third-party contract.
+  - app: apps/storefront
+    path: /api/checkout-session
+    methods: [GET, POST]
+    reason: Fail-quiet abandoned-checkout capture beacon (204 on every refusal) sent by checkout.astro as the shopper types; tenant from Host, bot- and rate-gated. GET is a 405 stub. Internal to the storefront.
+  - app: apps/storefront
+    path: /api/track
+    methods: [GET, POST]
+    reason: First-party analytics beacon (`analytics_events`) sent by the storefront's own tracker; fails quiet, bot- and rate-gated. GET is a 405 stub. Internal to the storefront.
+  - app: apps/storefront
+    path: /api/search
+    methods: [GET]
+    reason: Same-origin JSON behind the ⌘K search palette (`SearchPalette.astro`); returns this tenant's catalog rows with server-built srcsets. Internal to the storefront.
+  - app: apps/storefront
+    path: /feed/google.xml
+    methods: [GET]
+    reason: Google Merchant product feed — the contract is Google's feed specification (ADR 0013 catalog ids), not an OpenAPI operation.
+  - app: apps/storefront
+    path: /feed/tiktok.xml
+    methods: [GET]
+    reason: TikTok Shop catalog feed — the contract is TikTok's feed specification (ADR 0013 catalog ids), not an OpenAPI operation.
+  - app: apps/storefront
+    path: /robots.txt
+    methods: [GET]
+    reason: Well-known robots exclusion file per tenant; format is the robots.txt standard (see the long note in pages/robots.txt.ts about Cloudflare Managed robots.txt).
+  - app: apps/storefront
+    path: /sitemap.xml
+    methods: [GET]
+    reason: Per-tenant XML sitemap; the contract is the sitemaps.org protocol, not an OpenAPI operation.
+  - app: apps/landing
+    path: /sitemap.xml
+    methods: [GET]
+    reason: Static apex sitemap for tokophi.com; the contract is the sitemaps.org protocol, not an OpenAPI operation.
 components:
   securitySchemes:
+    callbackSignedRef:
+      type: apiKey
+      in: query
+      name: cb
+      description: |
+        Per-payment HMAC minted into the bill's `callback_url` as `?cb=<reff>.<hmac>`
+        (Task 4.13 / SEC-16, `@tokophi/lib/pay-callback`). The route BINDS the
+        signature to the row it resolves (`payments.reff_id` / `invoices.reff_id`),
+        so a leaked URL is worth one payment, never all of them. This is the form
+        every new bill carries.
     callbackHeaderAuth:
       type: apiKey
       in: header
       name: X-Callback-Token
-      description: Shared AutoLaris callback secret.
+      description: Shared AutoLaris callback secret. Accepted; the provider does not yet send it.
     callbackQueryAuth:
       type: apiKey
       in: query
       name: token
-      description: Shared callback secret fallback. Prefer the header form so credentials do not enter URLs or logs.
+      description: |
+        Legacy shared-secret fallback. Nothing mints it any more, but the door stays
+        OPEN until the vendor confirms a header (AGENTS.md "The PAY CALLBACK URL is
+        closed; the callback's `?token=` DOOR IS NOT") — refusing it would 401 every
+        genuine payment on a bill issued before the signed form.
+    shipmentWebhookBearer:
+      type: http
+      scheme: bearer
+      description: The platform's own aggregator API key, echoed back by the provider as `Authorization: Bearer …` (their only credential). Compared timing-safe; absent key configuration refuses everyone.
   parameters:
+    CallbackSignedRefQuery:
+      name: cb
+      in: query
+      required: false
+      description: Signed reference `<reff>.<hmac>`; the preferred and only minted form.
+      schema:
+        type: string
     CallbackTokenQuery:
       name: token
       in: query
@@ -741,3 +870,22 @@ components:
       required: [ok]
       properties:
         ok: { const: true }
+    ShipmentWebhookRequest:
+      type: object
+      description: Provider push. Only `data[].order_id` is read, and only as a hint to re-verify.
+      properties:
+        method: { type: string, description: Provider event name; logged, never acted on. }
+        data:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            properties:
+              order_id: { type: string, maxLength: 40 }
+    ShipmentWebhookResult:
+      type: object
+      required: [ok, known, changed]
+      properties:
+        ok: { const: true }
+        known: { type: integer, minimum: 0 }
+        changed: { type: integer, minimum: 0 }

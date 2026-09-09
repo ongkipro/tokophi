@@ -10,6 +10,7 @@
 // Deliberately NOT a product grid: /produk is the list of products. This page's job is the shape of
 // the shop.
 import Layout from "../../layouts/Layout.astro";
+import { imageSrcSet } from "../../data/catalog";
 import PageHeader from "../../components/PageHeader.astro";
 import RevealGrid from "../../components/RevealGrid.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
@@ -21,6 +22,14 @@ const { store, catalog } = Astro.locals;
 // "Semua Produk" row for a merchant to have made) — so this lists exactly what they built. The cover
 // falls back to the first product's image, the same trick the homepage grid uses, because most
 // merchants never upload a category cover.
+// `sizes` for a tile, derived from THIS grid (Task 6.12) — the browser trusts it completely, so it is
+// arithmetic, not a guess: the section is `max-w-7xl px-4 sm:px-6`, the grid `grid-cols-2 gap-4
+// sm:grid-cols-3` (column gap 16 at every breakpoint):
+//   <640     (100vw − 2·16 − 1·16) / 2 = (100vw − 48) / 2      measured 182 at 412
+//   640–1279 (100vw − 2·24 − 2·16) / 3 = (100vw − 80) / 3      measured 229 at 768
+//   ≥1280    (1280  − 48   − 32)   / 3 = 400                   measured 400 at 1280
+const TILE_SIZES = "(min-width: 1280px) 400px, (min-width: 640px) calc((100vw - 80px) / 3), calc((100vw - 48px) / 2)";
+
 const collections = catalog.collections.map((c) => {
   const items = catalog.byCollection(c.handle);
   return { ...c, image: c.imageUrl || items[0]?.image, count: items.length };
@@ -59,6 +68,8 @@ const DESCRIPTION = names.length
                 {c.image ? (
                   <img
                     src={c.image}
+                    srcset={imageSrcSet(c.image)}
+                    sizes={imageSrcSet(c.image) ? TILE_SIZES : undefined}
                     alt=""
                     loading="lazy"
                     decoding="async"

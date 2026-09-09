@@ -1027,6 +1027,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/promo-ai.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ]
         },
@@ -1091,6 +1092,7 @@
           "tests": [
             "apps/admin/lib/admin-link-targets.test.ts",
             "apps/admin/lib/landing-html-gate.test.ts",
+            "apps/admin/lib/promo-ai.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ]
@@ -1338,6 +1340,7 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/lib/cancel-reconcile.test.ts",
             "apps/admin/lib/cron-auth.test.ts"
           ]
         },
@@ -1764,6 +1767,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/super-admin/lib/aggregator-enabled-is-not-a-gate.test.ts",
             "apps/super-admin/lib/audit-writes.test.ts",
             "apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
@@ -2142,14 +2146,14 @@
             "CheckoutLayout"
           ],
           "data": [
-            "catalog"
+            "catalog",
+            "checkout"
           ],
           "lib": [
-            "cart-variant",
-            "recovery"
+            "cart-variant"
           ],
           "locals": true,
-          "db": true,
+          "db": false,
           "gate": [],
           "setHtml": false,
           "tests": []
@@ -2162,7 +2166,9 @@
           "layout": [
             "CheckoutLayout"
           ],
-          "data": [],
+          "data": [
+            "catalog"
+          ],
           "lib": [],
           "locals": true,
           "db": false,
@@ -2274,7 +2280,9 @@
           "layout": [
             "Layout"
           ],
-          "data": [],
+          "data": [
+            "catalog"
+          ],
           "lib": [
             "breadcrumb"
           ],
@@ -2295,6 +2303,7 @@
             "Layout"
           ],
           "data": [
+            "catalog",
             "content"
           ],
           "lib": [
@@ -2732,7 +2741,6 @@
         "module": "checkout.ts",
         "exports": [
           "digits",
-          "getAbandonedCart",
           "getAbandonedCarts",
           "getCheckoutMetrics"
         ]
@@ -2740,7 +2748,6 @@
       {
         "module": "collections.ts",
         "exports": [
-          "getCollection",
           "getCollectionDetail",
           "getCollections"
         ]
@@ -2919,12 +2926,6 @@
         ]
       },
       {
-        "module": "payments.ts",
-        "exports": [
-          "getOrderPayment"
-        ]
-      },
-      {
         "module": "platform-finance.ts",
         "exports": [
           "getSubscriptionPpnEnabled"
@@ -3008,13 +3009,11 @@
           "TEMPLATE_TYPE_LABELS",
           "getBrandColor",
           "getCollectionAssignments",
-          "getDefaultHomepage",
           "getPlatformDefaultSections",
           "getProductAssignments",
           "getProductGalleryLayout",
           "getStoreTheme",
           "getTemplate",
-          "getTemplatesByType",
           "listTemplates"
         ]
       },
@@ -3600,6 +3599,7 @@
         "module": "catalog.ts",
         "exports": [
           "ADMIN_BASE",
+          "UPLOAD_WIDTHS",
           "VIRTUAL_COLLECTION_HANDLES",
           "activeVouchers",
           "enabledPaymentChannels",
@@ -3607,6 +3607,7 @@
           "imageSrcSet",
           "inStock",
           "mediaUrl",
+          "paymentKindWords",
           "productImages",
           "promoHub",
           "randomProducts",
@@ -3615,6 +3616,12 @@
           "storeCodPolicy",
           "storeFreeShip",
           "storeTaxSettings"
+        ]
+      },
+      {
+        "module": "checkout.ts",
+        "exports": [
+          "getRecoveredCheckout"
         ]
       },
       {

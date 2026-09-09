@@ -53,7 +53,7 @@ import { useCan } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, timeAgo } from "@tokophi/lib/format";
-import type { Order, OrderStatus } from "@/lib/mock/store";
+import type { Order, OrderStatus } from "@/lib/types/domain";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";

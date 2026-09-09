@@ -1,7 +1,7 @@
 // Pure derivation utils for Dashboard/Analitik. The data (daily series, products, orders,
 // activities) is fetched from the DB in the server wrapper and passed in — no storage access
 // here, so these stay callable client-side (the range switcher re-derives on the client).
-import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
+import type { DayPoint, Product, Order, Activity, Review } from "@/lib/types/domain";
 import type { FunnelDay, DeviceDay } from "@/lib/data/funnel";
 import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
 import type { CourierReturns, ReturnsByCourier } from "@/lib/data/returns";

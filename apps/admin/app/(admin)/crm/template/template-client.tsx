@@ -15,7 +15,7 @@ import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { fillTemplate } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { createWaTemplate, updateWaTemplate, deleteWaTemplate } from "@/lib/actions/crm";
-import { type WaTemplate, type FollowupType } from "@/lib/mock/store";
+import { type WaTemplate, type FollowupType } from "@/lib/types/domain";
 
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";

@@ -9,7 +9,7 @@ import { uploadMedia, getMedia } from "@/lib/actions/media";
 import { useCan } from "@/components/admin/permissions";
 import { ArrowLeft, ImageUp, ChevronDown, Newspaper, Trash2 } from "lucide-react";
 
-import type { BlogPost } from "@/lib/mock/store";
+import type { BlogPost } from "@/lib/types/domain";
 import type { BlogRef } from "@/lib/data/articles";
 
 import {

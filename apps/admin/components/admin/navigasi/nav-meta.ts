@@ -1,4 +1,4 @@
-import type { NavItemType } from "@/lib/mock/store";
+import type { NavItemType } from "@/lib/types/domain";
 import {
   Home,
   Grid2x2,

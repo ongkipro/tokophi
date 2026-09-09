@@ -41,6 +41,12 @@ are building one product together, not racing. Everything below was learned by b
     the seed running out, not a trend). `seed:recent` only INSERTS, touches one store, and is idempotent
     — it fills only days with zero orders, so a second run does nothing. Re-running it is free; truncating
     the shared DB costs someone else their afternoon.
+  - ⚠️ **The same rot hits WRITES, not only charts (found 2026-09-08, Task 8.13).** `stores.current_period_end`
+    is seeded at a fixed date; once the wall clock passes it, `computeBilling()` returns `readOnly` and EVERY
+    admin save fails with `SuspendedError` — surfacing as "Gagal menyimpan produk" on a store nobody suspended.
+    Two browser agents had to move that one column forward and put it back to test anything that writes. **`npm run seed:recent -w @tokophi/db` now fixes it** (Task 8.13, 2026-09-09): its first step moves a
+    LAPSED `current_period_end` to `now() + 30 days` for the anchor store only, idempotently, and prints what it did.
+    Do not hand-edit `stores` for this any more.
   - 🛑 **`SEED_FORCE=1` now REFUSES** when the database holds rows nothing writes back — orders,
     customers, ledger entries, media, Store Builder templates, flash sales, the platform operator
     logins, the aggregator API key, the gateway credentials, and **the encrypted CAPI tokens in
@@ -268,7 +274,7 @@ as N29); `apps/super-admin/lib/no-fixed-password.test.ts` keeps the stricter loc
 there must be exactly `pw`, and `pw` must come from the mint.
 
 ## Database (local Postgres — `@tokophi/db`)
-Local backend fully wired behind the data layer (all 4 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **82 tables · 106 migrations `0000`–`0105`**, counted from `packages/db/src/schema.ts` and `drizzle/meta/_journal.json` on 2026-08-24, snake_case, money = bigint IDR). **MULTI-tenant** — the dev DB carries 7 stores and the whole `platformGate` control plane reaches every one of them. (ADR 0008 called it a single-tenant MVP; that stopped being true long ago and this line said otherwise for months.) Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **54 of the 55 store-scoped tables** (measured 2026-09-08 by the verifier itself; `inventory_levels` got a direct policy in `0100`) AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **54/55 as of 2026-09-08, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036. ⚠️ **THIS PARAGRAPH HAS NOW BEEN WRONG TWICE, AND ONCE IT MOCKED ITS OWN STALE FIGURE WHILE THE STALE FIGURE SAT TEN LINES BELOW IT** (it said 45/46 while `SECURITY.md` already said 51/52, and the sentence saying "this doc claimed 36/39" shared a file with a live `36/39`). The count is DERIVED and moves with every migration: **run `npm run verify-rls -w @tokophi/db` and believe its output, not this sentence.** ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
+Local backend fully wired behind the data layer (all 4 surfaces read + all editors write; auth+RBAC+RLS; real variants). Local dev uses **plain PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **83 tables · 107 migrations `0000`–`0106`**, counted from `packages/db/src/schema.ts` and `drizzle/meta/_journal.json` on 2026-09-09, snake_case, money = bigint IDR). **MULTI-tenant** — the dev DB carries 7 stores and the whole `platformGate` control plane reaches every one of them. (ADR 0008 called it a single-tenant MVP; that stopped being true long ago and this line said otherwise for months.) Auth (local, JWT) + RBAC + RLS are done locally; Storage (self-hosted MinIO/S3) comes with the VPS. **RLS** (migration 0012, extended by 0032 `page_templates`, 0035 `support_*`, 0036 `media`+`payments`, **0058 `stores`**) is enabled on **54 of the 55 store-scoped tables** (measured 2026-09-08 by the verifier itself; `inventory_levels` got a direct policy in `0100`) AND **enforces at runtime**: the admin runs every read (`lib/data/*` via `withCurrentTenant`) + write (`lib/actions/*` via `withTenant`) inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`, so tenant queries execute as the non-owner role with policies applied. `npm run verify-rls -w @tokophi/db` derives the store-scoped set from the catalog (every table with a `store_id`) and FAILS if one lacks RLS — **54/55 as of 2026-09-08, and the ONE remaining exception is `platform_activity`** (the platform's own audit log: cross-tenant by design, written before a session exists). `media` + `payments` were retrofitted in 0036. ⚠️ **THIS PARAGRAPH HAS NOW BEEN WRONG TWICE, AND ONCE IT MOCKED ITS OWN STALE FIGURE WHILE THE STALE FIGURE SAT TEN LINES BELOW IT** (it said 45/46 while `SECURITY.md` already said 51/52, and the sentence saying "this doc claimed 36/39" shared a file with a live `36/39`). The count is DERIVED and moves with every migration: **run `npm run verify-rls -w @tokophi/db` and believe its output, not this sentence.** ⚠️ **`stores` is NOT in that count and never could be**: it is keyed by `id`, has no `store_id`, so the catalog query cannot see it — that blind spot leaked two merchants' data across tenants until `0058` put an `id`-based policy on it. Auth (`lib/auth.ts`, pre-session `store_users` read), super-admin (cross-tenant), and the storefront (`Host`-resolved read-only catalog) stay on the owner connection. On the VPS this becomes PostgREST connecting as `tokophi_app` with the JWT `store_id` claim feeding the GUC. **RBAC** (app-layer, `lib/rbac.ts`) is enforced too.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @tokophi/db     # apply versioned migrations (canonical)
@@ -476,12 +482,24 @@ npm run generate -w @tokophi/db    # after editing src/schema.ts → new migrati
     measured, never the table.**
   - **A login rate-limit DOES exist — but it is a floor, not a wall, and it is keyed on IP ALONE.**
     `signIn` on both panels calls `rateLimit()` from `@tokophi/lib/cache` **before** the scrypt check
-    (`login:admin:<ip>` 15/min, `login:platform:<ip>` 10/min, shipped `53dd9ee` 2026-07-16). ⚠️ Two
-    things it does NOT do, and code has been written here on the assumption that it does: the counter
-    is an **in-process `Map`**, so it resets on every redeploy and would not span replicas; and it
-    counts **IPs, not accounts**, so one specific merchant can be attacked at 15/min *per source
-    address* with nothing anywhere recording that it is happening — **no failed login is written to any
-    table or audit log.** That is why the mint's entropy is the load-bearing half of this pair.
+    (`login:admin:<ip>` 15/min, `login:platform:<ip>` 10/min, shipped `53dd9ee` 2026-07-16).
+    ✅ **BOTH of the things this bullet used to say it does NOT do are now closed** (Task 6.3,
+    2026-09-09 · N62, 2026-08-06). The counter is no longer an in-process `Map`: it is ONE ROW PER KEY
+    in `rate_limit_counters` (migration **0106**), bumped by a single atomic
+    `insert … on conflict do update … returning`, so it survives a redeploy and spans replicas. And
+    the per-ACCOUNT half exists — `recordFailedLogin`/`failedLoginLocked` count consecutive failures
+    per email (audit rows at 5/25/125…, sign-in refused at 25), and that streak is bumped into the
+    same shared row, so a distributed grind can no longer reset it by waiting for a deploy.
+    ⚠️ **TWO THINGS IT STILL DOES NOT DO, AND THE FIRST IS THE ONE PEOPLE ASSUME.** The decision is
+    made from a process-local cache and the shared count is merged back WRITE-BEHIND, because every
+    call site is `if (!rateLimit(...).ok)` and a synchronous function cannot do I/O — so the FIRST
+    call for a key on a freshly started process is answered before the shared count is known (one
+    request per key per replica, where it used to be a whole fresh quota), and a burst arriving inside
+    one round-trip can overshoot by the number of requests in flight. Making `rateLimit` async is a
+    one-word edit at each of its ~20 call sites and is the shape to move to. Second: a failed login is
+    still written to no table — `recordFailedLogin` returns audit TEXT that `signIn` writes to
+    `platform_activity` on a threshold, which is a witness, not a log. The mint's entropy remains the
+    load-bearing half of this pair.
   - **A password the UI drops on the floor is worse than the bug** — the merchant cannot log in and
     nobody can say why. Each minting action returns `password`; the callers show it ONCE
     (`toko-client.tsx` + `pengaturan-client.tsx`: a `duration: Infinity` toast that survives the
@@ -1270,7 +1288,7 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
 - `app/(admin)/` — route group. `page.tsx` = Dashboard (`/`). Sections: pesanan, produk, pelanggan, diskon, analitik, halaman(+baru), blog(+baru), navigasi, pengaturan.
 - `components/admin/` — shell (sidebar, topbar, nav-links, brand) + shared bits (page-header, order-status, kpi-card, *-chart, …) + per-screen subfolders.
 - `components/ui/` — shadcn/ui primitives (**on Base UI**).
-- `lib/mock/store.ts` — deterministic seeded fixtures, anchored `TODAY=2026-06-30`. **Single source of demo data.**
+- `lib/types/domain.ts` — the admin's domain VIEW types (`Product`, `Order`, … carry `minutesAgo`/joined names, not row shapes); the unions that equal a DB enum are DERIVED from `@tokophi/db` via a type-only import. `lib/mock/store.ts` was deleted 2026-09-09 (Task 6.7): all 51 importers had been `import type` for months, and `apps/admin/lib/no-runtime-mock.test.ts` fails on any VALUE import from a `mock/` path.
 - `lib/data/` — thin data layer over the mock (`getSummary/getSeries/...`). **Swap these bodies for API later; keep signatures.**
 - `lib/format.ts` — `IDR()`, `num()`, `pct()`, `timeAgo()` (id-ID). `lib/nav.ts` — grouped `NAV_GROUPS`.
 
@@ -1302,7 +1320,7 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
 
 ## Adding a screen
 1. Create `app/(admin)/<route>/page.tsx` (client if interactive).
-2. Add mock to `lib/mock/store.ts` + (optional) selectors in `lib/data/`.
+2. Add the read to `lib/data/<entity>.ts` (inside `withCurrentTenant`) and its view type to `lib/types/domain.ts`.
 3. Register it in `lib/nav.ts` (`NAV_GROUPS`).
 4. Build + verify console clean + screenshot (Playwright renders charts correctly; `chrome --headless --virtual-time-budget` mis-sizes Recharts).
 

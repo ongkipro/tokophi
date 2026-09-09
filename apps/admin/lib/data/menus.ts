@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { asc, eq } from "drizzle-orm";
-import type { NavMenu, NavItem, NavItemType } from "@/lib/mock/store";
+import type { NavMenu, NavItem, NavItemType } from "@/lib/types/domain";
 
 const DB_TO_TYPE: Record<string, NavItemType> = {
   home: "beranda", collection: "koleksi", product: "produk", page: "halaman", blog: "blog", url: "url", catalog: "koleksi",

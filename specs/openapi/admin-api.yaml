@@ -327,3 +327,33 @@ components:
         dead: { type: integer, minimum: 0 }
         released: { type: integer, minimum: 0 }
         backfilled: { type: integer, minimum: 0 }
+# Public routes of the admin app that are deliberately NOT part of this contract. Task 5.13 / NF-15:
+# `npm run verify:openapi` fails on any public route that is neither documented nor listed here, so
+# an exclusion is a decision recorded in the spec's own diff. Every entry needs a `reason`; an entry
+# that matches no route on disk, or a route that is not public, is reported as stale. Machine-facing
+# public routes (`/api/public/*`) are documented in storefront-api.yaml, not exempted.
+x-tokophi-route-exemptions:
+  - app: apps/admin
+    path: /api/auth/google/start
+    methods: [GET]
+    reason: Browser redirect into Google OAuth for the seller login page (Task 5.20); a navigation, not a JSON operation. Not a third-party contract.
+  - app: apps/admin
+    path: /api/auth/google/callback
+    methods: [GET]
+    reason: Google's OAuth redirect target; the contract is Google's authorization-code flow, and the response is a redirect that sets the session cookie.
+  - app: apps/admin
+    path: /api/auth/signout
+    methods: [GET]
+    reason: Cookie-deleting redirect the layout sends a dead-but-valid session to (a Server Component cannot delete a cookie). Internal to the seller panel.
+  - app: apps/super-admin
+    path: /api/auth/signout
+    methods: [GET]
+    reason: Identical cookie-deleting redirect for the platform control plane; same reason as the seller panel's.
+  - app: apps/admin
+    path: /api/uploads/{name}
+    methods: [GET]
+    reason: Serves merchant media bytes (`?w=` renditions) to the storefront; static-asset semantics, replaced by MinIO/S3 on the VPS plan. Not a JSON operation.
+  - app: apps/admin
+    path: /impersonate
+    methods: [GET]
+    reason: One-time exchange of an opaque 256-bit handle for a bounded seller session (Task 4.11 / SEC-10). Reached only from the control plane's "Buka Dashboard Seller" link; a navigation whose only parameter is spent on first use. Not a contract for any caller.

@@ -26,6 +26,7 @@ Updated: 2026-09-08
 | ADR 0013 | accepted | Stable, system-generated catalog product ids (`retailerId()`, one scheme per store) | 2026-07-29 | `0013-stable-catalog-product-ids.md` |
 | ADR 0014 | superseded by 0015 (2026-08-12) | Platform absorbs the courier's shipping cost on COD orders | 2026-08-05 | `0014-platform-absorbs-cod-shipping.md` |
 | ADR 0015 | accepted (owner, issue #180) | Net Seller proceeds + shipping reconciliation (`order-finance.ts`) | 2026-08-12 | `0015-net-seller-proceeds-and-shipping-reconciliation.md` |
+| ADR 0017 | accepted (structural changes; the ~0 s options remain an owner decision) | Deploy window: health-first in-place swap on Coolify compose — consistent container names, `migrate` gate dropped from routed apps, `start_interval: 2s`; **81–115 s → 7–8 s** accepted as the floor (0016 reserved for Task 5.8) | 2026-08-28 | `0017-zero-downtime-deploy.md` |
 
 ## Owner rulings without an ADR (recorded in `AGENTS.md` unless noted)
 
@@ -42,4 +43,4 @@ Updated: 2026-09-08
 | DEC-009 | accepted | Repository visibility is **private** (fourth flip, 2026-09-04). Public windows: 2026-08-27→28 and 2026-09-01→04, both opened by owner order to revive GitHub Actions; closed 2026-09-04 by owner order after PR #380/#381 merged. Rule (project memory): never flip without a new explicit order. Consequence: Actions minutes are metered again. | `gh api repos/ongkipro/tokophi --jq .visibility` → `private`; BUILD-LOG 2026-08-28, 2026-09-01, 2026-09-04 |
 
 Use stable IDs (`DEC-nnn`). When a ruling needs alternatives and consequences spelled out, write the
-ADR in `specs/decisions/` (next free number is **0016**) and link it here.
+ADR in `specs/decisions/` (0016 is RESERVED for the buyer-account decision, Task 5.8 — `0016-global-buyer-account.md`, not yet written; next free number is **0018**) and link it here.

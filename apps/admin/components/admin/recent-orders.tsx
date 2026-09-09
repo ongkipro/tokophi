@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { OrderStatusBadge } from "./order-status";
-import type { Order } from "@/lib/mock/store";
+import type { Order } from "@/lib/types/domain";
 import { IDR, timeAgo } from "@tokophi/lib/format";
 
 export function RecentOrders({ orders }: { orders: Order[] }) {

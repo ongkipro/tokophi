@@ -8,6 +8,47 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-09 09:45 UTC] — SECURITY · Task 6.3 (NF-6): public rate limits moved to a SHARED Postgres counter
+
+- **Executor:** Subagent (Claude, Opus 5). **Scope IDs:** `NF-6`, related `F-F5`, `N62`.
+- **Files:** **new** `packages/lib/src/rate-limit.ts` · **new** `packages/lib/src/rate-limit-store.ts` · **new** `packages/lib/src/rate-limit.test.ts` · **new** `packages/lib/src/rate-limit-store.test.ts` · **new** `packages/db/drizzle/0106_rate_limit_counters.sql` · `packages/lib/src/cache.ts` · `packages/lib/package.json` (two export entries) · `apps/storefront/src/lib/chat.ts` · `packages/db/src/schema.ts` · `packages/db/drizzle/meta/_journal.json` · `packages/db/src/schema-indexes.test.ts` · `TASKS.md` · `AGENTS.md` · `specs/docs/{SECURITY.md,SCHEMA.md,CODE_MAP.md,STATUS.md}`.
+
+**The store is Postgres, and the reason is not "it was already there".** Migration **0106**, stamp `1787545171751` — above the journal's newest (`0105`, `1787545111751`) and above the dev DB's newest applied (`1787302186123`), checked against `origin/main` and every remote branch first (highest `idx` anywhere was 105). One row per limiter key, bumped by a single atomic `insert … on conflict do update … returning`: the read, the fixed-window roll and the increment happen under one row lock, so two replicas cannot both observe the same count — the same lost-update class `receivePurchaseOrder` and `markPayoutPaid` have each already paid for. No `store_id` (an unauthenticated shopper, a sign-in that has not happened and a payment callback have no tenant) and **RLS enabled with no policy**, the strictest setting, exactly as `impersonation_grants` (0098) — which also keeps it out of `verify-rls` check 6. `create table if not exists` / `create index if not exists`, per the idempotency mandate.
+
+**Cloudflare was rejected as the implementation and kept as the recommendation.** A rule is zone configuration this repository cannot create or verify — shipping it would be a gate nobody here can run — and, deciding the point, **the edge cannot see an ACCOUNT**: the per-account brake keys on an email address that lives inside the POST body of a Next server action.
+
+**The API did not change, and that is the trade.** All ~20 call sites are `if (!rateLimit(...).ok)`; a synchronous function cannot do I/O. So the local Map stays as the synchronous answer and as a CACHE of the shared row: the shared count is applied **write-behind** and merged back as `max(local, shared)`. Measured consequence, stated in the code, in `SECURITY.md` §9/§10 and in `AGENTS.md`: the first call for a key on a freshly started process is answered before the shared count is known — **one request per key per replica, where it used to be the entire quota, on every deploy** — and a burst inside one round-trip can overshoot by the number in flight. Making `rateLimit` async is a one-word edit per call site and is the named follow-on.
+
+**Fail-open / fail-closed, per bucket, with the reasoning in `rate-limit.ts`.** `login:*` and `signup:*` fail **CLOSED**: both already read `users` on the next line, so a database that cannot serve this counter cannot serve the sign-in either — closing adds no outage mode and removes a silent downgrade back to per-replica counting on the one gate whose purpose is stopping a credential grind. `order`, `ongkir`, `promo`, `paycb`, `chat:*`, `tracking-*` and any unknown bucket fail **OPEN**: refusing a real shopper for a fault of ours is the worse bug, and a refused pay callback strands a PAID order at `menunggu` — an outage this repo has had once. The strict answer arms only after one successful bump in the process, so a checkout without a database, or a deploy whose migration has not landed, is the old in-process limiter and nothing worse.
+
+**The second copy is gone.** `apps/storefront/src/lib/chat.ts:98` had hand-rolled the limiter because `@tokophi/lib/cache` starts with `import "server-only"`, which Rollup cannot resolve in the Astro SSR bundle. That constraint is still true, so the DECISION was split into `rate-limit.ts` — pure, no `server-only`, no DB — which both surfaces now import. A copy is how the weaker half of a pair survives a fix; the 24-bit password mint is this repo's own proof. ⚠️ **Two more copies remain and were out of this change surface**: `apps/storefront/src/pages/api/track.ts:45` and `apps/storefront/src/pages/api/checkout-session.ts:29`, both fail-quiet analytics paths.
+
+**The per-ACCOUNT counter (N62) now survives a deploy.** `recordFailedLogin`/`failedLoginLocked` existed but were per-process, so an attacker only had to wait for a redeploy. The streak is bumped into the same shared row (`loginfail:<surface>:<email>`, deliberately NOT in the strict list — a broken counter must never be able to LOCK a merchant out) and `clearFailedLogins` DELETES it, or a successful sign-in would leave a stale count that re-arms the lock on the next typo.
+
+- **Runnable checks:** `packages/lib/src/rate-limit.test.ts` — 36 tests, the decision as a table plus the strict list pinned in BOTH directions (widening it is a security decision, narrowing it an availability one). `packages/lib/src/rate-limit-store.test.ts` — 9 tests against real Postgres, **every transaction rolled back** via the `ROLLBACK` symbol idiom (`sql.begin` COMMITS on success — the first version of this file left 49 rows behind, found and fixed), and the backend **INJECTED** (`useRateLimitBackend`) so the suites can never reach the shared dev database. `resolveBackend` additionally refuses to auto-resolve under `VITEST`, because unrelated suites call `rateLimit` (e.g. `signup-metered.test.ts` hammers it six times) and would otherwise have written into the shared dev DB.
+- **Mutations: 8 proved RED.** Revert `rateLimit` to the plain Map ⇒ **4 red** (shared quota, restart, window roll, fail-closed). Drop the `loginfail` bump ⇒ 1. Drop `scheduleClear` ⇒ 1. Make `mergeShared` reject a shared window OLDER than the local one ⇒ **2** — that was a real bug found by the suite, not a hypothetical: a restarted process opens its local window at `now`, which is later than the shared window the row has been counting in since before the deploy, so the naive merge threw away every answer on exactly the path this task exists for.
+- **Verification:** `npx vitest run packages/lib packages/db` **44 files / 376 passed** · full `npx vitest run` **1368 / 1369** — the single red is `test/page-map-fresh.test.ts`, stale from OTHER agents' new test files (`promo-ai.test.ts`, `cancel-reconcile.test.ts`, `aggregator-enabled-is-not-a-gate.test.ts`); regenerating it was reverted rather than sweep their in-flight work into this diff · `npx tsc --noEmit` **0** for `packages/lib`, `packages/db`, `apps/admin`, `apps/super-admin` · `npm run check:storefront` **0 errors (126 files)** · `npx astro build` **green**, and `rate_limit_counters` is present in the built `chunks/chat_*.mjs` — the proof that Rollup resolves the new cross-package imports and that nothing was tree-shaken · `npm run verify-migrations -w @tokophi/db` **green** (107 entries, head `0106`, stamps increasing).
+- **Shared-resource discipline:** the migration was **NOT** applied to the shared dev database (`select count(*) from information_schema.tables where table_name='rate_limit_counters'` on `tokophi` → **0**), per the AGENTS.md rule about migrating an unmerged branch's migration into the shared container. The `_test` database has it via `test/db-setup.ts`, and ends every run with **0 rows**.
+- **Docs re-derived, not hand-edited:** the `doc-counts` and `schema-indexes` guards both fired on the new table and were satisfied at the source — `AGENTS.md` (82→83 tables, 106→107 migrations, head 0106) · `SCHEMA.md` · `CODE_MAP.md` (three anchors) · `STATUS.md` · `INDEX_CENSUS` += `rate_limit_counters_expires_idx`. `SECURITY.md` §9 gained the four public-endpoint keys and the `loginfail` row it never listed, the 429/`Retry-After` contract, and a rewrite of the 🔴 paragraph that had asserted the in-process limitation; §10's "In-process rate limits" gap row became "Write-behind rate limits" with the real remaining cost.
+
+### [2026-09-09 09:30 UTC] — STOREFRONT · Task 6.13 follow-up: SF-4 (keranjang + thanks), SF-6 and SF-7 closed
+
+- **Executor:** Subagent (Claude, Opus 5) — the three files SF-4/6/7 name were being edited by the Task 6.12 srcset stream when the first 6.13 pass ran, so those rows were deferred. Task 6.13 is now **11 of 11**.
+- **Files:** `apps/storefront/src/pages/{keranjang,thanks,checkout}.astro` · **new** `apps/storefront/src/data/checkout.ts` · **new** `apps/storefront/src/lib/page-map-hygiene.test.ts` · `TASKS.md` · `specs/docs/tasks/2026-09-04-page-map-report.md` · regenerated `specs/docs/{PAGE_MAP.md,page-map.json}`.
+
+**SF-4 — `keranjang.astro`: the payment trust line is DERIVED, not written.** It read *"Pembayaran lewat kanal resmi — transfer bank & QRIS."* — a hard-coded claim about which channels the PLATFORM has live, on the last page before checkout. Every `kind='ewallet'` row is `enabled=f, active=f` (the live gateway probe refused them), which is exactly why `index.astro` derives its badge from `enabledPaymentChannels()`. `PAY_TRUST` is now built from that same list; zero live channels ⇒ *"Pembayaran lewat kanal resmi."* with no channel named. Measured in Chromium against the seeded store: the rendered sentence is *"Pembayaran lewat kanal resmi — transfer bank & QRIS."* — the same words, now because the database says so. ⚠️ `KIND_LABEL` is a SECOND copy of the map in `index.astro` (that file was outside this change surface); both belong in `data/catalog.ts` the next time either is edited, and the comment in `keranjang.astro` says so.
+
+**SF-4 — `thanks.astro`: no presence claim, no English guarantee.** The green **ADMIN ONLINE** pill was static markup on every render — nothing on this platform knows whether a merchant is at their desk, and a shopper who messages at 02:00 on the strength of that dot is owed an answer we cannot make anyone give. The footer read *"Safe Checkout · Quality Guaranteed"*: the only English on an Indonesian page, asserting a guarantee no store here has agreed to. Both removed; the comment left in place names what a real presence signal would need (last-seen, or business hours the merchant SET).
+
+**SF-6 — the dead `ORIGIN_CITY`.** `store.city || "Yogyakarta"` was injected into every checkout's inline script via `define:vars` and read by nothing; the only mention was a stale comment. Const, `define:vars` entry and comment all gone, and the comment now states the rule positively: the origin is never sent to the client, because `/api/public/ongkir` prices from the SELLER's pickup district and ignores `body.originCity`. (The one remaining `Yogyakarta` in the file is an unrelated `//` note about province spellings.)
+
+**SF-7 — the last `.astro` page importing `@tokophi/db`.** The `checkout_sessions` recovery read moved to **`src/data/checkout.ts` → `getRecoveredCheckout(token, storeId)`**, and `checkout.astro` was repointed in the same change — a helper nothing imports is dead code, which is why the earlier pass skipped it. `verifyRecoveryToken` moved INSIDE the new module deliberately: verify and read are one operation, and split across two modules a later caller could reach the read with a session id it never proved. `storeId` stays an explicit WHERE as well as a token claim (the storefront reads as OWNER; there is no RLS behind this to catch a missing predicate). The page keeps only the catalog image re-resolution, which is presentation. `@tokophi/db`, `drizzle-orm` and `lib/recovery` imports are gone from it.
+
+- **Runnable check:** `apps/storefront/src/lib/page-map-hygiene.test.ts` — 13 tests, `codeOnly`/`textWithoutComments` chosen per assertion (the trust sentence and the two English strings live inside literals/text, so `codeOnly` would inert the evidence; the derivation is code). The SF-7 claim walks `src/pages/**/*.astro` **from the directory**, not a file list, so a new page reintroducing the import fails — and it uses `textWithoutComments` because a module specifier IS a string literal, which `codeOnly` makes inert in both directions. Every claim was proved RED against an on-disk mutation of its own target, restored immediately: keranjang sentence back → **3 failed**, ADMIN ONLINE back → **1 failed**, `ORIGIN_CITY` back → **1 failed**, `@tokophi/db` import back → **2 failed**.
+- **Verification:** `npm run check:storefront` **0 errors** (exit 0) · `npx vitest run apps/storefront` **131 passed / 17 files** · `npm run verify -w @tokophi/storefront` **8/8 PASS** (image-widths, hero-srcset, pdp-srcset, search-srcset, page-srcset, pixel-defer, feed-origin, h1-floor) · `node scripts/gen-page-map.mjs` regenerated (the new `src/data/checkout.ts` module and `/checkout`'s data column) and `test/page-map-fresh.test.ts` green.
+- **Browser evidence** (own server on :4413, Host `toko-demo.test`, killed by recorded PID — no `pkill`): `/keranjang` renders the derived trust line and one cart row; `/thanks` header is the store name alone with no pill and no English footer; `/checkout` and `/checkout?r=<bad token>` both render `Checkout — Batik Nusantara` (an invalid recovery token falls through to the ordinary empty checkout, as designed); `ORIGIN_CITY` absent from the served HTML; the district search fires and paints the *"Gagal mencari kecamatan"* failure row (the admin app on :3000 is not running locally — the ongkir proxy is refused, so this is the Task 5.4 failure state doing its job, not a regression). No `pageerror`, no JS exception; the only console errors are `ERR_CONNECTION_REFUSED` for that same absent admin origin, present on `/` too.
+- **Also closed in the report:** SF-9, SF-10, SF-11, AD-4, AD-6, LP-1, LP-2, LP-3 were shipped by the earlier 6.13 pass but never marked in `2026-09-04-page-map-report.md`. Each re-verified in code before marking (sr-only `<h1>`, the shared `clamp` import, no `TODO` in `CheckoutLayout`, the five dead exports gone with `lib/data/payments.ts` deleted, `searchTaxonomy`'s `getSession` bail, the `PUBLIC_DEMO_URL` ARG, no HTML comment left in `Base.astro`). A closed task must be closed everywhere it is named.
+
 ### [2026-09-03 — CHECKPOINT] — DOCS · resume checklist sebelum restart laptop owner (deploy 528 diverifikasi live)
 
 - **Executor:** Main Session (Claude, Fable 5). Owner me-restart laptop; seluruh status dibekukan ke `specs/docs/tasks/2026-09-03-resume-checklist.md` — antrean owner (R2 4-variabel + uji restore, sheet UAT KA, port Coolify, keputusan struktural), antrean engineering (re-probe OVO siang WIB, promo-AI→API, P1/P2, Stage 7), dan log kereta #375–#378.
@@ -2842,3 +2883,184 @@ confirm dialogs, the product-editor guard, the Pengembalian caveat, and the Supe
 **Still blocked, unchanged and outside this release:** the KiriminAja sandbox refuses the VPS IP
 (`401 … 45.77.33.112 were not allowed`), so `op:"rates"` fails and no order can be placed. Owner action at the vendor
 dashboard; the control plane now SHOWS this instead of a green light (Task 8.3).
+
+## 2026-09-09 09:10 UTC — Subagent (Task 5.1 / F-S12) — Shipment cancellation reconciles remote and local state
+
+**Scope.** `TASKS.md` Task 5.1. Files: `apps/admin/lib/actions/shipping.ts` (cancel path only),
+`apps/admin/lib/ka-tracking.ts` (`syncOrderFromKa`), `apps/admin/app/api/cron/tracking/route.ts`,
+**new** `apps/admin/lib/cancel-reconcile.ts` (pure) + `cancel-reconcile.test.ts`, `apps/admin/lib/cancel-shipment.test.ts`
+(extended), `specs/docs/PAGE_MAP.md` (regenerated — `page-map-fresh` was already red on this branch from earlier sweep
+changes; the regenerated file also carries those), `TASKS.md` 5.1, `specs/docs/REQUIREMENTS.md` F-S12. No schema change.
+
+**What was wrong.** `cancelShipment` called the vendor FIRST and wrote `cancellation_requested` after — a throw between
+the two left the courier holding a queued void the DB never heard of. Nothing read the row back: the merchant saw
+"diminta" forever, `shipment_one_active_per_order` counted the pending row as active so the order could never be
+re-booked, and when tracking eventually reported 300/302 the poller's ordinary mapping sent the order to **`batal`**
+(stock restored, sale clawed back) for a shipment the merchant had voided in order to re-ship.
+
+**Change.** ① Intent first: under `pg_advisory_xact_lock` + `FOR UPDATE`, the `accepted` booking flips to
+`cancellation_requested` (note "jawaban kurir belum tercatat") BEFORE `kaCancelShipment`; an already-pending row refuses
+a second request; a legacy order with no booking row is passed through (nothing durable can carry it — documented).
+② The vendor's answer is recorded AFTER by `recordCancelAnswer`, best-effort (`try/catch`, logs, never throws; only
+updates a row still in `cancellation_requested`): accept → note "diterima kurir, menunggu konfirmasi"; refusal → back to
+`accepted` with the vendor's words (seller-facing, ADR 0004 hides them from shoppers only); transport error → intent
+KEPT, `{ ok:false, pending:true }` with a message saying the request is recorded and checked by tracking.
+③ Reconciler: `syncOrderFromKa` (the ONE tracking writer) reads the pending booking inside its row lock and applies
+`decideCancelReconcile` from the pure module. Decision table: `down`→wait · `not_found`→**attention** (order
+`problem_at`/`problem_note`, booking untouched) · `tracked null` (350/unmapped)→wait · `booked`→wait ·
+`canceled` (300/302)→**void** (booking `voided`+`voided_at`, `orders.awb`/`ka_order_id` NULL, `dikirim→diproses` via
+`applyOrderStatusChange` — the ALLOWED table's own "shipment voided, needs re-booking" transition; `diproses` stays;
+forward mapping skipped) · `shipped/delivered/returned/problem`→**revert** (booking `accepted`, ordinary mapping continues).
+The poller marks `pendingCancel` from the booking row and, on a failed pull shaped like "tidak ditemukan"/404, passes
+`{ kind:"not_found" }` explicitly; every other failure is `down`. Summary gains `cancelsReconciled`.
+**The ledger is never written by the reconciler**: a confirmed void is not a confirmed refund (`refunded` exists and
+nothing observes it yet) — reversing the shipping debit on a guess would hand back money the courier may keep.
+
+**REAL vs ASSUMED about the vendor.** REAL: tracking 300 "canceled by client" / 302 "pickup canceled by seller" →
+outcome `canceled`; 350 = requested-not-granted (unmapped); cancel_shipment `status:true` = queued ≤48 h; sandbox
+answers "Paket tidak ditemukan" to a booking ref. ASSUMED: that a void requested via cancel_shipment shows up in
+tracking as 300/302 rather than the shipment vanishing — nobody has driven a real cancel to completion (the sandbox
+never issues an AWB). That is why "not found" resolves to a human flag, never to `voided`.
+
+**Verification.** `npx vitest run apps/admin/lib/cancel*` → **30 passed** (2 files; 6 of them on real Postgres in
+`tokophi_test`, committed rows cleaned in `afterAll`). Neighbours `ka-status-codes` `ka-webhook` `order-status`
+`ledger-credit` `commerce-lifecycle` → 79 passed. `npx tsc -p apps/admin --noEmit` → clean. `npx eslint` on the six
+touched files → clean. Not exercised: a live KiriminAja cancel (no sandbox path exists), the browser.
+
+**Known ceiling (not done, deliberately).** No `cancellation_requested_at` column ⇒ no age-based give-up: a parcel that
+sits at origin with a void the courier never confirms stays pending until it moves or a human looks. Closing it is a
+migration (one timestamp column) — reported rather than written, per the task boundary.
+
+---
+
+## 2026-09-09 09:45 UTC — Main Session (agent) — Task 8.7 / F-P9: Promo-AI off the `claude` CLI spawn
+
+**The defect.** `apps/admin/lib/promo-ai.ts` reached the model with `execFile("claude", ["-p", prompt,
+"--output-format", "json"], …)`. The `claude` binary is on a developer's laptop and **is not in the admin
+image**, so the whole feature — Seller → Landing Page (`/promo/[id]`) → *"Generate dengan AI"* — could only
+ever answer **`"Claude CLI tidak ditemukan di server."`** in production, on every press, for as long as the
+button has existed. It fails LOUDLY (`toast.error`), not silently: the merchant sees an error naming an
+internal tool they cannot install, and nothing on the screen says the feature is simply not switched on. The
+old comment in that file called the missing binary "graceful degradation, same posture as the missing
+KiriminAja key" — which is the sentence that let it sit: a control whose only reachable outcome is an error
+is not a degraded feature, it is a dead one. `tsc`, `eslint` and the build were green throughout and always
+would be — a missing binary is a fact about the container.
+
+**Call chain.** `promo-editor-client.tsx` `generate()` → server action `generatePromoContent(productId)`
+(`lib/actions/promo.ts`, `requireCapability("content:write")` → `withCurrentTenant` product read) →
+`generateLandingCopy()` (`lib/promo-ai.ts`) → `runClaude()` → spawn. Output: one JSON object of
+direct-response landing copy (badge/headline/subheadline/problem/agitation/solution/benefits/idealFor/
+guarantee) sanitised through the save path's own cleaners and pushed into the form as a **draft** — nothing is
+persisted until the merchant presses Simpan.
+
+**Option taken: (a), an env-gated HTTPS client — and it is not an invented integration.** The repo has no
+pre-existing LLM key convention (`ANTHROPIC` / `OPENAI` / `9router` appear nowhere in code, compose or the env
+examples), but Task 8.7 as written already names `ANTHROPIC_API_KEY` and the Messages API, it is the **same
+vendor the code was already calling** through the CLI, and (b)'s honesty requirement is satisfied anyway
+because the key-absent state is the shipped default. A plain `fetch`, no SDK dependency added for one POST.
+
+**What changed.**
+- `apps/admin/lib/promo-ai.ts` — `child_process` gone. `askClaude()` POSTs to `api.anthropic.com/v1/messages`
+  (`claude-opus-5`, `max_tokens: 16000`, `output_config: { effort: "low" }`, `AbortController` at 120 s).
+  Key read at CALL time (a module-scope read gets baked in at build time when the env is empty — the
+  `lib/google.ts` trap), sent in `x-api-key` and nowhere else. `stop_reason: "refusal"` is handled **before**
+  reading content. **The provider's own error text never reaches the merchant** (ADR 0004): status + body to
+  `console.error`, one of our sentences to the shopper-facing side. New exports `promoAiEnabled()` and
+  `PROMO_AI_DISABLED_ID`.
+- `lib/actions/promo.ts` — refuses `{ ok:false, error }` when the key is absent, **before** the product read.
+  A server action takes its argument from the client, so a disabled `<Button>` gates nothing.
+- `app/(admin)/promo/[id]/page.tsx` — passes `aiEnabled={promoAiEnabled()}`; the boolean crosses, never the key.
+- `promo-editor-client.tsx` — off ⇒ the card goes neutral, the button is `disabled`, and the copy reads
+  *"Generate AI belum aktif — kunci API belum dipasang di server. Hubungi admin TokoΦ."* The merchant never
+  presses a control that cannot work.
+- `lib/env-health.ts` — `ANTHROPIC_API_KEY` classified **optional** (empty is a legitimate state, the
+  `GOOGLE_CLIENT_ID` posture); required by `env-census.test.ts`, which derives the list from the sink.
+- `docker-compose.coolify.yml` — `ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}` in the **admin** service only.
+- `specs/docs/DEPLOY.md` — the env note (why empty is the honest default, that setting it starts spending quota).
+
+**Guard.** `apps/admin/lib/promo-ai.test.ts`, 7 tests. A `codeOnly()` sweep of `apps/admin` +
+`apps/super-admin` + `apps/storefront/src` (non-test `.ts`/`.tsx`, count floor asserted) proves no
+`child_process` / `execFile(` / `spawn(` on any request path — **scan everything, name the exceptions**; a bare
+`exec(`/`fork(` is deliberately NOT in the pattern (`RegExp.prototype.exec` is everywhere, and an alarm that
+cries wolf is an alarm nobody reads — the `verify-rls` lesson). Plus a predicate self-check on the removed
+code, and claims on the disabled state (action refuses, button disabled, sentence rendered — that last one via
+`textOfFile`, because the sentence lives in a string literal).
+⚠️ **PROVED RED**, not assumed: re-inserting `import { execFile } from "node:child_process";` into
+`promo-ai.ts` turned the sweep red naming that exact file; reverted, green.
+
+**Verification.** `npx vitest run apps/admin/lib/promo-ai.test.ts` → **7 passed**;
+`apps/admin/lib/env-census.test.ts` → **6 passed**. `npx tsc -p apps/admin --noEmit` → clean.
+`npx eslint` on the six touched files → clean.
+**Not verified:** the live API call (no key in this session) and the browser. The button's disabled state is
+what production will show until the owner sets the key.
+
+**What a real implementation still needs (owner):** ① an `ANTHROPIC_API_KEY` set in Coolify — that is the only
+remaining step to turn the feature on, and it is a **cost** decision (every press is billed API usage, at
+Opus-tier rates for ~1–2k output tokens); ② the key added to `.env.example` and `.env.coolify.example` — those
+two files were permission-blocked in this session and are not in the task's Target Files, so they are still
+missing it; ③ nothing rate-limits presses per store — the existing `rateLimit()` in `@tokophi/lib/cache` is an
+in-process Map keyed on IP and is not wired here, so a merchant holding down Generate spends quota freely; ④
+no usage is recorded anywhere, so there is no way to attribute spend to a store; ⑤ a live smoke test after the
+key lands (one Generate on a real product, confirm the form fills and no key appears in any container log).
+
+## 2026-09-09 02:50 UTC — Main Session + 12 parallel subagents — SWEEP 2: the release gate becomes runnable; 14 more tasks closed
+
+**Why.** After the 2026-09-08 sweep, root `TASKS.md` carried 26 open tasks and Stage 7 (Release Gate) had **never been
+run** because three of its steps named commands that did not exist. This wave built those commands, executed every task
+that did not need an owner decision or a credential, and then ran the gate.
+
+**Now runnable — Stage 7's missing halves.** `npm run lint` (root, admin + super-admin: **0 errors**) · `npm run
+build:all` (four surfaces) · `npm run verify:guards` = `verify:source-size` + `verify:openapi` + `verify:doc-authority`
++ `verify:traceability` + `verify-migrations` + `verify-rls`. Each guard is RED-proved in `test/release-guards.test.ts`
+against a mutated temp copy — never against product source.
+
+**Tasks closed (evidence on each `Status:` line).** 5.1 shipment-cancel reconciliation (intent written BEFORE the
+vendor call, the 15-min poller reconciles via a pure decision table, no migration) · 5.13 OpenAPI coverage (30 of 38
+public route×methods were undocumented; the KiriminAja webhook and Task 4.13's `?cb=` callback shape added) · 5.14
+documentation authority (14 dead canonical links → honest stubs marked NOT WRITTEN; exactly one execution queue
+enforced) · 5.15 traceability (32 MET rows had no file evidence; SEC-6 pointed at a deleted file; F-P9 and SEC-19
+transcribed) · 6.3 shared rate limits · 6.4 unused dependencies (15 entries; `@tokophi/data` deleted entirely) · 6.6
+guard (ceilings pinned; the split deliberately NOT done) · 6.7 mock fixtures (all 51 importers were type-only;
+`lib/mock/` deleted, `lib/types/domain.ts` created, 7 unions derived from DB enums) · 6.12 srcset (worst case 8,33×
+oversize; `/thanks` −90%, uploads 77 772 → 8 692 B per row) · 6.13 all 11 hygiene rows · 8.6 root scaffolds + `.delivery/`
+ignored · 8.7 promo-AI off the CLI spawn · 8.11 ADR 0017 zero-downtime · 8.12 the second status light wired to nothing ·
+8.13 the seed's billing anchor.
+
+**Three findings this wave produced, filed rather than hidden.**
+1. **The rate limiter's honest ceiling.** The shared counter is write-behind because `rateLimit()` is synchronous, so
+   the FIRST call per key per replica is still answered locally — one request, where it used to be a whole fresh quota
+   after every deploy. Making it async is a one-word edit at ~20 sites and is the named follow-on. A real bug the suite
+   caught: a restarted process opens its local window at `now`, later than the shared window the row has been counting
+   in, so a naive merge discarded every shared answer on exactly the path the task exists for.
+2. **Two more limiter copies** remain in `api/track.ts` and `api/checkout-session.ts` (fail-quiet analytics).
+3. **A guard that pinned a NAME, not a claim.** Hoisting the duplicated payment-kind vocabulary into
+   `paymentKindWords(style)` turned `page-map-hygiene.test.ts` red, because it asserted the page imports
+   `enabledPaymentChannels` — a refactor that made the guarantee STRONGER (one vocabulary instead of two copies
+   differing only in capitalisation) looked like a regression. The test now pins the derivation CHAIN: page →
+   `paymentKindWords` → live channel list.
+
+**Verification.** Recorded in the Stage 7 block appended below.
+
+## 2026-09-09 02:55 UTC — Main Session — STAGE 7 (Release Gate) RUN FOR THE FIRST TIME
+
+The gate had never been executed (BUILD-LOG 2026-08-31, resume checklist 2026-09-03) because steps 1, 3 and 5 named
+commands that did not exist. All four executable steps now pass on `feat/sweep-0909`:
+
+| step | command | result |
+|---|---|---|
+| 1 | `npm run lint` | **exit 0 — 0 errors**, 4 warnings (admin `withPpn` unused + 3 pre-existing) |
+| 2 | `npm run test:release` | **exit 0 — 161 files / 1369 tests**, `verify-migrations` ✓, `test:db` no skips, `verify-rls` **54/55**, `verify-rls-app` ✓, storefront **8/8 checks** |
+| 3 | `npm run build:all` | **exit 0 ×4** — landing 6 s · storefront 6 s · super-admin 17 s · admin 31 s |
+| 5 | `npm run verify:guards` | **exit 0** — source-size, openapi, doc-authority, traceability, verify-migrations, verify-rls |
+
+**Steps 4 and 6 are NOT met and are not claimed.** Step 4 (seller + storefront browser matrices at desktop and 320 px,
+keyboard paths, error states) has only the partial drives recorded in `2026-09-08-browser-verification.md`, the
+storefront `verify` suite and `audit:responsive`. Step 6 (re-run every Stage 4/P0 reproduction into
+`AUDIT-SUMMARY.md`) has not been run. Stage 7 therefore stays `[~]`, not `[x]`.
+
+⚠️ **An operational lesson worth keeping.** `build:all` was killed three times by the harness's low-memory watchdog
+while a **leaked `next dev` from one of this sweep's own browser agents held 3,98 GB** on port 3147, 57 minutes after
+that agent reported killing it. Identified as MINE before touching it (`/proc/<pid>/cwd` → `apps/admin`, `ss -ltnp`
+→ the private port I had assigned), then killed by PID — never `pkill`. Available memory 8,0 → 12,1 GB. Even then the
+four builds only completed when run ONE AT A TIME IN THE FOREGROUND: chained in the background they spike past the
+watchdog. **After a wave of browser agents, check `ss -ltnp` for leaked dev servers before running anything heavy.**

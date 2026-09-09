@@ -1,0 +1,12 @@
+# NOT WRITTEN — Task 5.8 owner decision.
+# Placeholder so that the link in specs/README.md resolves. A 934-line draft of this contract exists
+# on the unmerged branch `feature/buyer-account-local` (commit 8dc12d7); it has NOT been accepted and
+# describes no deployed route. `npm run verify:openapi` skips a file carrying the status below: it
+# documents nothing and exempts nothing. Replace the whole file with the accepted contract, or delete
+# it and its links, when Task 5.8 is decided.
+x-tokophi-status: not-written
+openapi: 3.1.0
+info:
+  title: TokoΦ Account API (not written)
+  version: 0.0.0
+paths: {}

@@ -24,7 +24,7 @@ import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics
 import type { FunnelDay } from "@/lib/data/funnel";
 import type { ReturnsByCourier } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
-import type { DayPoint, Product, Order, Activity, Review } from "@/lib/mock/store";
+import type { DayPoint, Product, Order, Activity, Review } from "@/lib/types/domain";
 import { IDR, num, pct, share } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
 

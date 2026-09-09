@@ -1,0 +1,11 @@
+# NOT WRITTEN — Task 5.8 owner decision.
+# Placeholder so that the link in specs/README.md resolves. No draft of a headless storefront
+# contract exists on any branch. `npm run verify:openapi` skips a file carrying the status below: it
+# documents nothing and exempts nothing. The storefront's only HTTP contract today is
+# storefront-api.yaml beside this file.
+x-tokophi-status: not-written
+openapi: 3.1.0
+info:
+  title: TokoΦ Headless Storefront API (not written)
+  version: 0.0.0
+paths: {}

@@ -16,6 +16,7 @@ import { codeOnly, textWithoutComments } from "../../../../../test/source-code";
 
 const SECTIONS = fileURLToPath(new URL(".", import.meta.url));
 const INDEX = fileURLToPath(new URL("../../pages/index.astro", import.meta.url));
+const LANDING = fileURLToPath(new URL("../../pages/lp/[slug].astro", import.meta.url));
 
 // ⚠️ THIS FILE HAND-ROLLED ITS OWN COMMENT STRIPPER, AND THEN DID NOT USE IT ON HALF THE FILE.
 //
@@ -60,6 +61,13 @@ describe("the homepage h1 floor", () => {
     expect(src).toContain(asCode("const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some("));
     expect(src).toContain(asCode(`s.type === "hero"`));
     expect(src).toContain(asCode(`{!TEMPLATE_HAS_HEADING && <h1 class="sr-only">`));
+  });
+
+  // Page-map SF-9: the custom-HTML landing has the same problem with no template to inspect — the
+  // merchant's pasted markup and OrderFunnel both may carry no heading — so its floor is
+  // unconditional. A claim about what the page executes → codeOnly.
+  it("lp/[slug].astro renders an unconditional sr-only <h1> from the landing title", () => {
+    expect(codeOnly(readFileSync(LANDING, "utf8"))).toContain(asCode(`<h1 class="sr-only">{landing.title}</h1>`));
   });
 
   // The floor and Hero's own `<h1>` are two halves of ONE predicate: "does a slide have a heading".

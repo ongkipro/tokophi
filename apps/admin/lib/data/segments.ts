@@ -2,7 +2,7 @@ import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant } from "@/lib/tenant";
 import { desc } from "drizzle-orm";
-import type { CustSegment } from "@/lib/mock/store";
+import type { CustSegment } from "@/lib/types/domain";
 
 export async function getSegments(): Promise<CustSegment[]> {
   return withCurrentTenant(async (db) => {

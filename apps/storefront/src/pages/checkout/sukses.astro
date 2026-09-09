@@ -4,6 +4,7 @@
 // menu here invites the shopper to browse away from a number they still have to act on.
 // The one exit is deliberate and earned: the "Lanjut Belanja" button at the bottom.
 import CheckoutLayout from "../../layouts/CheckoutLayout.astro";
+import { UPLOAD_WIDTHS } from "../../data/catalog";
 const store = Astro.locals.store;
 ---
 
@@ -52,7 +53,8 @@ const store = Astro.locals.store;
   </section>
 </CheckoutLayout>
 
-<script is:inline>
+{/* The line thumbnail is `h-16 w-14` in a `shrink-0` cell: 56 px at every viewport (Task 6.12). */}
+<script is:inline define:vars={{ UPLOAD_WIDTHS, THUMB_SIZES: "56px" }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -64,6 +66,23 @@ const store = Astro.locals.store;
       return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
+    }
+
+    // ── srcset for a cart thumbnail (Task 6.12) ──
+    // The line comes from localStorage, so this runs in the browser and cannot call `imageSrcSet`.
+    // A MERCHANT UPLOAD (`/api/uploads/*`, served by the Seller app) takes `?w=`, and its ladder is
+    // UPLOAD_WIDTHS — the same list `imageSrcSet` uses, injected by the server, never a copy typed
+    // here. A seeded `/products/*.webp` has real width files beside it, but WHICH rungs exist is only
+    // known to the 5 KB generated manifest, and shipping that to every visitor to serve a few
+    // thumbnails would cost more than it saves — so a static seed image stays bare, deliberately.
+    // Empty string ⇒ no attribute at all, the same shape the server helper renders.
+    function srcsetFor(u) {
+      if (!/^(https?:\/\/[^/]+)?\/api\/uploads\//.test(u)) return "";
+      return UPLOAD_WIDTHS.map(function (w) { return u + "?w=" + w + " " + w + "w"; }).join(", ");
+    }
+    function srcsetAttr(u, sizes) {
+      var s = srcsetFor(u);
+      return s ? ' srcset="' + esc(s) + '" sizes="' + sizes + '"' : "";
     }
 
     // Clear the cart on arrival at success.
@@ -118,7 +137,7 @@ const store = Astro.locals.store;
         return (
           '<div class="flex items-center gap-3 border-b border-[var(--co-line)] py-3 last:border-0">' +
           '<div class="relative shrink-0">' +
-          '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-[var(--co-accent-weak)]" loading="lazy" />' +
+          '<img src="' + esc(item.image) + '"' + srcsetAttr(item.image, THUMB_SIZES) + ' alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-[var(--co-accent-weak)]" loading="lazy" />' +
           '<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-xs font-semibold text-white">' + item.qty + "</span>" +
           "</div>" +
           '<div class="min-w-0 flex-1">' +

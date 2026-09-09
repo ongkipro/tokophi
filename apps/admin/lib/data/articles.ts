@@ -3,7 +3,7 @@ import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { publishedFirst } from "@tokophi/db/article-order";
 import { asc, eq } from "drizzle-orm";
-import type { BlogPost } from "@/lib/mock/store";
+import type { BlogPost } from "@/lib/types/domain";
 
 // ⚠️ `body` and `imageUrl` were NOT here, and their absence was destroying merchant work.
 //

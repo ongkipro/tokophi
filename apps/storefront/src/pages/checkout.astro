@@ -2,12 +2,10 @@
 import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown, Info } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
-import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip } from "../data/catalog";
+import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip, UPLOAD_WIDTHS } from "../data/catalog";
 import { noVariantChoice } from "../lib/cart-variant";
-import { db, schema } from "@tokophi/db";
+import { getRecoveredCheckout } from "../data/checkout";
 import { PAYMENT_FEES, channelFeeValue, type FeeKind } from "@tokophi/lib/payment-fees";
-import { and, eq } from "drizzle-orm";
-import { verifyRecoveryToken } from "../lib/recovery";
 
 // ADR 0009 §4 — checkout is LOCKED (not part of the Store Builder); its only per-store variance is
 // branding read from the store profile: the logo (stores.logo_url) + the brand colour. BOTH now live
@@ -28,7 +26,6 @@ const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/p
 const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
 // PROMO P0 — voucher preview. Derived from the order API base so it needs no new env (same admin host).
 const PROMO_API = ORDER_API.replace(/\/order$/, "/promo");
-const ORIGIN_CITY = store.city || "Yogyakarta";
 const STORE_SLUG = store.slug;
 
 // Payment channels = whatever the platform (super-admin) enabled (platform_payment_channels),
@@ -132,8 +129,9 @@ const NO_CHOICE_HANDLES = catalog.products.filter(noVariantChoice).map((p) => p.
 
 // ── Recovery link (?r=<signed token>) ────────────────────────────────────────────────────────────
 // The merchant's WhatsApp "kamu meninggalkan keranjang" message links here. The token is an HS256
-// JWT bound to (session id, store id) with a 7-day life (src/lib/recovery.ts) — NOT a raw session
-// id, which would hand anyone who sees the URL a stranger's name, phone and address.
+// JWT bound to (session id, store id) with a 7-day life — NOT a raw session id, which would hand
+// anyone who sees the URL a stranger's name, phone and address. The verify and the row read live
+// together in src/data/checkout.ts, so no page here touches @tokophi/db (page-map report SF-7).
 //
 // A valid token restores: the basket (from the snapshot in checkout_sessions.items — the price the
 // shopper actually saw, not today's price) and everything they had typed. The session id is handed
@@ -142,51 +140,13 @@ const NO_CHOICE_HANDLES = catalog.products.filter(noVariantChoice).map((p) => p.
 //
 // A bad/expired/other-tenant token is simply ignored → the ordinary empty checkout, never an error.
 const rToken = Astro.url.searchParams.get("r");
-type RecoverItem = { handle: string | null; name: string | null; variant: string | null; qty: number; price: number };
-let RECOVER: {
-  sessionId: string;
-  items: { handle: string; name: string; variant: string; qty: number; price: number; image: string }[];
-  name: string; phone: string; email: string; address: string;
-  city: string; province: string; postcode: string; destId: number | null;
-} | null = null;
-
-if (rToken) {
-  const sid = await verifyRecoveryToken(rToken, store.id);
-  if (sid) {
-    const [row] = await db
-      .select()
-      .from(schema.checkoutSessions)
-      .where(and(eq(schema.checkoutSessions.storeId, store.id), eq(schema.checkoutSessions.sessionId, sid)))
-      .limit(1);
-    // `pulih` = already bought. Re-hydrating that cart would push the shopper to buy it twice.
-    if (row && row.status !== "pulih") {
-      const snap = (Array.isArray(row.items) ? row.items : []) as RecoverItem[];
-      RECOVER = {
-        sessionId: sid,
-        // The image is NOT in the snapshot (that stays the documented {handle,name,variant,qty,price}
-        // shape) — it is re-resolved from the live catalog, so a re-shot photo shows up correctly.
-        items: snap
-          .filter((i) => i?.name && i.qty > 0)
-          .map((i) => ({
-            handle: i.handle ?? "",
-            name: i.name ?? "",
-            variant: i.variant ?? "",
-            qty: i.qty,
-            price: i.price,
-            image: (i.handle && catalog.findProduct(i.handle)?.image) || "",
-          })),
-        name: row.name ?? "",
-        phone: row.phone ?? "",
-        email: row.email ?? "",
-        address: row.address ?? "",
-        city: row.city ?? "",
-        province: row.province ?? "",
-        postcode: row.postcode ?? "",
-        destId: row.districtId ?? null,
-      };
-    }
-  }
-}
+const recovered = rToken ? await getRecoveredCheckout(rToken, store.id) : null;
+// The image is NOT in the snapshot (that stays the documented {handle,name,variant,qty,price}
+// shape) — it is re-resolved from the live catalog here, so a re-shot photo shows up correctly.
+const RECOVER = recovered && {
+  ...recovered,
+  items: recovered.items.map((i) => ({ ...i, image: (i.handle && catalog.findProduct(i.handle)?.image) || "" })),
+};
 ---
 
 <CheckoutLayout title="Checkout" description={`Selesaikan pesananmu di ${store.name}.`}>
@@ -979,7 +939,9 @@ if (rToken) {
   }
 </style>
 
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, ORIGIN_CITY, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER, NO_CHOICE_HANDLES }}>
+{/* Two thumbnail boxes, both fixed and `shrink-0` (Task 6.12): the summary line `h-16 w-14` = 56 px,
+    and the mobile summary bar's `#summary2-thumb` `h-10 w-9` = 36 px. */}
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER, NO_CHOICE_HANDLES, UPLOAD_WIDTHS, THUMB_SIZES: "56px", BAR_THUMB_SIZES: "36px" }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -1028,6 +990,23 @@ if (rToken) {
       return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
+    }
+
+    // ── srcset for a cart thumbnail (Task 6.12) ──
+    // The line comes from localStorage, so this runs in the browser and cannot call `imageSrcSet`.
+    // A MERCHANT UPLOAD (`/api/uploads/*`, served by the Seller app) takes `?w=`, and its ladder is
+    // UPLOAD_WIDTHS — the same list `imageSrcSet` uses, injected by the server, never a copy typed
+    // here. A seeded `/products/*.webp` has real width files beside it, but WHICH rungs exist is only
+    // known to the 5 KB generated manifest, and shipping that to every visitor to serve a few
+    // thumbnails would cost more than it saves — so a static seed image stays bare, deliberately.
+    // Empty string ⇒ no attribute at all, the same shape the server helper renders.
+    function srcsetFor(u) {
+      if (!/^(https?:\/\/[^/]+)?\/api\/uploads\//.test(u)) return "";
+      return UPLOAD_WIDTHS.map(function (w) { return u + "?w=" + w + " " + w + "w"; }).join(", ");
+    }
+    function srcsetAttr(u, sizes) {
+      var s = srcsetFor(u);
+      return s ? ' srcset="' + esc(s) + '" sizes="' + sizes + '"' : "";
     }
 
     // ---- The funnel session id (Analytics.astro, sessionStorage "tphi:sid") ----
@@ -1167,7 +1146,7 @@ if (rToken) {
         return (
           '<div class="flex items-center gap-3">' +
           '<div class="relative shrink-0">' +
-          '<img src="' + esc(item.image) + '" alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-[var(--co-accent-weak)]" loading="lazy" />' +
+          '<img src="' + esc(item.image) + '"' + srcsetAttr(item.image, THUMB_SIZES) + ' alt="' + esc(item.name) + '" class="h-16 w-14 rounded-lg object-cover bg-[var(--co-accent-weak)]" loading="lazy" />' +
           '<span class="absolute -right-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-xs font-semibold text-cream">' + item.qty + "</span>" +
           "</div>" +
           '<div class="min-w-0 flex-1">' +
@@ -1196,6 +1175,10 @@ if (rToken) {
     if (s2items) s2items.innerHTML = itemsHtml; // the SAME string the top summary got
     var s2thumb = document.getElementById("summary2-thumb");
     if (s2thumb && cart[0] && cart[0].image) {
+      // srcset BEFORE src — set the other way round the browser has already committed to the bare
+      // `src` (the full original) by the time the ladder arrives; same trap as the hero carousel.
+      var s2set = srcsetFor(cart[0].image);
+      if (s2set) { s2thumb.srcset = s2set; s2thumb.sizes = BAR_THUMB_SIZES; } else { s2thumb.removeAttribute("srcset"); s2thumb.removeAttribute("sizes"); }
       s2thumb.src = cart[0].image;
       s2thumb.hidden = false;
     }
@@ -1601,7 +1584,9 @@ if (rToken) {
     })();
 
     // ---- Live KiriminAja ongkir (via platform proxy on the admin) ----
-    // ONGKIR_API + ORIGIN_CITY injected via define:vars (env-driven, per-store origin)
+    // ONGKIR_API injected via define:vars (env-driven). The ORIGIN is NOT a client concern and is
+    // never sent: /api/public/ongkir prices from the SELLER's pickup district and ignores any
+    // origin in the body — an untrusted client string must never decide a price (AGENTS.md).
     var destSearch = document.getElementById("dest-search");
     var destResults = document.getElementById("dest-results");
     var destHint = document.getElementById("dest-hint");

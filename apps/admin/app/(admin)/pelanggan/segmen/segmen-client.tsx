@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { useCan } from "@/components/admin/permissions";
 import { num, pct } from "@tokophi/lib/format";
-import { type CustSegment } from "@/lib/mock/store";
+import { type CustSegment } from "@/lib/types/domain";
 import { cn } from "@tokophi/ui/lib/utils";
 
 import { Card } from "@tokophi/ui/card";

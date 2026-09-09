@@ -80,6 +80,19 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
 
 ## ⏱ Jendela 503 saat deploy — DIUKUR 2026-08-19: **15 menit → 81 detik**
 
+> **PEMBARUAN 2026-08-28 — jendela sekarang 7,0–8,3 detik per surface (−93 %), dan ini keputusan struktural:
+> ADR [`0017-zero-downtime-deploy.md`](../decisions/0017-zero-downtime-deploy.md).** Seksi di bawah ini adalah
+> catatan pengukuran 2026-08-19 (15 menit → 81 detik) dan tetap benar untuk penyebab PERTAMA (rantai seed di
+> jalur kritis). Penyebab KEDUA, yang ditemukan 2026-08-28, berbeda: Coolify meruntuhkan seluruh stack compose
+> sebelum menaikkan yang baru (`is_consistent_container_name_enabled` + `depends_on: migrate` membuat urutan
+> start serial ~13–20 s), dan retry Traefik TIDAK bisa menjembatani pool kosong (503 dijawab seketika; diukur
+> 19,6 / 17,5 / 3,4+19,6 s). Yang dilakukan (`5b7d7c8`, `73c3b51`, `16b72b0`): nama container konsisten, gate
+> `migrate` dilepas dari app yang di-routing, healthcheck `start_interval: 2s`. Hasil deploy 524:
+> **`app` 8,3 s · `rich` 7,0 s · `toko` 7,3 s**. Dua tuas yang tersisa ada DI LUAR repo (orkestrasi Coolify
+> untuk swap tumpang-tindih; image Next yang tidak reproducible sehingga ketiga app selalu ikut swap) dan
+> sengaja belum diputuskan — lihat ADR §5. ⚠️ Ambang alarm uptime eksternal (Task 8.1) harus lebih panjang
+> dari jendela ini, atau setiap deploy akan membangunkan orang.
+
 Dua pengukuran pada hari yang sama, keduanya dengan probe HTTP tiap 20 detik terhadap
 `app.tokophi.com/login` sejak detik merge, bukan dengan membaca log:
 
@@ -696,6 +709,19 @@ with it unset, and the failure is silent in the only way that matters: the Selle
 save is REFUSED (correctly — it will not store a token in plaintext) with a message naming an internal
 env variable, and by that card's own copy **every prepaid conversion then records nothing at all**. Add
 it to both example files.
+
+⚠️ **`ANTHROPIC_API_KEY` — OPTIONAL, AND EMPTY IS THE HONEST DEFAULT** (Task 8.7, 2026-09-09). It is
+the ONLY thing that turns on Seller → Promo → **"Generate dengan AI"**. Before 8.7 that button shelled
+out to the `claude` CLI, which exists on a developer's laptop and not in the admin image, so in
+production every press answered *"Claude CLI tidak ditemukan di server."* — a shipped control whose
+only possible outcome was an error. It is a plain HTTPS POST to the Anthropic Messages API now
+(`apps/admin/lib/promo-ai.ts`, no SDK dependency), and `docker-compose.coolify.yml` forwards
+`${ANTHROPIC_API_KEY:-}` into `admin` only. Unset ⇒ the card renders the button **disabled** with the
+reason on it and the server action refuses with `{ ok:false, error }` — the feature is off, not
+broken, the same posture as `GOOGLE_CLIENT_ID`. Set ⇒ every press spends API quota, so it is a cost
+decision, not a config chore. The key is never logged, never returned to the browser, and the
+provider's own error text never reaches the merchant (ADR 0004) — only the HTTP status is
+`console.error`ed.
 
 See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`, **`INTEGRATION_TOKEN_KEY`** (≥16 chars — encrypts the merchants' CAPI tokens; see the conversion-cron section, rotation is a code change). Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default **`cname.tokophi.cc`** — the SaaS zone; it read `.com` until 2026-08-08 and that was wrong).
 

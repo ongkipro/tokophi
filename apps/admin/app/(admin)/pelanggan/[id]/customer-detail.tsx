@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 
-import { type Customer } from "@/lib/mock/store";
+import { type Customer } from "@/lib/types/domain";
 import type { CustomerOrder, CustomerRow } from "@/lib/data/customers";
 import { AccountBadge } from "@/components/admin/pelanggan/account-badge";
 import { IDR, num, timeAgo, waLink } from "@tokophi/lib/format";

@@ -1,6 +1,6 @@
 import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
-import type { OrderStatus } from "@/lib/mock/store";
+import type { OrderStatus } from "@/lib/types/domain";
 
 const MAP: Record<OrderStatus, { label: string; cls: string }> = {
   baru: { label: "Baru", cls: "bg-blue-500/12 text-blue-600 dark:text-blue-400" },

@@ -49,6 +49,11 @@ const packages = buildPackages(product);
 ---
 
 <LandingLayout title={landing.title} robots="noindex,follow">
+  {/* The `<h1>` floor (page-map SF-9): neither the pasted HTML nor OrderFunnel guarantees a heading,
+      so the page has one of its own — visually hidden, the way index.astro does for a builder
+      homepage with no hero. A merchant whose markup carries its own `<h1>` gets two; that is the
+      cheaper defect than none, and the merchant HTML is theirs to shape. */}
+  <h1 class="sr-only">{landing.title}</h1>
   {/* The merchant's own landing markup — rendered verbatim (see security note in frontmatter). */}
   <div class="landing-html" set:html={landing.html} />
 

@@ -18,7 +18,14 @@
     "check:storefront": "astro check --root apps/storefront",
     "check:landing": "astro check --root apps/landing",
     "test:db": "TEST_DB_REQUIRED=1 vitest run",
-    "test:release": "npm run verify-migrations -w @tokophi/db && npm run test:db && npm run verify-rls -w @tokophi/db && npm run verify-rls-app -w @tokophi/db && npm run verify -w @tokophi/storefront"
+    "test:release": "npm run verify-migrations -w @tokophi/db && npm run test:db && npm run verify-rls -w @tokophi/db && npm run verify-rls-app -w @tokophi/db && npm run verify -w @tokophi/storefront",
+    "lint": "npm run lint -w @tokophi/admin && npm run lint -w @tokophi/super-admin",
+    "build:all": "npm run build -w @tokophi/admin && npm run build -w @tokophi/super-admin && npm run build -w @tokophi/storefront && npm run build -w @tokophi/landing",
+    "verify:openapi": "node scripts/verify-openapi.mjs",
+    "verify:doc-authority": "node scripts/verify-doc-authority.mjs",
+    "verify:traceability": "node scripts/verify-traceability.mjs",
+    "verify:source-size": "node scripts/verify-source-size.mjs",
+    "verify:guards": "npm run verify:source-size && npm run verify:openapi && npm run verify:doc-authority && npm run verify:traceability && npm run verify-migrations -w @tokophi/db && npm run verify-rls -w @tokophi/db"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

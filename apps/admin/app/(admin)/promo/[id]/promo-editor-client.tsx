@@ -20,7 +20,7 @@ import { Textarea } from "@tokophi/ui/textarea";
 import { Switch } from "@tokophi/ui/switch";
 import { Label } from "@tokophi/ui/label";
 
-export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
+export function PromoEditorClient({ editor, aiEnabled }: { editor: PromoEditor; aiEnabled: boolean }) {
   const router = useRouter();
   const canWrite = useCan("content:write");
   const [saving, startSave] = React.useTransition();
@@ -124,18 +124,22 @@ export function PromoEditorClient({ editor }: { editor: PromoEditor }) {
         </CardContent>
       </Card>
 
-      {/* AI generate */}
-      <Card className="border-brand-200 bg-brand-50/40">
+      {/* AI generate — Task 8.7. `aiEnabled` is the server telling us whether a key exists; the key
+          itself never comes here. Off = the button is disabled AND the reason is written out, rather
+          than a button that presses into an error. The action refuses too; this is only the courtesy. */}
+      <Card className={aiEnabled ? "border-brand-200 bg-brand-50/40" : "bg-muted/40"}>
         <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-1.5 font-medium">
-              <Sparkles className="h-4 w-4 text-brand-600" /> Generate dengan AI
+              <Sparkles className={`h-4 w-4 ${aiEnabled ? "text-brand-600" : "text-muted-foreground"}`} /> Generate dengan AI
             </div>
             <p className="text-sm text-muted-foreground">
-              Claude menulis judul, masalah, solusi, manfaat &amp; gejala dari data produk. Isi form terisi otomatis — periksa lalu Simpan.
+              {aiEnabled
+                ? "Claude menulis judul, masalah, solusi, manfaat & gejala dari data produk. Isi form terisi otomatis — periksa lalu Simpan."
+                : "Generate AI belum aktif — kunci API belum dipasang di server. Hubungi admin TokoΦ."}
             </p>
           </div>
-          <Button onClick={generate} disabled={!canWrite || generating} className="shrink-0">
+          <Button onClick={generate} disabled={!aiEnabled || !canWrite || generating} className="shrink-0">
             <Sparkles className="mr-1.5 h-4 w-4" />
             {generating ? "Membuat…" : "Generate"}
           </Button>

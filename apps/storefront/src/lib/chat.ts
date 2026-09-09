@@ -19,6 +19,9 @@ import { SignJWT, jwtVerify } from "jose";
 import { createHash } from "node:crypto";
 import type { APIContext } from "astro";
 import { authSecret, authSecretBytes } from "@tokophi/lib/secret";
+// The rate limiter — see the long note further down; these two modules are the shared one.
+import { type Window, bump, decide, mergeShared } from "@tokophi/lib/rate-limit";
+import { scheduleBump } from "@tokophi/lib/rate-limit-store";
 
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
 const secret = () => authSecretBytes();
@@ -87,26 +90,35 @@ export function ipHash(ip: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fixed-window rate limits. Deliberately NOT `rateLimit` from @tokophi/lib/cache: that module
-// starts with `import "server-only"`, a Next-internal alias Rollup cannot resolve in the Astro SSR
-// bundle (`astro build` dies) — src/data/cache.ts and src/pages/api/track.ts already re-implement
-// for exactly this reason.
+// Fixed-window rate limits. This was a SECOND HAND-ROLLED COPY of `rateLimit` until Task 6.3
+// (2026-09-09), and the reason it existed is still true: `@tokophi/lib/cache` starts with
+// `import "server-only"`, a Next-internal alias Rollup cannot resolve in the Astro SSR bundle
+// (`astro build` dies). What changed is that the DECISION and the shared COUNT now live in two
+// modules that import neither `server-only` nor anything Next-shaped —
+// `@tokophi/lib/rate-limit` (pure) and `@tokophi/lib/rate-limit-store` (one Postgres row per key,
+// write-behind) — so this file can reach the real limiter instead of re-implementing it. A copy is
+// how the weaker half of a pair survives a fix; the 24-bit password mint is this repo's own proof.
 //
-// PROD: in-memory does not span containers and resets on redeploy — this is a floor, not a wall.
-// The wall is a Cloudflare Rate Limiting rule on /api/chat/* (spec §3).
+// The signature stays `boolean` because every caller under src/pages/api/chat/ reads it that way.
+//
+// ⚠️ Still a floor, not a wall, for one reason now instead of three: the local map answers
+// synchronously and the shared count is merged back one round-trip later, so a burst inside that
+// round-trip can overshoot and the first call after a restart is answered before the shared count is
+// known. It no longer resets on redeploy and it no longer counts per container. The outer wall is
+// still a Cloudflare Rate Limiting rule on /api/chat/* (spec §3).
 // ---------------------------------------------------------------------------------------------
-const hits = new Map<string, { count: number; reset: number }>();
+const hits = new Map<string, Window>();
 
 export function rateLimit(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now();
-  const e = hits.get(key);
-  if (!e || now > e.reset) {
-    hits.set(key, { count: 1, reset: now + windowMs });
-    if (hits.size > 10_000) for (const [k, v] of hits) if (now > v.reset) hits.delete(k);
-    return true;
-  }
-  e.count++;
-  return e.count <= limit;
+  const next = bump(hits.get(key), windowMs, now);
+  hits.set(key, next);
+  if (hits.size > 10_000) for (const [k, v] of hits) if (now > v.windowStart + windowMs) hits.delete(k);
+  scheduleBump(key, windowMs, now, (shared) => {
+    const cur = hits.get(key);
+    if (cur) hits.set(key, mergeShared(cur, shared, windowMs, Date.now()));
+  });
+  return decide(next, limit, windowMs, now).ok;
 }
 
 export const LIMITS = {

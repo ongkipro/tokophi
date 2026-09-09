@@ -12,7 +12,7 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { ProductThumb } from "@/components/admin/product-thumb";
 import { IDR, num } from "@tokophi/lib/format";
-import type { Product } from "@/lib/mock/store";
+import type { Product } from "@/lib/types/domain";
 import { cn } from "@tokophi/ui/lib/utils";
 import { toast } from "sonner";
 import { bulkSetProductStatus, bulkDeleteProducts, duplicateProduct, deleteProduct } from "@/lib/actions/products";

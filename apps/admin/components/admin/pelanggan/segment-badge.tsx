@@ -1,6 +1,6 @@
 import { Badge } from "@tokophi/ui/badge";
 import { cn } from "@tokophi/ui/lib/utils";
-import type { Segment } from "@/lib/mock/store";
+import type { Segment } from "@/lib/types/domain";
 
 export const SEGMENTS: Record<Segment, { label: string; cls: string; dot: string }> = {
   baru: {

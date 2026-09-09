@@ -44,7 +44,7 @@ import type {
   PendingFund,
   SaldoTab,
 } from "@/lib/data/ledger";
-import type { OrderStatus } from "@/lib/mock/store";
+import type { OrderStatus } from "@/lib/types/domain";
 
 const KIND_LABEL: Record<string, string> = {
   sale: "Penjualan",

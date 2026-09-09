@@ -19,7 +19,7 @@ import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
 import { Separator } from "@tokophi/ui/separator";
 import { IDR, num, waLink, fillTemplate } from "@tokophi/lib/format";
-import { type FollowupType, type LeadStage } from "@/lib/mock/store";
+import { type FollowupType, type LeadStage } from "@/lib/types/domain";
 import { getLeads, getFollowups, getWaTemplates } from "@/lib/data/crm";
 import { getStoreName } from "@/lib/data/store";
 import { getSession } from "@/lib/auth";

@@ -45,6 +45,13 @@ describe("kontak — per-store email, honest empty state", () => {
     expect(MARKUP).not.toMatch(EMAIL_LITERAL);
   });
 
+  // Page-map SF-4, same class: opening hours are a per-tenant fact the platform holds no setting
+  // for, so the page must not publish a schedule. MARKUP, not CODE — the schedule was plain text.
+  it("publishes no opening hours — there is no store setting to derive them from", () => {
+    expect(MARKUP).not.toMatch(/Jam\s+Operasional/);
+    expect(MARKUP).not.toMatch(/\d\d\.\d\d\s*[–-]\s*\d\d\.\d\d\s*WIB/);
+  });
+
   // ── Mutation self-checks: prove each predicate FIRES on the code it exists to refuse, so the
   //    guard can never be green for want of matching anything (the public-guard.test.ts rule). ──
   it("would go red if a hardcoded fallback address came back", () => {

@@ -13,7 +13,7 @@ import Layout from "../../layouts/Layout.astro";
 // sections fight over one sort param and render two redundant toolbars.
 import ProductCard from "../../components/ProductCard.astro";
 import { IDR } from "@tokophi/lib/format";
-import { activeVouchers, storeFreeShip, promoHub, mediaUrl, type VoucherPromo } from "../../data/catalog";
+import { activeVouchers, storeFreeShip, promoHub, mediaUrl, imageSrcSet, type VoucherPromo } from "../../data/catalog";
 
 const { store, catalog } = Astro.locals;
 
@@ -33,6 +33,8 @@ const [vouchers, freeShip, hub] = await Promise.all([activeVouchers(store.id), s
 const hubTitle = hub.title?.trim() || "Semua Promo, Satu Halaman";
 const hubSubtitle = hub.subtitle?.trim() || `Flash sale, kode voucher, dan gratis ongkir dari ${store.name} — semuanya di sini.`;
 const hubBanner = hub.bannerUrl?.trim() ? mediaUrl(hub.bannerUrl.trim()) : null;
+// The banner is `absolute inset-0` in a full-bleed section — its box IS the viewport (Task 6.12).
+const BANNER_SIZES = "100vw";
 
 // Human label for a voucher chip. `gratis_ongkir` value is unused; persen is %, nominal is rupiah off.
 function voucherLabel(v: VoucherPromo): string {
@@ -58,7 +60,13 @@ const TITLE = "Promo";
   <section class="relative overflow-hidden bg-gradient-to-br from-brand-600 to-brand-700 text-white">
     {hubBanner && (
       <>
-        <img src={hubBanner} alt="" class="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={hubBanner}
+          srcset={imageSrcSet(hubBanner)}
+          sizes={imageSrcSet(hubBanner) ? BANNER_SIZES : undefined}
+          alt=""
+          class="absolute inset-0 h-full w-full object-cover"
+        />
         <div class="absolute inset-0 bg-gradient-to-r from-black/70 via-black/45 to-black/20"></div>
       </>
     )}

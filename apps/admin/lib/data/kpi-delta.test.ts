@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NO_FIGURE, pct } from "@tokophi/lib/format";
 import { getMoneyTiles, getSummary, getVisitsKpi, getConversionKpi } from "./dashboard";
-import type { DayPoint } from "@/lib/mock/store";
+import type { DayPoint } from "@/lib/types/domain";
 import type { FunnelDay } from "@/lib/data/funnel";
 
 // "A FIGURE WITH NO SOURCE IS '—', NEVER A NUMBER" — the standing rule, applied to the DELTA rather

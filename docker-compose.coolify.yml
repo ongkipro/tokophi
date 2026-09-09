@@ -186,6 +186,13 @@ services:
       # the same type, so a new merchant starts from the platform default instead of a blank page.
       # Unset = blank canvas, exactly as before.
       PLATFORM_DEFAULT_THEME_STORE_ID: ${PLATFORM_DEFAULT_THEME_STORE_ID:-}
+      # Task 8.7 — Promo → "Generate dengan AI" (apps/admin/lib/promo-ai.ts). It used to shell out to
+      # the `claude` CLI, which is on a developer's laptop and NOT in this image, so the feature was
+      # dead here from the day it shipped while looking implemented. It is a plain HTTPS POST to the
+      # Anthropic Messages API now. EMPTY IS A VALID STATE and the honest default: the button is
+      # disabled with its reason written on the card, and the server action refuses too. Setting it
+      # turns the feature on and starts spending API quota per press.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     expose:
       - "3000"
     healthcheck:

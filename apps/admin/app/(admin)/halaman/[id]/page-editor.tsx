@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@tokophi/ui/dropdown-menu";
-import { type CmsPage } from "@/lib/mock/store";
+import { type CmsPage } from "@/lib/types/domain";
 
 // ---- helpers ----
 function slugify(s: string): string {
