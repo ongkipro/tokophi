@@ -506,3 +506,25 @@ Instant delivery (removed from this product) caps at 40.000 g and supports GoSen
 Phone values are normalised by stripping spaces and hyphens; `08`, `+628` and `02` landlines are
 accepted. *"Current mock success responses are illustrative and are not an authoritative production
 response contract"* — do not build parsers from the doc's examples alone.
+
+### 🔴 `order_id` — the booking endpoint and the tracking endpoint disagree, and we are on the wrong side
+
+Read straight from the spec, 2026-09-09:
+
+| endpoint | field | constraint |
+|---|---|---|
+| `POST /api/mitra/v6.2/request_pickup` | `packages[].order_id` | **no `maxLength`** |
+| `POST /api/mitra/tracking` | `order_id` | **`maxLength: 20`** |
+
+So a booking is accepted with an id the tracking endpoint declares it will not take. Measured with a
+REAL production order number (`PHI-768771328ISC`, 16 chars): `shipping.ts:814` builds
+`orderNumber` stripped of non-alphanumerics + 8 characters of the booking UUID, and `kiriminaja.ts`
+prefixes it — giving **28 characters** with the configured prefix `5758`, and **31** with the code's
+`TOKOPHI` fallback. The limit is 20.
+
+This is the strongest available explanation for issue #12's *"`awbFilled` has only ever been 0"*: the
+poller asks tracking for an id longer than tracking accepts. It cannot be fully separated from "no
+production booking has ever been made" until one is — but the arithmetic no longer needs a booking.
+
+⚠️ **Do not fix it by truncating at send time.** An id the vendor stores in truncated form is an id we
+can never look it up by again. Shorten the CONSTRUCTION and guard the total. Task 8.20.

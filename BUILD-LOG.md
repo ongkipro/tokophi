@@ -3335,3 +3335,36 @@ Admin table will read "available, but we switched it off", which is the truth.
 
 **A mistake of mine, caught by the tests:** I wrote the verdict literal as `same` where the type says `match`.
 One test went red immediately and I corrected it; the comparison function itself was right all along.
+
+## 2026-09-09 11:58 UTC — Main Session — ISSUE AUDIT (5 open) + 🔴 a confirmed defect the audit surfaced: `order_id` is 28 chars, tracking allows 20
+
+**The five open issues were re-verified against CODE, not prose.** Outcome: **#16 closable** (all ten
+findings, the three missing routes and every "celah fitur besar" — search, filters, URL sorting,
+pagination, category `og:image` — verified shipped; four small residues to carry over: `ProductGrid`
+"2 kolom" is 2 columns at every width, breadcrumb tap targets, two unguarded hover-lifts, and the qty
+button at the 44 px borderline). **#21, #14, #13, #12 stay open**, each with a precise statement of what
+is actually left so the next reader does not re-audit from zero. Nothing was closed or commented on —
+the repo is public now, so the drafts wait for the owner.
+
+Two things the audit marked "unverified" rather than guessed, both invisible from the repo: whether the
+two Cloudflare Cache Rules in `CLOUDFLARE-PERF.md` §2 exist in the zone, and whether
+`ops/tokophi-probe.sh` is installed in any host's cron.
+
+**🔴 And it surfaced a real defect, confirmed from the vendor's own schema.** Issue #12's 2026-07-20
+suspicion — *"`TOKOPHI-<ref>` may exceed max:20"* — is now measured, not suspected:
+
+| endpoint | field | constraint |
+|---|---|---|
+| `v6.2/request_pickup` | `packages[].order_id` | **no `maxLength`** |
+| `tracking` | `order_id` | **`maxLength: 20`** |
+
+**A booking is accepted with an id tracking says it will not take.** With a REAL production order number
+(`PHI-768771328ISC`, 16 chars), `shipping.ts:814` builds the reference and `kiriminaja.ts` prefixes it:
+**28 characters** with the configured prefix `5758`, **31** with the code's `TOKOPHI` fallback. The limit
+is 20 — over by 8 and 11.
+
+This is the strongest available explanation for *"`awbFilled` has only ever been 0"*: the poller asks
+tracking for an id longer than tracking accepts. It cannot be fully separated from "no production
+booking has ever been made" until one is — but the arithmetic no longer needs a booking to be believed.
+Filed as **Task 8.20**, with an explicit ⚠️ **do not truncate at send time**: an id the vendor stores
+truncated is an id we can never look up again. Shorten the CONSTRUCTION and guard the total.
