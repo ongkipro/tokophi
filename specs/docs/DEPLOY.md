@@ -78,6 +78,41 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
     - **Module-scope `process.env` reads get baked at build time** (when the var is unset) for app-local server code → `ADMIN_URL` was frozen to `localhost:3000`. Read env **inside the function** at request time (workspace-package reads like the KiriminAja key are runtime, hence unaffected).
     - **Node-runtime `req.url` behind Traefik = the internal `http://localhost:3000`.** `NextResponse.redirect(new URL("/x", req.url))` leaks that host. Use a **relative `Location`** header (`new NextResponse(null, {status:307, headers:{Location:"/x"}})`) so the browser resolves against the real origin. (Middleware/edge already returns relative.)
 
+## 🟢 Merge ke `main` yang TIDAK men-deploy — itu `watch_paths`, bukan webhook yang hilang
+
+Ditemukan 2026-09-09 08:19 UTC, setelah salah didiagnosis sebagai kegagalan webhook. **Aplikasi Coolify id `1` punya**
+
+```
+watch_paths = !**/*.md
+```
+
+**Commit yang hanya menyentuh berkas `.md` sengaja tidak memicu deploy.** Contoh terukur: PR #384
+(`d06f032`, hanya `BUILD-LOG.md` + `TASKS.md` + `specs/docs/KIRIMINAJA.md`) — webhook datang dan
+diproses 7 detik setelah merge, tapi tidak ada build. Bandingkan PR #383 (`419eb60`, ada kode):
+
+```
+03:12:10  ProcessGithubPullRequestWebhook   →  ApplicationDeploymentJob   (deploy jalan)
+08:13:28  ProcessGithubPullRequestWebhook   →  (tidak ada job)            (docs-only, dilewati)
+```
+
+⚠️ **Konsekuensi yang harus diketahui sebelum panik.** Sesudah merge docs-only, produksi menjalankan
+commit LAMA dan itu benar — kodenya identik. Yang menyesatkan:
+
+- **`ops/check-deploy-currency.sh` menjawab `OK`** dan memang seharusnya begitu; header skripnya sendiri
+  menyatakan ia menangkap antrean macet dan **tidak** mengklaim menangkap "main bergerak tapi tak pernah
+  diantrekan". Di kasus ini tidak ada yang perlu ditangkap.
+- **Tidak ada webhook tingkat repo** (`gh api repos/ongkipro/tokophi/hooks` → `[]`). Itu normal: Coolify
+  terhubung sebagai **GitHub App** (`source_type = App\Models\GithubApp`), jadi webhooknya ada di App,
+  bukan di repo. Kosongnya daftar itu bukan bukti apa-apa.
+
+**Cara memastikan dalam satu perintah** — jangan menyimpulkan dari commit yang berjalan saja:
+
+```bash
+git diff --name-only <deployed> <main>     # semuanya .md?  → memang tidak akan deploy
+```
+
+Kalau ada berkas non-`.md` dan tetap tidak ada baris antrean setelah ~60 detik, barulah itu masalah.
+
 ## ⏱ Jendela 503 saat deploy — DIUKUR 2026-08-19: **15 menit → 81 detik**
 
 > **PEMBARUAN 2026-08-28 — jendela sekarang 7,0–8,3 detik per surface (−93 %), dan ini keputusan struktural:
