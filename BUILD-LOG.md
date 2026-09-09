@@ -3064,3 +3064,21 @@ that agent reported killing it. Identified as MINE before touching it (`/proc/<p
 → the private port I had assigned), then killed by PID — never `pkill`. Available memory 8,0 → 12,1 GB. Even then the
 four builds only completed when run ONE AT A TIME IN THE FOREGROUND: chained in the background they spike past the
 watchdog. **After a wave of browser agents, check `ss -ltnp` for leaked dev servers before running anything heavy.**
+
+## 2026-09-09 03:00 UTC — Main Session — CI caught what the local run structurally could not: a guard that lists via `git ls-files`
+
+**Symptom.** `npm run test:release` was green locally (161 files / 1369 tests) and CI on PR #383 failed with
+`env-census.test.ts`: *"classify these in lib/env-health.ts: VITEST"*.
+
+**Why the local run could not see it.** `env-census` enumerates through `trackedSources()` = `git ls-files`. The new
+`packages/lib/src/rate-limit-store.ts` was still UNTRACKED when I ran the gate, so the scan never opened it. The
+moment it was committed and pushed, CI's checkout listed it and the read was found. **Every guard in this repo that
+lists via `git ls-files` — the census, `password.test.ts`, `no-published-credentials.test.ts`, `session-cookie`,
+`store-slug`, `env-file` — is blind to a brand-new file until it is staged.** The mirror of the trap already recorded
+here (a tracked-but-DELETED file ENOENTs the same scans). Run them once after `git add`, not only before.
+
+**Fix.** `VITEST` joins `NOT_OPERATOR_SET` beside `TEST_DATABASE_URL`/`TEST_DB_REQUIRED` — the set for names a
+harness or platform sets and an operator can neither set nor act on. Classifying it in `env-health.ts` instead would
+put a test-runner flag on the operator's health screen, which that file's own comment says is how a census gets
+ignored. `rate-limit-store.ts` consults it to refuse the auto-resolved backend under test so an unrelated suite
+cannot write counter rows into the shared dev database. Census 6/6 green.

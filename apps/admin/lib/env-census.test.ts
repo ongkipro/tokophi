@@ -25,6 +25,10 @@ const NOT_OPERATOR_SET = new Set([
   "SEED_OWNER_PASSWORD",
   "DRY_RUN", // ops scripts
   "CHECK_BASE_URL", // storefront check harness
+  // Vitest sets this itself. `packages/lib/src/rate-limit-store.ts` consults it to refuse the
+  // auto-resolved backend under test, so a suite about something else cannot write counter rows into
+  // the SHARED dev database. An operator can neither set it nor act on it.
+  "VITEST",
 ]);
 
 // `trackedSources()` is the ONE lister; the prefixes below are this guard's scope and nothing else.
