@@ -3082,3 +3082,42 @@ harness or platform sets and an operator can neither set nor act on. Classifying
 put a test-runner flag on the operator's health screen, which that file's own comment says is how a census gets
 ignored. `rate-limit-store.ts` consults it to refuse the auto-resolved backend under test so an unrelated suite
 cannot write counter rows into the shared dev database. Census 6/6 green.
+
+## 2026-09-09 03:18 UTC — Main Session — READ THE VENDOR'S v6.2 SPEC: three confirmations, one grace period, three tasks
+
+**Why it had never been read.** `developer.kiriminaja.com/docs` is client-rendered — fetching it returns a title and
+nothing else, which is why every previous pass here worked from prose and from driving the sandbox. The sitemap names
+the real artefact: **`/docs/openapi/json` — OpenAPI 3.1.0, `info.version 6.2.0`, ~199 KB, 25 paths.** It can be
+diffed, so from now on it is the contract of record; `specs/docs/KIRIMINAJA.md` carries the URL and the retrieval date.
+
+**It CONFIRMS three things this repo shipped on measurement alone.**
+1. **Task 5.1's one stated assumption is now documented.** The reconciler maps tracking `300`/`302` → voided; the
+   vendor's status table says **`300` Canceled by client** (listed under *Final State*) and **`302` Pickup canceled by
+   seller**. That shipped four hours earlier explicitly labelled ASSUMED because nobody had driven a real cancel to
+   completion. The label is now wrong in our favour — corrected in `TASKS.md`.
+2. **`cancel_shipment` takes the AWB, reason 5–200 chars, and a non-COD void is queued up to 48 h** with
+   `data.success: "pending"` / *"Paket akan dibatalkan dalam 2x24jam"* — exactly the N34 rule and exactly what
+   `cancelShipment` implements.
+3. **`v6.1/shipping_price` is CURRENT, not stale — there is no v6.2 rate endpoint.** Worth stating plainly, because
+   "we are on v6.1 while v6.2 exists" reads like debt and is not.
+
+**One grace period, measured not guessed.** `v6.2/request_pickup` marks nine fields REQUIRED that `kaCreateOrder`
+omits or sends conditionally: sender `zipcode`/`latitude`/`longitude`/`kelurahan_id`, and per package
+`destination_zipcode`/`destination_kelurahan_id`/`destination_latitude`/`destination_longitude`/`items`. Bookings
+succeed anyway (sandbox, 2026-08-20, `5758-…`), so the server is lenient TODAY. ⚠️ **The coordinates are not merely
+unsent — we do not have them**: `op === "instant"` was removed and its own note records it was the only consumer of
+shopper/store coordinates, so nothing geocodes anything. Filed as **Task 8.14**, with an explicit "never send zeroes".
+
+**Two endpoints that close open questions.**
+- **`POST /api/mitra/set_callback`** — the missing half of **N39**. Our receiver shipped 2026-08-24 and nothing in
+  this repo has ever registered its URL; no log records a manual registration either, so the poller may be doing all
+  the work. ⚠️ **One callback URL per account, and a new registration REPLACES the previous one** — so this is a
+  shared-resource write, filed as **Task 8.15** with an audit line and a warning in the confirm dialog.
+- **`credit/balance` + `pin/validate`** (both v6.2) — the spec pairs them with pickup. Today a booking refused for an
+  empty aggregator balance is indistinguishable from any other refusal. Filed as **Task 8.16**.
+
+**Also recorded:** `/api/mitra/tracking` is throttled and may answer **429** (our poller's batch of 100 stays as it
+is); the webhook contract states *"use `awb` and `order_id` together for idempotency"* and *"`problem_packages` is
+not terminal"*; the status table gives eight codes we do not map yet (`301`, `310`, `311`, `333`, `400`, `500`,
+`152`, `210`/`211`). ⚠️ **The official SDKs are BEHIND the spec** — `kiriminaja/rust` on `main` still calls
+`v6.1/request_pickup`. Do not treat an SDK as the contract.

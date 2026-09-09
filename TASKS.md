@@ -687,6 +687,33 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
 - **Done when:** The ADR exists and `DEPLOY.md` states the expected deploy window as a number with its source.
 - **Status:** `[x]` **DONE 2026-09-09 (record written; the two absolute-zero levers stay undecided by design)** — `specs/decisions/0017-zero-downtime-deploy.md` (0016 is reserved for the buyer-account decision, Task 5.8): context = the TWO different 503 causes with their measurements (seed chain on the critical path: 15 min → 81 s, 2026-08-19; Coolify full-stack teardown + serial `depends_on: migrate` + Traefik retry that cannot bridge an empty pool: 81–115 s → 7,0–8,3 s, 2026-08-28), decision = the three structural changes actually taken with their commits, consequences incl. the ~10 s pre-migration schema window, evidence table by deploy id, §5 the residual and the three ~0 s options NOT decided (all outside the repo). Named the false claim in the history ("build with containers already down", refuted on `#281`). `DEPLOY.md` deploy-window section now carries the 2026-08-28 numbers + both off-repo levers; `SLA-DRP.md` §4 gained the routine-deploy RTO row (≈ 5,3 min/month); `DECISIONS.md` index + next-free-number corrected.
 
+### Task 8.14: Send the Fields `v6.2/request_pickup` Documents as Required
+- **Tracing:** vendor OpenAPI 3.1 `info.version 6.2.0`, read 2026-09-09 (`specs/docs/KIRIMINAJA.md`)
+- **Target Files:** `packages/lib/src/kiriminaja.ts`, `apps/admin/lib/actions/shipping.ts`, `packages/db/src/schema.ts` (coordinates), `apps/admin/app/(admin)/pengaturan/**`
+- **Change:**
+  1. The spec marks these REQUIRED and `kaCreateOrder` omits them or sends them conditionally: sender `zipcode`, `latitude`, `longitude`, `kelurahan_id`; per package `destination_zipcode`, `destination_kelurahan_id`, `destination_latitude`, `destination_longitude`, `items`. Sandbox bookings succeed anyway (measured 2026-08-20), so the server is lenient TODAY — a grace period, not a contract.
+  2. Send what we HAVE unconditionally: the kelurahan ids and both zipcodes already exist on the order and on `store_settings` (the shopper's kodepos has been required since 2026-08-03), and `items` can be built from `order_line_items`.
+  3. ⚠️ **The coordinates are a data-model change, not a client edit** — `op === "instant"` was removed and its own note records it was the only consumer of shopper/store coordinates, so nothing geocodes anything today. Decide: geocode the seller's pickup address once at Pengaturan → Alamat and the shopper's district centroid at order time, or ask the vendor whether they are truly required for a `drop: false` pickup. **Never send zeroes** — a courier would route on them.
+- **Done when:** a booking sends every documented-required field it can honestly produce; the remaining gaps are named in `KIRIMINAJA.md` with the vendor's answer; `kiriminaja-v62.test.ts` pins the payload shape.
+- **Status:** `[ ]` **OPEN** (found 2026-09-09 by diffing the vendor spec against `kaCreateOrder`; nothing is broken today, this is the grace period).
+
+### Task 8.15: Register the Webhook with `set_callback` — the Missing Half of N39
+- **Tracing:** N39; vendor OpenAPI `POST /api/mitra/set_callback`
+- **Target Files:** `packages/lib/src/kiriminaja.ts`, `apps/super-admin/lib/actions.ts`, `apps/super-admin/app/(platform)/pengaturan/**`
+- **Change:**
+  1. The receiver `apps/admin/app/api/public/kiriminaja/webhook` shipped 2026-08-24, but nothing in this repo has ever REGISTERED its URL with the vendor and no log records a manual registration — so the poller is doing all the work and the webhook may never have fired.
+  2. Add `kaSetCallback(url)` and an OWNER-rank Super Admin action that calls it, showing the URL it registered and the vendor's answer.
+  3. ⚠️ **The spec says ONE callback URL per account and a new registration REPLACES the previous one**, and asks to be notified before a change. So this button can silently take the webhook away from whatever is registered now: read the current value first if the vendor exposes it, log the old and new URL to `platform_activity`, and put the warning in the confirm dialog.
+- **Done when:** the registered URL is visible in Super Admin, changing it is audited, and one real vendor callback is observed hitting the receiver.
+- **Status:** `[ ]` **OPEN** (found 2026-09-09).
+
+### Task 8.16: Use `pin/validate` + `credit/balance` So a Failed Booking Says Why
+- **Tracing:** vendor OpenAPI `GET /api/mitra/v6.2/credit/balance`, `POST /api/mitra/v6.2/pin/validate`
+- **Target Files:** `packages/lib/src/kiriminaja.ts`, `apps/admin/lib/actions/shipping.ts`, `apps/super-admin` (balance surface)
+- **Change:** the spec pairs both with pickup — validate the PIN and confirm the balance covers the shipping cost before booking, and `request_pickup` accepts optional `pin`/`payment_method`. We send neither, so a booking refused for an empty aggregator balance is indistinguishable from any other refusal, on a screen that tells the merchant to try again. Surface the platform balance in Super Admin beside the KiriminAja probe (Task 8.3), and name insufficient balance as its own error at the booking path.
+- **Done when:** an insufficient-balance refusal is reported as such to the operator, and the balance is visible before it runs out.
+- **Status:** `[ ]` **OPEN** (found 2026-09-09).
+
 ### Task 8.12: Remove the `shipping_aggregator.enabled` Status Light, or Enforce It
 - **Tracing:** browser verification 2026-09-08 (observation beside Task 8.3)
 - **Target Files:** `apps/super-admin/app/(platform)/pengaturan/pengaturan-client.tsx`, `packages/db/src/seed.ts`
