@@ -354,15 +354,31 @@ terminal; wait for a later finished event"**.
 The endpoint list was read earlier the same day; this is the PROSE, which is where the operational
 rules live. Re-downloaded and byte-identical, so the two passes describe one artefact.
 
-### 🔴 The docs never mention the IP allow-list that is currently blocking us
+### ✅ RESOLVED 2026-09-09 ~17:00 WIB — but the docs still never mention the IP allow-list
+
+**Outcome first:** the allow-list took effect and production prices shipping again. Measured at 17:06:
+`/api/mitra/province` → `200`, 37 provinces; the public `op:"rates"` path → 4 rates, COD true, origin
+resolved to the seller's real pickup district; a Chromium drive of the live checkout showed the order
+total move from Rp110.000 to **Rp125.400** (goods + Rp15.400 ongkir), 0 console errors.
+
+⚠️ **BOTH keys pass now — the old 64-char one and the new `v4.local.` one.** So the fix was the IP entry
+on the account, not the credential, and **no key swap was needed**. Production was never redeployed: the
+running container already held the working key. Whoever reads this next should not assume a new key is
+part of the remedy.
+
+⏱ **It is not instant.** The dashboard showed the key active at 16:16 with the IP already listed, and
+the API still refused at 16:42. It began answering between 16:42 and 17:06 — roughly **30–50 minutes**
+after the entry looked correct on screen. Do not conclude the whitelist is broken from one probe.
+
+### The docs never mention the IP allow-list at all
 
 `## Environments`, `## Authentication` and `## Rate Limits` describe base URLs, the Bearer header and
 429s. **Nothing anywhere in 18 KB of prose says an API key is bound to an IP address**, yet the sandbox
 enforces exactly that (`401 "Your IP address <ip> were not allowed to access this API. #1"`). Measured
 2026-09-09 from two different networks: the message always names the CALLER's address, and a garbage
 key answers `"Unauthorized."` instead — so the key authenticates first and the IP check runs after it.
-Treat the allow-list as an undocumented, vendor-side gate: it cannot be reasoned about from the docs
-and it must be confirmed with support.
+Treat the allow-list as an undocumented, vendor-side gate: it cannot be reasoned about from the docs,
+it is applied with a delay of tens of minutes, and only a live probe proves it.
 
 ⚠️ The prose also says a sandbox key comes from **`https://sandbox.kiriminaja.com`** (register → wait
 for approval → *Integrasi*). **That host does not resolve in DNS** (checked 2026-09-09), while

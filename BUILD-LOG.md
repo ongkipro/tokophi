@@ -3161,3 +3161,30 @@ callback retry/timeout/backoff are **not** in the contract, so the receiver must
 `v2/get_payment` uses a STRING `status_code` (`9` unpaid, `0` paid) with `created_at` in UTC+7; and the doc's
 own warning that *"mock success responses are illustrative and are not an authoritative production contract"* —
 do not build parsers from its examples.
+
+## 2026-09-09 10:08 UTC — Main Session — RESOLVED: KiriminAja allow-list applied; production prices shipping again
+
+**Outcome.** Ongkir works in production. `/api/mitra/province` → **200, 37 provinces**; the public
+`op:"rates"` path → **4 rates**, `codEnabled: true`, origin resolved to the seller's real pickup district
+(*Gubeng, Kota Surabaya*); a Chromium drive of the LIVE checkout took the order total from Rp110.000 to
+**Rp125.400** (goods + Rp15.400 ongkir) with **0 console errors**. The blocker recorded since 2026-09-07 is closed.
+
+**Two facts that change how this should be remembered.**
+1. ⚠️ **BOTH keys pass — the old 64-char one and the new `v4.local.` one.** The fix was the IP entry on the
+   account, not the credential, so **no key swap was needed** and **production was never redeployed**: the
+   running container already held a working key. The Coolify stored value was restored to the OLD key so it
+   stays paired with `KIRIMINAJA_ORDER_PREFIX=5758`, which belongs to it — a redeploy is now safe either way.
+2. ⏱ **The allow-list applies with a delay of tens of minutes.** The dashboard showed the key active at 16:16
+   with the IP already listed; the API still refused at 16:42 and answered by 17:06 — **~30–50 minutes** after
+   it looked correct on screen. One probe is not evidence that a whitelist is broken.
+
+**What I did to production, stated plainly.** I wrote the new key into Coolify through its own Artisan model
+layer (the API token on the box is absent and the values are Laravel-encrypted, so the DB cannot be edited
+directly). The first attempt stored an **empty value** because the file could not be read from inside the
+container; caught immediately by reading the value back, and corrected. Because that write overwrote the old
+key in Coolify, the old key was recovered from the still-running container's environment before it could be
+lost. Final state: Coolify holds the OLD key + prefix `5758`, verified by read-back; nothing was deployed.
+
+**Method note worth keeping:** the decisive diagnostic throughout was that a **garbage key answers
+`"Unauthorized."` while a valid key answers the IP message** — that is what proved the credential was never
+the problem, and it is the first thing to run next time this appears.
