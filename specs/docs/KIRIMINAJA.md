@@ -272,3 +272,79 @@ and the doc omits the village field it actually has. Field-by-field evidence:
    Also measured: a nonexistent destination id gets v6.2's **generic** create error instead of
    v6.1's specific *"Tujuan pengiriman … doesn't exists"* — the seller-facing message for a bad
    destination is less useful now, and that is the vendor's, not ours.
+
+## The vendor publishes a machine-readable spec — read THAT, not the SPA (found 2026-09-09)
+
+`https://developer.kiriminaja.com/docs` is a client-rendered page: fetching it returns a title and
+nothing else, which is why previous passes here worked from prose and measurement. The sitemap names
+the real source:
+
+```
+https://developer.kiriminaja.com/docs/openapi/json     # OpenAPI 3.1.0, info.version 6.2.0, ~199 KB
+```
+
+Retrieved 2026-09-09. **25 documented paths.** Check it against the client before assuming drift; it is the
+only vendor artefact here that can be diffed.
+
+### What the spec CONFIRMS about what we already shipped
+
+| our code | the spec says | verdict |
+|---|---|---|
+| `v6.2/request_pickup` (migrated 2026-08-20, N40) | documented, and it is the newest pickup path | current |
+| `v6.1/shipping_price` | **there is no v6.2 rate endpoint** — v6.1 IS the current one | current, not stale |
+| `v3/cancel_shipment` takes the **AWB**, reason 5–200 chars | *"using its AWB, not the merchant order ID"*, *"The reason must contain 5 to 200 characters"* | confirmed |
+| a non-COD void is queued, `status:true` ≠ cancelled | *"COD packages are canceled immediately. Non-COD packages may remain pending for up to 48 hours"*, example `data.success: "pending"`, text *"Paket akan dibatalkan dalam 2x24jam"* | confirmed |
+| Task 5.1's reconciler maps tracking **300/302 → voided** | the status table: **`300` Canceled by client**, **`302` Pickup canceled by seller** (`300` is listed under *Final State*) | **the ASSUMPTION IS NOW DOCUMENTED** — 5.1 shipped calling this an assumption because nobody had driven a real cancel to completion; the vendor's own table says it |
+| `/api/mitra/tracking` | *"This endpoint is throttled and may return `429 Too Many Requests`"* | our poller must keep its batch of 100 — do not widen it |
+
+Other codes the table gives, none of which we map yet: `301` recipient refused · `310`/`311` recipient
+disputes or will not pay · `333` destroyed by courier · `400` successfully returned · `500` package has
+issues · `152` re-delivery · `210`/`211` SOP violation.
+
+### What the spec says we are NOT sending — and we book successfully anyway
+
+`v6.2/request_pickup` marks these **required**, and `kaCreateOrder` omits them or sends them
+conditionally. Sandbox bookings succeed regardless (measured 2026-08-20, `5758-…`), so the server is
+lenient TODAY — that is a grace period, not a contract.
+
+| field | ours |
+|---|---|
+| `zipcode` (sender) | absent |
+| `latitude`, `longitude` (sender) | absent |
+| `kelurahan_id` (sender) | conditional |
+| `destination_zipcode` | conditional |
+| `destination_kelurahan_id` | conditional |
+| `destination_latitude`, `destination_longitude` | absent |
+| `items` (per package) | absent |
+
+⚠️ **The coordinates are not merely unsent — we do not HAVE them.** `op === "instant"` was removed and
+its own note records that it *"was the only consumer of shopper/store coordinates"*. Supplying them is
+a data-model change (a geocode on the seller's pickup address and on the shopper's), not a client edit.
+Tracked as a task; do not "fix" it by sending zeroes, which is a lie the courier would route on.
+
+### Endpoints the spec documents that we do not use
+
+- **`POST /api/mitra/set_callback`** — *"Registers or replaces the account webhook callback URL… Only
+  one callback URL is supported per account. A new registration replaces the previous URL."* This is
+  the missing half of N39: the receiver `api/public/kiriminaja/webhook` shipped 2026-08-24, but nothing
+  in this repo has ever REGISTERED it, and no log records a manual registration. One URL per account
+  is a shared-resource fact worth knowing before anyone calls it.
+- **`GET /api/mitra/v6.2/credit/balance`** and **`POST /api/mitra/v6.2/pin/validate`** — the spec pairs
+  them with pickup: validate the PIN and confirm the balance covers the shipping cost before booking.
+  `request_pickup` accepts optional `pin` and `payment_method`. We send neither, and a booking that
+  fails for insufficient balance is currently indistinguishable from any other refusal.
+- `v6.1/awb/print`, `v6.1/addresses`, `v2/schedules`, `v2/get_payment`, `v3/set_whitelist_services`,
+  `couriers`, `courier_services`, `couriers_group`, `city`/`kecamatan`/`kelurahan`,
+  `calculations/cod`, and the whole `v4/instant/*` family (deliberately removed — TokoΦ ships regular
+  expedition only).
+
+### The webhook contract, in the vendor's own words
+
+Two events: **`expressShipmentEvent`** (*"Sent when an express package is processed, shipped, canceled,
+delivered, returned, or encounters a delivery problem"*) and `instantShipmentEvent`. Payload fields:
+`method`, `data`, `payment`, `packages`. Two rules stated there that our receiver should be checked
+against: **"Use `awb` and `order_id` together for idempotency"**, and **"`problem_packages` is not
+terminal; wait for a later finished event"**.
+
+⚠️ The official SDKs are BEHIND the spec: `kiriminaja/rust` (main) still calls
+`/api/mitra/v6.1/request_pickup`. Do not treat an SDK as the contract.
