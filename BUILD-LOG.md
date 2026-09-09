@@ -3121,3 +3121,34 @@ is); the webhook contract states *"use `awb` and `order_id` together for idempot
 not terminal"*; the status table gives eight codes we do not map yet (`301`, `310`, `311`, `333`, `400`, `500`,
 `152`, `210`/`211`). ⚠️ **The official SDKs are BEHIND the spec** — `kiriminaja/rust` on `main` still calls
 `v6.1/request_pickup`. Do not treat an SDK as the contract.
+
+## 2026-09-09 08:19 UTC — Main Session — CORRECTION: a docs-only merge does not deploy, by configuration
+
+**What I reported first, and it was wrong.** After merging PR #384 (`d06f032`) I found no deployment row
+for it and called it "an anomaly", suspecting a missed webhook. It is not an anomaly. Coolify application
+id `1` carries **`watch_paths = !**/*.md`**, so a commit touching only Markdown is deliberately skipped.
+PR #384 changed exactly three files, all `.md`.
+
+**The evidence, which distinguishes the two cases cleanly** (`docker logs coolify`):
+
+```
+03:12:10  ProcessGithubPullRequestWebhook  →  ApplicationDeploymentJob   (#383, carried code)
+08:13:28  ProcessGithubPullRequestWebhook  →  (no job)                   (#384, docs-only)
+```
+
+The webhook ARRIVED and was processed 7 seconds after the merge, both times. Only the deploy decision
+differs, and it is correct: rebuilding four containers for a documentation edit buys nothing.
+
+**Two things that made this easy to misread, now written into `DEPLOY.md`:**
+1. `ops/check-deploy-currency.sh` answers `OK` here — rightly. Its own header says it catches a WEDGED
+   queue and explicitly does **not** claim to catch "main moved but nothing was ever queued". In this case
+   there was nothing to catch.
+2. `gh api repos/ongkipro/tokophi/hooks` returns `[]`. That is normal and proves nothing: Coolify is
+   connected as a **GitHub App** (`source_type = App\Models\GithubApp`), so the webhook lives on the App.
+
+**The one-command check before concluding anything:** `git diff --name-only <deployed> <main>`. All `.md`
+⇒ no deploy is expected. A non-`.md` file with no queue row after ~60 s ⇒ then it is a real problem.
+
+⚠️ Also fixed in my own tooling: the watch I armed for that deploy broke on ANY terminal status, so it
+matched the PREVIOUS deploy's `finished` row and exited immediately, reporting success for a deploy that
+had never started. A deploy watch must match the COMMIT it is waiting for.
