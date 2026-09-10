@@ -1,8 +1,8 @@
 # Status — tokophi
 
-Updated: 2026-09-08
+Updated: 2026-09-11
 Status: Active
-State: SMOKE_TESTING
+State: VERIFIED
 Review-Risk: R2
 Independent-Review: PENDING
 Primary-Worker: Main Session (Claude)
@@ -11,9 +11,9 @@ Independent-Review-Head: UNSET
 
 > **This file is a thin pointer, not a second status document.** The detailed, dated status
 > (what is real / seeded / fake, test boundaries, release blockers) lives in
-> [`specs/docs/STATUS.md`](specs/docs/STATUS.md). The execution queues are root
-> [`TASKS.md`](TASKS.md) (audit-remediation stages) and [`specs/docs/TASKS.md`](specs/docs/TASKS.md)
-> (the product breakdown the AGENTS.md protocol names). The execution log is
+> [`specs/docs/STATUS.md`](specs/docs/STATUS.md). The one execution queue is root
+> [`TASKS.md`](TASKS.md); [`specs/docs/TASKS.md`](specs/docs/TASKS.md) is the historical epic ledger
+> (evidence, not a queue — `specs/README.md` authority table). The execution log is
 > [`BUILD-LOG.md`](BUILD-LOG.md). If this file and those disagree, those win — fix this one.
 
 ## Delivery state machine
@@ -32,49 +32,54 @@ Use `BLOCKED` only as an interruption state. Record the blocker and exact state 
 
 **The product is LIVE and has been since 2026-07-13** (`tokophi.com` landing · `app.` Seller panel ·
 `rich.` Super Admin · `<slug>.tokophi.id` storefronts). One Vultr box (`volumdev`, 45.77.33.112)
-running Coolify + `docker-compose.coolify.yml`; Postgres 16 with **106 migrations (`0000`–`0105`)**
-and **82 tables** (counted from `packages/db/drizzle/meta/_journal.json` and `schema.ts`,
-2026-09-08); RLS verified `54/55` store-scoped tables (`npm run verify-rls -w @tokophi/db`,
-2026-09-08). Shape of the system: `ARCHITECTURE.md`.
+running Coolify + `docker-compose.coolify.yml`; Postgres 16 with **109 migrations (`0000`–`0108`)**
+and **83 tables** (counted from `packages/db/drizzle/meta/_journal.json` and `schema.ts`,
+2026-09-11 — the count is guarded by `packages/db/src/doc-counts.test.ts`); RLS verified `54/55`
+store-scoped tables (`npm run verify-rls -w @tokophi/db`, 2026-09-11). Shape of the system:
+`ARCHITECTURE.md`.
 
-**Why `SMOKE_TESTING` and not `VERIFIED`:** the latest release (`4b0f4c8`, PR #381, merged
-2026-09-04 03:37 UTC) is on `main`, and production was smoke-tested on 2026-09-07 after the outage
-below — four hosts 200/307, checkout address cascade driven in Chromium with 0 console errors — but
-the shipping-rate probe FAILS (see Blockers), so no order can complete and `VERIFIED` is unreachable.
-Which commit production is actually serving was not re-read after the outage; run
-`ops/check-deploy-currency.sh` on the box (BUILD-LOG has no deploy number for #380/#381 — the last
-logged verified deploy is 528, PR #378, 2026-09-03).
+**Release on production: `98f1d5a` (PR #390, Coolify deploy 536, `finished` 2026-09-10 16:46 UTC)** on
+base `fca0a2e` (PR #389, deploy 535). Both deploys were matched by COMMIT in
+`application_deployment_queues`, and the data they carried was read back from the production
+database (migration stamp `1787545291751`; 74 017 courier village ids; VA fee 3000 in the live checkout
+HTML and the running admin bundle) — `RELEASE.md`, BUILD-LOG 2026-09-10.
+
+**Why `VERIFIED`:** every configured probe in `OBSERVABILITY.md` was run off-box on 2026-09-11 —
+landing 200 · app 307 · rich 307 · storefront-demo 200 · `ongkir-search` 200 with "Kota Semarang" ·
+`ongkir-rates` → PASS — 4 rates cod=2 originFrom=pickup sample=jne:REG23 Rp16000.
+All green, so the state machine's condition for VERIFIED is met.
+⚠️ **VERIFIED does not mean production is on the courier's PRODUCTION endpoint.** `KIRIMINAJA_ENV`
+is `sandbox` on both admin and storefront (measured 2026-09-10), so every live ongkir is a sandbox
+figure and no parcel is really booked — that is Task 8.9 (one authorised production booking, owner),
+the substance of issue #5, and it is not a probe failure: the sandbox answers correctly.
 
 ## Active work
 
-Branch `feat/sweep-0907` (page-map report follow-ups; this file's rewrite is finding RH-2). Ordered
-queue: `specs/docs/tasks/OPEN.md` → `NEXT.md`; stages in root `TASKS.md`.
+Open PRs, CI green, awaiting the owner's merge order: **#391** (ADR 0004 — no provider brand in any
+merchant/shopper string, guarded) · **#392** (payment-advice reconciliation cron, observe-only, plus
+three latent AutoLaris defects). Queue: root `TASKS.md` Stage 8; navigation handoff
+`specs/docs/tasks/OPEN.md`. The remaining open items are owner-gated (8.9 first production booking,
+8.4 offsite backup credentials, 8.1 alert channel, 8.5 branch pruning, 5.8 buyer accounts).
 
 ## Blockers
 
-- **OPEN — owner action, not code:** KiriminAja sandbox IP allow-list refuses `45.77.33.112`
-  (`401 "Your IP address … were not allowed"` from inside the admin container, BUILD-LOG
-  2026-09-07 11:53 UTC). Consequence: `/api/public/ongkir` rates → `SHIPPING_QUOTE_UNAVAILABLE` →
-  no ongkir → no COD → **no order can be placed**. Fix: re-add the IP on the KiriminAja dashboard,
-  then Super Admin → Pengaturan → "Tes koneksi KiriminAja". Resume at `SMOKE_TESTING` and re-run
-  the `ongkir-rates` probe in `OBSERVABILITY.md`.
-- **RESOLVED 2026-09-07:** production VPS suspended by Vultr for billing, 2026-09-04 20:27 WIB →
-  2026-09-07 18:47 WIB (~70 h 20 min). Owner topped up; auto-resumed; 18 containers healthy within
-  ~2 min. No orders were lost (`orders_since_sep1 = 0`); nothing could have been placed either.
-  Nothing external noticed for 70 hours — recorded as the gap in `OBSERVABILITY.md`.
+- **None that code can move.** The 2026-09-07 allow-list blocker is **RESOLVED** (owner re-added the
+  IP 2026-09-09; rates verified live the same day and again today).
+- **Owner-gated, not blocking the state machine:** production still on the courier sandbox (Task 8.9);
+  no external uptime monitor / pager and no offsite backup credential (Tasks 8.1, 8.4 — the 70-hour
+  outage of 2026-09-04→07 is why they matter; `OBSERVABILITY.md` "The gap").
 
 ## Verification evidence
 
-- `npm run verify-rls -w @tokophi/db` → `RLS verified` (12/12 checks), 2026-09-08, local dev DB.
-- `node scripts/gen-page-map.mjs --check` → fresh (BUILD-LOG 2026-09-04 09:55 UTC).
-- `npx vitest run` 2026-09-08 on this worktree: **141/142 files, 1152/1153 tests**. The one red is
-  `test/page-map-fresh.test.ts` — `PAGE_MAP.md` is stale against *uncommitted* page edits by a
-  parallel stream on this branch, not against HEAD (`4b0f4c8` was fresh per BUILD-LOG 2026-09-04);
-  it clears when that stream runs `node scripts/gen-page-map.mjs`. Dated boundaries:
-  `specs/docs/STATUS.md`.
-- Production smoke 2026-09-07: hosts 200/307 + checkout cascade OK, rates FAIL (BUILD-LOG).
+- Release gate on the two merged PRs and the two open ones: lint 0 · `verify:guards` 0 · `test:release`
+  up to **171 files / 1 494 tests** · RLS verified · storefront `verify` 8/8 (BUILD-LOG 2026-09-10/11).
+- Production read-backs after deploy 535/536: BUILD-LOG 2026-09-10 16:40 UTC.
+- Off-box probes 2026-09-11 (this file's "Why" paragraph); `ops/tokophi-probe.sh` is the same set and
+  still runs on **no** machine on a schedule (Task 8.1).
+- Doc authority: `node scripts/verify-doc-authority.mjs` → ok (8 documents, one queue).
 
 ## Next verified action
 
-Owner restores the KiriminAja allow-list → run `ops/tokophi-probe.sh` off-box + the rates probe →
-confirm `running=<4b0f4c8>` via `ops/check-deploy-currency.sh` → transition `State` to `VERIFIED`.
+Owner merges #391/#392 (CI green) → Coolify deploy → re-run the probes above + confirm the seventh
+cron sidecar reports on Super Admin → Analitik → Sistem → rewrite `RELEASE.md` header with
+`Base: 98f1d5a…`. Then Task 8.9: one real production booking flips `KIRIMINAJA_ENV` off sandbox.

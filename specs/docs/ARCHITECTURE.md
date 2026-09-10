@@ -1,5 +1,15 @@
 # TokoΦ — Architecture
 
+> **Dated design document (last substantive revision 2026-07-29).** It still says "three surfaces"
+> (there are four — `apps/landing`), calls the backend "in progress" (it has been live on Postgres +
+> RLS since July), and predates the cron sidecars, the two-pool RLS runtime (`db` owner / `appDb`
+> restricted), custom domains, the ledger, courier village ids and the payment-advice loop. **For what
+> the code does today read the record: repository-root [`ARCHITECTURE.md`](../../ARCHITECTURE.md)**
+> (one screen, every count read off disk, updated 2026-09-11) and [`SYSTEM_MAP.md`](SYSTEM_MAP.md)
+> for the cross-surface edges. This file keeps the *rationale* behind the shape — the data-layer
+> seam, shared-source pattern, determinism, tenancy model — which has not changed. Where the two
+> disagree, the record wins, and the disagreement is a bug to fix here.
+
 > Authoritative architecture doc. Companion to [`../PRD.md`](../PRD.md) (product), [`GUIDE.md`](GUIDE.md) (how to build/contribute), [`UML.md`](UML.md) (detailed diagrams), [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md) (DB). Describes how the three surfaces are built, the shared **local-Postgres backend fully wired behind the data layer** (all three surfaces live on it — ADR 0007), and the **per-client topology** (ADR 0008, **amended by [ADR 0009](../decisions/0009-self-serve-store-builder.md)**: storefront is SSR multi-tenant + self-serve store builder, not per-client hand-built static).
 
 ---

@@ -1,11 +1,11 @@
 # Architecture — tokophi
 
-Updated: 2026-09-08
+Updated: 2026-09-11
 Expected stack: Existing repository — npm-workspaces monorepo: Next.js (admin, super-admin) + Astro SSR (storefront) + static Astro (landing) over PostgreSQL 16 / Drizzle
 
 > **This is the RECORD of what is built, not the design.** It is a one-screen index; every section
 > points at the document that owns the detail. Design and rationale: `specs/docs/ARCHITECTURE.md`,
-> `specs/PRD.md`, `specs/decisions/`. Every count below was read off disk on 2026-09-08 (the
+> `specs/PRD.md`, `specs/decisions/`. Every count below was read off disk on 2026-09-11 (the
 > command is named beside it); re-derive, never copy.
 
 ## Selected capabilities
@@ -27,8 +27,9 @@ password mint, KiriminAja/AutoLaris clients), `packages/db`. Route-level map of 
 **`specs/docs/PAGE_MAP.md`** (generated, `node scripts/gen-page-map.mjs`); concern-level map:
 `specs/docs/CODE_MAP.md`, `specs/docs/SYSTEM_MAP.md`.
 
-**Data layer.** `packages/db/src/schema.ts` → **82 `pgTable`s**; `drizzle/meta/_journal.json` →
-**106 migrations, `0000_familiar_sugar_man` … `0105_roles_advertiser_cs`**. Money is `bigint` IDR.
+**Data layer.** `packages/db/src/schema.ts` → **83 `pgTable`s**; `drizzle/meta/_journal.json` →
+**109 migrations, `0000_familiar_sugar_man` … `0108_order_ship_kelurahan`** (⚠️ hand-written — `npm run
+generate` diffs against a snapshot frozen at `0095` and emits a batch-aborting migration; AGENTS.md). Money is `bigint` IDR.
 Two pools (`packages/db/src/client.ts`): `db` = owner (`DATABASE_URL`), `appDb` = restricted
 (`APP_DATABASE_URL`, role proved against `pg_roles` when `DATABASE_RUNTIME_ROLE=app`), and
 `withTenant()` / `withCurrentTenant()` (`apps/admin/lib/tenant.ts`) are `appDb`'s only callers — they
@@ -45,15 +46,22 @@ comes from `platform_admins` on every request, never the cookie; `platform-rank.
 `impersonation_grants` (migration 0098). Boundaries, rate limits, known gaps: **`specs/docs/SECURITY.md`**.
 
 **Providers (platform-managed, brands hidden from merchants — ADR 0004).** Shipping + COD:
-KiriminAja (`packages/lib/src/kiriminaja.ts`; `KIRIMINAJA_ENV` defaults to sandbox; quote =
-`apps/admin/lib/shipping-quote.ts`; COD decision = `apps/admin/lib/cod.ts`). Payments: AutoLaris
+KiriminAja (`packages/lib/src/kiriminaja.ts`; `KIRIMINAJA_ENV` defaults to sandbox **and production
+still runs sandbox** — every live ongkir is a sandbox figure until Task 8.9's first real booking; quote =
+`apps/admin/lib/shipping-quote.ts`; COD decision = `apps/admin/lib/cod.ts`; village ids in BOTH id
+spaces — Kemendagri `kelurahan.id` for postcodes, courier `kelurahan.ka_kelurahan_id` for bookings,
+74 017/78 764 filled by `packages/db/scripts/build-ka-kelurahan-ids.mjs`; contract notes
+`specs/docs/KIRIMINAJA.md`). Client-facing labels never name a provider: `@tokophi/lib/provider-label`
+(`TokoΦ Kirim` / `TokoΦ Bayar`), guarded repo-wide by `provider-label.test.ts`. Payments: AutoLaris
 (`packages/lib/src/autolaris.ts`, `pay-callback.ts`); fee schedule enforced at `/api/public/order`
 (`payment-fees.ts`). Money map: **`specs/docs/FINANCE.md`**. Flows: `specs/docs/FLOWS.md` §5, §8.
 
 **Deploy topology.** Cloudflare (proxied, Origin CA wildcard) → Coolify/Traefik on Vultr `volumdev`
 (45.77.33.112) → `docker-compose.coolify.yml` services: `postgres`, `migrate` (exits 0), `seed`,
-`admin`, `super-admin`, `storefront`, `landing`, sidecars `cron`, `cron-tracking`,
-`cron-tracking-events`, `cron-order-expiry`, `cron-domains`, `backup` (6-hourly `pg_dump`, keep 14 d),
+`admin`, `super-admin`, `storefront`, `landing`, **six** cron sidecars `cron` (billing), `cron-tracking`,
+`cron-tracking-events`, `cron-order-expiry`, `cron-domains`, `cron-payment-advice` (observe-only
+reconciliation, PR #392) — each self-reports to `cron_runs` and is listed on Super Admin → Analitik →
+Sistem, census in `apps/admin/lib/cron-auth.test.ts`; `backup` (6-hourly `pg_dump`, keep 14 d),
 `backup-offsite` (rclone → R2, inert + unhealthy until credentialed). Runbook + every gotcha:
 **`specs/docs/DEPLOY.md`**; availability/DR: `specs/docs/SLA-DRP.md`.
 

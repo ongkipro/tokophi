@@ -1,6 +1,6 @@
 # Observability Contract — tokophi
 
-Updated: 2026-09-08
+Updated: 2026-09-11
 Status: REQUIRED
 
 Probe format:
@@ -29,7 +29,7 @@ are run by `ops/tokophi-probe.sh` (search) and by hand / Super Admin → Pengatu
 KiriminAja" (rates) and count as configured probes all the same:
 
 - `ongkir-search` — `POST https://app.tokophi.com/api/public/ongkir` body `{"op":"search","q":"Semarang"}` → 200 containing `Semarang` (proves Postgres).
-- `ongkir-rates` — `POST …/api/public/ongkir` body `{"op":"rates",…}` for a seeded route → 200 with a non-empty `rates` list, never `SHIPPING_QUOTE_UNAVAILABLE` (proves the courier API accepts our IP). **Red as of 2026-09-07.**
+- `ongkir-rates` — `POST …/api/public/ongkir` body `{"op":"rates","storeSlug":"<slug>","destinationId":<id>,"items":[{"handle","variant","qty"}],"itemValue":<idr>}` for a seeded route → 200 with a non-empty `rates` list, never `SHIPPING_QUOTE_UNAVAILABLE` (proves the courier API accepts our IP). Was red 2026-09-07 (allow-list); **green 2026-09-09 and again 2026-09-11** (4 rates cod=2 originFrom=pickup sample=jne:REG23 Rp16000). ⚠️ Green here proves the SANDBOX endpoint answers; production runs `KIRIMINAJA_ENV=sandbox` (Task 8.9).
 
 ## What actually exists (all of it verified by reading the file named)
 
@@ -41,6 +41,7 @@ KiriminAja" (rates) and count as configured probes all the same:
 | T-11 | `ops/check-deploy-currency.sh` — Coolify's own `application_deployment_queues` vs the running image tag | on the VPS | a wedged serial deploy queue: all hosts green on OLD code (2026-08-06) |
 | env | `GET /api/health/env` (`apps/admin/app/api/health/env/route.ts`) — names + presence of every required env var, **never a value**; gated on the `x-cron-secret` header (`lib/cron-auth.ts`), fails closed | one request after every deploy | a value saved in Coolify that never reached the container |
 | cron | `cron_runs` (migration `0091`) — one upserted row per sidecar with its self-reported `interval_sec`; rendered at Super Admin → Analitik → Sistem (`app/(platform)/analitik/cron-liveness.ts`) in red once overdue | in-app | `cron-tracking` silent for a week while `awbFilled` sat at 0 |
+| cron-advice | `cron-payment-advice` (PR #392) — every 15 min asks the payment gateway's `advice` for each live prepaid bill and records the ANSWER DISTRIBUTION (`rc=… ket=…` counts, per-outcome tallies, a 20-row sample) into the same `cron_runs` row; settles nothing by construction | in-app, same card | the first real settlement answer from the provider becomes visible without anyone asking — go-live question #6 |
 | suite | `npm run verify -w @tokophi/storefront` — builds, starts ONE storefront, runs all six `check-*.mjs` (pixel defer, srcsets, image widths, h1 floor…) | dev / CI | perf and markup regressions build/lint/`astro check` cannot see |
 | data | `npm run verify-rls -w @tokophi/db` (12 checks, `54/55` tables today) · `npm run verify-ledger -w @tokophi/db` | dev, and ledger also against production (2026-08-05) | tenant leaks; orphan rows in the balance |
 | backup | `backup` sidecar healthcheck: unhealthy if no `*.dump` younger than 8 h; `backup-offsite`: unhealthy unless a real upload round succeeded within 8 h | on the VPS | a backup loop that is alive but writing nothing |

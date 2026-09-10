@@ -373,7 +373,8 @@ Subscription enforcement is real-time (`computeBilling` in `requireCapability` �
 are read-only immediately, no job needed). But **recurring invoice generation + stored-status
 sync** run via `GET /api/cron/billing` **with `x-cron-secret: $CRON_SECRET` in a HEADER**, and the thing that calls it is the
 `cron` **sidecar** in `docker-compose.coolify.yml`, alongside `cron-tracking` /
-`cron-tracking-events`. This heading used to read *"schedule this"* and told you to add a **Coolify
+`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` (six loops as of
+2026-09-11 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one). This heading used to read *"schedule this"* and told you to add a **Coolify
 Scheduled Task** — following that would have created a **second** caller. Verified 2026-08-03:
 `select count(*) from scheduled_tasks` in `coolify-db` is **0**; the sidecar is the only scheduler
 and always has been.

@@ -232,12 +232,20 @@ export function compareChannelFees(channels: AlChannelProbe[]): FeeComparisonRow
   return rows;
 }
 
+// Bounded. Every caller of this helper is on a path that either holds a shopper (checkout) or a
+// cron tick, and neither may wait forever on a provider that has stopped answering — the advice
+// cron in particular walks a LIST of transactions, so one hung socket would starve the rest. 15 s is
+// generous for a JSON envelope; a timeout surfaces as a thrown AbortError, which every caller already
+// treats as "gagal terhubung" rather than as an answer.
+const AL_TIMEOUT_MS = 15_000;
+
 async function al<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
     cache: "no-store",
+    signal: AbortSignal.timeout(AL_TIMEOUT_MS),
   });
   return (await res.json()) as T;
 }

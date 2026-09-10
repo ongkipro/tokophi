@@ -188,3 +188,16 @@ Self-contained mock for the demo store, kept 1:1 with the admin fashion demo (sa
 Inventory locations, refunds, gift cards, loyalty, notification templates, domains, **storefront customer accounts** (`customers.password_hash` exists; nothing reads it). ~~abandoned carts~~ — shipped in 0044/0045 (`checkout_sessions`). Add the rest when the corresponding screens ship.
 
 *Living doc — update alongside the mocks whenever an entity is added.*
+
+
+## Addendum 2026-09-11 — village ids come in TWO spaces (migrations `0107`, `0108`)
+
+The body above predates these columns; `SCHEMA.md` is the catalog of record. A village on our side has
+two ids and only one is a courier id: **Kemendagri** `kelurahan.id` (text, `"34.02.07.2001"` — the key the
+POSTCODE dataset is published under) and **KiriminAja** `kelurahan.ka_kelurahan_id` (integer, from
+`POST /api/mitra/kelurahan`; 74 017 of 78 764 filled, one id per village per district, guarded by
+`packages/db/src/kelurahan-csv.test.ts`). The order snapshots the destination in both:
+`orders.ship_kelurahan_name` (what the shopper picked) and `orders.ship_kelurahan_id` (re-derived
+server-side against `ship_district_id`, never taken from the request; omitted from the booking when the
+district was itself a guess). Sender side: `store_settings.sender_kelurahan_id`. Rationale and the
+matcher defect the full walk exposed: root `TASKS.md` Task 8.17; vendor contract: `KIRIMINAJA.md`.

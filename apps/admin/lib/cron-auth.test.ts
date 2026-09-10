@@ -116,7 +116,9 @@ describe("no first-party secret in a cron URL — source scan", () => {
       .split("\n")
       .filter((line) => /^\s*command:/.test(line) && line.includes("/api/cron/"));
 
-    expect(cronCommands.length).toBe(5);
+    // Six since 2026-09-11: `cron-payment-advice` (observe-only reconciliation). This count is the
+    // review gate for a new loop — bump it only after checking the line below passes for the newcomer.
+    expect(cronCommands.length).toBe(6);
     for (const line of cronCommands) {
       expect(line).not.toMatch(URL_SECRET);
       expect(line).toContain("x-cron-secret: $$CRON_SECRET");
