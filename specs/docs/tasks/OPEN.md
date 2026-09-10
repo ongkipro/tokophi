@@ -61,7 +61,7 @@ token and a restore is exercised once** (2026-09-02) · generated page map + 35-
 
 | | what is actually being asked |
 |---|---|
-| **KiriminAja allow-list** | above, item 1. Blocks every order today. |
+| **KiriminAja allow-list** | ~~above, item 1~~ **RESOLVED 2026-09-09** — owner re-added the IP; rates 200 with COD from inside the container, live checkout total moved to Rp125.400 in Chromium (BUILD-LOG 2026-09-09; Super Admin update-log v1.4.0). Production still runs `KIRIMINAJA_ENV=sandbox` — that is Task 8.9, not this. |
 | **Uptime + billing alert** | above, item 2. |
 | **KiriminAja production cutover** | `KIRIMINAJA_ENV=sandbox` in production (AUDIT-FULL 2026-08-31 ③); the UAT sheet from 2026-08-24 is still unsent, so there is no production key. Same contract both sides (owner ruling 2026-08-03) — an endpoint swap, nothing else. |
 | **R2 credential + restore drill** | `backup-offsite` is deployed and UNHEALTHY on purpose. Needs a Cloudflare token with **R2 Storage: Edit** (both existing tokens are zone-scoped) and one restore-from-R2 into a throwaway DB (`DEPLOY.md` runbook). Until then the only backups sit on the box that was just suspended for 70 h. |

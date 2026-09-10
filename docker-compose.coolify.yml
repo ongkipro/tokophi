@@ -489,6 +489,28 @@ services:
       timeout: 5s
       retries: 3
 
+  # Payment reconciliation — OBSERVE ONLY. Every 15 minutes it reads AutoLaris `advice` for each live
+  # prepaid bill (payments + subscription invoices in `menunggu` with a provider `trx_id`) and records
+  # the answer distribution in `cron_runs`. It writes NOTHING to payment state: on 2026-09-09 the
+  # endpoint answered `02/FAILED` for bills our own database still held live, and no PAID answer has
+  # ever been observed, so acting on it would kill legitimate bills. Its job is to make the first
+  # real settlement answer VISIBLE, which is how go-live question #6 (the advice status mapping) gets
+  # answered by evidence instead of by asking. Bounded per tick; see `api/cron/payment-advice`.
+  cron-payment-advice:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      CRON_INTERVAL_SEC: 900
+    command: ["sh", "-c", "while true; do echo \"[cron-payment-advice] $$(date -Iseconds)\"; wget -qO- --header \"x-cron-secret: $$CRON_SECRET\" \"http://admin:3000/api/cron/payment-advice?every=$$CRON_INTERVAL_SEC\" || echo 'cron payment-advice failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # Cloudflare for SaaS certificate poller. A verified domain is not routable until BOTH the custom
   # hostname and its edge certificate are active; this is the only process allowed to make that jump.
   cron-domains:

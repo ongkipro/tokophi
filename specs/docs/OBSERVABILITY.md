@@ -7,7 +7,8 @@
 >
 > | What you want | Where it is |
 > |---|---|
-> | The production probe contract (URL → expected status → max latency) | repository-root `OBSERVABILITY.md` (`ops/tokophi-probe.sh` runs it) |
+> | The production probe contract (URL → expected status → max latency) | repository-root [`OBSERVABILITY.md`](../../OBSERVABILITY.md) (`ops/tokophi-probe.sh` runs it) |
+> | Whether each of the six cron sidecars is alive (incl. `payment-advice`, observe-only) | Super Admin → Analitik → Sistem, from `cron_runs`; source `apps/super-admin/app/(platform)/analitik/cron-liveness.ts` |
 > | SLI / SLO / SLA, RTO / RPO, single points of failure, the recovery runbook | `SLA-DRP.md` |
 > | The cron sidecars, container logs, how to verify a deploy really landed | `DEPLOY.md` |
 > | Known alerting blind spots (no external uptime monitor, no alert channel) | `tasks/2026-08-06-alerting-gaps.md` and root `TASKS.md` Stage 8 |

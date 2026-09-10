@@ -1,111 +1,22 @@
-# PRD: Tokophi Multi-page Marketing Site
+# PRD — TokoΦ (entrypoint)
 
-**Status:** Implemented locally, pending product review
+> **This file is the entrypoint the authority table names for "Product scope and non-goals"; the
+> product requirements themselves live in [`specs/PRD.md`](specs/PRD.md) (v0.5, rewritten against the
+> code and the database — everything there is verified or explicitly labelled aspirational).** Until
+> 2026-09-11 this path held the PRD of the **landing site only**, so the authority map routed "product
+> scope" into a document about the marketing pages. That PRD is preserved, unchanged, at
+> [`specs/docs/LANDING_PRD.md`](specs/docs/LANDING_PRD.md).
 
-**Surface:** `https://tokophi.com`
-
-**Implementation:** `apps/landing`
-**Last validated:** 2026-08-06 (Asia/Jakarta)
-
-## Product goal
-
-Tokophi needs a seller-focused public site that explains the product through separate intent-led
-pages instead of one long landing page. A prospective Indonesian seller should understand what the
-product does, how the workflow operates, which payment and shipping capabilities are available,
-and where to inspect a public demo before creating a store.
-
-## Audience and positioning
-
-- Primary audience: Indonesian online sellers.
-- Positioning: one operational workspace for catalog, orders, payments, shipping, customers, and
-  store activity.
-- Tone: clear, operational, trustworthy, and free of unsupported commercial claims.
-- Buyer-facing commerce remains on merchant storefronts, not the apex marketing site.
-
-## Canonical routes
-
-| Route | Intent |
+| Need | Read |
 |---|---|
-| `/` | Product introduction and route gateway |
-| `/fitur/` | Verified product capabilities |
-| `/cara-kerja/` | Seller workflow from setup to fulfillment |
-| `/pembayaran-pengiriman/` | Payment and domestic-shipping operating model |
-| `/demo/` | Privacy-safe public storefront proof |
-| `/faq/` | Verified operational answers |
-| `/kontak/` | Operator identity and support channels |
-| `/privasi/` | Privacy notice |
+| What the product is, who it is for, what it deliberately is not | [`specs/PRD.md`](specs/PRD.md) |
+| Verifiable requirements and their current status (`F-*`, `NF-*`) | [`specs/docs/REQUIREMENTS.md`](specs/docs/REQUIREMENTS.md) |
+| The apex marketing site (`tokophi.com`) | [`specs/docs/LANDING_PRD.md`](specs/docs/LANDING_PRD.md) |
+| Feature specs beside the PRD | [`specs/PROMO_SPEC.md`](specs/PROMO_SPEC.md) · [`specs/THEME_EDITOR_SPEC.md`](specs/THEME_EDITOR_SPEC.md) · [`specs/docs/CHAT_SPEC.md`](specs/docs/CHAT_SPEC.md) · [`specs/docs/HEADLESS_STOREFRONT_SPEC.md`](specs/docs/HEADLESS_STOREFRONT_SPEC.md) · [`specs/docs/TOKOPHI_ACCOUNT_SPEC.md`](specs/docs/TOKOPHI_ACCOUNT_SPEC.md) |
+| Decisions that shaped the scope | [`DECISIONS.md`](DECISIONS.md) → [`specs/decisions/`](specs/decisions/) |
+| What is built (the record, not the design) | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| What to build next | [`TASKS.md`](TASKS.md) (the one execution queue) |
 
-Pricing is intentionally absent until the order-finance policy tracked in GitHub Issue `#180` is
-accepted and implemented.
-
-## Component architecture
-
-```text
-Base.astro
-└── MarketingLayout.astro
-    ├── SiteHeader.astro
-    │   └── MobileNav.tsx              React + shadcn Sheet, client:load
-    ├── route-owned Astro content
-    │   ├── PageHero.astro
-    │   ├── FeatureIconGrid.tsx        shadcn Card + Lucide, server-rendered
-    │   ├── RouteGateway.astro
-    │   ├── StoreDemo.astro
-    │   └── FinalCta.astro
-    ├── SiteFooter.astro
-    └── MotionLayer.astro              GSAP + ScrollTrigger
-```
-
-Astro owns routes, metadata, and static content. React is hydrated only where the mobile modal state
-and focus management require it. Tailwind v4 scans only the reused `@tokophi/ui` primitives and maps
-their semantic shadcn tokens onto the existing Tokophi design tokens.
-
-## Requirements
-
-### PR-LP-09: Multi-page information architecture
-
-The apex shall use distinct canonical pages with unique intent, metadata, one `h1`, maintained
-internal links, and sitemap coverage. The homepage shall summarize choices rather than duplicate
-all long-form content.
-
-### PR-LP-10: Shared adaptive navigation
-
-Every public page shall expose the same maintained route set, seller login, and create-store action.
-Desktop navigation shall remain static Astro. Mobile navigation shall provide accessible focus
-management, active state, keyboard operation, and Escape dismissal.
-
-### PR-LP-11: Restrained motion
-
-GSAP shall provide hierarchy and scroll reveal without scroll-jacking. Motion shall animate only
-transform and opacity, use one centralized registration point, disable depth effects on smaller
-screens, and leave all content visible under reduced-motion or JavaScript failure.
-
-### PR-LP-12: Requested implementation stack
-
-The site shall use Astro, TypeScript, Tailwind CSS, shadcn primitives from the existing
-`@tokophi/ui` package, explicit Lucide icon imports, and GSAP. React hydration is limited to the
-mobile navigation; feature cards render on the server.
-
-## Content constraints
-
-- Visible marketing copy uses Bahasa Indonesia.
-- Do not publish unaccepted fees, payout timing, settlement behavior, provider availability,
-  service coverage, testimonials, statistics, or customer claims.
-- Product imagery must come from privacy-reviewed demo data and include explicit dimensions and
-  meaningful alt text.
-- Use `Dashboard Seller` for the merchant application surface.
-- Existing build-time login, signup, demo, identity, and contact fallbacks remain authoritative.
-
-## Quality requirements
-
-- No horizontal overflow at 320, 390, 768, 1024, 1280, or 1440 CSS pixels.
-- Exactly one `h1` and no duplicate ID per canonical page.
-- Complete keyboard focus behavior, dark scheme, and reduced-motion support.
-- No empty link target or broken internal route.
-- Unique title, description, canonical URL, and sitemap entry per canonical route.
-- `npm run check:landing` and `npm run build -w @tokophi/landing` must pass.
-
-## Known remaining evidence gap
-
-The public storefront demo capture is integrated and privacy-reviewed. A current, seeded,
-privacy-reviewed Dashboard Seller screenshot is still required before replacing the honest abstract
-hero artwork with seller-product imagery.
+**Non-goals, in one line** (full list in `specs/PRD.md`): no Themes marketplace, no Apps/Plugins, no
+buyer accounts at checkout (guest is the normal case), no provider brands shown to merchants or
+shoppers (ADR 0004), no per-merchant payment channels or fee-bearer choice (platform-managed, ADR 0004).

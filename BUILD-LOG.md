@@ -3688,3 +3688,95 @@ so the seed's `truncate`-then-insert repopulated correctly with the 5-column par
 
 **Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 486 tests** · RLS verified ·
 storefront 8/8.
+
+## 2026-09-11 01:05 UTC — Payment reconciliation cron (observe-only), AutoLaris re-read, three latent defects closed (Main Session)
+
+**Scope:** owner request *"baca ulang repo ongkipro/autolaris → pastikan create order dan courir id = 1, json jangan lupa sama advice, dan cronjob untuk cek"* · branch `feat/payment-advice-cron` · Task 8.19 status updated in place.
+
+**Re-read, field by field.** Our `/submit` payload matches the vendor reference on all 24 keys —
+`courir_id: 1`, `cod_value: "0"`, `order_details[{name,qty,unit_price}]`, dummy `origin`/`destination`
+from the vendor's own sample. `courir_id: 1` was correct but pinned by NOTHING; `autolaris-submit.test.ts`
+now holds it as a source claim with a mutation self-check. ⚠️ The vendor's OpenAPI declares **no request
+schema at all** for `/submit` (`required: []`, `properties: {}`) — the Markdown sample is the only contract.
+
+**The cron — `api/cron/payment-advice` + sidecar `cron-payment-advice` (900 s).** `alAdvice` and
+`classifyAdvice` shipped 2026-09-09 with **zero callers**; this is the loop the vendor guide §6 prescribes.
+It reads every live prepaid bill (`payments` menunggu + `trx_id` + `method <> cod`; `invoices` menunggu +
+`trx_id`), asks `advice` once each, and records the **answer distribution** — `"rc=02 ket=FAILED": n`,
+per-outcome counts, a 20-row sample naming ids — into `cron_runs.result`, rendered by the Super Admin cron
+card. **It writes nothing to payment state, by design:** the 2026-09-09 measurement showed `02/FAILED` for
+bills our DB held LIVE, so acting on `failed` kills legitimate bills, and `paid` is unreachable while
+`ADVICE_SETTLED` is empty. Its purpose is to make the first real settlement answer VISIBLE so go-live
+question #6 is answered by evidence. Bounded three ways: 40 rows/tick, sequential, and a **15 s timeout
+now inside `al()`** (worst case 10 min < the 15-min cadence). Production holds 6 candidates.
+Guard `route.test.ts` (5): fails closed without the header, asks once per bill, tallies exact answers,
+caps at 40, never calls `update` — and a `codeOnly` claim proves the source has no writer at all.
+
+**Three latent defects closed on the way.**
+- **`reff_id` is capped at 30 characters (h2h-api.md §7); the seller-created bill sent a 36-char UUID.**
+  Not yet triggered (longest stored: 16 payments / 28 invoices), but a truncated reff can never be
+  reconciled. `order-detail.tsx` now mints `SB-` + 16 hex (20 chars, 64 bits, ≥ the action's 16 floor).
+- **`al()` had no timeout.** Every AutoLaris call — checkout, billing, and now this sweep — could hang
+  on a dead socket indefinitely. `AbortSignal.timeout(15 000)`; callers already treat a throw as
+  "gagal terhubung".
+- **The Super Admin cron-liveness card never listed `order-expiry`** — a sidecar that cancels orders
+  and restores stock could die with nothing on any screen, beside a test whose own comment says *"a
+  cron nobody lists is a cron nobody misses"*. Listed now, with `payment-advice`. The sidecar census in
+  `cron-auth.test.ts` went RED at 5 when the sixth loop appeared — the review gate working — and is 6.
+
+**Docs:** `DEPLOY.md` sidecar list completed (it named three of six); `PAGE_MAP.md` regenerated twice —
+the second time because the new test names `order-detail.tsx` and the map records which tests name a
+route, which is exactly the freshness the guard exists to enforce.
+
+**Gate (clean run, every fix in place from the start):** lint 0 · verify:guards 0 · **test:release
+171 files / 1 494 tests** (the single red was the stale page map, regenerated and re-proved green) · RLS
+verified · storefront 8/8 (from the immediately preceding run on identical storefront code).
+
+## 2026-09-11 02:20 UTC — Root delivery-contract documents refreshed and interlinked; development-kit map added (Main Session)
+
+**Scope:** owner request *"md rapikan … development kita jika ada yang kurang buat dan sempurnakan; gunakan
+dotfiles development-kit; data dan architecture lengkap; md saling terhubung biar AI mudah mengidentifikasi"*
+· branch `docs/root-contract-refresh` · Markdown only (deliberately does not deploy: `watch_paths = !**/*.md`).
+
+**The root files were not misplaced — they were STALE.** Inventory first: all twelve root `.md` are the
+`development-kit` template set (`~/dotfiles/config/templates/`), read at their root paths by
+`verify-doc-authority`, `verify-traceability`, `doc-counts` and `release-guards`, and named at the root
+by the global delivery contract. Moving them to `docs/` would have reddened four guards. What was wrong:
+`STATUS.md` (2026-09-08) still carried the allow-list blocker resolved 2026-09-09, "106 migrations", and
+release `4b0f4c8`; `RELEASE.md` described PR #381 while production runs PR #390; `DECISIONS.md` lacked
+five rulings from the last 48 h and still said e-wallet 2,4 %; `ARCHITECTURE.md` (record) counted 82
+tables / 106 migrations and five sidecars; root `README.md` was **one line**.
+
+**The one genuine authority bug:** `specs/README.md` routes *"Product scope and non-goals"* to root
+`PRD.md` — and that file was the PRD of the **landing site only** (2026-08-06), while the product PRD is
+`specs/PRD.md`. Root `PRD.md` is now the entrypoint the table names (a routing table into
+`specs/PRD.md`, `REQUIREMENTS.md`, the feature specs, `DECISIONS.md`); the landing PRD is preserved
+unchanged at `specs/docs/LANDING_PRD.md`.
+
+**Written / refreshed:** `README.md` (kit front door: status, stack, quick links to every owner, real
+quickstart, what actually runs, environments) · `STATUS.md` (State **VERIFIED**, see below) ·
+`RELEASE.md` (`98f1d5a-pr390`, base `fca0a2e`, deploy 535/536 matched by commit, rollback command) ·
+`DECISIONS.md` (DEC-010 e-wallet 3 %, DEC-011 VA Rp3.000, DEC-012 advice observe-only, DEC-013 ADR 0004
+guard, DEC-014 no history rewrite; DEC-005/009 corrected) · `ARCHITECTURE.md` (83 tables, 109 migrations,
+six sidecars, two village-id spaces, provider-label, sandbox-in-production stated) · `OBSERVABILITY.md`
+(rates probe body + verdict, `cron-advice` row) · `specs/README.md` (**development-kit map**: every
+`development-spec-suite` concern → the TokoΦ document that owns it, or `Not applicable`/`Unknown` with
+reason and gate — no `docs/spec/` pack is created, per the kit's "never a rival document") ·
+`specs/docs/ARCHITECTURE.md` (dated-design header pointing at the record) · `DATA_MODEL.md` (0107/0108
+addendum) · `specs/docs/OBSERVABILITY.md` (real link + cron card row) · `OPEN.md` + epic ledger (allow-list
+blocker closed).
+
+**VERIFIED is earned, not asserted.** Every configured probe was run off-box: landing 200 (401 ms) · app
+307 · rich 307 · storefront-demo 200 · `ongkir-search` 200 containing "Kota Semarang" · `ongkir-rates`
+**200 with 4 rates, 2 COD-eligible, origin resolved from the seller's pickup address** (`originFrom=pickup`,
+route Surabaya → Banyumanik, real product `blazer-formal-wanita-premium-slim-fit`). Both STATUS and
+OBSERVABILITY say in the same breath that green proves the **sandbox** endpoint answers — production still
+runs `KIRIMINAJA_ENV=sandbox` (Task 8.9), which is a product fact, not a probe failure.
+
+⚠️ My probe summary first printed `sample=None:REG23` — I guessed the rate object's key name; fixed from the
+actual response before the sentence shipped into two contract files.
+
+**Guards:** `npm run verify:guards` → source-size ok · openapi ok (14 ops, 39 routes, 17 exemptions) ·
+doc-authority ok (8 documents, one queue) · traceability ok · migrations ok · RLS verified; `doc-counts`
++ `release-guards` + `page-map-fresh` **33/33**. The full `test:release` was not re-run: this branch
+touches only Markdown, and every suite that reads these files is in that 33.

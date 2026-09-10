@@ -13,7 +13,7 @@ import type { NextRequest } from "next/server";
 // is a plain module that happens to live next to its callers.
 
 /** The compose sidecars. Adding a job here means adding it to the reader's list too. */
-export type CronJob = "billing" | "tracking" | "tracking-events" | "domains" | "order-expiry";
+export type CronJob = "billing" | "tracking" | "tracking-events" | "domains" | "order-expiry" | "payment-advice";
 
 /**
  * The sidecar's OWN cadence, forwarded as `?every=<seconds>` from the same compose variable its
