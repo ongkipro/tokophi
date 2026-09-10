@@ -3892,3 +3892,19 @@ RLS verified · storefront 8/8.
 **Also landed while this ran — deploy 538 (`49e5f45`, PR #391 ADR 0004) verified on production:** admin
 container healthy, `TokoΦ Kirim` present in 8 server-bundle files, the old `KiriminAja belum
 dikonfigurasi` string in 0.
+
+
+## 2026-09-10 18:25 UTC — Deploy 539 verified; repository private again (eighth flip); records updated (Main Session)
+
+- **Deploy 539 (`b888d66`, PR #395) `finished`** — started 18:07:43 after waiting its turn in Coolify's
+  serial queue (the row is created at merge time, so "in progress for 16 minutes" was 7 minutes of build
+  plus 9 of queueing; `check-deploy-currency.sh`'s wedge threshold is the right instrument, not the
+  row's `created_at`). Read back from production unauthenticated: `rich.tokophi.com/login` carries the
+  eyebrow "Super Admin · control plane", `h1` "Masuk ke panel platform", zero occurrences of the old
+  description, zero `defaultValue`, an `h-11` submit; super-admin container healthy.
+- **Repository → private** (owner order, conditioned on the deploy). Sequenced AFTER deploy 539 and
+  after #396's CI reached a terminal state, so no metered Actions minutes were cut mid-run. Verified
+  `private=true disabled=false`; git access returned on the second retry (~10 s) — the same transient
+  403 the seventh flip showed. DEC-009 updated.
+- `RELEASE.md` → `b888d66-pr395` on base `49e5f45`; `STATUS.md` active work = #396 only; everything
+  else owner-gated.
