@@ -1018,7 +1018,7 @@ async function handle(req: Request) {
           // the order screen, and a name with no id would read as "we know the subdistrict" on every
           // screen while the booking still omitted it. `resolveDestinationKelurahan` returns the
           // pair or nothing for exactly that reason.
-          shipKelurahan: kel?.name ?? null,
+          shipKelurahanName: kel?.name ?? null,
           shipKelurahanId: kel?.kaKelurahanId ?? null,
 
           // 🔴 THE IDEMPOTENCY CLAIM (Task 4.8). This column carries a PARTIAL UNIQUE INDEX on

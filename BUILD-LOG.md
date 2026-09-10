@@ -3564,9 +3564,21 @@ always posted a kelurahan (it is how the kodepos is derived) and `/api/public/or
 and a comment in `checkout.astro` said so in as many words.
 
 **Migration `0108_order_ship_kelurahan`** (stamp 1787545291751, idempotent, no index) adds
-`orders.ship_kelurahan` — the NAME, snapshotted onto the order like the street, because the address
-belongs to the transaction and not to the person (0042) — and `orders.ship_kelurahan_id`,
-KiriminAja's own. The checkout now sends the name in `address.kelurahan`; the route **re-derives**
+`orders.ship_kelurahan_name` — the NAME, snapshotted onto the order like the street, because the
+address belongs to the transaction and not to the person (0042) — and `orders.ship_kelurahan_id`,
+KiriminAja's own.
+
+⚠️ **THOSE TWO NAMES ARE NOT ARBITRARY: THEY ARE ORPHANS THE SHARED DEV CONTAINER ALREADY CARRIED.**
+`0049_shipping_kelurahan` lost its slot to a second `0049` and was never re-numbered, so both columns
+exist on dev, in no `.sql`, in no `schema.ts`, and NOT on production — `seed-recent.ts` and
+`verify-migrations.ts` both already say so. I first wrote the text column as `ship_kelurahan`, then
+measured the dev container (`integer` nullable, `text` nullable — exactly the shapes needed) and
+renamed to match, so 0108 CONVERGES the two databases rather than leaving dev with a near-duplicate
+third column. `if not exists` then makes it a no-op on dev and a real create everywhere else: an
+unreproducible artefact becomes a tracked migration.
+⚠️ **Drizzle keys on `created_at`, not on the file hash, so an edited-after-applying migration never
+re-runs** (its own verifier says this). The `_test` database had already taken the old column name;
+it was realigned by hand rather than by re-running 0108, which would have done nothing. The checkout now sends the name in `address.kelurahan`; the route **re-derives**
 the id server-side against the district the ongkir was priced against, exactly as `saveSenderAddress`
 does on the seller's side. `createShipment` passes it through as `destKelurahanId`, which
 `kelurahanField()` was already built to carry.

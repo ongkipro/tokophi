@@ -77,7 +77,7 @@ describe("the order route derives the id and never reads one", () => {
   it("stores the resolver's pair, not a value from the request", () => {
     expect(ORDER_ROUTE).toMatch(/resolveDestinationKelurahan\s*\(\s*destId\s*,\s*addr\s*\.\s*kelurahan\s*\)/);
     expect(ORDER_ROUTE).toMatch(/shipKelurahanId\s*:\s*kel\s*\?\s*\.\s*kaKelurahanId\s*\?\?\s*null/);
-    expect(ORDER_ROUTE).toMatch(/shipKelurahan\s*:\s*kel\s*\?\s*\.\s*name\s*\?\?\s*null/);
+    expect(ORDER_ROUTE).toMatch(/shipKelurahanName\s*:\s*kel\s*\?\s*\.\s*name\s*\?\?\s*null/);
     // the shape that must never appear: an id taken straight off the body
     const idFromBody = /shipKelurahanId\s*:\s*(?:Number\s*\()?\s*addr\s*\./;
     expect(ORDER_ROUTE).not.toMatch(idFromBody);
