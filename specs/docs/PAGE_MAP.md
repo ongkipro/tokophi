@@ -93,7 +93,7 @@
 | `/daftar` | page | `apps/admin/app/daftar/page.tsx` | `daftar-form.tsx` `google-button.tsx` | — | `register` | — | — |  | — |
 | `/faktur/[number]` | page | `apps/admin/app/faktur/[number]/page.tsx` | `print-button.tsx` | `billing` | `billing` | `session` | — | ✓ | — |
 | `/` | layout | `apps/admin/app/layout.tsx` | — | — | — | — | — |  | — |
-| `/login` | page | `apps/admin/app/login/page.tsx` | `login-form.tsx` | — | `auth` | — | — |  | `packages/lib/src/no-published-credentials.test.ts` |
+| `/login` | page | `apps/admin/app/login/page.tsx` | `login-form.tsx` | — | `auth` | — | — |  | `apps/super-admin/lib/platform-shell-contract.test.ts` `packages/lib/src/no-published-credentials.test.ts` |
 
 ### API routes
 
@@ -140,7 +140,7 @@
 | `/toko` | page | `apps/super-admin/app/(platform)/toko/page.tsx` | `toko-client.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/update-log` | page | `apps/super-admin/app/(platform)/update-log/page.tsx` | `update-log-client.tsx` | — | — | `route:/update-log` | — |  | `apps/super-admin/lib/list-page.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | layout | `apps/super-admin/app/layout.tsx` | — | — | — | — | — |  | — |
-| `/login` | page | `apps/super-admin/app/login/page.tsx` | — | — | `auth` | — | — |  | `packages/lib/src/no-published-credentials.test.ts` |
+| `/login` | page | `apps/super-admin/app/login/page.tsx` | — | — | `auth` | — | — |  | `apps/super-admin/lib/platform-shell-contract.test.ts` `packages/lib/src/no-published-credentials.test.ts` |
 
 ### API routes
 
@@ -321,7 +321,7 @@
 | `health.ts` | `getHealthMap` `getStoreHealth` `healthFromSignals` |
 | `ka-probe.ts` | `classifyKaProbe` |
 | `list-page.ts` | `UPDATE_LOG_PAGE_SIZE` `filterChanged` `pageSlice` |
-| `nav.ts` | `NAV` `navFor` |
+| `nav.ts` | `NAV` `NAV_GROUPS` `navFor` |
 | `payout-transition.ts` | `markPayoutPaidInTxn` |
 | `platform-auth.ts` | `PLATFORM_COOKIE` `PLATFORM_MAX_AGE` `findAdmin` `getPlatformSession` `platformGate` `platformRouteGate` `rankRefusal` `requirePlatformAdmin` `signPlatformSession` `verifyPassword` |
 | `platform-rank.ts` | `RANK` `clearsRank` |

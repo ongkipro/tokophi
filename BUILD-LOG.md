@@ -3780,3 +3780,58 @@ actual response before the sentence shipped into two contract files.
 doc-authority ok (8 documents, one queue) · traceability ok · migrations ok · RLS verified; `doc-counts`
 + `release-guards` + `page-map-fresh` **33/33**. The full `test:release` was not re-run: this branch
 touches only Markdown, and every suite that reads these files is in that 33.
+
+## 2026-09-11 03:40 UTC — Task 8.22: Super Admin front door, mobile drawer, theme toggle, grouped nav — proved in Chromium (Main Session)
+
+**Scope:** owner request *"rapikan ui/ux super admin dan super admin login"* · branch
+`feat/super-admin-front-door` (cut from `origin/main`, checked) · skills routed before the first visual
+edit: `admin-product-ux` §1–4 (inspect before drawing — routes, `ROUTE_RULES`, `nav.ts`, shell, login,
+the Seller's accepted front door), `admin-dashboard` (reject ornamental badges/cards; group by job),
+`ui-validation` (real browser, both widths, keyboard, states, visual critique).
+
+**The direction was already decided by the repository, not by me.** The Seller's `/login` was measured
+on 2026-08-06 — *"a 384px card on a same-colour background is not a surface, an h1 at 24px/500 is body
+text, a 32px submit is a table-row control"* — and rebuilt as a split front door. The Super Admin login
+was still exactly that measured shape. Ported the pattern; kept what must differ on the control plane
+(no self-registration, no Google, and a right panel that lists how the panel is **governed** — every
+line a property of `platform-auth.ts` / `impersonation_grants`, not a promise).
+
+**Two structural defects in the shell, worse than aesthetics.** (1) Below `md` the sidebar is hidden
+and **nothing replaced it** — a phone had a header and no navigation. Added the drawer, CONTROLLED so a
+nav tap closes it (the Seller topbar's own lesson), rendering the same `NavLinks` as the sidebar.
+(2) The root layout applied a saved theme before paint but nothing could change it — added the toggle
+(DOM-subscription pattern, no duplicate state). Then the noise: the gradient "Platform · control plane"
+card and the redundant "Platform" badge are gone; the badge now shows the operator's **rank**, the fact
+`route-roles.ts` decides on. The flat nine-item nav is grouped Operasional / Pantau / Konfigurasi by
+`ROUTE_RULES`' own reasons, labels in the eyebrow voice, no cards.
+
+**Evidence — Chromium, 360×800 and 1280×900, 21/21 claims, 0 console errors.** Throwaway operator row
+created in the dev DB, used, deleted; dev server on :3251 started and killed by PID. Login: no
+horizontal overflow, one `h1` (37,6px), submit + email 44px, aside hidden/visible per width, keyboard
+order wordmark → email → password → submit, wrong password → `form [role=alert]` "Email atau kata sandi
+salah." (42px surface), real login → `/`. Shell: group labels, rank `Owner`, toggle flips `html.dark`,
+no ornament; at 360 the hamburger, the grouped drawer, `Toko` navigates **and** closes it, `/toko` no
+overflow. Five screenshots reviewed — accepted.
+
+⚠️ **Two false negatives were the harness, recorded so the next drive skips them:** a click before React
+hydrates submits the form natively (the dev log shows `POST /login` with no `ƒ signIn`), and
+`[role=alert]` alone matches Next's 1px route announcer. Wait for React's own `__reactProps$` marker on
+the form; scope to `form [role=alert]`.
+
+**Guards.** New `platform-shell-contract.test.ts` (4): controlled drawer with a `md:hidden` trigger
+mirroring the `md:flex` sidebar, toggle present, rank rendered, ornament absent, one `NavLinks` used
+twice, login one `h1` / `h-11` / `role=alert` / no `defaultValue` — **2 mutations → 2 reds**. My first
+version of it failed against the correct source three times: `codeOnly` inerts class strings
+(`md·flex`), `<h1` tokenises as `< h1`, `<X />` as `< X / >` — the AGENTS.md rule "choose the reading
+per assertion, write patterns whitespace-tolerant", learned again. `route-roles.test.ts`'s
+"sidebar renders the filtered list" claim was updated to the `NavLinks` shape and **strengthened**: both
+render sites must receive `nav`, never `NAV` — proved red by feeding the drawer the raw list.
+
+**Docs:** Task 8.22 in `TASKS.md`; Super Admin update-log `v1.6.0`; `PAGE_MAP.md` regenerated.
+
+**Gate (clean run, every fix in place):** lint 0 · verify:guards 0 · **test:release 172 files / 1 498 tests** ·
+RLS verified · storefront 8/8.
+
+**Also landed while this ran — deploy 538 (`49e5f45`, PR #391 ADR 0004) verified on production:** admin
+container healthy, `TokoΦ Kirim` present in 8 server-bundle files, the old `KiriminAja belum
+dikonfigurasi` string in 0.

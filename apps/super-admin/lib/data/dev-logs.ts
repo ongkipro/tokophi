@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.6.0-super-admin-front-door-mobile-nav",
+    version: "v1.6.0",
+    date: "2026-09-11",
+    title: "Super Admin Gets A Front Door, A Phone-Sized Menu, A Theme Switch — And The Provider's Name Leaves The Seller Panel",
+    category: "feature",
+    surfaces: ["Super Admin", "Seller Admin", "Payments"],
+    summary: "The control plane's login now has the same considered shape as the Seller's, an operator on a phone can finally reach every page through a drawer, the theme can be switched, and the sidebar is grouped by the kind of work instead of one flat list of nine. In the Seller panel, the shipping provider's brand no longer appears in any sentence a merchant reads. And every live prepaid bill is now read back from the payment gateway every fifteen minutes — observed, never acted on.",
+    problem: "The Super Admin login was a small centred card with body-sized heading and a table-row-height button — the exact form the Seller login had measured and abandoned a month earlier. Below tablet width the shell hid its sidebar and offered nothing in its place, so a phone had a header and no navigation. The saved dark theme could not be changed from inside the panel. A decorative gradient card and a redundant badge both said 'Platform' where the header already did. Separately, nine merchant-facing strings named the courier aggregator, against a decision that is five months old.",
+    solution: "The login became a split front door: display-scale heading, 44px fields and action, an error surface with an alert role, and a right panel that states how the panel is governed — rank re-read on every request, every merchant-affecting action logged, thirty-minute impersonation, password change revoking other sessions. The shell gained a controlled mobile drawer rendering the same grouped navigation as the sidebar, a theme toggle, and the operator's rank where the ornament used to be. The Seller panel reads one shared label, TokoΦ Kirim, wherever a provider name used to leak, guarded across every client-facing file. A new reconciliation loop asks the gateway's advice endpoint for each live bill and records the answer distribution on the cron card without settling anything, because the endpoint has been measured answering FAILED for bills that are still live.",
+    verification: "Driven in Chromium at 360 and 1280 pixels: 21 of 21 claims, zero console errors — no horizontal overflow on any screen, one h1, 44px controls, keyboard order, the wrong-password alert, a real login, the drawer opening and closing on a tap, the theme flipping. Guards pin the drawer as controlled, the toggle present, the ornament absent, and the login shape; each was proved red against a mutation first. Production after deploy 537: the payment-advice sidecar is healthy and its first tick reported six bills asked, zero errors. The brand guard scans more than two hundred client files and named the exact file when the old string was put back."
+  },
+  {
     id: "v1.5.0-kelurahan-walk-va-fee-corrected",
     version: "v1.5.0",
     date: "2026-09-10",
