@@ -3780,3 +3780,24 @@ actual response before the sentence shipped into two contract files.
 doc-authority ok (8 documents, one queue) · traceability ok · migrations ok · RLS verified; `doc-counts`
 + `release-guards` + `page-map-fresh` **33/33**. The full `test:release` was not re-run: this branch
 touches only Markdown, and every suite that reads these files is in that 33.
+
+
+## 2026-09-11 02:50 UTC — CORRECTION: #393 was not Markdown-only; it carried #392 (Main Session)
+
+The 02:20 entry above says *"Markdown only — does not deploy"*. **False.** `docs/root-contract-refresh` was
+created with `git checkout -b` while `feat/payment-advice-cron` was checked out, so it stacked on #392's
+commit and merging #393 (`f5100ac`) merged all of #392 too — 29 files, 11 of them code and compose.
+Coolify queued deploy **537** for it, which is how the error surfaced: a deploy row for a "docs" merge.
+GitHub marked #392 merged by itself (head reachable from `main`, diff empty).
+
+**What actually shipped is the commit that passed CI 4/4 on #392** — the observe-only advice cron, the
+seventh sidecar, the `al()` timeout, the 20-char seller `reff_id`. Nothing untested reached production;
+what was wrong was every sentence describing the release. `RELEASE.md` header now names `f5100ac` with
+base `98f1d5a`; `STATUS.md` "Active work" corrected. This entry is appended, the 02:20 one is left as
+written — the log records what was believed and when.
+
+**Invariant:** a branch for its own PR is cut from `origin/main` explicitly (`git checkout -b <new>
+origin/main`), and the PR's `commits` are read before it is opened. The `docs-only ⇒ no deploy` belief
+(memory, `DEPLOY.md`) stands — it was the premise that was wrong, not the rule.
+
+**Owed:** after 537 lands, prove `cron-payment-advice` is running and reports a `payment-advice` row.

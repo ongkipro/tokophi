@@ -55,9 +55,9 @@ the substance of issue #5, and it is not a probe failure: the sandbox answers co
 
 ## Active work
 
-Open PRs, CI green, awaiting the owner's merge order: **#391** (ADR 0004 — no provider brand in any
-merchant/shopper string, guarded) · **#392** (payment-advice reconciliation cron, observe-only, plus
-three latent AutoLaris defects). Queue: root `TASKS.md` Stage 8; navigation handoff
+**#392 (payment-advice cron) reached `main` inside #393** — my branching error, see `RELEASE.md`
+"This release"; Coolify deploy 537 carries it. Open: **#391** (ADR 0004 — no provider brand in any
+merchant/shopper string, guarded), CI re-running after the BUILD-LOG merge. Queue: root `TASKS.md` Stage 8; navigation handoff
 `specs/docs/tasks/OPEN.md`. The remaining open items are owner-gated (8.9 first production booking,
 8.4 offsite backup credentials, 8.1 alert channel, 8.5 branch pruning, 5.8 buyer accounts).
 
