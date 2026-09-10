@@ -2692,6 +2692,7 @@
         "exports": [
           "areaById",
           "kelurahanForDistrict",
+          "kelurahanWithKaIdForDistrict",
           "provinceForDistrict",
           "resolveArea",
           "searchAreaLocal"

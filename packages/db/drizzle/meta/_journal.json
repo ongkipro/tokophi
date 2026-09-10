@@ -750,6 +750,13 @@
       "when": 1787545171751,
       "tag": "0106_rate_limit_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1787545231751,
+      "tag": "0107_kelurahan_ka_id",
+      "breakpoints": true
     }
   ]
 }

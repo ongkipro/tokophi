@@ -221,7 +221,7 @@
 |---|---|
 | `activity.ts` | `getActivityFeed` |
 | `analytics.ts` | `SERIES_DAYS` `dailyStatsRows` `getCategorySales` `getChannelSalesDaily` `getCustomerMix` `getDailyStats` `getHourlyStats` `getOrderStats` `getProductSalesDaily` `getRegionSales` `hourlyStatsRows` |
-| `areas.ts` | `areaById` `kelurahanForDistrict` `provinceForDistrict` `resolveArea` `searchAreaLocal` |
+| `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `provinceForDistrict` `resolveArea` `searchAreaLocal` |
 | `articles.ts` | `getArticle` `getArticles` `getBlogs` |
 | `billing.ts` | `getBilling` `getFaktur` `getMyInvoices` |
 | `bulk-labels.ts` | `bulkLabels` `getBulkLabels` |

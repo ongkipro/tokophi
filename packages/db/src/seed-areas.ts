@@ -49,14 +49,21 @@ async function seedKelurahan() {
 
   const rows: (typeof schema.kelurahan.$inferInsert)[] = [];
   for (const line of lines) {
-    // name is quoted (it may in principle contain a comma); the other three fields never are.
-    const m = /^([^,]+),(\d+),"((?:[^"]|"")*)",(\d+)$/.exec(line);
+    // name is quoted (it may in principle contain a comma); the other fields never are. The 5th
+    // field — KiriminAja's own subdistrict id (Task 8.17) — is OPTIONAL in the pattern and may be
+    // empty: it is filled by scripts/build-ka-kelurahan-ids.mjs and 6,0% of rows (4 747 of
+    // 78 764) never match a vendor name. Optional rather than required so a CSV predating that
+    // column still loads.
+    const m = /^([^,]+),(\d+),"((?:[^"]|"")*)",(\d+)(?:,(\d*))?$/.exec(line);
     if (!m) continue;
     rows.push({
       id: m[1],
       districtId: Number(m[2]),
       name: m[3].replaceAll('""', '"'),
       postcode: m[4],
+      // Empty column ⇒ NULL, never 0. Zero is a subdistrict id to a courier; NULL is "we do not
+      // know", and the booking then omits the field.
+      kaKelurahanId: m[5] ? Number(m[5]) : null,
     });
   }
 

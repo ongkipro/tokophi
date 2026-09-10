@@ -22,7 +22,12 @@ export function SenderAddressCard() {
   // Postcode follows the chosen kelurahan (it is not typed). Kept in state rather than derived, so the
   // saved value still shows on load, before the kelurahan option list has come back.
   const [postcode, setPostcode] = React.useState("");
-  const [kelOptions, setKelOptions] = React.useState<{ name: string; postcode: string }[]>([]);
+  // KiriminAja's OWN subdistrict id for the chosen kelurahan (Task 8.17). `null` = we could not
+  // match one, and then `sender_kelurahan_id` stays NULL and the booking omits the field — the
+  // behaviour this form has always had. It is never typed and never derived from the row's
+  // Kemendagri primary key, which is not a courier id.
+  const [kelKaId, setKelKaId] = React.useState<number | null>(null);
+  const [kelOptions, setKelOptions] = React.useState<{ name: string; postcode: string; kaKelurahanId: number | null }[]>([]);
   // Kecamatan mana yang opsinya SUDAH termuat. "Sedang memuat" = fakta turunan (kecId ≠ loadedFor),
   // bukan state yang disetel-tangan — versi bendera membutuhkan setState sinkron di dalam effect.
   const [kelLoadedFor, setKelLoadedFor] = React.useState<number | null>(null);
@@ -37,6 +42,7 @@ export function SenderAddressCard() {
         setName(s.name); setPhone(s.phone); setAddress(s.address);
         setKecId(s.kecamatanId); setKecName(s.kecamatanName);
         setKelName(s.kelurahanName ?? "");
+        setKelKaId(s.kelurahanId ?? null);
         setPostcode(s.postcode ?? "");
       }
       setLoaded(true);
@@ -73,18 +79,22 @@ export function SenderAddressCard() {
   };
   const pick = (r: { id: number; text: string }) => {
     setKecId(r.id); setKecName(r.text); setResults([]); setQ("");
-    setKelName(""); setPostcode(""); // a kelurahan (and its postcode) belongs to its district
+    setKelName(""); setPostcode(""); setKelKaId(null); // a kelurahan (its postcode AND its id) belongs to its district
   };
   // The postcode is never typed — it comes from the kelurahan the seller picked.
   const pickKelurahan = (nextName: string) => {
     setKelName(nextName);
-    setPostcode(kelChoices.find((k) => k.name === nextName)?.postcode ?? "");
+    const hit = kelChoices.find((k) => k.name === nextName);
+    setPostcode(hit?.postcode ?? "");
+    setKelKaId(hit?.kaKelurahanId ?? null);
   };
   const save = () =>
     startTransition(async () => {
-      // kelurahanId stays null on purpose — see the comment on the field. We only carry the NAME
-      // (+ its postcode); both ride in the written pickup address the courier rider reads.
-      const r = await saveSenderAddress({ name, phone, address, kecamatanId: kecId, kecamatanName: kecName, kelurahanName: kelName, postcode });
+      // `kelurahanId` is KiriminAja's own subdistrict id and NOTHING ELSE (Task 8.17) — it comes
+      // from the option the seller picked, which carries `kelurahan.ka_kelurahan_id`. It is `null`
+      // for a kelurahan we could not match, and then the booking omits `kelurahan_id` exactly as
+      // before. The NAME and the postcode still ride in the written pickup address the rider reads.
+      const r = await saveSenderAddress({ name, phone, address, kecamatanId: kecId, kecamatanName: kecName, kelurahanId: kelKaId, kelurahanName: kelName, postcode });
       if (r.ok) toast.success("Alamat pengirim disimpan.");
       else toast.error(r.error ?? "Gagal menyimpan.");
     });
@@ -141,13 +151,15 @@ export function SenderAddressCard() {
         </div>
 
         {/* Kelurahan — precision for the rider who collects the parcel.
-            ⚠️ It is stored as a NAME, not as an id, and that is deliberate. KiriminAja's booking
-            takes a `kelurahan_id` from THEIR OWN numbering, and their address API only knows
-            kecamatan: searching "Airlangga" (a kelurahan inside Gubeng) returns "Not found".
-            Our `kelurahan` table is Kemendagri data with TEXT codes ("11.01.01.2001"). Writing one
-            of those into `sender_kelurahan_id` would send the courier a foreign id that looks
-            valid — wrong data wearing the costume of right data. So we send the kecamatan id (which
-            IS theirs) and put the kelurahan in the written address the rider actually reads. */}
+            ⚠️ TWO IDS EXIST FOR THIS ROW AND ONLY ONE OF THEM IS A COURIER ID. Our `kelurahan`
+            table is keyed on a Kemendagri code ("11.01.01.2001"), because that is the key the
+            POSTCODE dataset is published under. Writing one of THOSE into `sender_kelurahan_id`
+            would send the courier a foreign id that looks valid — wrong data wearing the costume
+            of right data, which is why this form carried only the NAME for as long as it did.
+            Since Task 8.17 the row also carries `ka_kelurahan_id`, KiriminAja's own subdistrict id
+            (`POST /api/mitra/kelurahan`), and THAT is what is saved. It is `null` for the 6,0% of
+            rows whose name did not match; the booking then omits `kelurahan_id` as before. The
+            name + postcode still ride in the written address the rider actually reads. */}
         {kecId && (
           <div className="space-y-1.5">
             <Label htmlFor="s-kel">

@@ -213,6 +213,57 @@ export async function kaShippingPrice(p: {
   return out;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SINK GUARD FOR `*_kelurahan_id` (Task 8.17)
+//
+// Every id sent as `kelurahan_id` or `destination_kelurahan_id` passes through here. The two id
+// spaces this product holds for one village are trivially distinguishable, and that is the whole
+// reason a runtime check is worth its lines:
+//   Kemendagri  "34.02.07.2001"  text, dotted, 13 characters. Strip the dots and it is 3402072001 —
+//                                a 10-digit number, which a well-meaning `Number()`/`replace` mints.
+//   KiriminAja  31483            a plain integer; the vendor's subdistrict table is ~83k rows, so
+//                                six digits is already generous and seven is the refusal line.
+// TypeScript stops the obvious version (the column is `text`, the field is `number`), but the
+// dangerous version type-checks: a `Number(row.id)` or a `parseInt` somewhere upstream produces a
+// number that is not a courier id, and the vendor would take it — a pickup routed to a subdistrict
+// nobody chose, with no error anywhere. So this THROWS rather than dropping the field: a booking
+// built from a wrong id must fail loudly, the same rule `kaOrderId` follows.
+export const KA_KELURAHAN_ID_MAX = 9_999_999;
+
+/** Throws on anything that is not a plausible KiriminAja subdistrict id. Returns the id. */
+export function assertKaKelurahanId(value: unknown, field: "kelurahan_id" | "destination_kelurahan_id"): number {
+  if (typeof value === "string") {
+    throw new Error(
+      `KiriminAja ${field}: got the string ${JSON.stringify(value)}. This field takes KiriminAja's own ` +
+        `numeric subdistrict id (POST /api/mitra/kelurahan). \`kelurahan.id\` is a Kemendagri code and is not one.`,
+    );
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`KiriminAja ${field}: ${JSON.stringify(value)} is not a positive integer subdistrict id.`);
+  }
+  if (value > KA_KELURAHAN_ID_MAX) {
+    throw new Error(
+      `KiriminAja ${field}: ${value} is too large to be a KiriminAja subdistrict id (max ${KA_KELURAHAN_ID_MAX}). ` +
+        `A 10-digit value is a Kemendagri village code with its dots stripped — sending it would route the parcel ` +
+        `to a subdistrict nobody chose.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * The conditional spread for one of the two fields. Absent/NULL -> `{}` (the field is OMITTED,
+ * which is what NULL means and what shipped before this column existed); a value -> the field,
+ * after the guard. Deliberately not `{ [field]: value ?? null }`: `null` is a value to the vendor.
+ */
+function kelurahanField<K extends "kelurahan_id" | "destination_kelurahan_id">(
+  field: K,
+  value: number | null | undefined,
+): Record<K, number> | Record<string, never> {
+  if (value === null || value === undefined) return {};
+  return { [field]: assertKaKelurahanId(value, field) } as Record<K, number>;
+}
+
 // create an express shipment (pickup request) → returns AWB / KiriminAja order id
 //
 // 🔴 WHAT THE v6.2 SPEC MARKS REQUIRED AND WE STILL DO NOT SEND — Task 8.14, 2026-09-09.
@@ -227,15 +278,26 @@ export async function kaShippingPrice(p: {
 // absence is asserted by `kiriminaja-v62.test.ts`. Filling them is a data-model change (a geocode
 // at Pengaturan → Alamat and one per destination district), not a client edit.
 //
-// 🔴 AND `kelurahan_id` / `destination_kelurahan_id` CANNOT BE FILLED FROM OUR DATA EITHER — the
-// ids we hold are the WRONG ONES. `kelurahan.id` is a **Kemendagri** village code (text, from
-// `packages/db/scripts/build-kelurahan.mjs`, joined to KiriminAja's districts BY NAME); it is not a
-// KiriminAja subdistrict id and sending it as one would be a wrong id, which is worse than an
-// absent one. That is why `kelurahanOptions()` returns only `{name, postcode}` and the Seller's
-// pickup form deliberately leaves `sender_kelurahan_id` NULL. `orders` carries no kelurahan at all
-// (the checkout collects one to derive the kodepos and `/api/public/order` ignores it). The honest
-// route is the vendor's own `kelurahan` endpoint, which we do not integrate — a separate task.
-// `kelurahanId` stays on the type because the column exists and a real KA id may arrive one day.
+// 🔴 `kelurahan_id` / `destination_kelurahan_id` TAKE KIRIMINAJA'S OWN SUBDISTRICT ID AND NOTHING
+// ELSE — Task 8.17. Two id spaces exist for one village and they are not interchangeable:
+//   · `kelurahan.id`            Kemendagri code, TEXT, dotted, 13 chars ("34.02.07.2001"). It is
+//                               the key the POSTCODE dataset is published under, which is the only
+//                               reason that table exists. It is NOT a courier id.
+//   · `kelurahan.ka_kelurahan_id`  KiriminAja's own, a small integer (31483), from
+//                               `POST /api/mitra/kelurahan` (kecamatan_id -> results[].id).
+// The Kemendagri code used to be the only one we held, so both fields were omitted — correctly:
+// a wrong id is worse than an absent one. `ka_kelurahan_id` (migration 0107) is populated by
+// `packages/db/scripts/build-ka-kelurahan-ids.mjs`, which matches by NAME within one district and
+// reports its unmatched rate rather than hiding it. It is NULL for the rows that did not match, and
+// the fields below are still spread CONDITIONALLY: NULL means omit, exactly as before. Never make
+// them unconditional on a column that may be NULL, and never send `0`/`""` for "unknown".
+//
+// `assertKaKelurahanId` above is the sink guard: it refuses anything shaped like a Kemendagri code.
+//
+// The SENDER half is wired (`store_settings.sender_kelurahan_id`, written from the Seller's pickup
+// form). The DESTINATION half is not: `orders` carries no kelurahan column at all — the checkout
+// collects one to derive the kodepos and `/api/public/order` ignores it — so `destKelurahanId` has
+// no producer yet and stays undefined. That needs its own column and its own capture.
 export type KaSender = {
   name: string; phone: string; address: string;
   kecamatanId: number; kelurahanId?: number | null;
@@ -304,7 +366,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   }>("/api/mitra/v6.2/request_pickup", {
     name: sender.name, phone: sender.phone, address: sender.address,
     kecamatan_id: sender.kecamatanId,
-    ...(sender.kelurahanId ? { kelurahan_id: sender.kelurahanId } : {}),
+    ...kelurahanField("kelurahan_id", sender.kelurahanId),
     // Spec-required (Task 8.14). It has always been in `store_settings.sender_postcode` and rode
     // only inside the written pickup `address`; it is now ALSO its own field, which is what the
     // vendor documents. Omitted, never sent as `""`/`0`, when the seller has no kelurahan-derived
@@ -317,7 +379,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       order_id: kaOrderId(pkg.orderRef),
       destination_name: pkg.destName, destination_phone: pkg.destPhone, destination_address: pkg.destAddress,
       destination_kecamatan_id: pkg.destKecamatanId,
-      ...(pkg.destKelurahanId ? { destination_kelurahan_id: pkg.destKelurahanId } : {}),
+      ...kelurahanField("destination_kelurahan_id", pkg.destKelurahanId),
       weight: pkg.weight, width: pkg.width ?? 10, length: pkg.length ?? 10, height: pkg.height ?? 10,
       qty: pkg.qty ?? 1, item_value: pkg.itemValue, item_name: pkg.itemName,
       service: pkg.service, service_type: pkg.serviceType, shipping_cost: pkg.shippingCost,

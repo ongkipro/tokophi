@@ -159,3 +159,33 @@ export async function kelurahanForDistrict(districtId: number): Promise<Keluraha
     .where(eq(schema.kelurahan.districtId, districtId))
     .orderBy(schema.kelurahan.name);
 }
+
+/** As above, plus KiriminAja's OWN subdistrict id — `null` where we could not match one. */
+export type KelurahanWithKaId = Kelurahan & { kaKelurahanId: number | null };
+
+/**
+ * The same list, carrying `kelurahan.ka_kelurahan_id` (Task 8.17).
+ *
+ * ⚠️ A SEPARATE FUNCTION ON PURPOSE — `kelurahanForDistrict` is served to the SHOPPER's browser by
+ * `/api/public/ongkir`, and the checkout needs exactly one thing from a kelurahan: its postcode.
+ * Publishing the courier id there would put a value into the client that only the server may
+ * decide, and the next change to make is always "echo it back in the order body". The vendor id is
+ * read on the SELLER's path only, where the id is chosen and stored server-side.
+ *
+ * `kaKelurahanId === null` is the normal state for part of the table: the name match against
+ * `POST /api/mitra/kelurahan` fails for 6,0% of rows — 4 747 of 78 764, measured (see
+ * `packages/db/scripts/build-ka-kelurahan-ids.mjs`). NULL means the booking omits the field, which
+ * is what it already does today.
+ */
+export async function kelurahanWithKaIdForDistrict(districtId: number): Promise<KelurahanWithKaId[]> {
+  if (!Number.isFinite(districtId) || districtId <= 0) return [];
+  return db
+    .select({
+      name: schema.kelurahan.name,
+      postcode: schema.kelurahan.postcode,
+      kaKelurahanId: schema.kelurahan.kaKelurahanId,
+    })
+    .from(schema.kelurahan)
+    .where(eq(schema.kelurahan.districtId, districtId))
+    .orderBy(schema.kelurahan.name);
+}

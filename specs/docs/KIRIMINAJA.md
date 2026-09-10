@@ -308,15 +308,48 @@ district's own postcode when that district has exactly one), `destination_zipcod
 (`orders.ship_postcode`, required at checkout since 2026-08-03), and `packages[].items` — one entry per
 `order_line_items` row, `price` PER UNIT per the schema, never one synthetic line.
 
-🔴 **The kelurahan ids we hold are the WRONG ONES, so sending them would be worse than omitting them.**
-`kelurahan.id` is a **Kemendagri** village code (text, built by `packages/db/scripts/build-kelurahan.mjs`
-and joined to KiriminAja's districts BY NAME) — not a KiriminAja subdistrict id. The rest of the code
-already behaves as if it knows this: `kelurahanOptions()` returns only `{name, postcode}`,
-`sender-address-card.tsx` says *"kelurahanId stays null on purpose"*, `store_settings.sender_kelurahan_id`
-is NULL for every store, and `orders` carries no kelurahan at all (checkout collects one only to derive
-the kodepos; `/api/public/order` ignores it). **The honest route exists and we do not use it:**
-`POST /api/mitra/kelurahan` (`kecamatan_id` → subdistrict list) and `GET /api/mitra/v6.1/addresses`.
-Filed as Task 8.17 — it needs a real integration and a column for the KA id, not a cast.
+🔴 **TWO ID SPACES EXIST FOR ONE VILLAGE AND ONLY ONE OF THEM IS A COURIER ID** (Task 8.17, closed
+2026-09-10 for the sender half). `kelurahan.id` is a **Kemendagri** village code — text, dotted,
+13 characters ("34.02.07.2001"), built by `packages/db/scripts/build-kelurahan.mjs` and joined to
+KiriminAja's districts BY NAME. It is the key the POSTCODE dataset is published under, which is the
+only reason that table exists, so it can never be overwritten. Migration **`0107_kelurahan_ka_id`**
+adds `kelurahan.ka_kelurahan_id` ALONGSIDE it: KiriminAja's own subdistrict id, a small integer.
+
+**The endpoint, verified live (sandbox, read-only, 2026-09-10).** `POST /api/mitra/kelurahan`
+`{"kecamatan_id": 548}` → HTTP 200
+
+```json
+{"status":true,"text":"Courier Loaded","method":"get_kelurahan_from_kecamatan_id",
+ "results":[{"id":31483,"kelurahan_name":"Bawuran","kecamatan_id":548,"postal_code":"55791"}, …]}
+```
+
+⚠️ It answers in **`results`**, not the `datas` every other hierarchy endpoint uses (the spec says so).
+⚠️ **`postal_code` is real but UNDOCUMENTED** — absent from the OpenAPI schema. We do not write it; the
+committed postcode stays the Kemendagri one the whole table is built on.
+🔴 **`status:false` IS A VENDOR ERROR, NOT "NO DATA".** At concurrency 4 the endpoint soft-throttles and
+answers **HTTP 200** with `{"status":false,"text":"Oops, terjadi kesalahan…","endpoint":"kelurahan"}` —
+no 429, no error status. A first run read that as missing coverage and reported **179 of 300 districts
+empty (59,7%)**; sixty seconds later the same three district ids (548, 2788, 1) all returned full lists.
+The populator therefore separates three outcomes — data / honestly empty / our failure — retries the
+third, and never counts it as the second.
+
+**Measured match rate** (200-district stride sample across every province, concurrency 2, 2026-09-10):
+2 423 kelurahan considered → **2 228 exact (91,95%) + 70 fuzzy (2,89%) = 94,84% matched**, **125
+unmatched (5,16%)**, **0 districts with no vendor data**, **0 failures**. The unmatched are name
+mismatches, concentrated in Sumatera Utara (19), Aceh (15) and NTT (15); every one is listed with its
+province in `packages/db/data/ka-kelurahan-unmatched.csv`. ⚠️ This 5% is a DIFFERENT gap from the ~4%
+of KiriminAja districts our Kemendagri join never resolved (295 of 7 030) — that one costs the kodepos
+auto-fill, this one costs the subdistrict id.
+
+**What is wired.** `kelurahanOptions()` now returns `{name, postcode, kaKelurahanId}` and the Seller's
+pickup form writes the vendor id into `store_settings.sender_kelurahan_id`; `saveSenderAddress`
+re-derives it against the chosen district and drops to NULL if it does not resolve. Both booking fields
+stay **conditional** — NULL means the field is omitted, exactly as before. **The DESTINATION half is
+NOT wired:** `orders` still carries no kelurahan column (checkout collects one only to derive the
+kodepos; `/api/public/order` ignores it), so `destination_kelurahan_id` has no producer yet.
+**The guard:** `packages/lib/src/ka-kelurahan-id.test.ts` — `assertKaKelurahanId` throws on a Kemendagri
+code, as a string AND as the 10-digit number a `Number()`/`replace` upstream would produce, and a
+`codeOnly` claim pins that `kiriminaja.ts` writes those two fields nowhere but through it.
 
 ⚠️ **Coordinates: confirmed unfillable, column by column.** `store_settings.sender_lat`/`sender_lng` are
 dead columns (nothing reads or writes them), `orders` has no coordinate columns, and neither
@@ -339,9 +372,9 @@ lenient TODAY — that is a grace period, not a contract.
 |---|---|
 | `zipcode` (sender) | absent |
 | `latitude`, `longitude` (sender) | absent |
-| `kelurahan_id` (sender) | conditional |
+| `kelurahan_id` (sender) | conditional — a REAL KA id since 0107, still omitted when NULL |
 | `destination_zipcode` | conditional |
-| `destination_kelurahan_id` | conditional |
+| `destination_kelurahan_id` | conditional — no producer yet (`orders` has no kelurahan column) |
 | `destination_latitude`, `destination_longitude` | absent |
 | `items` (per package) | absent |
 

@@ -1744,12 +1744,24 @@ export const kiriminajaAreas = pgTable("kiriminaja_areas", {
 export const kelurahan = pgTable(
   "kelurahan",
   {
+    // ⚠️ TWO ID SPACES LIVE ON THIS ROW AND THEY ARE NOT INTERCHANGEABLE.
+    // `id` is a **Kemendagri** village code — text, dotted, 13 characters ("34.02.07.2001"), built
+    // by `packages/db/scripts/build-kelurahan.mjs` and joined to KiriminAja's districts BY NAME. It
+    // is the key the POSTCODE dataset is published under, which is the only reason this table
+    // exists, so it can never be overwritten with a vendor id.
     id: text().primaryKey(),
     districtId: integer()
       .notNull()
       .references(() => kiriminajaAreas.id),
     name: text().notNull(),
     postcode: text().notNull(),
+    // KiriminAja's OWN subdistrict id (`POST /api/mitra/kelurahan` → `results[].id`) — a small
+    // integer (31483), nothing like the dotted code above. This is the ONLY value that may ever be
+    // sent as `kelurahan_id` / `destination_kelurahan_id` to `v6.2/request_pickup`; sending the
+    // Kemendagri code there would be a WRONG id, which is worse than an absent one.
+    // NULLABLE on purpose: the vendor has no subdistrict data for part of its own district list,
+    // and a name match can fail. NULL means "we do not know it" and the caller omits the field.
+    kaKelurahanId: integer(),
   },
   // The ONLY access pattern: "give me the kelurahan of the district the shopper just picked".
   // 78k rows, read on every checkout — without this it is a seq scan (25ms) per selection.
