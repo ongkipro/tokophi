@@ -3689,6 +3689,42 @@ so the seed's `truncate`-then-insert repopulated correctly with the 5-column par
 **Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 486 tests** · RLS verified ·
 storefront 8/8.
 
+## 2026-09-11 00:10 UTC — ADR 0004 enforced: the shipping provider's name leaves every merchant-facing string (Main Session)
+
+**Scope:** owner report ("kata KiriminAja di Pengaturan tidak perlu ditampilkan, rebrand TokoΦ") · branch `fix/hide-provider-brand`.
+
+**The report was a symptom of a five-month-old decision never being swept.** ADR 0004 says provider
+brands stay hidden from clients; the payment side always obeyed ("biaya pembayaran", never the PSP).
+The shipping side leaked **"KiriminAja" into nine strings a seller reads** — the Pengaturan →
+Pengiriman loading line the owner saw, an order-detail hint, six `shipping.ts` action errors, and one
+sentence the tracking cron writes to `orders.problem_note`, which `ka-tracking.ts:108` itself documents
+as *"merchant-facing"*. AGENTS.md already names the mechanism: a rule re-obeyed by hand at every call
+site is how the ninth one happens.
+
+**One label, one module.** `@tokophi/lib/provider-label` exports `SHIPPING_SERVICE = "TokoΦ Kirim"`
+(+ `PAYMENT_SERVICE` for symmetry). Nine sites now read it. The one operator-only sentence — *"daftarkan
+prefix order_id di KiriminAja Dashboard"* — was replaced rather than rebranded: a merchant cannot
+register a prefix, so it now says to contact TokoΦ support. Code identifiers, env vars, DB columns,
+the stored `payments.provider = "autolaris"` value, server logs and everything in `apps/super-admin`
+are untouched **on purpose** — operators must see the real vendor to resolve a support call.
+
+**Guard: `packages/lib/src/provider-label.test.ts` (6 tests).** It reads `textWithoutComments`, NOT
+`codeOnly` — the leak lives INSIDE a string literal, so inerting literals would make it permanently
+green (the same reason the credential guard keeps them). Identifiers survive comment-stripping, so the
+pattern is BOUNDARY-AWARE: a brand glued to identifier chars, `_`, `/`, `@` or `.` is code
+(`kiriminajaConfigured`, `KIRIMINAJA_API_KEY`, `@tokophi/lib/kiriminaja`, `schema.kiriminajaAreas`)
+and is ignored; proved on 10 shaped cases before use. Every client-facing `.ts/.tsx/.astro` under
+`apps/admin`, `apps/storefront`, `apps/landing` is scanned (>200 files, derived from `git ls-files`,
+super-admin deliberately excluded); the two surviving prose-shaped matches are NAMED allowances with
+reasons, and a stale allowance fails the suite. Mutation self-check on the seven shipped strings, and
+**proved RED against the real file** by putting the Pengaturan line back — it named
+`jasa-kirim-card.tsx` and the sentence.
+
+⚠️ **A hand-rolled TypeScript scanner was tried first and mis-lexed comment bodies as strings** (95
+false hits). Discarded for the repo's own `test/source-code.ts`, which exists precisely because
+every hand-rolled comment stripper here has had a different hole.
+
+**Gate:** lint 0 · verify:guards 0 · **test:release 170 files / 1 492 tests** · RLS verified · storefront 8/8.
 ## 2026-09-11 01:05 UTC — Payment reconciliation cron (observe-only), AutoLaris re-read, three latent defects closed (Main Session)
 
 **Scope:** owner request *"baca ulang repo ongkipro/autolaris → pastikan create order dan courir id = 1, json jangan lupa sama advice, dan cronjob untuk cek"* · branch `feat/payment-advice-cron` · Task 8.19 status updated in place.
@@ -3780,6 +3816,27 @@ actual response before the sentence shipped into two contract files.
 doc-authority ok (8 documents, one queue) · traceability ok · migrations ok · RLS verified; `doc-counts`
 + `release-guards` + `page-map-fresh` **33/33**. The full `test:release` was not re-run: this branch
 touches only Markdown, and every suite that reads these files is in that 33.
+
+
+## 2026-09-11 02:50 UTC — CORRECTION: #393 was not Markdown-only; it carried #392 (Main Session)
+
+The 02:20 entry above says *"Markdown only — does not deploy"*. **False.** `docs/root-contract-refresh` was
+created with `git checkout -b` while `feat/payment-advice-cron` was checked out, so it stacked on #392's
+commit and merging #393 (`f5100ac`) merged all of #392 too — 29 files, 11 of them code and compose.
+Coolify queued deploy **537** for it, which is how the error surfaced: a deploy row for a "docs" merge.
+GitHub marked #392 merged by itself (head reachable from `main`, diff empty).
+
+**What actually shipped is the commit that passed CI 4/4 on #392** — the observe-only advice cron, the
+seventh sidecar, the `al()` timeout, the 20-char seller `reff_id`. Nothing untested reached production;
+what was wrong was every sentence describing the release. `RELEASE.md` header now names `f5100ac` with
+base `98f1d5a`; `STATUS.md` "Active work" corrected. This entry is appended, the 02:20 one is left as
+written — the log records what was believed and when.
+
+**Invariant:** a branch for its own PR is cut from `origin/main` explicitly (`git checkout -b <new>
+origin/main`), and the PR's `commits` are read before it is opened. The `docs-only ⇒ no deploy` belief
+(memory, `DEPLOY.md`) stands — it was the premise that was wrong, not the rule.
+
+**Owed:** after 537 lands, prove `cron-payment-advice` is running and reports a `payment-advice` row.
 
 ## 2026-09-11 03:40 UTC — Task 8.22: Super Admin front door, mobile drawer, theme toggle, grouped nav — proved in Chromium (Main Session)
 

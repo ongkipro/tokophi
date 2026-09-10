@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -1471,7 +1472,7 @@ export function OrderDetail({
                 </div>
                 <div>{senderError}</div>
                 <div>
-                  Kurir menjemput paket dari alamat ini, jadi KiriminAja menolak
+                  Kurir menjemput paket dari alamat ini, jadi {SHIPPING_SERVICE} menolak
                   booking tanpa{" "}
                   <span className="font-medium text-foreground">kecamatan</span>
                   .

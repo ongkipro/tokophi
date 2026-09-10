@@ -7,6 +7,7 @@ import { normalizePhone } from "@tokophi/lib/validate";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
+import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, buildKaOrderRef, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
@@ -158,7 +159,7 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
     return {
       ok: false,
       rates: [],
-      error: "KiriminAja belum dikonfigurasi oleh platform (super-admin → Pengaturan).",
+      error: `${SHIPPING_SERVICE} belum dikonfigurasi oleh platform (super-admin → Pengaturan).`,
     };
 
   const ctx = await withCurrentTenant(async (db) => {
@@ -246,7 +247,7 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
     return {
       ok: false,
       rates: [],
-      error: r.error ?? "Gagal mengambil tarif dari KiriminAja.",
+      error: r.error ?? `Gagal mengambil tarif dari ${SHIPPING_SERVICE}.`,
     };
   const scope = await shippingScope(session.storeId);
   // Same EFFECTIVE COD flag the storefront sees (lib/cod.ts): the merchant's own switch + the
@@ -617,7 +618,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
   if (!kiriminajaConfigured())
     return {
       ok: false,
-      error: "KiriminAja belum dikonfigurasi oleh platform.",
+      error: `${SHIPPING_SERVICE} belum dikonfigurasi oleh platform.`,
     };
   // A shipment can only be booked with an expedition courier — the instant (rider) booking path was
   // removed with the feature (@tokophi/lib/couriers). This is the boundary, not the UI.
@@ -783,7 +784,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
   if (!destDistrictId)
     return {
       ok: false,
-      error: `Area tujuan "${o.city}" tidak ditemukan di KiriminAja.`,
+      error: `Area tujuan "${o.city}" tidak ditemukan di ${SHIPPING_SERVICE}.`,
     };
   const destAddress = o.shipAddress?.trim() || o.city || "-";
   if (!o.shipAddress?.trim()) {
@@ -1118,7 +1119,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
     });
     const e = (r.error ?? "").toLowerCase();
     // KiriminAja's rejections are actionable — surface WHAT to fix, not just that it failed.
-    const hint = e.includes("prefix") ? " (daftarkan prefix order_id di KiriminAja Dashboard, atau set KIRIMINAJA_ORDER_PREFIX)" : e.includes("batas pemrosesan") || e.includes("penjadwalan") ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)" : "";
+    const hint = e.includes("prefix") ? " (konfigurasi pengiriman platform belum lengkap — hubungi dukungan TokoΦ)" : e.includes("batas pemrosesan") || e.includes("penjadwalan") ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)" : "";
     return {
       ok: false,
       error: (r.error ?? "Gagal membuat pengiriman.") + hint,
@@ -1353,7 +1354,7 @@ export async function cancelShipment(orderNumber: string, reason = "Dibatalkan o
     revalidatePath(`/pesanan/${orderNumber}`);
     return {
       ok: false,
-      error: `KiriminAja menolak pembatalan: ${result.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.`,
+      error: `${SHIPPING_SERVICE} menolak pembatalan: ${result.error ?? "gagal"}. Pengiriman masih terdaftar di kurir.`,
     };
   }
 
@@ -1436,7 +1437,7 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
       kaOrderId: ref,
       awb: row?.awb ?? null,
       history: [],
-      message: unavailable ? "KiriminAja belum punya data lacak untuk pengiriman ini — kurir belum menjemput/memproses paket. Nomor resi terbit setelah paket diproses kurir." : (r.error ?? "Tracking belum tersedia."),
+      message: unavailable ? `${SHIPPING_SERVICE} belum punya data lacak untuk pengiriman ini — kurir belum menjemput/memproses paket. Nomor resi terbit setelah paket diproses kurir.` : (r.error ?? "Tracking belum tersedia."),
     };
   }
 
@@ -1469,7 +1470,7 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
     status: data.status ?? null,
     history,
     pending: history.length === 0,
-    message: realAwb ? `Nomor resi kurir diterima: ${realAwb}` : history.length ? `Update terakhir: ${history[history.length - 1].desc}` : "Pengiriman terdaftar di KiriminAja — belum ada pergerakan dari kurir.",
+    message: realAwb ? `Nomor resi kurir diterima: ${realAwb}` : history.length ? `Update terakhir: ${history[history.length - 1].desc}` : `Pengiriman terdaftar di ${SHIPPING_SERVICE} — belum ada pergerakan dari kurir.`,
   };
 }
 

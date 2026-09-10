@@ -1,11 +1,11 @@
 # Release Manifest — tokophi
 
-Release-ID: 98f1d5a-pr390
-Base: fca0a2ebff6c71d74db03d7c9d5cbe53b0b20f1a
+Release-ID: f5100ac-pr393
+Base: 98f1d5a2219d1e591af0ef1c0f9da39291424c85
 Environment: production
 Declared-Risk: R2
-Rollback-Ref: fca0a2ebff6c71d74db03d7c9d5cbe53b0b20f1a
-Rollback-Command: Coolify → application tokophi → Deployments → redeploy commit fca0a2e (or `git revert -m 1 98f1d5a` + push to `main` → webhook; ~10 min measured on deploys 535/536, specs/docs/DEPLOY.md)
+Rollback-Ref: 98f1d5a2219d1e591af0ef1c0f9da39291424c85
+Rollback-Command: Coolify → application tokophi → Deployments → redeploy commit 98f1d5a (or `git revert -m 1 f5100ac` + push to `main` → webhook; ~10 min measured on deploys 535/536, specs/docs/DEPLOY.md)
 Backup-Proof: NOT_REQUIRED
 Status: DEPLOYED
 
@@ -20,7 +20,30 @@ This file defines the current release boundary. It is repository truth for relea
 - `Backup-Proof` is `NOT_REQUIRED` unless migration risk requires a structured `backup://`, `snapshot://`, or artifact reference.
 - Set `Status: READY` only after the release scope is frozen for production gating.
 
-## This release — `98f1d5a` (PR #390, merged 2026-09-10 16:36 UTC; Coolify deploy **536**, `finished` 16:46 UTC)
+## This release — `f5100ac` (PR #393, merged 2026-09-10 17:30 UTC; Coolify deploy **537**)
+
+⚠️ **This release carries MORE than its PR title says, and the error was mine.** `docs/root-contract-refresh`
+was branched from `feat/payment-advice-cron` instead of `main`, so merging #393 ("docs only") also merged
+every commit of **#392** — the payment-advice cron route, the `cron-payment-advice` compose sidecar, the
+15 s `al()` timeout, the 20-char seller `reff_id`, the liveness-card additions. GitHub then marked #392
+merged on its own (head reachable from `main`, empty diff). The code is exactly the commit that passed
+CI 4/4 on #392, so nothing untested shipped — but the PR description, `STATUS.md` and the BUILD-LOG entry
+all said "Markdown only — does not deploy", which was false the moment it merged. Corrected here, by
+appending, never by rewriting.
+
+- **Scope** (`git diff --stat 98f1d5a f5100ac`, 29 files, 11 non-Markdown): #392 in full + the root
+  delivery-contract refresh + `LANDING_PRD.md` + the development-kit map in `specs/README.md`.
+- **Why R2:** adds a seventh compose service that calls the payment provider every 15 minutes
+  (read-only, bounded, proven by source to write no payment state) and a request timeout on every
+  AutoLaris call. **No migration** → `Backup-Proof: NOT_REQUIRED`.
+- **Verification owed after deploy 537 lands:** the `cron-payment-advice` container is `running`, a
+  `payment-advice` row appears in `cron_runs` within one interval, and Super Admin → Analitik → Sistem
+  shows it beside the (previously unlisted) `order-expiry`.
+- **Lesson recorded:** `git checkout -b <new>` branches from *wherever you are*. Every branch meant
+  for its own PR is now created as `git checkout -b <new> origin/main`, and `gh pr view --json
+  baseRefName,commits` is read before opening the PR.
+
+## Previous release — `98f1d5a` (PR #390, merged 2026-09-10 16:36 UTC; Coolify deploy **536**, `finished` 16:46 UTC)
 
 - **Scope** (`git diff --stat fca0a2e 98f1d5a`): VA fee default Rp3.500 → Rp3.000 (DEC-011) in
   `packages/lib/src/payment-fees.ts`, the comparison guard flipped from "diverges" to "match", six
@@ -71,6 +94,5 @@ other field validates (Base is a real ancestor of HEAD, Rollback-Ref resolves, n
 
 ## Next release
 
-Nothing is frozen. Candidates open on GitHub: **#391** (ADR 0004 brand guard) and **#392** (advice
-reconciliation cron + compose sidecar — the next deploy adds a container). Whichever merges first
-becomes the release this file describes; rewrite the header then, with `Base: 98f1d5a…`.
+Nothing is frozen. Open on GitHub: **#391** (ADR 0004 brand guard; CI re-running after a BUILD-LOG
+merge). It becomes the release this file describes; rewrite the header then, with `Base: f5100ac…`.
