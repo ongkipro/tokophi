@@ -17,6 +17,7 @@
     "./tax": "./src/tax.ts",
     "./like": "./src/like.ts",
     "./uuid": "./src/uuid.ts",
+    "./provider-label": "./src/provider-label.ts",
     "./form-config": "./src/form-config.ts",
     "./totp": "./src/totp.ts",
     "./password": "./src/password.ts",

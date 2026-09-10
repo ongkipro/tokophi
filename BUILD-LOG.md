@@ -3689,6 +3689,42 @@ so the seed's `truncate`-then-insert repopulated correctly with the 5-column par
 **Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 486 tests** · RLS verified ·
 storefront 8/8.
 
+## 2026-09-11 00:10 UTC — ADR 0004 enforced: the shipping provider's name leaves every merchant-facing string (Main Session)
+
+**Scope:** owner report ("kata KiriminAja di Pengaturan tidak perlu ditampilkan, rebrand TokoΦ") · branch `fix/hide-provider-brand`.
+
+**The report was a symptom of a five-month-old decision never being swept.** ADR 0004 says provider
+brands stay hidden from clients; the payment side always obeyed ("biaya pembayaran", never the PSP).
+The shipping side leaked **"KiriminAja" into nine strings a seller reads** — the Pengaturan →
+Pengiriman loading line the owner saw, an order-detail hint, six `shipping.ts` action errors, and one
+sentence the tracking cron writes to `orders.problem_note`, which `ka-tracking.ts:108` itself documents
+as *"merchant-facing"*. AGENTS.md already names the mechanism: a rule re-obeyed by hand at every call
+site is how the ninth one happens.
+
+**One label, one module.** `@tokophi/lib/provider-label` exports `SHIPPING_SERVICE = "TokoΦ Kirim"`
+(+ `PAYMENT_SERVICE` for symmetry). Nine sites now read it. The one operator-only sentence — *"daftarkan
+prefix order_id di KiriminAja Dashboard"* — was replaced rather than rebranded: a merchant cannot
+register a prefix, so it now says to contact TokoΦ support. Code identifiers, env vars, DB columns,
+the stored `payments.provider = "autolaris"` value, server logs and everything in `apps/super-admin`
+are untouched **on purpose** — operators must see the real vendor to resolve a support call.
+
+**Guard: `packages/lib/src/provider-label.test.ts` (6 tests).** It reads `textWithoutComments`, NOT
+`codeOnly` — the leak lives INSIDE a string literal, so inerting literals would make it permanently
+green (the same reason the credential guard keeps them). Identifiers survive comment-stripping, so the
+pattern is BOUNDARY-AWARE: a brand glued to identifier chars, `_`, `/`, `@` or `.` is code
+(`kiriminajaConfigured`, `KIRIMINAJA_API_KEY`, `@tokophi/lib/kiriminaja`, `schema.kiriminajaAreas`)
+and is ignored; proved on 10 shaped cases before use. Every client-facing `.ts/.tsx/.astro` under
+`apps/admin`, `apps/storefront`, `apps/landing` is scanned (>200 files, derived from `git ls-files`,
+super-admin deliberately excluded); the two surviving prose-shaped matches are NAMED allowances with
+reasons, and a stale allowance fails the suite. Mutation self-check on the seven shipped strings, and
+**proved RED against the real file** by putting the Pengaturan line back — it named
+`jasa-kirim-card.tsx` and the sentence.
+
+⚠️ **A hand-rolled TypeScript scanner was tried first and mis-lexed comment bodies as strings** (95
+false hits). Discarded for the repo's own `test/source-code.ts`, which exists precisely because
+every hand-rolled comment stripper here has had a different hole.
+
+**Gate:** lint 0 · verify:guards 0 · **test:release 170 files / 1 492 tests** · RLS verified · storefront 8/8.
 ## 2026-09-11 01:05 UTC — Payment reconciliation cron (observe-only), AutoLaris re-read, three latent defects closed (Main Session)
 
 **Scope:** owner request *"baca ulang repo ongkipro/autolaris → pastikan create order dan courir id = 1, json jangan lupa sama advice, dan cronjob untuk cek"* · branch `feat/payment-advice-cron` · Task 8.19 status updated in place.

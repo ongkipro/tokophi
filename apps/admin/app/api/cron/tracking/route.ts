@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
 import { db } from "@tokophi/db";
 import { sql } from "drizzle-orm";
 import { KaTransportError, kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
@@ -84,9 +85,9 @@ export async function GET(req: NextRequest) {
       ok: false,
       startedAt,
       intervalSec: cronIntervalSec(req),
-      result: { error: "KiriminAja belum dikonfigurasi." },
+      result: { error: `${SHIPPING_SERVICE} belum dikonfigurasi.` },
     });
-    return NextResponse.json({ ok: false, error: "KiriminAja belum dikonfigurasi." }, { status: 200 });
+    return NextResponse.json({ ok: false, error: `${SHIPPING_SERVICE} belum dikonfigurasi.` }, { status: 200 });
   }
 
   // Rank independently inside every store, then execute round 1 for all stores before round 2, etc.
@@ -130,7 +131,7 @@ export async function GET(req: NextRequest) {
   const flagPermanentError = async (orderNumber: string, httpStatus: number, detail?: string) => {
     problems++;
     const suffix = detail ? `: ${detail}` : ".";
-    const note = `KiriminAja menolak permintaan pelacakan secara permanen (HTTP ${httpStatus})${suffix}`;
+    const note = `${SHIPPING_SERVICE} menolak permintaan pelacakan secara permanen (HTTP ${httpStatus})${suffix}`;
     console.warn("[cron/tracking] permanent courier rejection", orderNumber, "HTTP", httpStatus);
     try {
       await syncOrderFromKa(orderNumber, "problem", null, note);
