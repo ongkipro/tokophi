@@ -232,6 +232,10 @@ describe("the sidebar offers only what the rank can open", () => {
     // or offered but denied. One source, both halves.
     expect(NAV_SRC).toContain(codeOnly("canOpenPath("));
     expect(SHELL_SRC).toContain(codeOnly("navFor(admin.role)"));
-    expect(SHELL_SRC, "the sidebar must render the filtered list").toContain(codeOnly("{nav.map("));
+    // Since 2026-09-11 the list is rendered by ONE `NavLinks` component, used by the sidebar and the
+    // mobile drawer alike; both must be handed the FILTERED `nav`, never the raw `NAV`. Two sites,
+    // because a drawer fed the unfiltered list would offer a support operator screens that refuse.
+    expect((SHELL_SRC.match(/items\s*=\s*\{\s*nav\s*\}/g) ?? []).length, "sidebar + drawer both render the filtered list").toBe(2);
+    expect(SHELL_SRC, "the raw NAV must never be rendered").not.toMatch(/items\s*=\s*\{\s*NAV\s*\}/);
   });
 });
