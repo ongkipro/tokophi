@@ -3554,3 +3554,71 @@ against the committed duplicates before the repair**, naming eight real clashing
 
 **Gate:** lint 0 · verify:guards 0 · **test:release 168 files / 1 477 tests** · RLS verified · storefront
 8/8. `packages/db` + `packages/lib` alone: 49 files / 469 tests.
+
+## 2026-09-10 15:05 UTC — Task 8.17 destination half: `destination_kelurahan_id` gets a producer (Main Session)
+
+**Scope:** Task 8.17, destination half · branch `feat/ka-kelurahan-ids` · local only, no merge, no deploy.
+
+The sender half shipped this morning. The destination field had no producer at all: the checkout has
+always posted a kelurahan (it is how the kodepos is derived) and `/api/public/order` threw it away,
+and a comment in `checkout.astro` said so in as many words.
+
+**Migration `0108_order_ship_kelurahan`** (stamp 1787545291751, idempotent, no index) adds
+`orders.ship_kelurahan` — the NAME, snapshotted onto the order like the street, because the address
+belongs to the transaction and not to the person (0042) — and `orders.ship_kelurahan_id`,
+KiriminAja's own. The checkout now sends the name in `address.kelurahan`; the route **re-derives**
+the id server-side against the district the ongkir was priced against, exactly as `saveSenderAddress`
+does on the seller's side. `createShipment` passes it through as `destKelurahanId`, which
+`kelurahanField()` was already built to carry.
+
+**The guard that carries the whole risk of this change.** `destDistrictId` falls back to
+`resolveArea(o.city)` for the **77 orders with no `ship_district_id`** — the branch that resolved
+"Surabaya" to "Bandar Surabaya, Lampung Tengah". A subdistrict belongs to exactly one district, so
+pairing a stored id with a guessed one puts a village that is not in the kecamatan on the same
+booking request. Guessed ⇒ omit.
+
+**What was deliberately NOT changed: the checkout.** The kelurahan picker appears only where it
+changes the answer — 5 520 of 6 735 districts (82,0%) have one postcode across every village, so most
+shoppers are never asked. NULL is therefore the common case, not a gap. An unresolvable name is
+dropped silently and never refuses an order; over-validation here would cost a sale to gain a field
+the courier already books without.
+
+**The decision is pure.** `apps/admin/lib/kelurahan-pick.ts` has no database import, the same split as
+`platform-rank.ts`. Matching is EXACT (case/space-insensitive), NOT the populator's 0.82 bigram floor:
+that floor joins two datasets written by different people, while here both sides are the same table, so
+a near-miss means the value did not come from our list — and this morning's walk proved `Cimanggu I`
+and `Cimanggu II` are different villages with different ids. A row with no vendor id is not a match
+either: a name without an id reads as "the subdistrict is known" on every screen while the booking
+still omits the field.
+
+**The shopper's list stays id-free** — `/api/public/ongkir` still serves `kelurahanForDistrict`. Wiring
+this half is exactly the change that invites "return the id and echo it back", which would make the
+re-derivation ceremonial.
+
+⚠️ **`npm run generate` PRODUCES A DANGEROUS MIGRATION IN THIS REPO.** The drizzle meta snapshots stop
+at `0095`, so it diffs against a year-old snapshot and replays shipped work: its 0108 re-created
+`impersonation_grants`, `platform_finance` and `rate_limit_counters`, re-added five columns, **and
+emitted `ALTER TYPE … ADD VALUE 'advertiser'`, which is not idempotent** and would abort the whole
+pending batch on any database that already has it — the failure AGENTS.md records from 2026-07-30 (16
+migrations silently unapplied). Discarded, along with its stray snapshot; 0108 is hand-written.
+`verify-migrations` green: 109 entries, stamps increasing, journal ↔ files matched.
+
+**Two mocks had to grow with the module.** `order/route.test.ts` and `commerce-lifecycle.test.ts` mock
+`@/lib/data/areas` wholesale, so a new export breaks them until it is stubbed. Both now stub
+`resolveDestinationKelurahan` as "nothing resolved", which is the ordinary case their fixtures describe.
+
+**Guard:** `apps/admin/lib/destination-kelurahan.test.ts`, 8 tests. The pure decision was proved RED
+against **5 mutations** — a fuzzy prefix match · the NULL-id check removed · case-sensitive keys · an
+empty name falling through to the first row · always returning the district's first matched row — each
+run against a generated copy, never against product source. Three source claims sit beside them, each
+with a mutation SELF-CHECK so it cannot be green for want of matching anything.
+
+**Files:** `packages/db/drizzle/0108_order_ship_kelurahan.sql` (new), `packages/db/src/schema.ts`,
+`apps/admin/lib/kelurahan-pick.ts` (new), `apps/admin/lib/data/areas.ts`,
+`apps/admin/app/api/public/order/route.ts`, `apps/admin/lib/actions/shipping.ts`,
+`apps/storefront/src/pages/checkout.astro`, `apps/admin/lib/destination-kelurahan.test.ts` (new),
+the two mocks above, and the four docs that publish the migration count (108 → 109).
+
+**Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 485 tests** · RLS verified ·
+storefront `npm run verify` 8/8 with a fresh build, and the built page carries the new field at both
+sites. ⚠️ **A live checkout submit was NOT driven** — placing a real order writes to the shared dev DB.

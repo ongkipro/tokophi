@@ -22,7 +22,7 @@ import {
   postcodeError,
   destIdError,
 } from "@tokophi/lib/validate";
-import { areaById } from "@/lib/data/areas";
+import { areaById, resolveDestinationKelurahan } from "@/lib/data/areas";
 import {
   rateLimited,
   clientIp,
@@ -203,6 +203,10 @@ async function handle(req: Request) {
       kota?: string;
       provinsi?: string;
       kodepos?: string;
+      // The subdistrict NAME the shopper picked. There is deliberately no id field here: the id is
+      // re-derived server-side (Task 8.17), and a request that could name one would be a request
+      // that chooses the courier's destination subdistrict.
+      kelurahan?: string;
     };
     // `cost` is deliberately NOT read — the price is re-quoted below. `service`/`serviceType` ARE:
     // they say WHICH service the shopper picked, which is a choice, not a price.
@@ -386,6 +390,19 @@ async function handle(req: Request) {
     );
   const kota = area.city ?? null;
   const provinsi = area.province ?? null;
+
+  // ── KELURAHAN: the shopper's pick, RE-DERIVED against the district, never trusted ─────────────
+  // The checkout has always posted this (it is how the kodepos is filled) and this route has always
+  // thrown it away, so `destination_kelurahan_id` had no producer at all. What arrives is a NAME
+  // from a picker over our own list; what may be stored is KiriminAja's own subdistrict id for a
+  // village that is actually IN the district this order was priced against. Same rule, same reason
+  // as `saveSenderAddress` on the seller's side.
+  //
+  // ⚠️ NULL IS THE COMMON CASE AND IT MUST NEVER REFUSE AN ORDER. The picker is shown only for the
+  // 18% of districts whose postcode is ambiguous, so most orders legitimately carry no kelurahan at
+  // all — and over-validation here would cost a sale to win a field the courier already books
+  // without. An unresolvable name is dropped silently, exactly like an unparseable postcode.
+  const kel = await resolveDestinationKelurahan(destId, addr.kelurahan);
 
   // ── ITEMS: the cart says WHAT is being bought, the database says WHAT IT COSTS ────────────────
   // `i.price` from the body is ignored. It used to be summed straight into `orders.subtotal_idr` and
@@ -997,6 +1014,12 @@ async function handle(req: Request) {
           shipAddress: alamat,
           shipPostcode: kodepos,
           shipDistrictId: destId,
+          // Both or neither: the id is what the courier acts on, the name is what a human reads on
+          // the order screen, and a name with no id would read as "we know the subdistrict" on every
+          // screen while the booking still omitted it. `resolveDestinationKelurahan` returns the
+          // pair or nothing for exactly that reason.
+          shipKelurahan: kel?.name ?? null,
+          shipKelurahanId: kel?.kaKelurahanId ?? null,
 
           // 🔴 THE IDEMPOTENCY CLAIM (Task 4.8). This column carries a PARTIAL UNIQUE INDEX on
           // (store_id, checkout_session_id) — `orders_one_per_checkout_session`, migration 0097 —

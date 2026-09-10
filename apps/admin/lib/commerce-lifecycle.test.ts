@@ -61,6 +61,10 @@ vi.mock("@/lib/data/areas", () => ({
     city: "Jakarta Selatan",
     province: "DKI Jakarta",
   })),
+  // The destination subdistrict is resolved against the district (Task 8.17). These fixtures name no
+  // kelurahan, which is the ORDINARY case — the checkout only asks where the postcode is ambiguous —
+  // so the honest stub is "nothing resolved" and the order stores NULL for both columns.
+  resolveDestinationKelurahan: vi.fn(async () => null),
 }));
 vi.mock("@tokophi/lib/autolaris", async (importOriginal) => {
   const actual = await importOriginal<typeof Autolaris>();

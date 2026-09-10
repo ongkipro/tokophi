@@ -934,6 +934,21 @@ export const orders = pgTable("orders", {
   // The KiriminAja district the ongkir was quoted against and the parcel is booked to. The
   // authoritative destination — a typed city name is a claim, a district id is what the courier acts on.
   shipDistrictId: integer(),
+  // The destination subdistrict, in BOTH id spaces the sender side already keeps apart (Task 8.17).
+  //
+  // `shipKelurahan` is the NAME the shopper picked, snapshotted onto the order for the same reason
+  // the street is: it belongs to the transaction, not the person. `shipKelurahanId` is KiriminAja's
+  // OWN subdistrict id — never the Kemendagri code `kelurahan.id` — and is what `v6.2/request_pickup`
+  // accepts as `destination_kelurahan_id`.
+  //
+  // ⚠️ BOTH ARE NULL FOR MOST ORDERS, BY DESIGN, AND THAT IS NOT A GAP TO CLOSE IN THE CHECKOUT.
+  // The kelurahan picker is shown only where it changes the answer: 5 520 of 6 735 districts (82,0%)
+  // have exactly ONE postcode across every village in them, so the kodepos is filled from the
+  // district alone and the shopper is never asked which village. Asking anyway would add a required
+  // choice to an Indonesian checkout to gain a field the courier already books without. NULL here
+  // means "not asked", not "failed" — the booking omits the field exactly as it always has.
+  shipKelurahan: text(),
+  shipKelurahanId: integer(),
   // Task 4.8 — the storefront checkout session this order came from, and the DATABASE's guarantee
   // that a session buys at most once: `orders_one_per_checkout_session`, a PARTIAL unique index on
   // (store_id, checkout_session_id) (migration 0097). NULL for an order that did not come from a

@@ -659,6 +659,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
         shipAddress: schema.orders.shipAddress,
         shipPostcode: schema.orders.shipPostcode,
         shipDistrictId: schema.orders.shipDistrictId,
+        shipKelurahanId: schema.orders.shipKelurahanId,
         custName: schema.customers.name,
         custPhone: schema.customers.phone,
         // ⚠️ Whether this parcel is COD is a FACT ABOUT THE ORDER, not a checkbox. See the booking below.
@@ -1051,6 +1052,13 @@ export async function createShipment(input: { orderNumber: string; service: stri
         destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
         destAddress,
         destKecamatanId: destDistrictId,
+        // 🔴 ONLY WHEN THE DISTRICT IS THE ONE THE ID WAS DERIVED AGAINST. `destDistrictId` may be
+        // a GUESS — 77 orders carry no `ship_district_id` and the branch above resolves one from
+        // the typed city, which is how "Surabaya" became "Bandar Surabaya, Lampung Tengah". A
+        // subdistrict id belongs to exactly one district, so pairing a stored id with a guessed
+        // district would send the courier a village that is not in the kecamatan on the same
+        // request — a wrong id, which this whole task exists to avoid. Guessed ⇒ omit.
+        destKelurahanId: destDistrictId === o.shipDistrictId ? o.shipKelurahanId : null,
         destZipcode: destZipcode || undefined,
         weight,
         width,

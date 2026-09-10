@@ -110,8 +110,8 @@
 | `/api/cron/tracking` | GET | `apps/admin/app/api/cron/tracking/route.ts` | `cron` | ✓ | `apps/admin/lib/cancel-reconcile.test.ts` `apps/admin/lib/cron-auth.test.ts` |
 | `/api/health/env` | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-webhook.test.ts` |
-| `/api/public/ongkir` | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | — |
-| `/api/public/order` | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` |
+| `/api/public/ongkir` | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/destination-kelurahan.test.ts` |
+| `/api/public/order` | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` |
 | `/api/public/pay/callback` | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` |
 | `/api/public/promo` | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
 | `/api/uploads/[name]` | GET | `apps/admin/app/api/uploads/[name]/route.ts` | — |  | `apps/admin/lib/image-content.test.ts` |
@@ -221,7 +221,7 @@
 |---|---|
 | `activity.ts` | `getActivityFeed` |
 | `analytics.ts` | `SERIES_DAYS` `dailyStatsRows` `getCategorySales` `getChannelSalesDaily` `getCustomerMix` `getDailyStats` `getHourlyStats` `getOrderStats` `getProductSalesDaily` `getRegionSales` `hourlyStatsRows` |
-| `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `provinceForDistrict` `resolveArea` `searchAreaLocal` |
+| `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `provinceForDistrict` `resolveArea` `resolveDestinationKelurahan` `searchAreaLocal` |
 | `articles.ts` | `getArticle` `getArticles` `getBlogs` |
 | `billing.ts` | `getBilling` `getFaktur` `getMyInvoices` |
 | `bulk-labels.ts` | `bulkLabels` `getBulkLabels` |
