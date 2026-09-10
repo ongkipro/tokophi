@@ -1,4 +1,5 @@
 import "server-only";
+import { pickKelurahan } from "@/lib/kelurahan-pick";
 import { db, schema } from "@tokophi/db";
 import { or, ilike, eq, asc, sql } from "drizzle-orm";
 import { kaAddressByName } from "@tokophi/lib/kiriminaja";
@@ -155,6 +156,67 @@ export async function kelurahanForDistrict(districtId: number): Promise<Keluraha
   if (!Number.isFinite(districtId) || districtId <= 0) return [];
   return db
     .select({ name: schema.kelurahan.name, postcode: schema.kelurahan.postcode })
+    .from(schema.kelurahan)
+    .where(eq(schema.kelurahan.districtId, districtId))
+    .orderBy(schema.kelurahan.name);
+}
+
+/** As above, plus KiriminAja's OWN subdistrict id — `null` where we could not match one. */
+export type KelurahanWithKaId = Kelurahan & { kaKelurahanId: number | null };
+
+/**
+ * The same list, carrying `kelurahan.ka_kelurahan_id` (Task 8.17).
+ *
+ * ⚠️ A SEPARATE FUNCTION ON PURPOSE — `kelurahanForDistrict` is served to the SHOPPER's browser by
+ * `/api/public/ongkir`, and the checkout needs exactly one thing from a kelurahan: its postcode.
+ * Publishing the courier id there would put a value into the client that only the server may
+ * decide, and the next change to make is always "echo it back in the order body". The vendor id is
+ * read on the SELLER's path only, where the id is chosen and stored server-side.
+ *
+ * `kaKelurahanId === null` is the normal state for part of the table: the name match against
+ * `POST /api/mitra/kelurahan` fails for 6,0% of rows — 4 747 of 78 764, measured (see
+ * `packages/db/scripts/build-ka-kelurahan-ids.mjs`). NULL means the booking omits the field, which
+ * is what it already does today.
+ */
+/**
+ * Resolve the DESTINATION subdistrict a shopper picked at checkout into the pair the order stores
+ * (Task 8.17, destination half): the canonical name and KiriminAja's own id.
+ *
+ * 🔴 THE NAME IS A CLAIM AND THE ID IS NEVER TAKEN FROM THE REQUEST. The checkout's kelurahan
+ * control is a picker over OUR OWN list, so the honest check is "does this name exist in the
+ * district the ongkir was priced against?" — the same shape as `saveSenderAddress` re-deriving the
+ * seller's id, and the same reason: a courier id a client can choose is a courier id a client will
+ * eventually choose. Nothing is published to the browser either; `/api/public/ongkir` still serves
+ * `kelurahanForDistrict`, which has no id column.
+ *
+ * MATCHING IS EXACT (case- and space-insensitive), NEVER FUZZY. The populator's 0.82 bigram floor
+ * exists to join two datasets that were written by different people; here both sides are this same
+ * table, so a near-miss means the value did not come from our list and guessing which village was
+ * meant would put a stranger's subdistrict on a real parcel.
+ *
+ * Returns `null` for "no honest answer" — no name given (the common case: the picker is only shown
+ * for the 18% of districts where the postcode is ambiguous), a name that does not resolve, or a row
+ * whose `ka_kelurahan_id` we never matched (6,0% of the table). The caller stores NULL for both
+ * columns and the booking omits the field, exactly as it always has.
+ */
+export async function resolveDestinationKelurahan(
+  districtId: number,
+  name: string | null | undefined,
+): Promise<{ name: string; kaKelurahanId: number } | null> {
+  // The DECISION is `pickKelurahan` — pure, and therefore tested. This function is the read.
+  if (!(name ?? "").trim()) return null; // the common case: skip the query entirely
+  if (!Number.isFinite(districtId) || districtId <= 0) return null;
+  return pickKelurahan(await kelurahanWithKaIdForDistrict(districtId), name);
+}
+
+export async function kelurahanWithKaIdForDistrict(districtId: number): Promise<KelurahanWithKaId[]> {
+  if (!Number.isFinite(districtId) || districtId <= 0) return [];
+  return db
+    .select({
+      name: schema.kelurahan.name,
+      postcode: schema.kelurahan.postcode,
+      kaKelurahanId: schema.kelurahan.kaKelurahanId,
+    })
     .from(schema.kelurahan)
     .where(eq(schema.kelurahan.districtId, districtId))
     .orderBy(schema.kelurahan.name);

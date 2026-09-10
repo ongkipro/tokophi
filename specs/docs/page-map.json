@@ -1405,7 +1405,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": true,
-          "tests": []
+          "tests": [
+            "apps/admin/lib/destination-kelurahan.test.ts"
+          ]
         },
         {
           "url": "/api/public/order",
@@ -1429,6 +1431,7 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/commerce-lifecycle.test.ts",
+            "apps/admin/lib/destination-kelurahan.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
             "apps/admin/lib/public-guard.test.ts"
           ]
@@ -2692,8 +2695,10 @@
         "exports": [
           "areaById",
           "kelurahanForDistrict",
+          "kelurahanWithKaIdForDistrict",
           "provinceForDistrict",
           "resolveArea",
+          "resolveDestinationKelurahan",
           "searchAreaLocal"
         ]
       },

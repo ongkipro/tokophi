@@ -461,9 +461,13 @@ const RECOVER = recovered && {
                   <input type="text" id="kel-search" autocomplete="off" placeholder=" " class="input-field" />
                   <label for="kel-search" class="float-label">Kelurahan / Desa (opsional)</label>
                 </div>
-                {/* The submitted value. The order API ignores `kelurahan` entirely — only the
-                    checkout-session capture reads it — but it stays a real field so the payload keeps
-                    the shape it always had. */}
+                {/* The submitted value. Since Task 8.17 the order API READS it: it re-derives
+                    KiriminAja's own subdistrict id against the district the ongkir was priced
+                    against and stores the pair on the order, so a booking can send
+                    `destination_kelurahan_id`. The NAME is all that is sent — the id is the
+                    server's to decide, and `/api/public/ongkir` still publishes no courier id.
+                    Empty is normal and never blocks the order: this picker is only shown where the
+                    district's postcode is ambiguous. */}
                 <input type="hidden" name="kelurahan" id="kel-value" />
                 {/* IN FLOW, not absolute — it PUSHES the page down exactly like #dest-results above.
                     I first made it a floating popup, which is a third interaction model on one form:
@@ -2598,6 +2602,10 @@ const RECOVER = recovered && {
           kota: fd.get("kota"),
           provinsi: fd.get("provinsi"),
           kodepos: fd.get("kodepos"),
+          // The NAME only. The order API re-derives the courier's id from it (Task 8.17); a client
+          // that could send the id is a client that gets to choose the destination subdistrict.
+          // Blank for the 82% of districts whose kodepos needs no kelurahan — that is not an error.
+          kelurahan: fd.get("kelurahan"),
         },
         shipping: {
           id: shipEl ? shipEl.value : "",
@@ -2701,7 +2709,7 @@ const RECOVER = recovered && {
           customer: { name: order.shippingAddress.nama, phone: normalizePhone(order.shippingAddress.whatsapp) || order.shippingAddress.whatsapp, email: order.contact.email },
           // kota/provinsi ride along for the abandoned-cart snapshot only — the API DERIVES both from
           // destId (kiriminaja_areas) and ignores what is sent here. A typed province is a claim.
-          address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos },
+          address: { alamat: order.shippingAddress.alamat, kota: order.shippingAddress.kota, provinsi: order.shippingAddress.provinsi, kodepos: order.shippingAddress.kodepos, kelurahan: order.shippingAddress.kelurahan },
           // service/serviceType identify WHICH service the shopper picked (a label cannot). There is
           // deliberately NO `cost` here any more: the order API RE-QUOTES the ongkir server-side and
           // writes its own number. A price posted by the browser is a price the browser gets to

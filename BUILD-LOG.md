@@ -8,6 +8,27 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-10 13:15 UTC] — SHIPPING · Task 8.17: KiriminAja's REAL subdistrict ids, alongside the Kemendagri codes
+
+- **Executor:** Subagent (Claude, Opus 5). **Scope ID:** `8.17` (relates `8.14`, N30).
+- **Files:** **new** `packages/db/drizzle/0107_kelurahan_ka_id.sql` · **new** `packages/db/scripts/build-ka-kelurahan-ids.mjs` · **new** `packages/lib/src/ka-kelurahan-id.test.ts` · `packages/db/src/schema.ts` · `packages/db/src/seed-areas.ts` · `packages/db/drizzle/meta/_journal.json` · `packages/lib/src/kiriminaja.ts` · `packages/lib/src/kiriminaja-v62.test.ts` · `apps/admin/lib/data/areas.ts` · `apps/admin/lib/actions/shipping.ts` · `apps/admin/components/admin/pengaturan/sender-address-card.tsx` · `TASKS.md` · `AGENTS.md` · `specs/docs/{KIRIMINAJA.md,SCHEMA.md,CODE_MAP.md,STATUS.md}`.
+
+**Two id spaces for one village, and only one of them is a courier id.** `kelurahan.id` is a Kemendagri code — text, dotted, 13 characters — and it is the key the POSTCODE dataset is published under, which is the only reason that table exists. `v6.2/request_pickup` wants KiriminAja's own. Migration **0107**, stamp **1787545231751** (above the journal's newest `0106`/`1787545171751`, which is also the shared dev DB's newest applied stamp — checked against `origin/main`'s journal before generating), adds `kelurahan.ka_kelurahan_id` **alongside**, `add column if not exists`, no index (nothing looks a row up by it). Applied ONLY to the throwaway `tokophi_test` database by `test/db-setup.ts`; the shared dev DB is still at `1787545171751` with no such column (`select max(created_at)` + `information_schema.columns`, both re-checked after the run).
+
+**The vendor endpoint, verified live** (sandbox, read-only, no booking): `POST /api/mitra/kelurahan` `{"kecamatan_id":548}` → `{"status":true,"text":"Courier Loaded","method":"get_kelurahan_from_kecamatan_id","results":[{"id":31483,"kelurahan_name":"Bawuran","kecamatan_id":548,"postal_code":"55791"},…]}`. It answers in **`results`**, not the `datas` every other hierarchy endpoint uses, and carries an **undocumented `postal_code`** absent from the OpenAPI schema — read for the report, never written.
+
+🔴 **`status:false` IS A VENDOR ERROR, NOT "NO DATA", and the first run proved how expensive conflating them is.** At concurrency 4 the endpoint soft-throttles with **HTTP 200** `{"status":false,"text":"Oops, terjadi kesalahan…","endpoint":"kelurahan"}` — no 429, no error status, the same shape as a real answer minus `results`. Read as "the vendor has no subdistricts here" it produced **179 of 300 districts empty (59,7%)**. Sixty seconds later the same three ids (548, 2788, 1) all returned full lists. The populator now separates three outcomes — data / honestly empty / OUR failure — retries the third on a 1–16 s ladder, and prints the three counts separately so a failure can never be read as coverage.
+
+**Measured match rate** (200-district stride sample across every province, concurrency 2, pace 250 ms): **2 423 kelurahan → 2 228 exact (91,95%) + 70 fuzzy (2,89%) = 94,84% matched · 125 unmatched (5,16%) · 0 vendor-empty · 0 failures.** Every unmatched row is written with its province to `data/ka-kelurahan-unmatched.csv` and summarised per province (Sumatera Utara 19, Aceh 15, NTT 15, …). This 5% is a DIFFERENT gap from the ~4% of KA districts the Kemendagri join never resolved.
+
+**Only where the id is actually known.** Both `kelurahan_id` and `destination_kelurahan_id` stay **conditionally spread**; NULL means the field is omitted, never `0`/`null`/`""`. `assertKaKelurahanId` is the sink: it throws on a Kemendagri code as a STRING and as the 10-digit number a `Number()`/`replace` upstream would produce. `kelurahanWithKaIdForDistrict` is a separate reader from `kelurahanForDistrict` on purpose — the latter is served to the shopper by `/api/public/ongkir`, and a courier id must not be published to a client that could echo it back. `saveSenderAddress` re-derives the id against the chosen district and stores NULL if it does not resolve.
+
+**Verification.** `verify-migrations` ✓ (journal sane, stamps increasing, journal↔files match) · `npx vitest run packages/db packages/lib` **48 files / 465 tests, 0 failed** · `tsc -p packages/db`, `-p packages/lib`, `apps/admin` all exit 0 · `npm run lint -w @tokophi/admin` 0 errors (14 pre-existing warnings, none in touched files) · new `ka-kelurahan-id.test.ts` 11 tests, **5 mutations → 5 reds** (string arm removed · `KA_KELURAHAN_ID_MAX` ceiling removed · field made unconditional · the old raw spread put back · `schema.kelurahan.id` leaked into the seller option list), each run in a throwaway `git worktree` so no product source another stream owns was mutated.
+
+**NOT done.** The full 6 735-district walk is running in the background at concurrency 2 — the same key serves live merchant ongkir, so it is deliberately not parallelised — and `data/kelurahan.csv` is **not yet repopulated**: every `ka_kelurahan_id` is still NULL today, and the wiring is therefore inert until it is. The **destination** half has no producer (`orders` carries no kelurahan column), and `request_pickup` was not called, so the booking validator's acceptance of a real `kelurahan_id` is still unproven.
+
+---
+
 ### [2026-09-09 09:45 UTC] — SECURITY · Task 6.3 (NF-6): public rate limits moved to a SHARED Postgres counter
 
 - **Executor:** Subagent (Claude, Opus 5). **Scope IDs:** `NF-6`, related `F-F5`, `N62`.
@@ -3476,3 +3497,140 @@ figures are derived from the entries, so they cannot rot.
 **Gate:** lint 0, verify:guards 0, **test:release 166 files / 1462 tests**, RLS 54/55, storefront 8/8.
 RED-proved twice against the shipped construction. Worth keeping: `codeOnly` inerts a **regex literal** too,
 so `/[^A-Za-z0-9]/g` is unmatchable and a source claim must key on the identifiers around it.
+
+## 2026-09-10 07:23–14:55 UTC — Task 8.17: the full KiriminAja kelurahan walk, and the matcher defect it exposed (Main Session)
+
+**Scope:** Task 8.17 (sender half) · branch `feat/ka-kelurahan-ids` · local only, no merge, no deploy.
+
+**The walk.** 6 735 districts against `POST /api/mitra/kelurahan` (sandbox, concurrency 2, pace 250 ms),
+run inside the production admin container because the vendor allow-lists that IP. **0 transport
+failures, 0 districts honestly empty.** 78 764 villages considered → 72 017 exact (91,43%) + 2 140 fuzzy
+(2,72%) = **74 157 matched (94,15%)**, 4 607 unmatched (5,85%).
+
+**The defect the walk exposed — wrong ids, not missing ones.** The per-row matcher never marked a
+vendor record as taken, so sibling villages differing only by a numeral both claimed one id:
+`Cimanggu I`/`Cimanggu II` → 8252 · `Gunung Bunder I`/`Gunung Bunder II` → 8529 · `Biwage 1`/`Biwage 2`
+→ 22634. **125 ids claimed twice, 272 rows, 107 districts.** At most one of each pair can be right and
+the file did not say which. This column feeds `store_settings.sender_kelurahan_id`, which dispatches a
+real pickup rider, and the module's own header already called a wrong id worse than an absent one.
+
+**Fix.** `build-ka-kelurahan-ids.mjs` now claims a candidate exclusively; a CONTESTED exact match is
+abandoned by both sides (`reason: "ambiguous-exact"`) rather than resolved by file order; fuzzy pairs
+are scored across the whole district and assigned best-first, so the better name wins the record and
+the loser goes UNMATCHED instead of inheriting a neighbour's id. New `ONLY_DISTRICTS=` walks a named
+subset — it marks the run PARTIAL, so `data/kelurahan.csv` is never rewritten from one.
+
+**Repair.** Re-walked only the 107 affected districts (sandbox, 0 failures, ~40 s): 1 738 villages →
+1 302 exact + 87 fuzzy, 349 unmatched. Merged back: **165 rows changed, 0 duplicates left.** Final
+committed state **74 017 of 78 764 (93,97%)**, 4 747 blanks — coverage fell 0,18pp, which is the price
+of the honest answer. The unmatched report was rebuilt to reconcile exactly: 4 747 blanks in the CSV,
+4 747 rows listed, symmetric difference 0.
+
+**Two traps worth the next reader's time.**
+- **`awk -F,` is WRONG on this file.** Two village names contain a comma (`Lubuk Pakam I,II`,
+  `Lambang Sari I, II, III`), so field 5 reads back the POSTCODE for those rows. That mis-parse
+  invented two phantom districts and hid one real one, and the first repair pass therefore covered 106
+  of 107. Redone with a real CSV parser: 125 pairs / 272 rows / 107 districts. The committed writer
+  always quotes the name because `seed-areas.ts` parses with a regex that REQUIRES the quotes — a
+  "quote only when needed" writer would drop every plain-named row silently.
+- **A stride sample sizes a rate; it does not find a class.** The 200-district sample predicted
+  94,84%/5,16% and was accurate to **0,69pp** — and contained no duplicate pair big enough to notice.
+- I forced `KIRIMINAJA_ENV=production` on the first repair attempt and got HTTP 401 on every district.
+  The original walk ran on **sandbox** (the container's own env), and ids must come from the same
+  environment or they do not correspond. Killed by PID, never `pkill`; two of my own node processes
+  were alive (a timed-out `ssh` had left its child running) and both were stopped.
+
+**Files:** `packages/db/scripts/build-ka-kelurahan-ids.mjs` (claim-once matcher, `ONLY_DISTRICTS`),
+`packages/db/data/kelurahan.csv` (5th column populated), `packages/db/data/ka-kelurahan-unmatched.csv`
+(new), `packages/db/src/kelurahan-csv.test.ts` (new), plus the four sites that documented the coverage
+as "~5%" and now say 6,0%: `apps/admin/lib/actions/shipping.ts`, `apps/admin/lib/data/areas.ts`,
+`packages/db/src/seed-areas.ts`, `apps/admin/components/admin/pengaturan/sender-address-card.tsx`.
+`specs/docs/PAGE_MAP.md` regenerated (one line — `kelurahanWithKaIdForDistrict`).
+
+**Guard:** `packages/db/src/kelurahan-csv.test.ts`, 4 tests, pinning the OUTPUT rather than the matcher
+— one vendor id per village per district · no id reused across districts · distinct Kemendagri codes ·
+a coverage FLOOR of 85% so a collapsed re-walk cannot be committed looking healthy. **Proved RED
+against the committed duplicates before the repair**, naming eight real clashing pairs.
+
+**Gate:** lint 0 · verify:guards 0 · **test:release 168 files / 1 477 tests** · RLS verified · storefront
+8/8. `packages/db` + `packages/lib` alone: 49 files / 469 tests.
+
+## 2026-09-10 15:05 UTC — Task 8.17 destination half: `destination_kelurahan_id` gets a producer (Main Session)
+
+**Scope:** Task 8.17, destination half · branch `feat/ka-kelurahan-ids` · local only, no merge, no deploy.
+
+The sender half shipped this morning. The destination field had no producer at all: the checkout has
+always posted a kelurahan (it is how the kodepos is derived) and `/api/public/order` threw it away,
+and a comment in `checkout.astro` said so in as many words.
+
+**Migration `0108_order_ship_kelurahan`** (stamp 1787545291751, idempotent, no index) adds
+`orders.ship_kelurahan_name` — the NAME, snapshotted onto the order like the street, because the
+address belongs to the transaction and not to the person (0042) — and `orders.ship_kelurahan_id`,
+KiriminAja's own.
+
+⚠️ **THOSE TWO NAMES ARE NOT ARBITRARY: THEY ARE ORPHANS THE SHARED DEV CONTAINER ALREADY CARRIED.**
+`0049_shipping_kelurahan` lost its slot to a second `0049` and was never re-numbered, so both columns
+exist on dev, in no `.sql`, in no `schema.ts`, and NOT on production — `seed-recent.ts` and
+`verify-migrations.ts` both already say so. I first wrote the text column as `ship_kelurahan`, then
+measured the dev container (`integer` nullable, `text` nullable — exactly the shapes needed) and
+renamed to match, so 0108 CONVERGES the two databases rather than leaving dev with a near-duplicate
+third column. `if not exists` then makes it a no-op on dev and a real create everywhere else: an
+unreproducible artefact becomes a tracked migration.
+⚠️ **Drizzle keys on `created_at`, not on the file hash, so an edited-after-applying migration never
+re-runs** (its own verifier says this). The `_test` database had already taken the old column name;
+it was realigned by hand rather than by re-running 0108, which would have done nothing. The checkout now sends the name in `address.kelurahan`; the route **re-derives**
+the id server-side against the district the ongkir was priced against, exactly as `saveSenderAddress`
+does on the seller's side. `createShipment` passes it through as `destKelurahanId`, which
+`kelurahanField()` was already built to carry.
+
+**The guard that carries the whole risk of this change.** `destDistrictId` falls back to
+`resolveArea(o.city)` for the **77 orders with no `ship_district_id`** — the branch that resolved
+"Surabaya" to "Bandar Surabaya, Lampung Tengah". A subdistrict belongs to exactly one district, so
+pairing a stored id with a guessed one puts a village that is not in the kecamatan on the same
+booking request. Guessed ⇒ omit.
+
+**What was deliberately NOT changed: the checkout.** The kelurahan picker appears only where it
+changes the answer — 5 520 of 6 735 districts (82,0%) have one postcode across every village, so most
+shoppers are never asked. NULL is therefore the common case, not a gap. An unresolvable name is
+dropped silently and never refuses an order; over-validation here would cost a sale to gain a field
+the courier already books without.
+
+**The decision is pure.** `apps/admin/lib/kelurahan-pick.ts` has no database import, the same split as
+`platform-rank.ts`. Matching is EXACT (case/space-insensitive), NOT the populator's 0.82 bigram floor:
+that floor joins two datasets written by different people, while here both sides are the same table, so
+a near-miss means the value did not come from our list — and this morning's walk proved `Cimanggu I`
+and `Cimanggu II` are different villages with different ids. A row with no vendor id is not a match
+either: a name without an id reads as "the subdistrict is known" on every screen while the booking
+still omits the field.
+
+**The shopper's list stays id-free** — `/api/public/ongkir` still serves `kelurahanForDistrict`. Wiring
+this half is exactly the change that invites "return the id and echo it back", which would make the
+re-derivation ceremonial.
+
+⚠️ **`npm run generate` PRODUCES A DANGEROUS MIGRATION IN THIS REPO.** The drizzle meta snapshots stop
+at `0095`, so it diffs against a year-old snapshot and replays shipped work: its 0108 re-created
+`impersonation_grants`, `platform_finance` and `rate_limit_counters`, re-added five columns, **and
+emitted `ALTER TYPE … ADD VALUE 'advertiser'`, which is not idempotent** and would abort the whole
+pending batch on any database that already has it — the failure AGENTS.md records from 2026-07-30 (16
+migrations silently unapplied). Discarded, along with its stray snapshot; 0108 is hand-written.
+`verify-migrations` green: 109 entries, stamps increasing, journal ↔ files matched.
+
+**Two mocks had to grow with the module.** `order/route.test.ts` and `commerce-lifecycle.test.ts` mock
+`@/lib/data/areas` wholesale, so a new export breaks them until it is stubbed. Both now stub
+`resolveDestinationKelurahan` as "nothing resolved", which is the ordinary case their fixtures describe.
+
+**Guard:** `apps/admin/lib/destination-kelurahan.test.ts`, 8 tests. The pure decision was proved RED
+against **5 mutations** — a fuzzy prefix match · the NULL-id check removed · case-sensitive keys · an
+empty name falling through to the first row · always returning the district's first matched row — each
+run against a generated copy, never against product source. Three source claims sit beside them, each
+with a mutation SELF-CHECK so it cannot be green for want of matching anything.
+
+**Files:** `packages/db/drizzle/0108_order_ship_kelurahan.sql` (new), `packages/db/src/schema.ts`,
+`apps/admin/lib/kelurahan-pick.ts` (new), `apps/admin/lib/data/areas.ts`,
+`apps/admin/app/api/public/order/route.ts`, `apps/admin/lib/actions/shipping.ts`,
+`apps/storefront/src/pages/checkout.astro`, `apps/admin/lib/destination-kelurahan.test.ts` (new),
+the two mocks above, and the four docs that publish the migration count (108 → 109).
+
+**Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 485 tests** · RLS verified ·
+storefront `npm run verify` 8/8 with a fresh build, and the built page carries the new field at both
+sites. ⚠️ **A live checkout submit was NOT driven** — placing a real order writes to the shared dev DB.

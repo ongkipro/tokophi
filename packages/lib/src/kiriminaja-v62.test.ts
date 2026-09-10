@@ -115,10 +115,12 @@ describe("kaCreateOrder speaks v6.2", () => {
     expect(JSON.stringify(sent)).not.toMatch(/latitude|longitude/);
   });
 
-  // `kelurahan.id` is a KEMENDAGRI village code joined to KiriminAja's districts BY NAME — not a
-  // KiriminAja subdistrict id. Sending it as one would be a wrong id, which is worse than an absent
-  // one, so the Seller's pickup form leaves `sender_kelurahan_id` NULL and `orders` carries no
-  // kelurahan at all. The field is sent only when a caller supplies a real KA id.
+  // Two ids exist for one village: `kelurahan.id` is a KEMENDAGRI code (text, dotted) and
+  // `kelurahan.ka_kelurahan_id` is KiriminAja's own (Task 8.17, migration 0107). Only the second
+  // may be sent. Since 8.17 the Seller's pickup form writes the vendor id into
+  // `sender_kelurahan_id`; the DESTINATION half still has no producer (`orders` carries no
+  // kelurahan column), so `destKelurahanId` is undefined in practice. Both stay CONDITIONAL —
+  // NULL means omit. The guard that refuses a Kemendagri code is `ka-kelurahan-id.test.ts`.
   it("never invents a kelurahan id", async () => {
     const { sent } = await book(BOOKED, { sender: { kelurahanId: null }, pkg: { destKelurahanId: null } });
     expect(sent).not.toHaveProperty("kelurahan_id");

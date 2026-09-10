@@ -9,7 +9,7 @@ import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, buildKaOrderRef, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { resolveArea, provinceForDistrict, kelurahanForDistrict } from "@/lib/data/areas";
+import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 
@@ -294,11 +294,20 @@ export async function searchArea(q: string): Promise<{ id: number; text: string 
  *
  * Districts with no kelurahan rows (~4% — unmatched against the Kemendagri set) return []; the
  * caller must let the seller save without one rather than block them on data we do not have.
+ *
+ * 🔴 `kaKelurahanId` IS THE ONLY VALUE THAT MAY REACH `sender_kelurahan_id` (Task 8.17). It is
+ * KiriminAja's own subdistrict id, from `POST /api/mitra/kelurahan`. The row's PRIMARY key is a
+ * Kemendagri code ("34.02.07.2001") and it is deliberately NOT returned here — it is not a courier
+ * id, and a form that can see it is a form that can send it. `null` = we could not match one
+ * (6,0% of rows — 4 747 of 78 764, measured by the full walk of 2026-09-10), and the caller must
+ * save NULL rather than substitute anything.
  */
-export async function kelurahanOptions(districtId: number): Promise<{ name: string; postcode: string }[]> {
+export async function kelurahanOptions(
+  districtId: number,
+): Promise<{ name: string; postcode: string; kaKelurahanId: number | null }[]> {
   if (!(await getSession())) return [];
   if (!Number.isFinite(districtId) || districtId <= 0) return [];
-  return kelurahanForDistrict(districtId);
+  return kelurahanWithKaIdForDistrict(districtId);
 }
 
 // No lat/lng — instant (same-day) couriers were removed and they were the only consumer of the
@@ -342,6 +351,17 @@ export async function saveSenderAddress(input: { name: string; phone: string; ad
   // 5 digits or nothing. Normalised, not rejected — an odd postcode must never block saving an
   // address (same rule as the phone below); it just doesn't get written.
   const postcode = (input.postcode ?? "").replace(/\D/g, "");
+  // 🔴 THE KELURAHAN ID IS RE-DERIVED, NEVER TRUSTED (Task 8.17). What arrives is a number from a
+  // form; what may be stored is KiriminAja's own subdistrict id for a kelurahan that is actually IN
+  // the chosen district. A value that does not resolve is dropped to NULL — the booking then omits
+  // the field, which is the behaviour that has always shipped. Storing an unverified id would put a
+  // stranger's subdistrict on a pickup request, and nothing downstream could tell.
+  const kelurahanId =
+    input.kecamatanId && input.kelurahanId
+      ? ((await kelurahanWithKaIdForDistrict(input.kecamatanId)).some((k) => k.kaKelurahanId === input.kelurahanId)
+          ? input.kelurahanId
+          : null)
+      : null;
   const values = {
     senderPostcode: /^\d{5}$/.test(postcode) ? postcode : null,
     senderName: input.name,
@@ -352,7 +372,7 @@ export async function saveSenderAddress(input: { name: string; phone: string; ad
     senderAddress: input.address,
     senderKecamatanId: input.kecamatanId,
     senderKecamatanName: input.kecamatanName,
-    senderKelurahanId: input.kelurahanId ?? null,
+    senderKelurahanId: kelurahanId,
     senderKelurahanName: input.kelurahanName ?? "",
   };
   await withTenant(storeId, (db) =>
@@ -639,6 +659,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
         shipAddress: schema.orders.shipAddress,
         shipPostcode: schema.orders.shipPostcode,
         shipDistrictId: schema.orders.shipDistrictId,
+        shipKelurahanId: schema.orders.shipKelurahanId,
         custName: schema.customers.name,
         custPhone: schema.customers.phone,
         // ⚠️ Whether this parcel is COD is a FACT ABOUT THE ORDER, not a checkbox. See the booking below.
@@ -1031,6 +1052,13 @@ export async function createShipment(input: { orderNumber: string; service: stri
         destPhone: o.shipPhone?.trim() || o.custPhone || "081200000000",
         destAddress,
         destKecamatanId: destDistrictId,
+        // 🔴 ONLY WHEN THE DISTRICT IS THE ONE THE ID WAS DERIVED AGAINST. `destDistrictId` may be
+        // a GUESS — 77 orders carry no `ship_district_id` and the branch above resolves one from
+        // the typed city, which is how "Surabaya" became "Bandar Surabaya, Lampung Tengah". A
+        // subdistrict id belongs to exactly one district, so pairing a stored id with a guessed
+        // district would send the courier a village that is not in the kecamatan on the same
+        // request — a wrong id, which this whole task exists to avoid. Guessed ⇒ omit.
+        destKelurahanId: destDistrictId === o.shipDistrictId ? o.shipKelurahanId : null,
         destZipcode: destZipcode || undefined,
         weight,
         width,

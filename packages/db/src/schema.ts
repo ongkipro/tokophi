@@ -934,6 +934,21 @@ export const orders = pgTable("orders", {
   // The KiriminAja district the ongkir was quoted against and the parcel is booked to. The
   // authoritative destination — a typed city name is a claim, a district id is what the courier acts on.
   shipDistrictId: integer(),
+  // The destination subdistrict, in BOTH id spaces the sender side already keeps apart (Task 8.17).
+  //
+  // `shipKelurahanName` is the NAME the shopper picked, snapshotted onto the order for the same reason
+  // the street is: it belongs to the transaction, not the person. `shipKelurahanId` is KiriminAja's
+  // OWN subdistrict id — never the Kemendagri code `kelurahan.id` — and is what `v6.2/request_pickup`
+  // accepts as `destination_kelurahan_id`.
+  //
+  // ⚠️ BOTH ARE NULL FOR MOST ORDERS, BY DESIGN, AND THAT IS NOT A GAP TO CLOSE IN THE CHECKOUT.
+  // The kelurahan picker is shown only where it changes the answer: 5 520 of 6 735 districts (82,0%)
+  // have exactly ONE postcode across every village in them, so the kodepos is filled from the
+  // district alone and the shopper is never asked which village. Asking anyway would add a required
+  // choice to an Indonesian checkout to gain a field the courier already books without. NULL here
+  // means "not asked", not "failed" — the booking omits the field exactly as it always has.
+  shipKelurahanName: text(),
+  shipKelurahanId: integer(),
   // Task 4.8 — the storefront checkout session this order came from, and the DATABASE's guarantee
   // that a session buys at most once: `orders_one_per_checkout_session`, a PARTIAL unique index on
   // (store_id, checkout_session_id) (migration 0097). NULL for an order that did not come from a
@@ -1744,12 +1759,24 @@ export const kiriminajaAreas = pgTable("kiriminaja_areas", {
 export const kelurahan = pgTable(
   "kelurahan",
   {
+    // ⚠️ TWO ID SPACES LIVE ON THIS ROW AND THEY ARE NOT INTERCHANGEABLE.
+    // `id` is a **Kemendagri** village code — text, dotted, 13 characters ("34.02.07.2001"), built
+    // by `packages/db/scripts/build-kelurahan.mjs` and joined to KiriminAja's districts BY NAME. It
+    // is the key the POSTCODE dataset is published under, which is the only reason this table
+    // exists, so it can never be overwritten with a vendor id.
     id: text().primaryKey(),
     districtId: integer()
       .notNull()
       .references(() => kiriminajaAreas.id),
     name: text().notNull(),
     postcode: text().notNull(),
+    // KiriminAja's OWN subdistrict id (`POST /api/mitra/kelurahan` → `results[].id`) — a small
+    // integer (31483), nothing like the dotted code above. This is the ONLY value that may ever be
+    // sent as `kelurahan_id` / `destination_kelurahan_id` to `v6.2/request_pickup`; sending the
+    // Kemendagri code there would be a WRONG id, which is worse than an absent one.
+    // NULLABLE on purpose: the vendor has no subdistrict data for part of its own district list,
+    // and a name match can fail. NULL means "we do not know it" and the caller omits the field.
+    kaKelurahanId: integer(),
   },
   // The ONLY access pattern: "give me the kelurahan of the district the shopper just picked".
   // 78k rows, read on every checkout — without this it is a seq scan (25ms) per selection.
