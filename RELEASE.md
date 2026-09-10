@@ -1,11 +1,11 @@
 # Release Manifest — tokophi
 
-Release-ID: f5100ac-pr393
-Base: 98f1d5a2219d1e591af0ef1c0f9da39291424c85
+Release-ID: b888d66-pr395
+Base: 49e5f45
 Environment: production
 Declared-Risk: R2
-Rollback-Ref: 98f1d5a2219d1e591af0ef1c0f9da39291424c85
-Rollback-Command: Coolify → application tokophi → Deployments → redeploy commit 98f1d5a (or `git revert -m 1 f5100ac` + push to `main` → webhook; ~10 min measured on deploys 535/536, specs/docs/DEPLOY.md)
+Rollback-Ref: 49e5f45
+Rollback-Command: Coolify → application tokophi → Deployments → redeploy commit 49e5f45 (or `git revert -m 1 b888d66` + push to `main` → webhook; ~10 min measured on deploys 535–539, specs/docs/DEPLOY.md)
 Backup-Proof: NOT_REQUIRED
 Status: DEPLOYED
 
@@ -20,7 +20,20 @@ This file defines the current release boundary. It is repository truth for relea
 - `Backup-Proof` is `NOT_REQUIRED` unless migration risk requires a structured `backup://`, `snapshot://`, or artifact reference.
 - Set `Status: READY` only after the release scope is frozen for production gating.
 
-## This release — `f5100ac` (PR #393, merged 2026-09-10 17:30 UTC; Coolify deploy **537**)
+## This release — `b888d66` (PR #395, merged 2026-09-10 18:0x UTC; Coolify deploy **539**, `finished`)
+
+- **Scope:** Super Admin front-door login, controlled mobile drawer, theme toggle, rank badge, grouped
+  nav (Task 8.22) + its guards; Super Admin update-log `v1.6.0`. **No migration** → `Backup-Proof:
+  NOT_REQUIRED`.
+- **Why R2:** the control plane's shell and login are on every operator's path; the change is UI-only
+  (no action, gate or data path touched — `route-roles` guard re-proved), proven in Chromium 21/21.
+- **Deploy evidence, measured:** queue row 539 matched by commit; after it landed `rich.tokophi.com/login`
+  serves the new door (eyebrow "Super Admin · control plane", `h1` "Masuk ke panel platform", the old
+  description gone, no `defaultValue`, `h-11` submit), super-admin container healthy.
+- **Preceding deploys on this branch of history:** 538 (`49e5f45`, #391 ADR 0004 — `TokoΦ Kirim` in 8
+  admin bundle files, old string 0) · 537 (`f5100ac`, #393 carrying #392 — see below).
+
+## Previous release — `f5100ac` (PR #393, merged 2026-09-10 17:30 UTC; Coolify deploy **537**)
 
 ⚠️ **This release carries MORE than its PR title says, and the error was mine.** `docs/root-contract-refresh`
 was branched from `feat/payment-advice-cron` instead of `main`, so merging #393 ("docs only") also merged
@@ -94,5 +107,6 @@ other field validates (Base is a real ancestor of HEAD, Rollback-Ref resolves, n
 
 ## Next release
 
-Nothing is frozen. Open on GitHub: **#391** (ADR 0004 brand guard; CI re-running after a BUILD-LOG
-merge). It becomes the release this file describes; rewrite the header then, with `Base: f5100ac…`.
+Nothing is frozen. Open on GitHub: **#396** (README + these records; Markdown only, will not deploy).
+The next code merge becomes the release this file describes; rewrite the header then, with
+`Base: b888d66…`.

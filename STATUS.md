@@ -38,8 +38,8 @@ and **83 tables** (counted from `packages/db/drizzle/meta/_journal.json` and `sc
 store-scoped tables (`npm run verify-rls -w @tokophi/db`, 2026-09-11). Shape of the system:
 `ARCHITECTURE.md`.
 
-**Release on production: `98f1d5a` (PR #390, Coolify deploy 536, `finished` 2026-09-10 16:46 UTC)** on
-base `fca0a2e` (PR #389, deploy 535). Both deploys were matched by COMMIT in
+**Release on production: `b888d66` (PR #395, Coolify deploy 539, `finished` 2026-09-10 ~18:16 UTC)** on
+base `49e5f45` (PR #391, deploy 538); before those, 537 (`f5100ac`) and 536 (`98f1d5a`). Both deploys were matched by COMMIT in
 `application_deployment_queues`, and the data they carried was read back from the production
 database (migration stamp `1787545291751`; 74 017 courier village ids; VA fee 3000 in the live checkout
 HTML and the running admin bundle) — `RELEASE.md`, BUILD-LOG 2026-09-10.
@@ -55,9 +55,10 @@ the substance of issue #5, and it is not a probe failure: the sandbox answers co
 
 ## Active work
 
-**#392 (payment-advice cron) reached `main` inside #393** — my branching error, see `RELEASE.md`
-"This release"; Coolify deploy 537 carries it. Open: **#391** (ADR 0004 — no provider brand in any
-merchant/shopper string, guarded), CI re-running after the BUILD-LOG merge. Queue: root `TASKS.md` Stage 8; navigation handoff
+Everything from the 2026-09-10/11 session is on `main` and deployed (535–539, each matched by commit
+and read back from production). Open: **#396** (README + release records; Markdown only). The
+remaining queue is owner-gated (8.9 first production booking, 8.4 offsite backup credentials, 8.1 alert
+channel, 8.5 branch pruning, 5.8 buyer accounts). Queue: root `TASKS.md` Stage 8; navigation handoff
 `specs/docs/tasks/OPEN.md`. The remaining open items are owner-gated (8.9 first production booking,
 8.4 offsite backup credentials, 8.1 alert channel, 8.5 branch pruning, 5.8 buyer accounts).
 
