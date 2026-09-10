@@ -30,6 +30,39 @@ Start from the authority map below. Verify dated claims against code and the tar
 | Security posture | [`docs/SECURITY.md`](docs/SECURITY.md) |
 | Documentation applicability and validation boundary | [`docs/DEVELOPMENT_READINESS.md`](docs/DEVELOPMENT_READINESS.md) |
 
+## Development-kit map — where each specification concern lives here
+
+`development-kit` (dotfiles) routes work through one canonical artifact per concern and forbids a
+rival document beside an existing one; `development-spec-suite` names the artifact set for a
+`platform + multi-tenant + identity` product, which this is. TokoΦ predates the suite, so **no
+`docs/spec/` pack exists and none should be created** — the table maps each suite concern to the
+document that already owns it. An omitted concern is marked `Not applicable` with its reason and the
+gate that would activate it, as the suite requires.
+
+| Suite concern (reference artifact) | Owner here | Note |
+|---|---|---|
+| Business outcomes (`01-BRD`) | **Not applicable** — single owner-operator; no external sponsor. Activates if a commercial/regulatory commitment is signed (owner review) | pricing card: [`docs/PRICING.md`](docs/PRICING.md) |
+| Product behavior + NFRs (`02-PRD`) | [`PRD.md`](PRD.md) (v0.5, verified against code) → requirement IDs in [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | root `PRD.md` is the entrypoint |
+| Technical design (`03`) | [`docs/CODE_MAP.md`](docs/CODE_MAP.md) · [`docs/SYSTEM_GUIDE.md`](docs/SYSTEM_GUIDE.md) · the long section notes in `AGENTS.md` | per-concern, not one document |
+| System architecture (`04`) | design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (dated 2026-07, see its header) · **record: root [`ARCHITECTURE.md`](../ARCHITECTURE.md)** · edges: [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) | the record wins on what the code does |
+| Data model (`05`) | [`docs/SCHEMA.md`](docs/SCHEMA.md) (catalog of record) · [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) (entities) · [`docs/UML.md`](docs/UML.md) | `postgres-drizzle` owner |
+| Tenant isolation (`06`) | [`docs/SECURITY.md`](docs/SECURITY.md) §tenant + `AGENTS.md` "Database" (two pools, child-table rule) · verifier `npm run verify-rls -w @tokophi/db` | |
+| IAM / RBAC (`07`) | [`docs/SECURITY.md`](docs/SECURITY.md) §identity · `apps/admin/lib/rbac-policy.ts` · `apps/super-admin/lib/platform-rank.ts` + `route-roles.ts` | |
+| Domain routing (`08`) | [`docs/CUSTOM_DOMAIN.md`](docs/CUSTOM_DOMAIN.md) · ADR 0009 | Cloudflare for SaaS |
+| API specification (`09`) | [`openapi/storefront-api.yaml`](openapi/storefront-api.yaml) · [`openapi/admin-api.yaml`](openapi/admin-api.yaml) · [`openapi/headless.yaml`](openapi/headless.yaml) | `openapi-spec` owner; coverage guard in `verify:guards` |
+| Design system / white-label (`10`) | [`docs/PATTERN_UIUX.md`](docs/PATTERN_UIUX.md) · [`docs/IMPROVEMENT_UIUX.md`](docs/IMPROVEMENT_UIUX.md) · tokens in `packages/ui/styles.css` · brand boundary ADR 0004 + `@tokophi/lib/provider-label` | `admin-dashboard` / `design-taste` owners |
+| Billing & payments (`11`) | **[`docs/FINANCE.md`](docs/FINANCE.md)** (the one money map) · [`docs/PRICING.md`](docs/PRICING.md) · provider contract via skill `autolaris-h2h` | `DEC-001/005/010/011/012` |
+| Shipping, courier, COD (`17` + fulfilment owner) | `AGENTS.md` "Shipping & COD" · [`docs/KIRIMINAJA.md`](docs/KIRIMINAJA.md) (vendor contract as measured) · [`docs/FLOWS.md`](docs/FLOWS.md) §5 | |
+| Security architecture (`12`) | [`docs/SECURITY.md`](docs/SECURITY.md) · audits under `docs/AUDIT_*.md` | `application-security` owner |
+| Privacy & compliance (`13`) | [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) — **stub**; activates with Task 5.8 (buyer accounts, owner decision) | `Unknown` until written — not `Not applicable` |
+| SLA / DRP (`14`) | [`docs/SLA-DRP.md`](docs/SLA-DRP.md) | offsite backup still uncredentialed (Task 8.4) |
+| CI/CD & migrations (`15`) | [`docs/DEPLOY.md`](docs/DEPLOY.md) · `.github/workflows/` · `npm run verify-migrations -w @tokophi/db` · ADR 0017 | migrations are hand-written |
+| Observability & rate limits (`16`) | root [`OBSERVABILITY.md`](../OBSERVABILITY.md) (probes) · [`docs/SECURITY.md`](docs/SECURITY.md) (every rate limit with its value) · cron liveness on Super Admin → Analitik → Sistem | |
+| UX flows & screen contracts (`17`) | [`docs/FLOWS.md`](docs/FLOWS.md) · [`docs/UI_INVENTORY.md`](docs/UI_INVENTORY.md) · generated [`docs/PAGE_MAP.md`](docs/PAGE_MAP.md) · storefront checkout rules in `AGENTS.md` "Checkout input" | `admin-product-ux` / `storefront-ux` owners |
+| Market applicability (Indonesia) | `AGENTS.md` (phone/name/address normalisation, COD provinces, PPN toggle) · [`docs/FINANCE.md`](docs/FINANCE.md) | current-source required for tax/legal |
+| Pack applicability (`CONTEXT-RECORD`) | this table | no `CONTEXT-RECORD.md` — no pack |
+| Execution trace | root [`TASKS.md`](../TASKS.md) ↔ [`../BUILD-LOG.md`](../BUILD-LOG.md), traceability guard `scripts/verify-traceability.mjs` | |
+
 Supporting domain references:
 
 - [`docs/PAGE_MAP.md`](docs/PAGE_MAP.md) is the **generated** page-level index of all four surfaces — every URL → file, data/action modules, gate, tests (`node scripts/gen-page-map.mjs`; `test/page-map-fresh.test.ts` fails when stale). Start here to find a screen.
