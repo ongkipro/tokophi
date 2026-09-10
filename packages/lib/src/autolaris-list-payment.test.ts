@@ -140,9 +140,15 @@ describe("compareChannelFees — reports divergence, changes nothing", () => {
     expect(by.get("VABCA")).toMatchObject({ verdict: "match", ours: { value: 6500 }, theirs: { value: 6500 } });
   });
 
-  it("the other VA banks DIVERGE: we charge Rp3.500, the provider nets Rp3.000", () => {
+  // This test used to assert the OPPOSITE — `verdict: "differs"`, ours 3500 against theirs 3000 —
+  // and that is why the comparator exists: it found a Rp500 overcharge on the four cheapest channels
+  // we offer, sitting there since the 2026-08-24 schedule. The owner lowered the VA default to
+  // Rp3.000 on 2026-09-10 and the divergence closed. Same shape as the OVO case below, in the same
+  // direction of travel: the schedule is a mirror of the provider's configuration, and every gap
+  // between them is money moving to or from the buyer without anyone deciding it.
+  it("the other VA banks no longer diverge: our default was lowered to Rp3.000 (2026-09-10)", () => {
     for (const code of ["VABNI", "VABRI", "VAMANDIRI", "VAPERMATA"]) {
-      expect(by.get(code), code).toMatchObject({ verdict: "differs", ours: { value: 3500 }, theirs: { value: 3000 } });
+      expect(by.get(code), code).toMatchObject({ verdict: "match", ours: { value: 3000 }, theirs: { value: 3000 } });
     }
   });
 

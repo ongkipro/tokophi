@@ -183,7 +183,7 @@ export async function alProbeChannels(): Promise<AlProbeResult> {
 // ── Fee reconciliation — REPORT ONLY, never adjust ─────────────────────────────────────────────
 //
 // 🔵 `@tokophi/lib/payment-fees` is an OWNER RULING (2026-08-24, specs/docs/FINANCE.md): QRIS 0,7%
-// of omset, VA BCA Rp6.500 / other banks Rp3.500, e-wallet 3%, minimarket Rp4.000. Those numbers
+// of omset, VA BCA Rp6.500 / other banks Rp3.000, e-wallet 3%, minimarket Rp4.000. Those numbers
 // are what the SHOPPER is charged at checkout. The provider's `admin`/`tipe_admin` is what AutoLaris
 // nets from the platform — a different fact, on a different side of the transaction. They are
 // allowed to differ (that difference is platform margin, or platform absorption), so this function
