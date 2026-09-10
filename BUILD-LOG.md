@@ -3688,3 +3688,46 @@ so the seed's `truncate`-then-insert repopulated correctly with the 5-column par
 
 **Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 486 tests** · RLS verified ·
 storefront 8/8.
+
+## 2026-09-11 01:05 UTC — Payment reconciliation cron (observe-only), AutoLaris re-read, three latent defects closed (Main Session)
+
+**Scope:** owner request *"baca ulang repo ongkipro/autolaris → pastikan create order dan courir id = 1, json jangan lupa sama advice, dan cronjob untuk cek"* · branch `feat/payment-advice-cron` · Task 8.19 status updated in place.
+
+**Re-read, field by field.** Our `/submit` payload matches the vendor reference on all 24 keys —
+`courir_id: 1`, `cod_value: "0"`, `order_details[{name,qty,unit_price}]`, dummy `origin`/`destination`
+from the vendor's own sample. `courir_id: 1` was correct but pinned by NOTHING; `autolaris-submit.test.ts`
+now holds it as a source claim with a mutation self-check. ⚠️ The vendor's OpenAPI declares **no request
+schema at all** for `/submit` (`required: []`, `properties: {}`) — the Markdown sample is the only contract.
+
+**The cron — `api/cron/payment-advice` + sidecar `cron-payment-advice` (900 s).** `alAdvice` and
+`classifyAdvice` shipped 2026-09-09 with **zero callers**; this is the loop the vendor guide §6 prescribes.
+It reads every live prepaid bill (`payments` menunggu + `trx_id` + `method <> cod`; `invoices` menunggu +
+`trx_id`), asks `advice` once each, and records the **answer distribution** — `"rc=02 ket=FAILED": n`,
+per-outcome counts, a 20-row sample naming ids — into `cron_runs.result`, rendered by the Super Admin cron
+card. **It writes nothing to payment state, by design:** the 2026-09-09 measurement showed `02/FAILED` for
+bills our DB held LIVE, so acting on `failed` kills legitimate bills, and `paid` is unreachable while
+`ADVICE_SETTLED` is empty. Its purpose is to make the first real settlement answer VISIBLE so go-live
+question #6 is answered by evidence. Bounded three ways: 40 rows/tick, sequential, and a **15 s timeout
+now inside `al()`** (worst case 10 min < the 15-min cadence). Production holds 6 candidates.
+Guard `route.test.ts` (5): fails closed without the header, asks once per bill, tallies exact answers,
+caps at 40, never calls `update` — and a `codeOnly` claim proves the source has no writer at all.
+
+**Three latent defects closed on the way.**
+- **`reff_id` is capped at 30 characters (h2h-api.md §7); the seller-created bill sent a 36-char UUID.**
+  Not yet triggered (longest stored: 16 payments / 28 invoices), but a truncated reff can never be
+  reconciled. `order-detail.tsx` now mints `SB-` + 16 hex (20 chars, 64 bits, ≥ the action's 16 floor).
+- **`al()` had no timeout.** Every AutoLaris call — checkout, billing, and now this sweep — could hang
+  on a dead socket indefinitely. `AbortSignal.timeout(15 000)`; callers already treat a throw as
+  "gagal terhubung".
+- **The Super Admin cron-liveness card never listed `order-expiry`** — a sidecar that cancels orders
+  and restores stock could die with nothing on any screen, beside a test whose own comment says *"a
+  cron nobody lists is a cron nobody misses"*. Listed now, with `payment-advice`. The sidecar census in
+  `cron-auth.test.ts` went RED at 5 when the sixth loop appeared — the review gate working — and is 6.
+
+**Docs:** `DEPLOY.md` sidecar list completed (it named three of six); `PAGE_MAP.md` regenerated twice —
+the second time because the new test names `order-detail.tsx` and the map records which tests name a
+route, which is exactly the freshness the guard exists to enforce.
+
+**Gate (clean run, every fix in place from the start):** lint 0 · verify:guards 0 · **test:release
+171 files / 1 494 tests** (the single red was the stale page map, regenerated and re-proved green) · RLS
+verified · storefront 8/8 (from the immediately preceding run on identical storefront code).

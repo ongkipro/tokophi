@@ -781,7 +781,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/orders.test.ts",
-            "apps/admin/lib/uuid-guard.test.ts"
+            "apps/admin/lib/uuid-guard.test.ts",
+            "packages/lib/src/autolaris-submit.test.ts"
           ]
         },
         {
@@ -826,7 +827,8 @@
           "tests": [
             "apps/admin/lib/actions/orders.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
-            "apps/admin/lib/uuid-guard.test.ts"
+            "apps/admin/lib/uuid-guard.test.ts",
+            "packages/lib/src/autolaris-submit.test.ts"
           ]
         },
         {
@@ -1300,6 +1302,24 @@
           "tests": [
             "apps/admin/lib/cron-auth.test.ts"
           ]
+        },
+        {
+          "url": "/api/cron/payment-advice",
+          "kind": "api",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/admin/app/api/cron/payment-advice/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [
+            "cron"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": true,
+          "tests": []
         },
         {
           "url": "/api/cron/tracking-events",

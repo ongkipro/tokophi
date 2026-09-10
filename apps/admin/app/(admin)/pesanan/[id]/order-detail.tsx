@@ -460,7 +460,12 @@ export function OrderDetail({
   const createBill = (channelCode: string) => {
     if (!billIntent.current) {
       billIntent.current = {
-        requestKey: globalThis.crypto.randomUUID(),
+        // ⚠️ THIS KEY IS SENT TO THE PROVIDER AS `reff_id`, WHICH THE VENDOR CAPS AT 30 CHARACTERS
+        // (h2h-api.md §7). A UUID is 36 — over the cap on every seller-created bill, and whether the
+        // provider rejects or silently truncates, a truncated reff can never be reconciled. 20 chars:
+        // 16 hex of randomness (64 bits) behind a short tag, and still ≥ 16 so `createOrderPayment`'s
+        // own length floor accepts it. Retries of ONE intent reuse it; that contract is unchanged.
+        requestKey: `SB-${Array.from(globalThis.crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("")}`,
         channelCode,
       };
       setBillIntentChannel(channelCode);

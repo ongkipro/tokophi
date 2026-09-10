@@ -20,6 +20,12 @@ export const CRON_JOBS: { job: string; label: string; what: string }[] = [
   { job: "domains", label: "Aktivasi domain", what: "memeriksa hostname & sertifikat SSL merchant" },
   { job: "tracking-events", label: "Pengiriman konversi", what: "mengirim Purchase ke channel iklan" },
   { job: "billing", label: "Tagihan langganan", what: "sinkron status toko & terbitkan tagihan" },
+  // ⚠️ Missing from this card since the sidecar shipped — a cron nobody lists is a cron nobody
+  // misses, which is the sentence the test below exists to enforce. Found 2026-09-11.
+  { job: "order-expiry", label: "Kedaluwarsa pesanan", what: "membatalkan pesanan prabayar yang tidak dibayar & memulihkan stok" },
+  // Observe-only: reads AutoLaris `advice` for every live bill and records the answer distribution.
+  // It settles NOTHING (see the route) — the card shows that it is looking, not that money moved.
+  { job: "payment-advice", label: "Rekonsiliasi pembayaran", what: "membaca status tagihan prabayar di gateway (hanya mengamati)" },
 ];
 
 /**
