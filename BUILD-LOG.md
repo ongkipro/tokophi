@@ -3725,7 +3725,6 @@ false hits). Discarded for the repo's own `test/source-code.ts`, which exists pr
 every hand-rolled comment stripper here has had a different hole.
 
 **Gate:** lint 0 · verify:guards 0 · **test:release 170 files / 1 492 tests** · RLS verified · storefront 8/8.
-||||||| 98f1d5a
 ## 2026-09-11 01:05 UTC — Payment reconciliation cron (observe-only), AutoLaris re-read, three latent defects closed (Main Session)
 
 **Scope:** owner request *"baca ulang repo ongkipro/autolaris → pastikan create order dan courir id = 1, json jangan lupa sama advice, dan cronjob untuk cek"* · branch `feat/payment-advice-cron` · Task 8.19 status updated in place.
