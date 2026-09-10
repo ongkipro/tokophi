@@ -33,8 +33,8 @@ Label di storefront selalu generik/white-label (tanpa merek PSP — ADR 0004).
 | **COD** | **3%** + **PPN 11% atas fee-nya** | omset barang + ongkir yang ditagih |
 | **QRIS** | **0,7%** | **omset barang** saja (bukan total bayar) |
 | **Virtual Account BCA** | **Rp6.500** flat | per transaksi |
-| **Virtual Account bank lain** (BNI/BRI/Mandiri/Permata/…) | **Rp3.500** flat | per transaksi |
-| E-Wallet (OVO, DANA, ShopeePay, dll) | 2,4% | total bayar |
+| **Virtual Account bank lain** (BNI/BRI/Mandiri/Permata/…) | **Rp3.000** flat | per transaksi |
+| E-Wallet (OVO, DANA, ShopeePay, dll) | 3,0% | total bayar |
 | Minimarket/retail | Rp4.000 flat | per transaksi |
 
 - **Basis adalah bagian dari identitas fee** — QRIS dihitung dari omset, bukan dari payable; PPN

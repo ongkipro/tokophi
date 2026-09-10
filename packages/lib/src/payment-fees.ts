@@ -5,9 +5,20 @@
 // · QRIS       0,7% — of the GOODS OMSET (subtotal after goods discount), NOT of the payable total.
 //              The owner's words were "0,7% dari nilai omset"; charging it on the payable would tax
 //              the shipping and the fee itself.
-// · VA         flat per transaction, PER BANK: BCA Rp6.500, every other bank Rp3.500. The bank is a
+// · VA         flat per transaction, PER BANK: BCA Rp6.500, every other bank Rp3.000. The bank is a
 //              CHANNEL code (platform_payment_channels.channel, e.g. "VABCA"), so the split lives in
 //              CHANNEL_FEE_OVERRIDES — adding a bank with its own price is a data edit, not a deploy.
+//              ⚠️ **LOWERED from Rp3.500 by owner ruling 2026-09-10, and it was an OVERCHARGE, not a
+//              margin.** `GET /api/h2h/list_payment` reports what the provider actually bills THIS
+//              account, and every non-BCA bank it offers is Rp3.000 `fix` (measured live 2026-09-10:
+//              VABNI, VAPERMATA, VAMANDIRI, VABRI all `admin: "3000.0"`, VABCA `"6500.0"`). So for
+//              two and a half weeks the buyer paid Rp500 more than the transaction cost us, on the
+//              cheapest payment method we offer. The mirror image of the e-wallet defect below.
+//              🔴 THE DEFAULT MOVED — four overrides were NOT added, deliberately. Of the five VA
+//              banks the provider offers, four are Rp3.000 and one is Rp6.500; NONE is Rp3.500.
+//              Four override rows all equal to a new default would leave that default matching no
+//              bank at all, so the next bank the provider enables would be billed Rp3.500 silently.
+//              The default is the common case; BCA is the exception, and it stays the only one.
 // · E-wallet 3,0% — RAISED from 2,4% by owner ruling 2026-09-09, to match what the provider
 //              actually charges the account: `GET /api/h2h/list_payment` reports OVO at 3,0%
 //              `persen` (measured live 2026-09-09), so 2,4% meant the platform absorbed 0,6 pp on
@@ -30,13 +41,19 @@ export type Fee = { kind: FeeKind; label: string; type: "flat" | "pct"; value: n
 
 // value: flat = IDR/transaksi; pct = fraction of the declared base.
 export const PAYMENT_FEES: Record<FeeKind, Fee> = {
-  va: { kind: "va", label: "Virtual Account (semua bank)", type: "flat", value: 3_500, base: "payable", note: "Rp3.500 / transaksi (BCA Rp6.500)" },
+  va: { kind: "va", label: "Virtual Account (semua bank)", type: "flat", value: 3_000, base: "payable", note: "Rp3.000 / transaksi (BCA Rp6.500)" },
   ewallet: { kind: "ewallet", label: "E-Wallet (OVO, DANA, ShopeePay, dll)", type: "pct", value: 0.03, base: "payable", note: "3% / transaksi" },
   qris: { kind: "qris", label: "QRIS", type: "pct", value: 0.007, base: "omset", note: "0,7% dari nilai barang" },
   retail: { kind: "retail", label: "Minimarket (Indomaret, Alfamart)", type: "flat", value: 4_000, base: "payable", note: "Rp4.000 / transaksi" },
 };
 
-/** Per-CHANNEL flat overrides, keyed by `platform_payment_channels.channel`. Flat fees only. */
+/**
+ * Per-CHANNEL flat overrides, keyed by `platform_payment_channels.channel`. Flat fees only.
+ *
+ * BCA is the ONLY entry and that is the point: it is the only bank the provider prices differently
+ * from the rest (Rp6.500 against Rp3.000, measured on `list_payment` 2026-09-10). An override that
+ * merely restates the default is not documentation, it is a second place for the number to rot.
+ */
 export const CHANNEL_FEE_OVERRIDES: Record<string, number> = {
   VABCA: 6_500,
 };

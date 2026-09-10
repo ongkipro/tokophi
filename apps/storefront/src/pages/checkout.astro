@@ -44,7 +44,7 @@ const PAYMENTS = (await enabledPaymentChannels()).map((c) => {
     kind: c.kind,
     desc: payDesc(c.kind, c.label),
     feeType: fee?.type ?? "flat",
-    // Per-CHANNEL value (owner ruling 2026-08-24): VABCA Rp6.500, other VAs Rp3.500 — the override
+    // Per-CHANNEL value (owner rulings 2026-08-24 / 2026-09-10): VABCA Rp6.500, other VAs Rp3.000 — the override
     // table in payment-fees.ts, so the radio each bank renders carries ITS OWN price.
     feeValue: fee ? channelFeeValue(fee.kind, c.code) : 0,
     // Which number a pct fee multiplies. QRIS = "omset" (goods after discount), not the payable —

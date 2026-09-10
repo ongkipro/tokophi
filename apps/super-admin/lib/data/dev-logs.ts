@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.5.0-kelurahan-walk-va-fee-corrected",
+    version: "v1.5.0",
+    date: "2026-09-10",
+    title: "Every Village Gets The Courier's Own Id, And The Buyer Stops Overpaying On Four Banks",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Payments", "Database & RLS", "Seller Admin", "Storefront"],
+    summary: "The full courier subdistrict walk finished — 6.735 districts, no failures — and gave 74.017 of 78.764 villages the courier's own id, in both directions: the seller's pickup address and now the buyer's destination. The walk also exposed a matcher that produced WRONG ids rather than missing ones, which was fixed and re-run. Separately, the payment schedule was measured against the provider's own configuration again and a Rp500 overcharge on four virtual-account banks was closed.",
+    problem: "Two id problems and one money problem. Our village ids are Kemendagri codes, not the courier's, so both kelurahan fields on a pickup request had to stay empty — the seller's since always, the buyer's because nothing produced one at all: the checkout collected a village to fill the postcode and the order API threw it away. Then the walk itself produced 125 courier ids each claimed by two different villages, because the matcher scored every row on its own and never marked a record taken, so sibling villages differing only by a numeral both took the same id — at most one of each pair can be right and nothing said which. And the fee schedule charged Rp3.500 on every non-BCA virtual account while the provider bills the platform Rp3.000, so the buyer paid Rp500 above cost on the cheapest method we offer.",
+    solution: "The populator now claims a courier record exclusively, abandons a contested exact match on both sides instead of resolving it by file order, and awards a fuzzy match to the best name in the district so the loser goes unmatched rather than inheriting a neighbour's id; re-running only the 107 affected districts left zero duplicates. The destination half got its own columns and the id is re-derived on the server against the district the shipping was priced against — never taken from the request — and is omitted entirely when that district was itself a guess. The virtual-account default was lowered to Rp3.000 rather than adding four per-bank rows, because of the five banks the provider offers four are Rp3.000 and one is Rp6.500: none is Rp3.500, so a default matching no bank would have silently mispriced the next bank enabled.",
+    verification: "The walk: 6.735 districts, 0 transport failures, 0 districts empty, 74.017 of 78.764 villages matched (93,97%) with all 4.747 blanks listed per row with their province. The repair changed 165 rows and left 0 duplicates, verified by a guard that pins the output rather than the matcher and was proved red against the committed duplicates first. The fee correction is the provider's own number, read live from its channel list on 2026-09-10: Rp3.000 fix for BNI, Permata, Mandiri and BRI, Rp6.500 for BCA — and the comparison guard that had recorded the divergence now asserts agreement. Release gate green: lint 0, guards 0, 169 files and 1.485 tests, RLS verified, storefront 8/8. Not proven: the courier has still never been called with a real subdistrict id, which needs one authorised production booking."
+  },
+  {
     id: "v1.4.0-kiriminaja-unblocked-autolaris-contract",
     version: "v1.4.0",
     date: "2026-09-09",

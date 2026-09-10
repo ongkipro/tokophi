@@ -3634,3 +3634,57 @@ the two mocks above, and the four docs that publish the migration count (108 →
 **Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 485 tests** · RLS verified ·
 storefront `npm run verify` 8/8 with a fresh build, and the built page carries the new field at both
 sites. ⚠️ **A live checkout submit was NOT driven** — placing a real order writes to the shared dev DB.
+
+## 2026-09-10 16:40 UTC — VA fee lowered to Rp3.000: a Rp500 overcharge, not a margin (Main Session)
+
+**Scope:** owner ruling 2026-09-10 · branch `fix/va-fee-3000` · Task: payment schedule audit.
+
+**The order was to set BNI, Permata, Mandiri and BRI to Rp3.000. The audit says the order is a
+CORRECTION, not a preference.** `GET /api/h2h/list_payment` reports what the provider actually bills
+this account. Read live 2026-09-10 from the production admin container:
+
+| channel | provider | our schedule | gap |
+|---|---|---|---|
+| VABNI · VAPERMATA · VAMANDIRI · VABRI | `admin: "3000.0"` `fix` | Rp3.500 | **buyer paid +Rp500** |
+| VABCA | `admin: "6500.0"` `fix` | Rp6.500 | — |
+
+So since the 2026-08-24 schedule the buyer has been charged Rp500 above cost on the four cheapest
+channels we offer. ⚠️ **This was already FOUND and LOGGED at `BUILD-LOG.md:3301`** during the
+`list_payment` audit hours earlier — recorded as "we charge Rp500 more → platform margin" and then
+left alone. Finding it was not the same as fixing it; the owner's instruction is what closed it.
+
+**THE DEFAULT MOVED — four overrides were deliberately NOT added.** Of the five VA banks the provider
+offers, four are Rp3.000 and one is Rp6.500; **none is Rp3.500**. Four override rows all equal to a
+new default would leave that default matching no bank at all, so the next bank the provider enables
+would be billed Rp3.500 silently. `PAYMENT_FEES.va.value` is now `3_000` and `CHANNEL_FEE_OVERRIDES`
+keeps `VABCA` as its single entry — the only bank the provider genuinely prices differently.
+
+**The comparison guard now asserts the opposite of what it used to.**
+`autolaris-list-payment.test.ts` carried *"the other VA banks DIVERGE: we charge Rp3.500, the provider
+nets Rp3.000"* — that test is why the overcharge was visible at all. It now asserts `verdict: "match"`,
+which is the same direction of travel as the OVO case (2,4% → 3% on 2026-09-09). The schedule is a
+mirror of the provider's configuration; every gap is money moving to or from the buyer with nobody
+deciding it.
+
+**Guard:** `payment-fees.test.ts` gains a claim that BCA stays the ONLY per-bank exception and that no
+override may restate the default. Proved RED against two mutations — the value put back to Rp3.500,
+and a redundant `VABNI: 3_000` override added — then green again.
+
+**Audit sweep:** the figure was published in seven places outside the module. All corrected:
+`specs/docs/FINANCE.md`, `specs/docs/PRICING.md`, `AGENTS.md`, `apps/storefront/src/pages/checkout.astro`,
+`apps/admin/app/api/public/order/route.ts`, `packages/lib/src/autolaris.ts`, plus both test files.
+⚠️ **A second stale figure fell out of the same sweep:** `PRICING.md` still published e-wallet at
+**2,4%**, superseded by the 2026-09-09 ruling to 3%. One document had been wrong for a day without
+anyone reading it.
+
+**Super Admin update log:** new `v1.5.0` entry (`apps/super-admin/lib/data/dev-logs.ts`) covering the
+kelurahan walk, the destination half and this fee correction. It is the operator-facing changelog, so
+it names what changed for a merchant and what is still unproven.
+
+**Production verified after deploy 535 (`fca0a2e`, finished 16:29:24 UTC):** migration stamp
+`1787545291751` (= 0108) applied, `orders.ship_kelurahan_id` + `ship_kelurahan_name` both present,
+`kelurahan` 78 764 rows with **74 017 carrying `ka_kelurahan_id`** — identical to the committed file,
+so the seed's `truncate`-then-insert repopulated correctly with the 5-column parser.
+
+**Gate:** lint 0 · verify:guards 0 · **test:release 169 files / 1 486 tests** · RLS verified ·
+storefront 8/8.

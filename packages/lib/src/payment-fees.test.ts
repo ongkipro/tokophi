@@ -5,14 +5,32 @@ import { CHANNEL_FEE_OVERRIDES, PAYMENT_FEES, channelFeeValue, paymentFee } from
 // part of a fee's identity (QRIS was 1% of the payable for months because every caller picked its
 // own denominator), so a change here must be a deliberate re-ruling, not a refactor side-effect.
 describe("payment fee schedule", () => {
-  it("VA is flat per bank: BCA Rp6.500, every other bank Rp3.500", () => {
+  // 🔴 THESE FOUR NUMBERS ARE THE PROVIDER'S, NOT OURS. `GET /api/h2h/list_payment` reports what the
+  // account is actually billed, and on 2026-09-10 it answered `admin: "3000.0"` / `tipe_admin: "fix"`
+  // for VABNI, VAPERMATA, VAMANDIRI and VABRI, and `"6500.0"` for VABCA. We charged Rp3.500 for the
+  // four, so the buyer paid Rp500 above cost on every one of them. Owner ruling the same day lowered
+  // it. If this test is ever changed, re-read `list_payment` first — the schedule is a mirror of the
+  // provider's configuration, not an independent price list.
+  it("VA is flat per bank: BCA Rp6.500, every other bank Rp3.000", () => {
     expect(channelFeeValue("va", "VABCA")).toBe(6_500);
-    expect(channelFeeValue("va", "VABNI")).toBe(3_500);
-    expect(channelFeeValue("va", "VABRI")).toBe(3_500);
-    expect(channelFeeValue("va", null)).toBe(3_500);
+    for (const bank of ["VABNI", "VABRI", "VAMANDIRI", "VAPERMATA"]) {
+      expect(channelFeeValue("va", bank)).toBe(3_000);
+    }
+    expect(channelFeeValue("va", null)).toBe(3_000);
     // flat fees ignore both bases entirely
     expect(paymentFee("va", { omsetIdr: 1_000_000, payableIdr: 2_000_000 }, "VABCA")).toBe(6_500);
-    expect(paymentFee("va", { omsetIdr: 1_000_000, payableIdr: 2_000_000 }, "VAPERMATA")).toBe(3_500);
+    expect(paymentFee("va", { omsetIdr: 1_000_000, payableIdr: 2_000_000 }, "VAPERMATA")).toBe(3_000);
+  });
+
+  // The DEFAULT moved rather than four overrides being added, and that is a decision worth pinning:
+  // of the five VA banks the provider offers, four are Rp3.000 and one is Rp6.500 — none is Rp3.500.
+  // Four rows all equal to the default would leave the default matching no bank at all, so the next
+  // bank the provider enables would be billed at a price nothing charges.
+  it("keeps BCA as the ONLY per-bank exception", () => {
+    expect(Object.keys(CHANNEL_FEE_OVERRIDES)).toEqual(["VABCA"]);
+    for (const [code, value] of Object.entries(CHANNEL_FEE_OVERRIDES)) {
+      expect(value, `${code} restates the VA default and should be deleted`).not.toBe(PAYMENT_FEES.va.value);
+    }
   });
 
   it("QRIS is 0,7% of the GOODS OMSET, never the payable", () => {
