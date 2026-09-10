@@ -1625,6 +1625,7 @@
           "dynamic": false,
           "ownerDb": false,
           "tests": [
+            "apps/super-admin/lib/platform-shell-contract.test.ts",
             "packages/lib/src/no-published-credentials.test.ts"
           ]
         }
@@ -1961,6 +1962,7 @@
           "dynamic": false,
           "ownerDb": false,
           "tests": [
+            "apps/super-admin/lib/platform-shell-contract.test.ts",
             "packages/lib/src/no-published-credentials.test.ts"
           ]
         }
@@ -3546,6 +3548,7 @@
         "module": "nav.ts",
         "exports": [
           "NAV",
+          "NAV_GROUPS",
           "navFor"
         ]
       },
