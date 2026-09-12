@@ -3892,3 +3892,28 @@ RLS verified · storefront 8/8.
 **Also landed while this ran — deploy 538 (`49e5f45`, PR #391 ADR 0004) verified on production:** admin
 container healthy, `TokoΦ Kirim` present in 8 server-bundle files, the old `KiriminAja belum
 dikonfigurasi` string in 0.
+
+
+## 2026-09-12 — KiriminAja UAT sheet (MitraAPI V1 template) filled, rendered to PDF with vector logos (Main Session)
+
+**Scope:** owner request *"Template UAT - KiriminAja - MitraAPI V1 … analisa lengkap, pastikan logo presisi, isi dan
+sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downloads/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.pdf` (+ `.html`).
+
+- **The template** (docx, 221 paragraphs, 6 tables, **0 embedded images**): 1 Informasi Dokumen · 2 Scope (12 features)
+  · 3 Hasil (16 scenarios, Pass/Fail/N/A) · 4 Evidence Label (fields + 13-item mandatory checklist). No converter on
+  this machine (no pandoc/LibreOffice/python-docx) and none installed: the docx XML was read directly, the sheet was
+  rebuilt as print-CSS HTML, and Chromium (Playwright, already present) printed A4. **5 pages, 0,18 MB.**
+- **"Logo presisi":** TokoΦ mark drawn from `apps/landing/public/favicon.svg` geometry (Φ as strokes, not a font, so it
+  renders identically everywhere) + the wordmark rule (`Toko` + primary-coloured `Φ`); KiriminAja's mark from their own
+  `developer.kiriminaja.com/favicon.svg` (1024-unit vector). Both inline SVG — no raster, no font dependency.
+- **Every cell is evidence, and three things are stated rather than glossed:** (1) the 8 OIDs/pickups and the pricing
+  pair come from the 2026-08-24 simulation record; (2) **Tracking/Cancel could not be exercised** because the sandbox
+  never issued an AWB — Cancel is marked N/A with the ask, not Pass; (3) **KA Credit is N/A on measurement**, not
+  assumption — `GET v6.2/credit/balance` (the exact OpenAPI path) answered "Unable to find your endpoint target" in
+  three rounds with `province` passing as the control each time (2026-09-11). Section 4's label is rendered by the
+  product's own `shipping-label.ts` for OID `5758-UAT5032514` with a SAMPLE AWB that the sheet labels as such — the
+  module will not print a booking ref as a resi, and inventing a waybill would be worse than the gap. The checklist
+  marks Sorting Code, Insurance Information and courier logo as **not yet printed**; the action items ask for them.
+- **Review loop, honest:** first render had three defects (a "◐" glyph falling back to a bullet, a width rule I scoped
+  to every table's last column — pages 5 → 7 — and a footer spilling onto a stub page). Fixed, re-rendered, re-read.
+- **Not in scope:** submitting the sheet (owner), and production cutover (Task 8.9).
