@@ -178,8 +178,8 @@ stopped by the database. Do not write one.
 **`awb` vs `ka_order_id` is load-bearing** (fixed in `0b3cdda`). The code used to write
 `awb = r.awb ?? r.kaOrderId`, which stamped **our own order id** onto the shipping label under
 "No. resi" — an unscannable barcode on a real parcel. `awb` now stays NULL until the courier issues a
-real one, and the **KiriminAja sandbox never issues one**, so `awbPending: true` is the normal state
-in dev.
+real one, and the **KiriminAja sandbox never issues one** — its tracking answers `MOCK-<ref>`, which
+`realWaybill` refuses (2026-09-14) — so `awbPending: true` is the normal state in dev.
 
 **Why `ship_*` is a snapshot and not a lookup** (0042): `customer_addresses` belongs to the *customer*
 and changes. Without the snapshot, a buyer who moves house silently moves every past order with them —

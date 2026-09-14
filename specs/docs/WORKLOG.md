@@ -4,7 +4,13 @@
 > ▶ **The queue itself lives in [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with AC.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-09-14, later) · **TokoΦ v1.7.1** · 83 PostgreSQL Tables · 111 Migrations (`0000` through `0110_order_sorting_code`) · 177 Vitest files, **1.551/1.551 tests green** · KiriminAja: full v6.2 booking (live), sorting code prepared on branch `feat/ka-sorting-code`, tracking parser fixed (it never read the body) · UAT sheet revision 4 · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9)
+## ▶ CURRENT STATE (2026-09-14, evening) · **TokoΦ v1.7.2** · 83 PostgreSQL Tables · 111 Migrations (`0000` through `0110_order_sorting_code`) · 177 Vitest files, **1.556/1.556 tests green** · KiriminAja: v6.2 booking + sorting code + tracking parser live (deploy 541); audit fixes in PR #399 (stale rejection flags, DEMO resi, OpenAPI drift) · UAT sheet revision 4 · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9)
+
+## 2026-09-14 (evening) — Audit of the day's KiriminAja release (PR #399, branch `fix/ka-tracking-audit`)
+
+- **Found and fixed:** a stale "permanent rejection" flag (2026-08-27 allow-list 401, naming the brand) could never clear → `clearStaleTrackingRejection` on any 2xx answer · `realWaybill` let `DEMO<tail>` through and a webhook code could bind to a stored DEMO AWB · OpenAPI drift (`sortingFilled`, `cancelsReconciled`, `missingSortingCode`, boolean `ok`) · "batch 100" was never true (5 per store per tick) · stale "sandbox never issues an AWB" wording across REQUIREMENTS/STATUS/BACKLOG/SCHEMA/UAT sheet (it issues `MOCK-<ref>`).
+- **Verification:** full vitest 1.556/1.556 · 4 mutations, 4 reds · verify:guards ok · lint 0 · tsc 0.
+- **Next:** deploy, then witness `problemsCleared ≥ 1` for `PHI-206107047PVE` on the next tracking tick.
 
 ## 2026-09-14 (later) — Sorting code on the label + the tracking body nobody read (Task 8.23, branch `feat/ka-sorting-code`)
 
