@@ -1,7 +1,7 @@
 # TokoΦ
 
-> **Status:** live in production since 2026-07-13 | **Repo:** [ongkipro/tokophi](https://github.com/ongkipro/tokophi)
-> **Stack:** npm-workspaces monorepo — Next.js 16 (Seller `app.`, Super Admin `rich.`) + Astro SSR (multi-tenant storefront) + static Astro (landing) over PostgreSQL 16 / Drizzle, self-hosted on Coolify | **Started:** 2026-07-02 (ADR 0001) | **Updated:** 2026-09-11
+> **Status:** in active development, live in production | **Repo:** private
+> **Stack:** npm-workspaces monorepo — Next.js (Seller + Super Admin) + Astro SSR (multi-tenant storefront) + static Astro (landing) over PostgreSQL / Drizzle, self-hosted deployment
 
 ## Overview
 
@@ -31,7 +31,7 @@ authority map that names an owner per concern is [`specs/README.md`](specs/READM
 ## Quickstart
 
 ```bash
-git clone https://github.com/ongkipro/tokophi && cd tokophi
+git clone <this-repo> && cd tokophi
 npm install
 docker compose up -d db                 # PostgreSQL 16 @ localhost:5433
 cp .env.example .env                    # DATABASE_URL etc. — see AGENTS.md "Database"
@@ -62,6 +62,6 @@ WORKTREE"** section of `AGENTS.md`.
 
 ## Environment
 
-- **Production:** https://tokophi.com · https://app.tokophi.com · https://rich.tokophi.com · `https://<slug>.tokophi.id`
+- **Production:** four surfaces (landing, storefront, Seller, Super Admin) on a self-hosted domain — see `DEPLOY.md`
 - **Staging:** none — one production box; a PR's CI builds all four surfaces (`.github/workflows`)
 - **Local:** http://localhost:3000 (Seller) · http://localhost:3001 (Super Admin) · storefront per `apps/storefront` README
