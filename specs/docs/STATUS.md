@@ -261,7 +261,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 7 | **`orders.awb` is NULL on 700/700** | correct behaviour now (only a real waybill lands there), but no demo data exercises the AWB path |
 | 8 | 🔴 **The SPX free-return claim is UNVERIFIED** | it is a *Shopee Seller Center* benefit; we reach SPX through *KiriminAja*, a different contract, whose API has **no return field at all**. **The entire SPX-only COD policy rests on it** |
 | 9 | **The courier roster comes from ONE reference route** | KiriminAja has no list-couriers endpoint, so `kaServices()` prices origin `2099` → dest `356` and harvests the services out of the response. **The roster is only as complete as that one lane** |
-| 10 | **`KIRIMINAJA_ENV` defaults to `sandbox`** | an unset env **in production** silently talks to the sandbox and books no real parcels. The sandbox also never issues an AWB, so `awbPending` is the normal outcome in dev |
+| 10 | **`KIRIMINAJA_ENV` defaults to `sandbox`** | an unset env **in production** silently talks to the sandbox and books no real parcels. The sandbox also never issues a courier AWB — tracking answers `MOCK-<ref>`, which `realWaybill` refuses (2026-09-14) — so `awbPending` is the normal outcome in dev |
 | 11 | ✅ **`platform_couriers.services` legacy plain strings — FIXED** | the seed wrote `["Reguler","Same Day"]` where `getCodPolicy` expects `{type,name,group,cod,codAllowed}` objects; it skips non-objects, so a fresh DB had **zero** COD-allowed services and COD could not be exercised at all. The seed now writes objects with `codAllowed = cod && courier === "spx"` → 2 COD-allowed services. `540af0a` added the rest: `store_settings.cod_enabled = true` + **11** `store_shipping_methods` rows, so a fresh clone can exercise COD end-to-end with no API key and no clicking. Verified on a forced re-seed. |
 | 12 | **Parcel weight is hardcoded** | `qty × 500 g` |
 | 13 | **The label "Cetak" button is a toast stub** | there is no PDF |
@@ -333,7 +333,7 @@ Stated as unverified rather than guessed.
 
 1. **The SPX free-return claim** (§3.2 #8). Needs KiriminAja, in writing.
 2. **Whether AutoLaris and KiriminAja behave in production as in sandbox.** `KIRIMINAJA_ENV` defaults to
-   sandbox and the sandbox never issues an AWB, so the real booking path has never been observed.
+   sandbox and the sandbox never issues a courier AWB (only `MOCK-<ref>`, refused since 2026-09-14), so the real booking path has never been observed.
 3. **The AutoLaris callback signature spec.** We compare a shared secret; whether that is what AutoLaris
    actually sends in production is not confirmed against their documentation.
 4. **Google OAuth against real credentials.** The code path has never been run.
@@ -360,8 +360,8 @@ Stated as unverified rather than guessed.
 
 **Booking is real and honest.** `request_pickup` works, and `awb: null` is never back-filled with a
 booking reference. **Everything after booking is unproven.** `KIRIMINAJA_ENV` defaults to `sandbox` in
-both compose files and every `.env.example`, sandbox never issues an AWB, and so the entire path from
-`kaTrack` onward — the response shape, the numeric status table, the echo guard — **is inference nobody
+both compose files and every `.env.example`, sandbox never issues a courier AWB (its tracking answers `MOCK-<ref>`), and so the entire path from
+`kaTrack` onward — the numeric status table beyond 105, the echo guard on a real waybill — **is inference nobody
 has ever seen execute successfully.** `awbFilled` has never been observed non-zero.
 
 Two things that must be settled before anyone claims the resi flow works, both in BACKLOG:

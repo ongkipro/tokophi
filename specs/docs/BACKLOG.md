@@ -215,7 +215,7 @@ them) and `3eefe02` (one bad gateway reply killed the whole sweep; poller starva
       nothing. The buyer cannot see a waybill anywhere, so "resi" exists only for the merchant.
 - [ ] **In sandbox a booked shipment can never be cancelled** (verified, not inferred):
       `cancel_shipment` answers `{"status":false,"text":"Paket tidak ditemukan"}` for a booking
-      reference — it wants a courier AWB, which sandbox never issues.
+      reference — it wants a courier AWB, and the sandbox issues only `MOCK-<ref>` (measured 2026-09-14).
 
 ---
 
@@ -427,7 +427,7 @@ The seller's UI flow works too: **Cek Ongkir → pick → Buat** produced 2 book
 1. **[x] Tracking poller + `orders.awb` fill — BUILT `db10557` (by `Admin@Admins-Mac-mini`), SCHEDULED 2026-07-17.**
    `lib/ka-tracking.ts` (`syncOrderFromKa`: forward-only via a status RANK, reuses `applyOrderStatusChange`
    so inventory/ledger/COD move exactly as on a manual change, never overwrites a real AWB with our own
-   booking ref) + `app/api/cron/tracking/route.ts` (batch 100, fails closed without `CRON_SECRET`).
+   booking ref) + `app/api/cron/tracking/route.ts` (up to 5 orders per store per tick, fails closed without `CRON_SECRET`).
    **It shipped with nothing scheduling it** — added the `cron-tracking` sidecar (15 min, its own
    container; the existing `cron` sleeps 86400s and an AWB the shopper is waiting on cannot be a day
    late). Reviewed: `orders.number` is UNIQUE **globally** (`orders_number_unique`), so the poller's

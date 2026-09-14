@@ -275,7 +275,7 @@ Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 
 | **Admin** — 20+ modules | 🟢 All read the DB; all editors write it. Dashboard is an **action queue**, not vanity metrics. Pesanan is a **seller centre** (Shopee-style tabs, server-side search/filter/paging, counts that partition exactly) |
 | **Money** — Saldo, ledger, payouts | 🟢 Real, end-to-end. Balance derived, book append-only, payout approval in super-admin |
 | **COD** | 🟢 Enforced **and switched on** end-to-end (SPX only), exercised in a real browser. ⚠️ Its central premise is unverified (§4), and the return rate it optimises for is unmeasurable (§5) |
-| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking, and the checkout now offers **exactly the services the seller ticked** (`store_shipping_methods`; until `35b88a4` it read the courier-level list and offered services the seller had switched off). ⚠️ The sandbox never issues an AWB |
+| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking, and the checkout now offers **exactly the services the seller ticked** (`store_shipping_methods`; until `35b88a4` it read the courier-level list and offered services the seller had switched off). ⚠️ The sandbox never issues a courier AWB (its tracking answers `MOCK-<ref>`, refused since 2026-09-14) |
 | **Storefront** | 🟢 SSR multi-tenant, Store Builder, real funnel events. 🟢 `/blog` reads the DB; WhatsApp is per-store (email still shared) |
 | **Super-admin** | 🟢 Rebuilt on real numbers (`571ed17`). The merchant float is shown as a **liability** |
 | **Analytics** | 🟡 Honest maths, demo rows. The funnel is a `GROUP BY` over `analytics_events`; those rows are still overwhelmingly seeded |

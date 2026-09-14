@@ -660,7 +660,7 @@ npm run generate -w @tokophi/db    # ⚠️ READ THE WARNING BELOW BEFORE USING 
   |---|---|---|---|
   | 1 | **Proses** | `baru → diproses` via `applyOrderStatusChange` (the only writer of `orders.status`) | order detail · `/pesanan` |
   | 2 | **Atur pengiriman** | `bulkGenerateResi` books with **the service the SHOPPER paid for** (`orders.courier` + `service_type`) — deliberately NO rate picker. `createShipment` (order-detail single-order screen) is DIFFERENT — see below | order detail · `/pesanan/massal` |
-  | 3 | **Resi terbit** | booking returns `awb: null` (`awbPending`); **`cron-tracking` fills `orders.awb` on its own, every 15 min**, batch 100, for orders with a `ka_order_id` in `diproses`/`dikirim` | `api/cron/tracking` |
+  | 3 | **Resi terbit** | booking returns `awb: null` (`awbPending`); **`cron-tracking` fills `orders.awb` on its own, every 15 min**, up to 5 orders PER STORE per tick (round-robin), for orders with a `ka_order_id` in `diproses`/`dikirim`. ⚠️ Until 2026-09-14 it could not: every tracking consumer read `r.data`, which the response never has — see `KIRIMINAJA.md` §0.7b; the sandbox `awb` is `MOCK-<ref>` and is refused | `api/cron/tracking` |
   | 4 | **Cetak label** | `/api/admin/labels`, then `markLabelsPrinted` stamps `label_printed_at` — the "sudah/belum dicetak" filter | `/pesanan/massal` |
 
   ⚠️ **Step 2 is NOT one behavior — the two screens genuinely differ, on purpose (verified in code

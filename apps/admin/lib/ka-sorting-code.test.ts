@@ -15,6 +15,7 @@ const runId = randomUUID().slice(0, 8);
 
 let client: Sql;
 let syncOrderFromKa: typeof import("./ka-tracking").syncOrderFromKa;
+let clearStaleTrackingRejection: typeof import("./ka-tracking").clearStaleTrackingRejection;
 let accountId = "";
 let storeId = "";
 let seq = 0;
@@ -38,7 +39,7 @@ beforeAll(async () => {
   if (!URL_) return;
   process.env.DATABASE_URL = URL_;
   client = postgres(URL_, { max: 2 });
-  ({ syncOrderFromKa } = await import("./ka-tracking"));
+  ({ syncOrderFromKa, clearStaleTrackingRejection } = await import("./ka-tracking"));
   const [acc] = await client<{ id: string }[]>`insert into accounts (name) values (${`SC ${runId}`}) returning id`;
   accountId = acc.id;
   const [st] = await client<{ id: string }[]>`
@@ -107,6 +108,41 @@ suite("syncOrderFromKa — orders.sorting_code", () => {
   });
 });
 
+// A "permanent rejection" flag the vendor has since stopped earning (audit 2026-09-14). The first
+// note is the literal production text from the 2026-09-07 allow-list lapse, brand and all.
+suite("clearStaleTrackingRejection — lowers a permanent-rejection flag once the vendor answers, and nothing else", () => {
+  const flag = async (note: string | null) => {
+    const s = await seed({ awb: null });
+    await client`update orders set problem_at = ${note ? new Date("2026-08-27T05:11:25Z") : null}, problem_note = ${note} where id = ${s.id}`;
+    return s;
+  };
+  const state = async (id: string) =>
+    (await client<{ problem_at: Date | null; problem_note: string | null }[]>`select problem_at, problem_note from orders where id = ${id}`)[0];
+
+  it("clears the note the allow-list lapse wrote, in its pre-rename branded form", async () => {
+    const s = await flag("KiriminAja menolak permintaan pelacakan secara permanen (HTTP 401): Your IP address 45.77.33.112 were not allowed to access this API. #1");
+    expect(await clearStaleTrackingRejection(s.number)).toBe(true);
+    expect(await state(s.id)).toEqual({ problem_at: null, problem_note: null });
+  });
+
+  it("clears the current, unbranded form too", async () => {
+    const s = await flag("TokoΦ Kirim menolak permintaan pelacakan secara permanen (HTTP 403).");
+    expect(await clearStaleTrackingRejection(s.number)).toBe(true);
+  });
+
+  it("leaves a courier-reported obstacle alone — that is not a rejection", async () => {
+    const note = "Kurir melaporkan kendala pengiriman (kode 500). Hubungi kurir atau pembeli untuk memastikan paket.";
+    const s = await flag(note);
+    expect(await clearStaleTrackingRejection(s.number)).toBe(false);
+    expect((await state(s.id)).problem_note).toBe(note);
+  });
+
+  it("is a no-op on an order with no flag", async () => {
+    const s = await flag(null);
+    expect(await clearStaleTrackingRejection(s.number)).toBe(false);
+  });
+});
+
 // The webhook half. `verifyKaHint` needs a live tracking pull, so the binding RULE is table-tested in
 // `packages/lib/src/kiriminaja-tracking.test.ts`; what is pinned here is that the receiver and the
 // verifier are still wired to it — read as CODE, never as text (test/source-code.ts).
@@ -121,7 +157,7 @@ describe("the webhook passes the row as a hint, and the verifier binds it to the
 
   it("the verifier prefers the pull's code and otherwise accepts only a hint bound to the verified awb", () => {
     const pattern =
-      /t\s*\.\s*sortingCode\s*\?\?\s*sortingCodeFromHint\s*\(\s*\{\s*hintAwb\s*:\s*hint\s*\?\.\s*awb\s*,\s*hintSortingCode\s*:\s*hint\s*\?\.\s*sortingCode\s*,\s*verifiedAwb\s*:\s*realAwb\s*\?\?\s*order\s*\.\s*awb\s*\}\s*\)/;
+      /t\s*\.\s*sortingCode\s*\?\?\s*sortingCodeFromHint\s*\(\s*\{\s*hintAwb\s*:\s*hint\s*\?\.\s*awb\s*,\s*hintSortingCode\s*:\s*hint\s*\?\.\s*sortingCode\s*,\s*verifiedAwb\s*:\s*realAwb\s*\?\?\s*realWaybill\s*\(\s*order\s*\.\s*awb\s*,\s*kaOrderId\s*\)\s*\}\s*\)/;
     expect(src("./ka-tracking.ts")).toMatch(pattern);
     // Mutation self-check: the UNBOUND form (believe the body) must not satisfy the pattern.
     expect(codeOnly("const sortingCode = t.sortingCode ?? normalizeSortingCode(hint?.sortingCode);")).not.toMatch(pattern);
@@ -138,6 +174,20 @@ describe("the webhook passes the row as a hint, and the verifier binds it to the
     const old = codeOnly("const realAwb = t.awb && t.awb !== ref ? t.awb : null;");
     expect(old).toMatch(bare);
     expect(old).not.toMatch(uses);
+  });
+
+  it("the poller lowers a stale rejection on ANY 2xx answer, before the ok/failed split", () => {
+    const route = src("../app/api/cron/tracking/route.ts");
+    const clear = route.search(/clearStaleTrackingRejection\s*\(\s*o\s*\.\s*number\s*\)/);
+    const split = route.search(/if\s*\(\s*!\s*r\s*\.\s*ok\s*\)/);
+    expect(clear).toBeGreaterThan(0);
+    expect(split).toBeGreaterThan(0);
+    expect(clear).toBeLessThan(split);
+    // The scanner emits `>=` as `> =`, hence `>\s*=`.
+    expect(route).toMatch(/r\s*\.\s*httpStatus\s*>\s*=\s*200\s*&&\s*r\s*\.\s*httpStatus\s*<\s*300/);
+    // The note the poller WRITES carries the mark the clearer MATCHES — one constant, not two strings.
+    expect(route).toMatch(/const\s+note\s*=[^;]*TRACKING_REJECTION_MARK/);
+    expect(route).not.toMatch(/menolak\s*permintaan/);
   });
 
   it("no consumer reads the tracking envelope's nonexistent `data` key any more", () => {

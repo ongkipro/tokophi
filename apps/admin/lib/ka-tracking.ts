@@ -1,6 +1,6 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { applyOrderStatusChange, type OrderStatus } from "./order-status";
 import { kaTrack } from "@tokophi/lib/kiriminaja";
 import { normalizeSortingCode, realWaybill, sortingCodeFromHint } from "@tokophi/lib/kiriminaja-tracking";
@@ -296,6 +296,37 @@ export async function syncOrderFromKa(
   return { ok: true, changed };
 }
 
+// ── A "PERMANENT REJECTION" FLAG THAT IS NO LONGER TRUE (audit, 2026-09-14) ──────────────────────
+// `cron/tracking` raises `problem_at` with a note built from this mark when the vendor refuses a
+// tracking request with a non-retryable 4xx — in practice the 2026-09-07 IP allow-list lapse, which
+// wrote "…menolak permintaan pelacakan secara permanen (HTTP 401): Your IP address … were not
+// allowed" onto every polled order. The allow-list came back on 2026-09-09, but a failed pull never
+// lowers a flag, and "Tracking tidak tersedia" (HTTP 200, `status:false`) is a failed pull — so on
+// production one order still told its seller, weeks later, that the courier rejects it permanently,
+// naming the provider's brand in a note written before the brand was hidden (ADR 0004).
+//
+// The rule: once the vendor ANSWERS (any HTTP 2xx), a permanent-rejection claim is false and is
+// lowered. It touches ONLY notes carrying this mark — a courier-reported obstacle (code 5xx/7xx…) or
+// a cancellation "attention" note is not a rejection and is left for its own owner to clear. The
+// mark is matched without the provider label in front, so notes written before and after the brand
+// rename both qualify. One conditional UPDATE: atomic, and a no-op on every order without the flag.
+export const TRACKING_REJECTION_MARK = "menolak permintaan pelacakan secara permanen";
+
+export async function clearStaleTrackingRejection(orderNumber: string): Promise<boolean> {
+  const rows = await db
+    .update(schema.orders)
+    .set({ problemAt: null, problemNote: null })
+    .where(
+      and(
+        eq(schema.orders.number, orderNumber),
+        sql`${schema.orders.problemAt} is not null`,
+        like(schema.orders.problemNote, `%${TRACKING_REJECTION_MARK}%`),
+      ),
+    )
+    .returning({ id: schema.orders.id });
+  return rows.length > 0;
+}
+
 // ── WEBHOOK HALF (KA-UAT, 2026-08-24) ────────────────────────────────────────────────────────────
 // KiriminAja's webhook carries NO signature, NO HMAC and NO IP allowlist (their docs, verified) —
 // and in this system a delivery event collects COD cash and credits the ledger. So the webhook is
@@ -335,7 +366,10 @@ export async function verifyKaHint(
   const outcome = outcomeFromTrackingCode(t.statusCode);
   // The verified pull's code first; the webhook row's only when it names the waybill we verified.
   const sortingCode =
-    t.sortingCode ?? sortingCodeFromHint({ hintAwb: hint?.awb, hintSortingCode: hint?.sortingCode, verifiedAwb: realAwb ?? order.awb });
+    t.sortingCode ??
+    // The STORED waybill passes the same test: a `DEMO…` preview resi (fillDemoResi) is not something a
+    // courier routes, so it must not be able to bind a code either.
+    sortingCodeFromHint({ hintAwb: hint?.awb, hintSortingCode: hint?.sortingCode, verifiedAwb: realAwb ?? realWaybill(order.awb, kaOrderId) });
   if (!realAwb && !outcome && !sortingCode) return { known: true, changed: [] };
   const s = await syncOrderFromKa(order.number, outcome, realAwb, null, undefined, sortingCode);
   return { known: true, changed: s.changed };

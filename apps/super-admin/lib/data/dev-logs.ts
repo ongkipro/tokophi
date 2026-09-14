@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.7.2-kiriminaja-release-audit",
+    version: "v1.7.2",
+    date: "2026-09-14",
+    title: "An Audit Of The Day's Courier Release: A Stale Alarm That Could Never Clear, A Demo Resi That Slipped Through, And A Contract That Drifted",
+    category: "bugfix",
+    surfaces: ["Logistics", "Seller Admin"],
+    summary: "The shipping release of the same day was re-read against its code and against production. Four defects were found and closed: a seller-facing warning that stayed on an order for weeks after its cause was gone, a demo waybill format the new waybill check did not recognise, an API contract missing the fields the release had added, and a documented batch size that was never true.",
+    problem: "During the courier's IP allow-list outage every polled order was flagged as permanently rejected, and that note named the provider's brand. The allow-list came back two days later, but a flag is only lowered by a successful status, so one order kept telling its seller the courier refused it. The new check that refuses fake waybills recognised MOCK- and DEMO- with a separator, while the sandbox preview button stamps DEMO followed directly by characters. The API contract still described the tracking sweep and the label endpoint as they were before the release, and three documents claimed the sweep takes one hundred orders when it takes five per store.",
+    solution: "Once the courier answers at all, a permanent-rejection flag is lowered — only that kind of flag, recognised by a phrase the writer and the clearer share, so a real delivery problem is never erased. The waybill check now refuses mock, dummy and demo values in any form, and a webhook can no longer attach a sorting code to a stored demo waybill. The contract gained the new counters and the missing-sorting-code list, and the batch size and the sandbox waybill behaviour were corrected wherever they were written.",
+    verification: "Full suite 1.556 tests, 0 failed, including a real-database test that uses the exact production note. Four deliberate code mutations each turned a guard red. Contract, documentation and lint gates pass. The stale flag on the affected production order is expected to clear on the first tracking tick after deploy."
+  },
+  {
     id: "v1.7.1-sorting-code-tracking-body",
     version: "v1.7.1",
     date: "2026-09-14",
