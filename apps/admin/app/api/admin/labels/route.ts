@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     if (!Array.isArray(numbers) || !numbers.length) {
       return NextResponse.json({ error: "Tidak ada pesanan yang dipilih." }, { status: 400 });
     }
-    const { html, skipped } = await getBulkLabels(numbers.slice(0, 50));
+    const { html, skipped, missingSortingCode } = await getBulkLabels(numbers.slice(0, 50));
     if (!html) {
       return NextResponse.json(
         { error: "Tidak ada label yang bisa dicetak — resi belum terbit untuk pesanan yang dipilih." },
@@ -32,7 +32,8 @@ export async function POST(req: Request) {
     }
     // `skipped` is returned, never hidden: an order silently missing from a print run is a parcel that
     // silently does not ship.
-    return NextResponse.json({ html, skipped });
+    // `missingSortingCode`: printed, but the courier requires a sorting code that has not been issued.
+    return NextResponse.json({ html, skipped, missingSortingCode });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memproses label.";
     const isForbidden =

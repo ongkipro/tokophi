@@ -131,7 +131,9 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
       // `skipped` MUST be read. The server prints only orders with a real AWB and names the rest here;
       // stamping the whole selection as printed would hide those orders behind the "Belum dicetak"
       // filter — a parcel that silently never ships. Only what actually got a label gets stamped.
-      const { html, error, skipped } = (await res.json()) as { html?: string | null; error?: string; skipped?: string[] };
+      const { html, error, skipped, missingSortingCode } = (await res.json()) as {
+        html?: string | null; error?: string; skipped?: string[]; missingSortingCode?: string[];
+      };
       const missed = new Set(skipped ?? []);
       const printedNumbers = canPrint.map((r) => r.number).filter((n) => !missed.has(n));
 
@@ -147,6 +149,13 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
       const w = window.open("", "_blank", "width=420,height=640");
       if (!w) { toast.error("Popup diblokir browser — izinkan popup untuk mencetak."); return; }
       w.document.write(html); w.document.close(); w.focus(); w.print();
+      // SPX / ID Express / J&T / J&T Cargo require a sorting code on the label. The label marks the slot
+      // missing; this says so on the screen too, before the stack reaches the drop-off point.
+      if (missingSortingCode?.length)
+        toast.warning(`${missingSortingCode.length} label belum memuat sorting code`, {
+          description: `Kurir mewajibkan sorting code dan kodenya belum terbit: ${missingSortingCode.slice(0, 5).join(", ")}${missingSortingCode.length > 5 ? ", …" : ""}. Cetak ulang setelah kurir memproses resi.`,
+          duration: 9000,
+        });
       // "Ditandai dicetak", not "berhasil dicetak": we opened the dialog, we cannot see the printer.
       //
       // ⚠️ Report what we WROTE, never what we asked to write. `markLabelsPrinted` returns the row

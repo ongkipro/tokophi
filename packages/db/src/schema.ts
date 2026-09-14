@@ -959,6 +959,12 @@ export const orders = pgTable("orders", {
 
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
+  // The courier's SORTING / ROUTING code for this waybill (0110). Required on the label for SPX, ID
+  // Express, J&T and J&T Cargo (KiriminAja, 2026-09-14). It belongs to the AWB, so it is cleared with
+  // it. Written ONLY by `syncOrderFromKa` — from the verified tracking pull, or from a webhook
+  // `processed_packages` row whose awb equals the verified waybill. Issued in production only; the
+  // sandbox answers null. NULL = not issued yet, and the label shows the slot as missing.
+  sortingCode: text(),
   courier: text(),
   // WHICH service of that courier the shopper bought — "spx" alone is ambiguous (SPX Standard type 1
   // = `regular`, SPX Economy type 3 = `economy`: different products, different prices). Recorded by

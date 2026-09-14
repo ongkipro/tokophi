@@ -98,6 +98,8 @@ export type OrderShipment = {
   awb: string | null;
   /** orders.ka_order_id — the KiriminAja booking reference. Real, but NOT a waybill. */
   kaOrderId: string | null;
+  /** orders.sorting_code — the courier's routing code for this AWB (0110). Required on the label for spx/idx/jnt/jtcargo. */
+  sortingCode: string | null;
   /** orders.ka_pickup_number — the pickup number, which is also the courier's payment id (0088). */
   pickupNumber: string | null;
   /**
@@ -243,6 +245,7 @@ export async function getOrderDetail(
         province: schema.orders.province,
         courier: schema.orders.courier,
         awb: schema.orders.awb,
+        sortingCode: schema.orders.sortingCode,
         kaOrderId: schema.orders.kaOrderId,
         kaPickupNumber: schema.orders.kaPickupNumber,
         kaPaymentStatus: schema.orders.kaPaymentStatus,
@@ -548,6 +551,7 @@ export async function getOrderDetail(
         serviceName: o.serviceName ?? null,
         weightGrams: pkg.billableGrams,
         awb: o.awb ?? null,
+        sortingCode: o.sortingCode ?? null,
         kaOrderId: o.kaOrderId ?? null,
         pickupNumber: o.kaPickupNumber ?? null,
         // The COD flag comes from `payments.method` — the same expression lib/cod.ts and the

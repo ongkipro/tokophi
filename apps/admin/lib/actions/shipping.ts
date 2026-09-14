@@ -14,6 +14,8 @@ import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKa
 import { composePickupAddress } from "@/lib/pickup-address";
 import { stackedDims } from "@/lib/shipping-weight";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
+import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
+import { realWaybill } from "@tokophi/lib/kiriminaja-tracking";
 
 // `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
 // from the merchant's COD payout, so wherever a merchant sees a COD-capable rate they see this too.
@@ -1486,33 +1488,33 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
     };
   }
 
-  const data = (r.data ?? {}) as {
-    awb?: string;
-    waybill?: string;
-    status?: string;
-    history?: {
-      date?: string;
-      time?: string;
-      desc?: string;
-      description?: string;
-      status?: string;
-    }[];
-  };
-  // A waybill is only a waybill if it isn't just our own booking reference echoed back.
-  const realAwb = [data.awb, data.waybill].find((x) => !!x && x !== ref) ?? null;
-  if (realAwb) {
-    await withTenant(storeId, (db) => db.update(schema.orders).set({ awb: realAwb }).where(eq(schema.orders.number, orderNumber)));
+  // Parsed once in `kaTrack` (`details` + top-level `status_code` — this used to cast `r.data`, which
+  // the response never has, so "Lacak" could never see a waybill the courier had already issued).
+  const t = r.tracking ?? { awb: null, sortingCode: null, statusCode: null, text: null, histories: [], keys: [] };
+  // Not our own ref echoed back, not the sandbox's `MOCK-<ref>` (realWaybill).
+  const realAwb = realWaybill(t.awb, ref);
+  if (realAwb || t.sortingCode) {
+    // Through the ONE writer the poller and the webhook use, so a seller pressing "Lacak" and the
+    // 15-minute tick cannot disagree about the order: AWB, sorting code, and the forward-only status
+    // move together, inside one row lock. The order number was just read through RLS, so it is the
+    // caller's own order; `orders.number` is globally unique.
+    const outcome = outcomeFromTrackingCode(t.statusCode);
+    await syncOrderFromKa(
+      orderNumber,
+      outcome,
+      realAwb,
+      outcome === "problem" ? `Kurir melaporkan kendala pengiriman (kode ${String(t.statusCode ?? "-")}).` : null,
+      undefined,
+      t.sortingCode,
+    );
     revalidatePath(`/pesanan/${orderNumber}`);
   }
-  const history = (data.history ?? []).map((h) => ({
-    date: [h.date, h.time].filter(Boolean).join(" ").trim(),
-    desc: h.desc ?? h.description ?? h.status ?? "",
-  }));
+  const history = t.histories.map((h) => ({ date: h.date, desc: h.desc }));
   return {
     ok: true,
     awb: realAwb ?? row?.awb ?? null,
     kaOrderId: ref,
-    status: data.status ?? null,
+    status: t.text ?? (t.statusCode == null ? null : String(t.statusCode)),
     history,
     pending: history.length === 0,
     message: realAwb ? `Nomor resi kurir diterima: ${realAwb}` : history.length ? `Update terakhir: ${history[history.length - 1].desc}` : `Pengiriman terdaftar di ${SHIPPING_SERVICE} — belum ada pergerakan dari kurir.`,

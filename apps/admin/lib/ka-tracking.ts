@@ -3,6 +3,7 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { applyOrderStatusChange, type OrderStatus } from "./order-status";
 import { kaTrack } from "@tokophi/lib/kiriminaja";
+import { normalizeSortingCode, realWaybill, sortingCodeFromHint } from "@tokophi/lib/kiriminaja-tracking";
 import { decideCancelReconcile, type CancelVendorReply } from "./cancel-reconcile";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +115,14 @@ export async function syncOrderFromKa(
    * explicitly on a failed pull, because that branch never reaches here otherwise.
    */
   cancelReply?: CancelVendorReply,
+  /**
+   * The courier's sorting code for this waybill (0110), already resolved by the caller from a
+   * verified source — the tracking pull, or a webhook row bound to the verified AWB
+   * (`sortingCodeFromHint`). Normalised again here, because this is the column's only writer.
+   */
+  sortingCode?: string | null,
 ): Promise<KaSyncResult> {
+  const code = normalizeSortingCode(sortingCode);
   const changed: string[] = [];
   let found = true;
   await db.transaction(async (tx) => {
@@ -133,6 +141,7 @@ export async function syncOrderFromKa(
         storeId: schema.orders.storeId,
         status: schema.orders.status,
         awb: schema.orders.awb,
+        sortingCode: schema.orders.sortingCode,
         problemAt: schema.orders.problemAt,
       })
       .from(schema.orders)
@@ -183,7 +192,8 @@ export async function syncOrderFromKa(
           .where(eq(schema.shipmentBookings.id, pendingCancel.id));
         await tx
           .update(schema.orders)
-          .set({ awb: null, kaOrderId: null, problemAt: null, problemNote: null })
+          // The sorting code belongs to the waybill being voided — it goes with it (0110).
+          .set({ awb: null, kaOrderId: null, sortingCode: null, problemAt: null, problemNote: null })
           .where(eq(schema.orders.id, order.id));
         changed.push("cancel:voided");
         if (order.status === "dikirim") {
@@ -221,8 +231,17 @@ export async function syncOrderFromKa(
     // AWB: a booking returns awb: null; the waybill exists only once a courier accepts the pickup.
     // Never overwrite a real waybill with our own booking ref echoed back.
     if (awb && awb !== order.awb) {
-      await tx.update(schema.orders).set({ awb }).where(eq(schema.orders.id, order.id));
+      // A NEW waybill replaces the old one's sorting code too: a code routes one AWB, and carrying it
+      // onto a different parcel number would print a routing the courier never assigned to it.
+      await tx.update(schema.orders).set({ awb, sortingCode: code }).where(eq(schema.orders.id, order.id));
       changed.push(`awb:${awb}`);
+      if (code) changed.push(`sorting:${code}`);
+    } else if (code && code !== order.sortingCode && (awb ?? order.awb)) {
+      // Same waybill, code now known (or corrected). Never written without a waybill to attach it to,
+      // and never CLEARED by a pull that simply omits it — a later event without the field is silence,
+      // not a retraction.
+      await tx.update(schema.orders).set({ sortingCode: code }).where(eq(schema.orders.id, order.id));
+      changed.push(`sorting:${code}`);
     }
     // ── The problem flag (0062) ────────────────────────────────────────────────────────────────
     // `problem` maps to NO status change (OUTCOME_STATUS.problem === null) — it is a flag, and this
@@ -282,7 +301,10 @@ export async function syncOrderFromKa(
 // and in this system a delivery event collects COD cash and credits the ledger. So the webhook is
 // an UNTRUSTED HINT, exactly as the cron/tracking header comment prescribes: the payload names
 // which order to look at, and the FACTS come from a verified pull of the same tracking endpoint
-// the poller uses. Nothing from the webhook body is ever written to the database.
+// the poller uses. Nothing from the webhook body is ever written to the database — with ONE bound
+// exception, the sorting code, which the vendor delivers on `processed_packages`: it is taken from a
+// row only when that row's `awb` equals the waybill verified for the order (`sortingCodeFromHint`),
+// and the pull's own `details.sorting_code` wins whenever it is present.
 //
 // ⚠️ The pull → map → sync rules here MIRROR cron/tracking's loop and must move together:
 //   · a waybill is only real if it isn't our own booking ref echoed back (`!== ref`);
@@ -290,7 +312,11 @@ export async function syncOrderFromKa(
 //   · syncOrderFromKa is the ONE writer, forward-only, atomic with the money.
 // The cron keeps its richer loop (evidence logging, problem flags, per-store fairness); this is the
 // single-order fast path a webhook tick needs.
-export async function verifyKaHint(kaOrderId: string): Promise<{ known: boolean; changed: string[] }> {
+export async function verifyKaHint(
+  kaOrderId: string,
+  /** The webhook row's own `awb` and `sorting_code` — UNTRUSTED, used only through `sortingCodeFromHint`. */
+  hint?: { awb?: unknown; sortingCode?: unknown },
+): Promise<{ known: boolean; changed: string[] }> {
   const [order] = await db
     .select({ number: schema.orders.number, awb: schema.orders.awb, status: schema.orders.status })
     .from(schema.orders)
@@ -302,11 +328,15 @@ export async function verifyKaHint(kaOrderId: string): Promise<{ known: boolean;
   if (order.status !== "diproses" && order.status !== "dikirim") return { known: true, changed: [] };
 
   const r = await kaTrack(kaOrderId);
-  if (!r.ok) return { known: true, changed: [] }; // the poller will catch up on its own tick
-  const data = (r.data ?? {}) as { awb?: string; waybill?: string; status?: string | number };
-  const realAwb = [data.awb, data.waybill].find((x) => !!x && x !== kaOrderId) ?? null;
-  const outcome = outcomeFromTrackingCode(data.status);
-  if (!realAwb && !outcome) return { known: true, changed: [] };
-  const s = await syncOrderFromKa(order.number, outcome, realAwb, null);
+  if (!r.ok || !r.tracking) return { known: true, changed: [] }; // the poller will catch up on its own tick
+  const t = r.tracking;
+  // Not our own ref echoed back, not the sandbox's `MOCK-<ref>` (realWaybill).
+  const realAwb = realWaybill(t.awb, kaOrderId);
+  const outcome = outcomeFromTrackingCode(t.statusCode);
+  // The verified pull's code first; the webhook row's only when it names the waybill we verified.
+  const sortingCode =
+    t.sortingCode ?? sortingCodeFromHint({ hintAwb: hint?.awb, hintSortingCode: hint?.sortingCode, verifiedAwb: realAwb ?? order.awb });
+  if (!realAwb && !outcome && !sortingCode) return { known: true, changed: [] };
+  const s = await syncOrderFromKa(order.number, outcome, realAwb, null, undefined, sortingCode);
   return { known: true, changed: s.changed };
 }

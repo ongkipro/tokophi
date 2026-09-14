@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.7.1-sorting-code-tracking-body",
+    version: "v1.7.1",
+    date: "2026-09-14",
+    title: "Shipping Labels Get The Courier's Sorting Code — And The Tracking Answer Is Finally Read",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Seller Admin", "Database & RLS"],
+    summary: "KiriminAja confirmed the orders are correct and asked for one thing on the label: the sorting code that SPX, ID Express, J&T and J&T Cargo require. The field is now prepared end to end — stored with the waybill, filled from the courier's tracking answer and from its first webhook event, printed large above the barcode, and flagged on screen when it is missing. Wiring it exposed that no tracking answer had ever been read at all.",
+    problem: "The sorting code is issued by the courier when the waybill is created and arrives on the first webhook event; the sandbox never issues one, so it can only be prepared, not observed. Reaching for it showed that every tracking consumer — the 15-minute poller, the webhook's verification pull and the seller's Lacak button — read a response field that does not exist, so every successful answer came back empty. Production's own log line had recorded an undefined status on every pull for weeks. And the sandbox's waybill turned out to be a mock built from our own booking reference, which the old check would have accepted and printed as a resi.",
+    solution: "One parser now reads the tracking answer as the vendor documents it, and a single rule decides whether a value is a real courier waybill — refusing our own reference, anything containing it, and mock or demo numbers. A new order column holds the sorting code, written only by the one function that already owns tracking writes: from the verified tracking answer, or from a webhook row only when that row names the waybill we verified. It is validated before it is stored and cleared together with its waybill. The label prints it above the barcode; for the four couriers that require it the slot is always drawn, so a missing code reads as missing rather than as a complete label, and the bulk print screen names the orders that lack one.",
+    verification: "Measured from the allow-listed production container against the sandbox: all eight UAT parcels answer status 105 with a mock waybill and a null sorting code, the exact shape now pinned as a fixture. Label rendered in Chromium at 100 by 150 millimetres in both states with no overflow. Full suite 1.551 tests, 0 failed, including a real-Postgres suite for the column's writer; eight source mutations each turned a guard red. Not yet proven: a real sorting code, which only a production booking can produce."
+  },
+  {
     id: "v1.7.0-kiriminaja-v62-payload-uat-revision-3",
     version: "v1.7.0",
     date: "2026-09-14",

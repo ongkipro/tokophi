@@ -62,6 +62,41 @@ describe("buildLabelHtml — N38 required fields", () => {
   });
 });
 
+// Sorting code (KiriminAja, 2026-09-14): required on the label for SPX, ID Express, J&T, J&T Cargo;
+// issued in production only. The slot is ALWAYS drawn for those four — filled, or visibly missing.
+describe("buildLabelHtml — sorting code", () => {
+  it("prints the code for a courier that requires it", () => {
+    const html = buildLabelHtml({ ...base, courier: "spx", sortingCode: "JOG-JOG1000-JKT2010" });
+    expect(html).toContain('<div class="sortv">JOG-JOG1000-JKT2010</div>');
+    expect(html).not.toContain("Belum tersedia");
+  });
+
+  it("marks the slot MISSING, never omits it, when a required courier has no code yet", () => {
+    for (const courier of ["spx", "idx", "jnt", "jtcargo"]) {
+      const html = buildLabelHtml({ ...base, courier, sortingCode: null });
+      expect(html, courier).toContain('class="sort missing"');
+      expect(html, courier).toContain("Belum tersedia");
+    }
+  });
+
+  it("draws nothing for a courier that does not require it and has no code", () => {
+    const html = buildLabelHtml({ ...base, courier: "jne", sortingCode: null });
+    expect(html).not.toContain('class="sort');
+  });
+
+  it("escapes the code — it came from a network", () => {
+    const html = buildLabelHtml({ ...base, courier: "spx", sortingCode: '<img src=x onerror="1">' });
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x onerror=&quot;1&quot;&gt;");
+  });
+
+  it("puts the code above the barcode, where a sorter reads it first", () => {
+    const html = buildLabelHtml({ ...base, courier: "spx", sortingCode: "JOG-JOG1000-JKT2010" });
+    expect(html.indexOf('<div class="sort"')).toBeGreaterThan(0);
+    expect(html.indexOf('<div class="sort"')).toBeLessThan(html.indexOf('<div class="bc"'));
+  });
+});
+
 describe("formatWeight", () => {
   it("formats kg with id-ID decimals and grams below 1 kg", () => {
     expect(formatWeight(1200)).toBe("1,2 kg");
