@@ -50,7 +50,7 @@ tokophi/
 
 | Package | Exports / key modules | Notes |
 |---|---|---|
-| `db` | `db`, `client`, `schema` (**83 tables**), `migrations/` (**0000–0109**, 110 files), `seed.ts` | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
+| `db` | `db`, `client`, `schema` (**83 tables**), `migrations/` (**0000–0109**, 110 files), `seed.ts`, `./area-coords` (`resolveAreaCoords` — the ONE producer of a booking coordinate: village centroid, else district, else null; `0109`), `scripts/build-area-coords.mjs` + `build-ka-kelurahan-ids.mjs` (populate the reference CSVs `seed-areas.ts` loads on deploy) | **server-only** (`postgres` is a serverExternalPackage). `withTenant`/`withCurrentTenant` live in each app's `lib/tenant.ts`, not here. |
 | `lib` | `./billing` (pricing, `computeBilling`, `storeSegment`, `withPpn`), `./format` (IDR/num), `./couriers`, `./kiriminaja`, `./autolaris`, `./payment-fees`, `./integration-status`, `./totp`, `./cache`, `./colors` | Pure/shared. `kiriminaja`/`autolaris` are `server-only`. |
 | `ui` | 23 components (`button card dialog dropdown-menu table tabs switch …`) + `lib/utils` (cn) + Tailwind tokens | **shadcn on Base UI** — `render` prop not `asChild`, no `Select`. |
 | `data` | menu helpers | small shared. |
@@ -77,6 +77,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | **Bantuan** | `/bantuan`(+`/[id]`) | — | `support.ts` |
 | Faktur (print) | `/faktur/[number]` (outside `(admin)`) | billing (`getFaktur`) | billing (`getInvoicePayment`) |
 | Pengaturan | `/pengaturan` | shipping/payment-settings reads | `shipping.ts`,`payment-settings.ts` |
+| Shipping helpers (no route) | — | `lib/shipping-weight.ts` (`weightForCart`/`weightForOrder` + **`stackedDims`**, the one parcel-box rule: Σ item volumes stacked on the largest footprint — the v6.2 validator prices the manifest), `lib/shipping-quote.ts` (the one price producer), `lib/cod.ts` (the five COD conditions) | `actions/shipping.ts` (`getShippingRates` quoted with `insurance: 1` → `Rate.insurance/forceInsurance`; `createShipment` → `kaCreateOrder` with centroids, manifest, quoted insurance, COD = `orders.total_idr`), `actions/bulk-shipping.ts` |
 | Uploads serving + cron + callbacks | `/api/uploads/[name]` (public) · `/api/cron/billing` (daily) · **`/api/cron/tracking`** (KiriminAja AWB poller, 15 min) · **`/api/cron/tracking-events`** (conversion delivery worker, 60 s) · `/api/public/pay/callback` · `/impersonate` | — | — |
 
 **Auth/RBAC/tenancy:** `lib/auth.ts` (jose JWT session), `lib/rbac.ts` (`requireCapability`) + `lib/rbac-policy.ts` (role→cap matrix, client-safe), `lib/tenant.ts` (`withTenant`/`withCurrentTenant` → `tokophi_app` role + `app.store_id` GUC → RLS). `middleware.ts` = edge JWT gate.

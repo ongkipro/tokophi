@@ -3979,3 +3979,9 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 
 **Verification.** `tsc` packages/lib + apps/admin 0 · **full `npx vitest run`: 1 518 tests, 0 failed** (new: `kiriminaja-v62.test.ts` "derives the package qty from the manifest"; `shipping-manifest.test.ts` pins `insured`/`insuranceAmount`/the `insurance: 1` quote and that the goods-value form is gone).
 - **Not done:** the seller's rate picker does not yet SHOW that a service is force-insured or what the fee is (data is on the rate; UI is a separate visual task) · the insurance fee on a forced service is charged to the seller by the vendor and is not yet posted to the ledger.
+
+
+### [2026-09-14 08:50 UTC] — DOCS · development map, Update Log v1.7.0, worklog, and the one-page KiriminAja integration map (Main Session)
+
+- **Files:** `apps/super-admin/lib/data/dev-logs.ts` (v1.7.0 — the two vendor reviews and what changed) · `specs/docs/WORKLOG.md` (current-state line + 2026-09-14 entry) · `specs/docs/CODE_MAP.md` (db `./area-coords` + the populators; a "Shipping helpers" row naming `stackedDims`, `shipping-quote.ts`, `cod.ts`, the insured rate list) · `specs/docs/SYSTEM_MAP.md` §9 (the full v6.2 booking in one bullet) · `specs/docs/KIRIMINAJA.md` **§0 "The whole integration on one page"** — environment/identity, every endpoint we call with its one rule, every table/CSV and its producer, the v6.2 payload field by field with the rule that produced it, the seller's flow in 8 steps, the vendor's money rules (all measured), operations, the guard list, what is open. Deliberately a section of the existing doc, not a rival file (one owner per concern).
+- **Verification:** doc-counts + release-guards + super-admin suites 166/166 · `verify-doc-authority` ok · super-admin `tsc` 0.
