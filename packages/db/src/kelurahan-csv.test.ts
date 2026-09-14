@@ -26,13 +26,14 @@ const DIR = dirname(fileURLToPath(import.meta.url));
 const CSV = join(DIR, "../data/kelurahan.csv");
 
 // `name` is quoted (it can contain a comma); nothing else is. The 5th field may be empty.
-const LINE = /^([^,]+),(\d+),"((?:[^"]|"")*)",(\d+)(?:,(\d*))?$/;
+// The 6th/7th — the village centroid (0109) — may be empty too.
+const LINE = /^([^,]+),(\d+),"((?:[^"]|"")*)",(\d+)(?:,(\d*))?(?:,(-?[\d.]*),(-?[\d.]*))?$/;
 
 type Row = { code: string; districtId: number; name: string; postcode: string; kaId: number | null };
 
 function rows(): Row[] {
   const lines = readFileSync(CSV, "utf8").trim().split("\n");
-  expect(lines[0]).toBe("code,ka_district_id,name,postcode,ka_kelurahan_id");
+  expect(lines[0]).toBe("code,ka_district_id,name,postcode,ka_kelurahan_id,lat,lng");
   const out: Row[] = [];
   for (const line of lines.slice(1)) {
     const m = LINE.exec(line);

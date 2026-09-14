@@ -1,6 +1,17 @@
-// KiriminAja UAT simulation (KA-UAT, 2026-08-24) — the 9 scenarios their team asked for before
-// issuing the production IP, driven through THE SAME client the product uses
+// KiriminAja UAT simulation (KA-UAT, 2026-08-24; payload re-shaped to v6.2 on 2026-09-14 after
+// their review of the first sheet: "endpoint v6.2, payload still v6.1") — the 9 scenarios their
+// team asked for before issuing the production IP, driven through THE SAME client the product uses
 // (`@tokophi/lib/kiriminaja`), never bare curl: what they are certifying is our integration method.
+//
+// THE v6.2 SHAPE, every spec-required field, exactly as `createShipment` sends it for a real order:
+//   sender    name · phone · address · kecamatan_id · kelurahan_id · zipcode · latitude · longitude
+//   package   destination_{name,phone,address,kecamatan_id,kelurahan_id,zipcode,latitude,longitude}
+//             weight · width · length · height · qty · item_value · item_name · shipping_cost
+//             service · service_type · package_type_id · cod · insurance_amount · drop · note
+//             items[] { name, price (PER UNIT), weight, qty, width, length, height, metadata{sku,variant_label} }
+// The fixtures below are REAL rows from the reference tables (kelurahan ids = KiriminAja's own from
+// POST /api/mitra/kelurahan; coordinates = Kemendagri village centroids, 0109), read on 2026-09-14
+// and printed here so the script stays database-free.
 //
 //   1–4  non-COD × (actual-dominant | volumetric-dominant) × (± insurance)
 //   5–8  COD (SPX) × the same grid
@@ -27,8 +38,10 @@ if (!kiriminajaConfigured()) {
 }
 
 // Route: batiknusantara's real sender district → the destination used in the N30 measurement.
-const ORIGIN = 6138; // Kotagede, Yogyakarta (store_settings.sender_kecamatan_id of the seeded store)
-const DEST = 2107; // the district every prior live measurement used — known served, known COD-capable via SPX
+// ⚠️ 6138 is GUBENG, SURABAYA — the seeded store's `sender_kecamatan_id` — not Kotagede as this file
+// said until 2026-09-14 (the old sender address contradicted its own district id).
+const ORIGIN = 6138; // Gubeng, Kota Surabaya, Jawa Timur
+const DEST = 2107; // Mampang Prapatan, Jakarta Selatan — served, COD-capable via SPX
 
 // Two parcels, both inside the 1-kg chargeable band, chosen so the DOMINANT weight is unambiguous
 // (KA: volumetric = w×l×h ÷ 6 in grams·cm):
@@ -59,8 +72,17 @@ function pickupSchedule(): string {
   return `${y}-${m}-${d} 10:00:00`;
 }
 
-const SENDER = { name: "UAT TokoPhi", phone: "6281227168633", address: "Jl. Kemasan No. 10, Kotagede", kecamatanId: ORIGIN };
-const DEST_INFO = { destName: "Penerima UAT", destPhone: "6281234567890", destAddress: "Jl. Melati No. 12 RT 03 RW 05", destKecamatanId: DEST };
+// kelurahan Gubeng (35.78.08.1001): ka_kelurahan_id 69243, kodepos 60281, centroid −7,272900 / 112,749495
+const SENDER = {
+  name: "UAT TokoPhi", phone: "6281227168633", address: "Jl. Raya Gubeng No. 42, Gubeng, Gubeng, Kota Surabaya 60281",
+  kecamatanId: ORIGIN, kelurahanId: 69243, zipcode: "60281", latitude: -7.2729, longitude: 112.749495,
+};
+// kelurahan Mampang Prapatan (31.74.03.1001): ka_kelurahan_id 17554, kodepos 12790, centroid −6,242758 / 106,828637
+const DEST_INFO = {
+  destName: "Penerima UAT", destPhone: "6281234567890", destAddress: "Jl. Melati No. 12 RT 03 RW 05, Mampang Prapatan, Jakarta Selatan 12790",
+  destKecamatanId: DEST, destKelurahanId: 17554, destZipcode: "12790", destLatitude: -6.242758, destLongitude: 106.828637,
+  note: "UAT MitraAPI v6.2 — simulasi, jangan diproses",
+};
 
 type Row = { sim: number; label: string; service: string; quoted: number; oid: string; pickup: string; note: string };
 const rows: Row[] = [];
@@ -97,6 +119,16 @@ async function runScenario(sim: number, opts: { cod: boolean; parcel: keyof type
       service: rate.service, serviceType: String(rate.service_type), shippingCost: rate.cost,
       cod: codAmount,
       insuranceAmount: opts.insurance ? ITEM_VALUE : 0,
+      // The manifest (v6.2 `items`, price PER UNIT): two lines whose prices total ITEM_VALUE, whose
+      // weights sum to the parcel's, and whose VOLUMES (× qty) sum to the parcel's — the last one is
+      // load-bearing. MEASURED 2026-09-14 (4 probe bookings): the v6.2 validator derives the
+      // chargeable weight from Σ items[].(w×l×h×qty), not from the package dimensions. Two lines
+      // each carrying the whole box's dimensions = 2× the volume = a higher band than quoted =
+      // "Ongkir tidak sesuai". The stack: line 1 is half the box height, line 2 a quarter, twice.
+      items: [
+        { name: "Kain Batik Tulis Motif Parang", price: 100_000, weight: Math.ceil(p.weight * 0.6), qty: 1, width: p.widthCm, length: p.lengthCm, height: Math.ceil(p.heightCm / 2), metadata: { sku: "BTK-PRG-001", variant_label: "Merah / 2 m" } },
+        { name: "Selendang Batik Cap", price: 25_000, weight: Math.floor(p.weight * 0.2), qty: 2, width: p.widthCm, length: p.lengthCm, height: Math.floor(p.heightCm / 4), metadata: { sku: "SLD-CAP-002", variant_label: "Biru" } },
+      ],
     },
     pickupSchedule(),
   );
@@ -120,6 +152,19 @@ const GRID: { cod: boolean; parcel: keyof typeof PARCELS; insurance: boolean }[]
 ];
 
 async function main() {
+  // Evidence for the sheet: the v6.2 request body of scenario 1, captured off the wire (fetch is
+  // wrapped, never re-typed by hand) — no key is ever in a body, so nothing to redact.
+  const realFetch = globalThis.fetch;
+  let printed = false;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (!printed && String(input).includes("/request_pickup") && init?.body) {
+      printed = true;
+      console.log("── v6.2 REQUEST BODY (scenario 1, as sent) ──");
+      console.log(JSON.stringify(JSON.parse(String(init.body)), null, 2));
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
+
   // ── UAT sheet rows 2–3 (pricing, no OID needed): volumetric pricing demonstrated at multi-kg ──
   const pActual = await kaShippingPrice({ origin: ORIGIN, destination: DEST, weight: 5_000, lengthCm: 10, widthCm: 10, heightCm: 10, itemValue: ITEM_VALUE, insurance: 0 });
   const pVol = await kaShippingPrice({ origin: ORIGIN, destination: DEST, weight: 1_000, lengthCm: 40, widthCm: 30, heightCm: 20, itemValue: ITEM_VALUE, insurance: 0 });

@@ -29,22 +29,21 @@ KiriminAja - MitraAPI V1"). The filled sheet is tracked here so it does not live
 
 | File | What it is |
 |---|---|
-| `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.html` | the sheet as submitted, self-contained (inline vector logos, the sample label as a data URI, no external fetch, **no API key**) |
+| `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.md` | **revision 2 — the current sheet**, Markdown (tracked; Markdown does not trigger a deploy). Filled after KiriminAja's review of revision 1 ("endpoint v6.2, payload still v6.1"): all 8 scenarios re-booked 2026-09-14 with the full v6.2 payload, the request body of scenario 1 printed verbatim as evidence |
+| `specs/docs/uat/label-5758-UAT5032514.png` | the sample label the sheet embeds (rendered 2026-09-12 by `shipping-label.ts` for the run-1 COD OID; the module is unchanged) |
+| `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.html` | revision 1, as submitted and reviewed (self-contained HTML, no API key). Kept as the record of what the vendor saw |
 
-The PDF the owner uploads is rendered from that file by Chromium (Playwright is already a dev
-dependency; `page.pdf({ format: "A4", printBackground: true })`) — 5 pages, 0,18 MB. The copy
-rendered 2026-09-12 has sha256 `240a8dc62cbe1798e53d78a2977e635ca49d535b2f01d29c7156f9e71be70535`;
-the PDF is deliberately not tracked because it is derivable and would be the repo's first binary
-document. Every "Actual / Evidence" cell is a measured fact — sources: the 8 sandbox OIDs from the
-2026-08-24 simulation (`ops/kiriminaja-uat-sim.ts`), the volumetric pricing pair, province 200
-(re-measured 2026-09-12), the webhook's 401 fail-closed on production, and `credit/balance` absent on
-this key (KA Credit marked N/A on measurement). Tracking/Cancel are N/A because the sandbox never
-issued an AWB. **Status and next step: root `TASKS.md` Task 8.9** — the owner submits the sheet, the
-provider approves, then `KIRIMINAJA_ENV=production` + the production key in Coolify.
+**Render:** `node ops/uat-sheet-render.mjs specs/docs/uat/<sheet>.md ~/Downloads/<sheet>.pdf` —
+micromark + GFM tables (already a transitive dependency) into the same print CSS and vector header as
+revision 1, images inlined, Chromium via Playwright. Revision 2 renders to **8 pages, 0,22 MB**
+(portal cap 10 MB). The PDF is deliberately not tracked (derivable; the repo has no binary documents);
+the copy rendered 2026-09-14 has sha256 recorded in `BUILD-LOG.md` under that date.
+**Status and next step: root `TASKS.md` Task 8.9** — the owner submits the sheet, the provider
+approves, then `KIRIMINAJA_ENV=production` + the production key in Coolify.
 
-⚠️ A commit that touches this directory **deploys**: the Coolify watch rule is `!**/*.md` and this file
-is HTML. Nothing in any image reads `specs/`, so the rebuild is pure cost (`DEPLOY.md` → Watch Paths);
-adding `!specs/**` to that rule is the fix, and it is a Coolify setting, not a repo change.
+⚠️ Revision 1 was tracked as `.html`, and a commit touching a non-Markdown file under `specs/` DOES
+deploy (the Coolify watch rule is exclusion-only, `!**/*.md` — `DEPLOY.md` → Watch Paths). That is why
+revision 2 is Markdown. Adding `!specs/**` to that rule is the owner-side fix.
 
 ## ⚠️ The sandbox enforces an IP ALLOW-LIST — and the platform's egress IP is the VPS IP
 
@@ -386,26 +385,44 @@ extra keys and the added fields change no price. ⚠️ Only the array ORDER var
 compare `results[0]` across two calls. `request_pickup` was NOT called, so nothing yet proves the
 booking validator accepts these; that needs a real sandbox pickup and the owner's say-so.
 
-### What the spec originally said we were NOT sending
+### ✅ Every field the v6.2 spec marks required is sent when we hold it — closed 2026-09-14
 
-`v6.2/request_pickup` marks these **required**, and `kaCreateOrder` omits them or sends them
-conditionally. Sandbox bookings succeed regardless (measured 2026-08-20, `5758-…`), so the server is
-lenient TODAY — that is a grace period, not a contract.
+KiriminAja's review of UAT revision 1 (2026-09-14) said it in one line: *"endpoint yang digunakan
+sudah versi 6.2 namun struktur payload yang digunakan masih versi 6.1."* Diffing the two schemas in
+their OpenAPI, "v6.2 structure" means exactly: `items[]` (with `metadata.sku`/`variant_label`),
+`zipcode` + `destination_zipcode` required, `kelurahan_id` + `destination_kelurahan_id` required,
+`qty` required, and **both coordinate pairs required**. The 2026-08-24 simulation predated Task 8.14,
+so what the vendor reviewed was genuinely the old shape.
 
-| field | ours |
+| field | ours (since) |
 |---|---|
-| `zipcode` (sender) | absent |
-| `latitude`, `longitude` (sender) | absent |
-| `kelurahan_id` (sender) | conditional — a REAL KA id since 0107, still omitted when NULL |
-| `destination_zipcode` | conditional |
-| `destination_kelurahan_id` | conditional — no producer yet (`orders` has no kelurahan column) |
-| `destination_latitude`, `destination_longitude` | absent |
-| `items` (per package) | absent |
+| `zipcode` / `destination_zipcode` | sent (8.14, 2026-09-09) — stored postcode, else the district's sole postcode; omitted when neither exists |
+| `kelurahan_id` / `destination_kelurahan_id` | sent (8.17, 0107/0108) — KiriminAja's own id, omitted when NULL |
+| `items[]` + `metadata` | sent (8.14) — one line per `order_line_items` row, price PER UNIT, `sku`/`variant_label` from the variant |
+| `latitude`/`longitude` + `destination_*` | **sent (0109, 2026-09-14)** — the CENTROID of the kelurahan, else the district (`resolveAreaCoords`), from the Kemendagri boundaries dataset. NEVER `0,0`; `coordFields` in `kiriminaja.ts` throws on 0,0, a lone coordinate, or a point outside Indonesia |
+| `note` | sent when non-empty |
 
-⚠️ **The coordinates are not merely unsent — we do not HAVE them.** `op === "instant"` was removed and
-its own note records that it *"was the only consumer of shopper/store coordinates"*. Supplying them is
-a data-model change (a geocode on the seller's pickup address and on the shopper's), not a client edit.
-Tracked as a task; do not "fix" it by sending zeroes, which is a lie the courier would route on.
+**Why a centroid is the honest coordinate.** A shopper gives a street, a WhatsApp number, a kecamatan
+and (where the kodepos is ambiguous) a kelurahan; nothing here geocodes a street. For a REGULAR
+courier the vendor's own pricing response says `use_geolocation: false`, so the coordinate is
+informational and the centroid of the smallest known area is the truthful value. Whether Lion/Pos
+need a precise point is action item 2 on the UAT sheet. Coverage: 78 415 / 78 764 kelurahan (99,6%)
+and 6 735 / 7 030 districts (95,8%) carry a centroid; the rest omit the fields, as before.
+
+🔴 **AND THE BOOKING VALIDATOR PRICES `items[]`, NOT THE PACKAGE BOX — measured 2026-09-14.** Four
+probe bookings of one 15×15×24 cm / 400 g parcel at its own quoted price (AnterAja REG Rp7.000):
+items of 1×1×1 → accepted (`5758-PRB11159`); one line = the box, the rest 1×1×1 → accepted
+(`5758-PRB21159`); one line = the box → accepted (`5758-PRB31200`); **two lines EACH = the box, i.e.
+2× the volume → "Ongkir tidak sesuai"** (`5758-PRB41201`, not created). The first v6.2 run of the
+simulation, whose manifest carried the box's dimensions on every line × qty (3× the volume), was
+refused on all four volumetric scenarios the same way. So the chargeable weight is
+`max(actual, Σ items[].(w×l×h×qty) ÷ divisor)`, and a quote built on "the largest item per axis" —
+which ignored quantity and every line but the biggest — under-prices any multi-line order: the N30
+mismatch one level down. `stackedDims` (`apps/admin/lib/shipping-weight.ts`) is now the ONE rule for
+the box in the checkout quote, the seller's re-quote and the booking: the largest footprint, and a
+height that holds Σ item volumes, rounded UP (a quote above the vendor's own figure is accepted —
+probe A). The manifest carries each line's OWN dimensions (a line with none sends 1 cm, never the
+package's). Pinned by `shipping-weight.test.ts` and `shipping-dimensions.test.ts`.
 
 ### Endpoints the spec documents that we do not use
 

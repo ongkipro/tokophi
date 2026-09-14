@@ -1,5 +1,5 @@
 "use server";
-import { db, schema } from "@tokophi/db";
+import { db, schema, resolveAreaCoords } from "@tokophi/db";
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
@@ -12,6 +12,7 @@ import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, bu
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
+import { stackedDims } from "@/lib/shipping-weight";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 
 // `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
@@ -98,6 +99,10 @@ async function packageRows(db: Tx, orderId: string) {
       // quote and the booking cannot describe different contents (the N30 lesson, one level down).
       title: schema.orderLineItems.title,
       unitPrice: schema.orderLineItems.priceIdr,
+      // v6.2 `items[].metadata` (sku, variant_label) — the same row, so the manifest cannot name a
+      // variant the parcel does not contain.
+      sku: schema.productVariants.sku,
+      variantTitle: schema.productVariants.title,
     })
     .from(schema.orderLineItems)
     .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
@@ -229,9 +234,9 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
 
   const actualWeight = ctx.pkgRows.reduce((sum, row) => sum + (row.weight ?? 0) * (row.qty ?? 1), 0);
   const weight = Math.max(1000, actualWeight);
-  const lengthCm = Math.max(0, ...ctx.pkgRows.map((row) => row.l ?? 0)) || undefined;
-  const widthCm = Math.max(0, ...ctx.pkgRows.map((row) => row.w ?? 0)) || undefined;
-  const heightCm = Math.max(0, ...ctx.pkgRows.map((row) => row.h ?? 0)) || undefined;
+  // ONE rule for the box (`stackedDims`): the quote here, the checkout quote and the booking below
+  // must all describe the parcel the vendor prices — Σ item volumes, not the largest item.
+  const { lengthCm, widthCm, heightCm } = stackedDims(ctx.pkgRows);
   const itemValue = Number(ctx.order?.subtotal ?? 0);
   const r = await kaShippingPrice({
     origin,
@@ -1005,9 +1010,10 @@ export async function createShipment(input: { orderNumber: string; service: stri
   const pkgRows = data.pkgRows;
   const actualWeight = pkgRows.reduce((a, r) => a + (r.weight ?? 0) * (r.qty ?? 1), 0);
   const weight = Math.max(1000, actualWeight);
-  const length = Math.max(0, ...pkgRows.map((r) => r.l ?? 0)) || undefined;
-  const width = Math.max(0, ...pkgRows.map((r) => r.w ?? 0)) || undefined;
-  const height = Math.max(0, ...pkgRows.map((r) => r.h ?? 0)) || undefined;
+  // The SAME box the quote priced (`stackedDims`, see shipping-weight.ts): Σ item volumes stacked on
+  // the largest footprint. The v6.2 validator prices `items[]` (measured 2026-09-14), so the package
+  // dimensions, the quote and the manifest below all have to agree.
+  const { lengthCm: length, widthCm: width, heightCm: height } = stackedDims(pkgRows);
 
   // ── The v6.2 spec-required fields we can honestly produce (Task 8.14) ───────────────────────
   // Both zipcodes: the stored one first — the shopper's kodepos has been REQUIRED at checkout
@@ -1026,10 +1032,25 @@ export async function createShipment(input: { orderNumber: string; service: stri
     price: Math.max(0, Number(row.unitPrice ?? 0)),
     weight: Math.max(1, row.weight ?? 0),
     qty: Math.max(1, row.qty ?? 1),
-    width: Math.max(1, row.w ?? width ?? 10),
-    length: Math.max(1, row.l ?? length ?? 10),
-    height: Math.max(1, row.h ?? height ?? 10),
+    // The line's OWN box, never the parcel's: the vendor sums items[] volumes × qty, so a line that
+    // borrowed the package dimensions would count the whole parcel once per line and per unit. A
+    // product that declared none sends the schema minimum (1 cm) — no volume it never claimed.
+    width: Math.max(1, row.w ?? 1),
+    length: Math.max(1, row.l ?? 1),
+    height: Math.max(1, row.h ?? 1),
+    // "Default" is drizzle's placeholder for a product with no options, not a variant label.
+    metadata: { sku: row.sku?.trim() || null, variant_label: row.variantTitle && row.variantTitle !== "Default" ? row.variantTitle : null },
   }));
+  // Coordinates (0109): the centroid of the smallest area each address is known to be in. The
+  // destination kelurahan is trusted only when the district is the one it was derived against —
+  // the same guard `destKelurahanId` below applies — and `resolveAreaCoords` returns null rather
+  // than a coordinate for a mismatched pair. Null ⇒ the fields are omitted, never 0,0. Reference
+  // tables, no tenant → the owner handle, exactly as `resolveArea` above.
+  const destKelurahanForBooking = destDistrictId === o.shipDistrictId ? o.shipKelurahanId : null;
+  const [senderCoords, destCoords] = await Promise.all([
+    resolveAreaCoords(db, { districtId: s.senderKecamatanId, kaKelurahanId: s.senderKelurahanId }),
+    resolveAreaCoords(db, { districtId: destDistrictId, kaKelurahanId: destKelurahanForBooking }),
+  ]);
 
   let r: Awaited<ReturnType<typeof kaCreateOrder>>;
   try {
@@ -1046,6 +1067,8 @@ export async function createShipment(input: { orderNumber: string; service: stri
         kecamatanId: s.senderKecamatanId,
         kelurahanId: s.senderKelurahanId,
         zipcode: senderZipcode,
+        latitude: senderCoords?.lat,
+        longitude: senderCoords?.lng,
       },
       {
         orderRef: providerReference,
@@ -1059,8 +1082,10 @@ export async function createShipment(input: { orderNumber: string; service: stri
         // subdistrict id belongs to exactly one district, so pairing a stored id with a guessed
         // district would send the courier a village that is not in the kecamatan on the same
         // request — a wrong id, which this whole task exists to avoid. Guessed ⇒ omit.
-        destKelurahanId: destDistrictId === o.shipDistrictId ? o.shipKelurahanId : null,
+        destKelurahanId: destKelurahanForBooking,
         destZipcode: destZipcode || undefined,
+        destLatitude: destCoords?.lat,
+        destLongitude: destCoords?.lng,
         weight,
         width,
         length,

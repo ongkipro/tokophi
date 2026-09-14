@@ -72,18 +72,39 @@ export type CartWeight = {
   resolved: number;
 };
 
-/** Sum a cart's weight from the DB. Resolution mirrors /api/public/order (handle + variant title). */
-// The parcel's dimensions = the LARGEST value per axis across the matched lines — the same rule
-// `createShipment` uses when it books, so the quote and the booking describe the same box.
-// A product that declares none contributes nothing; if NO product does, all three stay undefined and
-// the request omits them, which is exactly today's behaviour for a catalogue without dimensions.
-function maxDims(matched: { l?: number | null; w?: number | null; h?: number | null }[]) {
-  const axis = (k: "l" | "w" | "h") => {
-    const vals = matched.map((m) => m[k]).filter((v): v is number => typeof v === "number" && v > 0);
-    return vals.length ? Math.max(...vals) : undefined;
-  };
-  return { lengthCm: axis("l"), widthCm: axis("w"), heightCm: axis("h") };
+/** One line of a parcel as the dimension rule sees it: the product's box (cm) and how many. */
+export type DimLine = { l?: number | null; w?: number | null; h?: number | null; qty?: number | null };
+
+/**
+ * THE ONE RULE FOR A PARCEL'S DIMENSIONS — used by the checkout quote (`weightForCart`), the
+ * seller's re-quote (`weightForOrder`, `getShippingRates`) and the booking (`createShipment`), so all
+ * three describe the same box.
+ *
+ * A STACK, not a max: footprint = the largest length × the largest width across the lines, height =
+ * whatever makes the volume hold Σ(l × w × h × qty), rounded UP to a whole centimetre.
+ *
+ * ⚠️ WHY NOT "largest value per axis", which this was until 2026-09-14. That box ignores QUANTITY and
+ * ignores every line but the biggest, and KiriminAja's v6.2 booking validator does neither — MEASURED
+ * on the sandbox with four probe bookings of one 15×15×24 cm parcel at its own quoted price: items
+ * whose volumes (× qty) sum to the box or less were accepted; two lines EACH carrying the box's
+ * dimensions (2× the volume) were refused "Ongkir tidak sesuai". The validator prices the manifest,
+ * `Σ items[].(w×l×h×qty)`, and since the manifest is required (Task 8.14) the quote has to price the
+ * same thing or the seller absorbs the gap — the N30 mismatch one level down. Rounding UP keeps the
+ * quoted box ≥ the manifest, and a quote above the vendor's own figure is accepted (probe A).
+ *
+ * A line with no dimensions contributes no volume (the product never declared one); if NO line has
+ * any, all three stay undefined and the request omits them, exactly as before.
+ */
+export function stackedDims(lines: DimLine[]): { lengthCm?: number; widthCm?: number; heightCm?: number } {
+  const boxed = lines.filter((m) => (m.l ?? 0) > 0 && (m.w ?? 0) > 0 && (m.h ?? 0) > 0) as { l: number; w: number; h: number; qty?: number | null }[];
+  if (!boxed.length) return {};
+  const lengthCm = Math.max(...boxed.map((m) => m.l));
+  const widthCm = Math.max(...boxed.map((m) => m.w));
+  const volume = boxed.reduce((sum, m) => sum + m.l * m.w * m.h * Math.max(1, m.qty ?? 1), 0);
+  return { lengthCm, widthCm, heightCm: Math.max(1, Math.ceil(volume / (lengthCm * widthCm))) };
 }
+
+/** Sum a cart's weight from the DB. Resolution mirrors /api/public/order (handle + variant title). */
 
 export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[]): Promise<CartWeight> {
   const clean = items.filter((i) => (i.qty ?? 0) > 0);
@@ -118,7 +139,7 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
   let grams = 0;
   let resolved = 0;
   const missing: string[] = [];
-  const matched: { l?: number | null; w?: number | null; h?: number | null }[] = [];
+  const matched: DimLine[] = [];
   for (const i of clean) {
     const qty = i.qty ?? 1;
     const byId = i.variantId ? rows.find((r) => r.id === i.variantId) : undefined;
@@ -136,7 +157,7 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
       continue;
     }
     resolved++;
-    matched.push(match);
+    matched.push({ ...match, qty });
     if (match.weight == null) {
       missing.push(match.handle + (match.title ? ` (${match.title})` : ""));
       grams += DEFAULT_WEIGHT_GRAMS * qty;
@@ -144,7 +165,7 @@ export async function weightForCart(db: Tx, storeId: string, items: CartItemRef[
       grams += match.weight * qty;
     }
   }
-  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved, ...maxDims(matched) };
+  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved, ...stackedDims(matched) };
 }
 
 /** Same thing for an EXISTING order — from its line items' variants (the admin re-quote + booking). */
@@ -179,5 +200,5 @@ export async function weightForOrder(db: Tx, orderId: string): Promise<CartWeigh
       grams += r.weight * qty;
     }
   }
-  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved, ...maxDims(rows) };
+  return { grams, billableGrams: Math.max(MIN_BILLABLE_GRAMS, grams), missing, resolved, ...stackedDims(rows) };
 }
