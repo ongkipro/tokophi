@@ -226,6 +226,30 @@ function astroSurface(app, label) {
 }
 
 // ─── render ───────────────────────────────────────────────────────────────────────────────────────
+// ─── "what it is" — hand-curated, merged here so the generated map also answers WHY a page exists ──
+// `scripts/page-descriptions.json` is keyed `<app>:<url>`. The generator refuses to run when a page,
+// API route or endpoint has no line there, or a line names a route that no longer exists — so the
+// column can neither be skipped for a new page nor rot after a rename. Layouts are described in place.
+const DESCRIPTIONS = JSON.parse(read(join(ROOT, "scripts/page-descriptions.json")));
+const describe = (app, r) => (r.kind === "layout" ? "layout" : DESCRIPTIONS.routes[`${app}:${r.url}`]);
+function checkDescriptions(surfaces) {
+  const wanted = new Set();
+  const missing = [];
+  for (const s of surfaces)
+    for (const r of s.rows) {
+      if (r.kind === "layout") continue;
+      const key = `${s.app}:${r.url}`;
+      wanted.add(key);
+      if (!DESCRIPTIONS.routes[key]) missing.push(key);
+    }
+  const extra = Object.keys(DESCRIPTIONS.routes).filter((k) => !wanted.has(k));
+  if (missing.length || extra.length) {
+    if (missing.length) console.error(`scripts/page-descriptions.json — no description for: ${missing.join(", ")}`);
+    if (extra.length) console.error(`scripts/page-descriptions.json — describes a route that no longer exists: ${extra.join(", ")}`);
+    process.exit(1);
+  }
+}
+
 const code = (s) => (s ? `\`${s}\`` : "");
 const list = (xs) => (xs && xs.length ? xs.map(code).join(" ") : "—");
 const yn = (b) => (b ? "✓" : "");
@@ -235,13 +259,13 @@ function renderNext(s) {
   const apis = s.rows.filter((r) => r.kind === "api");
   let md = `## ${s.label} — \`apps/${s.app}\`\n\n`;
   md += `${pages.filter((r) => r.kind === "page").length} pages · ${pages.filter((r) => r.kind === "layout").length} layouts · ${apis.length} API routes\n\n`;
-  md += `### Pages\n\n| URL | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |\n|---|---|---|---|---|---|---|---|---|---|\n`;
+  md += `### Pages\n\n| URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |\n|---|---|---|---|---|---|---|---|---|---|---|\n`;
   for (const r of pages) {
-    md += `| ${code(r.url)} | ${r.kind} | ${code(r.file)} | ${list(r.clients)} | ${list(r.data)} | ${list(r.actions)} | ${list(r.gate)} | ${list(r.clientGates)} | ${yn(r.dynamic)} | ${list(r.tests)} |\n`;
+    md += `| ${code(r.url)} | ${describe(s.app, r)} | ${r.kind} | ${code(r.file)} | ${list(r.clients)} | ${list(r.data)} | ${list(r.actions)} | ${list(r.gate)} | ${list(r.clientGates)} | ${yn(r.dynamic)} | ${list(r.tests)} |\n`;
   }
-  md += `\n### API routes\n\n| URL | methods | file | gate | owner \`db\` | tests |\n|---|---|---|---|---|---|\n`;
+  md += `\n### API routes\n\n| URL | what it is | methods | file | gate | owner \`db\` | tests |\n|---|---|---|---|---|---|---|\n`;
   for (const r of apis) {
-    md += `| ${code(r.url)} | ${r.methods.join(" ") || "—"} | ${code(r.file)} | ${list(r.gate)} | ${yn(r.ownerDb)} | ${list(r.tests)} |\n`;
+    md += `| ${code(r.url)} | ${describe(s.app, r)} | ${r.methods.join(" ") || "—"} | ${code(r.file)} | ${list(r.gate)} | ${yn(r.ownerDb)} | ${list(r.tests)} |\n`;
   }
   return md + "\n";
 }
@@ -251,13 +275,13 @@ function renderAstro(s) {
   const eps = s.rows.filter((r) => r.kind !== "page");
   let md = `## ${s.label} — \`apps/${s.app}\`\n\n`;
   md += `${pages.length} pages · ${eps.length} endpoints\n\n`;
-  md += `### Pages\n\n| URL | file | layout | src/data | src/lib | locals | set:html | tests |\n|---|---|---|---|---|---|---|---|\n`;
+  md += `### Pages\n\n| URL | what it is | file | layout | src/data | src/lib | locals | set:html | tests |\n|---|---|---|---|---|---|---|---|---|\n`;
   for (const r of pages) {
-    md += `| ${code(r.url)} | ${code(r.file)} | ${list(r.layout)} | ${list(r.data)} | ${list(r.lib)} | ${yn(r.locals)} | ${yn(r.setHtml)} | ${list(r.tests)} |\n`;
+    md += `| ${code(r.url)} | ${describe(s.app, r)} | ${code(r.file)} | ${list(r.layout)} | ${list(r.data)} | ${list(r.lib)} | ${yn(r.locals)} | ${yn(r.setHtml)} | ${list(r.tests)} |\n`;
   }
-  md += `\n### Endpoints\n\n| URL | methods | file | src/data | src/lib | \`@tokophi/db\` | gate | tests |\n|---|---|---|---|---|---|---|---|\n`;
+  md += `\n### Endpoints\n\n| URL | what it is | methods | file | src/data | src/lib | \`@tokophi/db\` | gate | tests |\n|---|---|---|---|---|---|---|---|---|\n`;
   for (const r of eps) {
-    md += `| ${code(r.url)} | ${r.methods.join(" ") || "—"} | ${code(r.file)} | ${list(r.data)} | ${list(r.lib)} | ${yn(r.db)} | ${list(r.gate)} | ${list(r.tests)} |\n`;
+    md += `| ${code(r.url)} | ${describe(s.app, r)} | ${r.methods.join(" ") || "—"} | ${code(r.file)} | ${list(r.data)} | ${list(r.lib)} | ${yn(r.db)} | ${list(r.gate)} | ${list(r.tests)} |\n`;
   }
   return md + "\n";
 }
@@ -318,9 +342,16 @@ let md = `# TokoΦ — PAGE MAP (generated — do not edit by hand)
 > \`lib/actions/*\` — so look the module up in the tables at the bottom. **owner \`db\`** = the file
 > imports the owner handle directly (the deliberate exceptions are auth, public API, cron, super-admin,
 > storefront — see AGENTS.md "TWO POOLS"). **tests** = test files that name the route's directory,
-> file or URL (a grep, not a coverage claim).
+> file or URL (a grep, not a coverage claim). **what it is** = one hand-written line per route from
+> \`scripts/page-descriptions.json\` (the generator refuses a route without one, or a line whose route is gone).
 
 `;
+
+checkDescriptions(surfaces);
+
+md += `## Quick find — "I want to change X, where do I go?"\n\n| task | start here |\n|---|---|\n`;
+for (const [task, where] of DESCRIPTIONS.howto) md += `| ${task} | ${where} |\n`;
+md += `\n(Curated in \`scripts/page-descriptions.json\` next to the per-route "what it is" column — a new page cannot be added without a line there.)\n\n`;
 
 md += `## Totals\n\n| surface | pages | layouts | API/endpoints |\n|---|---|---|---|\n`;
 for (const s of surfaces) {
@@ -341,7 +372,7 @@ const json =
   JSON.stringify(
     {
       $comment: "Generated by scripts/gen-page-map.mjs — do not edit. Human-readable twin: PAGE_MAP.md. Column semantics are in that file's header.",
-      surfaces: surfaces.map((s) => ({ app: `apps/${s.app}`, label: s.label, routes: s.rows })),
+      surfaces: surfaces.map((s) => ({ app: `apps/${s.app}`, label: s.label, routes: s.rows.map((r) => ({ ...r, whatItIs: describe(s.app, r) })) })),
       modules: Object.fromEntries(LIB_DIRS.map(([dir]) => [dir, libRows(dir)])),
     },
     null,

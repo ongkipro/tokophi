@@ -21,7 +21,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Keamanan' — change password (revokes other sessions), 2FA/TOTP."
         },
         {
           "url": "/akun/langganan",
@@ -41,7 +42,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Langganan' — the store's plan, trial/period countdown, payment history, link to the printable faktur."
         },
         {
           "url": "/akun",
@@ -57,7 +59,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "layout"
         },
         {
           "url": "/akun/profil",
@@ -75,7 +78,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Profil' — the signed-in user's name/email/avatar."
         },
         {
           "url": "/analitik",
@@ -95,7 +99,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Analitik' — sales, funnel, devices, products; every figure from `orders`/`analytics_events`, '—' when there is no source."
         },
         {
           "url": "/bantuan/[id]",
@@ -117,7 +122,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "One support ticket thread; UUID-guarded."
         },
         {
           "url": "/bantuan",
@@ -141,7 +147,8 @@
           "tests": [
             "apps/admin/lib/actions/menus.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Bantuan' — the merchant's support tickets list (writes go to the Super Admin ticket desk)."
         },
         {
           "url": "/blog/[id]",
@@ -164,7 +171,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Article editor (content:write); media upload."
         },
         {
           "url": "/blog/baru",
@@ -180,7 +188,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "New article."
         },
         {
           "url": "/blog",
@@ -203,7 +212,8 @@
           "tests": [
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Blog' — article list."
         },
         {
           "url": "/crm/followup",
@@ -223,7 +233,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Follow-up' — due follow-ups, mark done → `followups.status`."
         },
         {
           "url": "/crm",
@@ -242,7 +253,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'CRM' landing — redirects/overview of pipeline, follow-ups, templates."
         },
         {
           "url": "/crm/pipeline",
@@ -262,7 +274,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Pipeline' — leads by stage (drag/drop)."
         },
         {
           "url": "/crm/template",
@@ -282,7 +295,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Template' — WhatsApp message templates used by CRM and abandoned-cart recovery."
         },
         {
           "url": "/diskon/[id]",
@@ -304,7 +318,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Voucher editor — a blank period = no end date; an edit never moves `starts_at`."
         },
         {
           "url": "/diskon/baru",
@@ -318,7 +333,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "New voucher."
         },
         {
           "url": "/diskon",
@@ -340,7 +356,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Diskon' (vouchers) — list; status shown from `nonaktif` + dates, never dates alone."
         },
         {
           "url": "/files",
@@ -358,7 +375,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'File' — media library (uploads under `/api/uploads`)."
         },
         {
           "url": "/flash-sale/[id]",
@@ -380,7 +398,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Flash sale editor — price reaches variant rows, not only the headline."
         },
         {
           "url": "/flash-sale/baru",
@@ -396,7 +415,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "New flash sale."
         },
         {
           "url": "/flash-sale",
@@ -420,7 +440,8 @@
           "tests": [
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Flash Sale' — list with live/upcoming badge computed on the server clock."
         },
         {
           "url": "/halaman/[id]",
@@ -442,7 +463,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Static page editor."
         },
         {
           "url": "/halaman/baru",
@@ -456,7 +478,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "New static page."
         },
         {
           "url": "/halaman",
@@ -479,7 +502,8 @@
           "tests": [
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Halaman' — static pages list."
         },
         {
           "url": "/keuangan",
@@ -495,7 +519,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Keuangan' — the seller's money overview (entitlement = goods + goods PPN − shipping debits)."
         },
         {
           "url": "/keuangan/penghasilan",
@@ -514,7 +539,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Penghasilan' — per-order earnings breakdown (fees, PPN, shipping delta)."
         },
         {
           "url": "/",
@@ -540,7 +566,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "layout"
         },
         {
           "url": "/navigasi",
@@ -562,7 +589,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/menus.test.ts"
-          ]
+          ],
+          "whatItIs": "'Navigasi' — storefront menus; Simpan = delete + re-insert the tree."
         },
         {
           "url": "/obrolan",
@@ -582,7 +610,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Obrolan' — the storefront chat inbox (WhatsApp-style, per store)."
         },
         {
           "url": "/",
@@ -611,7 +640,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Dashboard Seller — today's sales, orders, KPIs and the 7/30-day chart, all derived live from `orders` (never `analytics_daily`)."
         },
         {
           "url": "/pelanggan/[id]",
@@ -633,7 +663,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Customer detail: orders, tags, notes."
         },
         {
           "url": "/pelanggan/keranjang",
@@ -653,7 +684,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Keranjang ditinggal' — abandoned checkouts; recovery over WhatsApp ('WA dibuka', never 'terkirim'); rate = rescued/abandoned only."
         },
         {
           "url": "/pelanggan",
@@ -675,7 +707,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case."
         },
         {
           "url": "/pelanggan/segmen",
@@ -695,7 +728,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Segmen' — customer segments (create/delete)."
         },
         {
           "url": "/pelanggan/ulasan",
@@ -715,7 +749,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Ulasan' — product reviews moderation."
         },
         {
           "url": "/pemasaran",
@@ -740,7 +775,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Pemasaran' — ad channels (Meta/Google/TikTok) connection, catalog id scheme, conversion queue health; 'dari pesanan toko Anda', never 'menurut Meta'."
         },
         {
           "url": "/pengaturan",
@@ -756,7 +792,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/users.test.ts"
-          ]
+          ],
+          "whatItIs": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision)."
         },
         {
           "url": "/pesanan/[id]",
@@ -783,7 +820,8 @@
             "apps/admin/lib/actions/orders.test.ts",
             "apps/admin/lib/uuid-guard.test.ts",
             "packages/lib/src/autolaris-submit.test.ts"
-          ]
+          ],
+          "whatItIs": "Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking."
         },
         {
           "url": "/pesanan/massal",
@@ -803,7 +841,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'."
         },
         {
           "url": "/pesanan",
@@ -829,7 +868,8 @@
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts",
             "packages/lib/src/autolaris-submit.test.ts"
-          ]
+          ],
+          "whatItIs": "'Pesanan' — orders list with status tabs; URL params validated before any enum cast."
         },
         {
           "url": "/produk/[id]",
@@ -856,7 +896,8 @@
           "tests": [
             "apps/admin/lib/form-labels.test.tsx",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Product editor — variants grid, media (upload/drag), dimensions (they price ongkir), taxonomy."
         },
         {
           "url": "/produk/baru",
@@ -870,7 +911,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "New product."
         },
         {
           "url": "/produk/inventori",
@@ -894,7 +936,8 @@
           "tests": [
             "apps/admin/lib/actions/inventory.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts"
-          ]
+          ],
+          "whatItIs": "'Inventori' — stock per variant/location, bulk save."
         },
         {
           "url": "/produk/kategori/[id]",
@@ -918,7 +961,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Collection editor (manual/conditions)."
         },
         {
           "url": "/produk/kategori/baru",
@@ -934,7 +978,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "New collection."
         },
         {
           "url": "/produk/kategori",
@@ -961,7 +1006,8 @@
           "tests": [
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Kategori' (collections) — list."
         },
         {
           "url": "/produk",
@@ -988,7 +1034,8 @@
             "apps/admin/lib/form-labels.test.tsx",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Produk' — product list (archive-delete), 'Berat belum diisi' warnings."
         },
         {
           "url": "/produk/pembelian",
@@ -1008,7 +1055,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "'Pembelian' — purchase orders: build lines, 'Terima barang' adds stock, cancel = delete."
         },
         {
           "url": "/promo/[id]",
@@ -1031,7 +1079,8 @@
           "tests": [
             "apps/admin/lib/promo-ai.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Promo campaign detail."
         },
         {
           "url": "/promo/html/[id]",
@@ -1053,7 +1102,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Landing HTML editor (same owner-only rule for the markup)."
         },
         {
           "url": "/promo/html/baru",
@@ -1072,7 +1122,8 @@
           "tests": [
             "apps/admin/lib/admin-link-targets.test.ts",
             "apps/admin/lib/landing-html-gate.test.ts"
-          ]
+          ],
+          "whatItIs": "New landing HTML (`/lp/<slug>`) — raw markup EXECUTES on the shop origin; `landing:html` is owner-only."
         },
         {
           "url": "/promo",
@@ -1097,7 +1148,8 @@
             "apps/admin/lib/promo-ai.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Promo' hub — vouchers, flash sales and landing pages in one place."
         },
         {
           "url": "/saldo",
@@ -1119,7 +1171,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/seller-entity-links.test.ts"
-          ]
+          ],
+          "whatItIs": "'Saldo' — pending/available balance derived from the ledger, payout requests (never joins `orders` when summing)."
         },
         {
           "url": "/tema/[id]",
@@ -1144,7 +1197,8 @@
           "tests": [
             "apps/admin/lib/admin-h1-floor.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "Puck editor for one template; palette is per template type."
         },
         {
           "url": "/tema",
@@ -1169,7 +1223,8 @@
           "tests": [
             "apps/admin/lib/admin-h1-floor.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "'Tema' (Store Builder) — homepage/category/product templates list."
         },
         {
           "url": "/api/admin/labels",
@@ -1189,7 +1244,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Renders 100×150 mm shipping labels (Code 128) for orders that already have a real AWB."
         },
         {
           "url": "/api/auth/google/callback",
@@ -1207,7 +1263,8 @@
           "ownerDb": true,
           "tests": [
             "packages/lib/src/session-cookie.test.ts"
-          ]
+          ],
+          "whatItIs": "Google sign-in callback → session cookie."
         },
         {
           "url": "/api/auth/google/start",
@@ -1223,7 +1280,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Google sign-in start."
         },
         {
           "url": "/api/auth/signout",
@@ -1239,7 +1297,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Deletes the session cookie (a Server Component cannot)."
         },
         {
           "url": "/api/cron/billing",
@@ -1261,7 +1320,8 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/cron-auth.test.ts"
-          ]
+          ],
+          "whatItIs": "Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`)."
         },
         {
           "url": "/api/cron/domains",
@@ -1281,7 +1341,8 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/cron-auth.test.ts"
-          ]
+          ],
+          "whatItIs": "Custom-domain verification sweep."
         },
         {
           "url": "/api/cron/order-expiry",
@@ -1301,7 +1362,8 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/cron-auth.test.ts"
-          ]
+          ],
+          "whatItIs": "Expires unpaid prepaid orders after their window."
         },
         {
           "url": "/api/cron/payment-advice",
@@ -1319,7 +1381,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": true,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing."
         },
         {
           "url": "/api/cron/tracking-events",
@@ -1341,7 +1404,8 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/cron-auth.test.ts"
-          ]
+          ],
+          "whatItIs": "Every 60 s delivers queued conversions (Meta CAPI / GA4 / TikTok) with retries + dead-letter."
         },
         {
           "url": "/api/cron/tracking",
@@ -1362,7 +1426,8 @@
           "tests": [
             "apps/admin/lib/cancel-reconcile.test.ts",
             "apps/admin/lib/cron-auth.test.ts"
-          ]
+          ],
+          "whatItIs": "Every 15 min pulls KiriminAja tracking for booked orders: fills `orders.awb`, advances status forward-only."
         },
         {
           "url": "/api/health/env",
@@ -1383,7 +1448,8 @@
           "tests": [
             "apps/admin/lib/cron-auth.test.ts",
             "apps/admin/lib/env-census.test.ts"
-          ]
+          ],
+          "whatItIs": "Reports which integrations are configured (header-gated), used by the deploy probe."
         },
         {
           "url": "/api/public/kiriminaja/webhook",
@@ -1403,7 +1469,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/ka-webhook.test.ts"
-          ]
+          ],
+          "whatItIs": "Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth."
         },
         {
           "url": "/api/public/ongkir",
@@ -1427,7 +1494,8 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/destination-kelurahan.test.ts"
-          ]
+          ],
+          "whatItIs": "Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate."
         },
         {
           "url": "/api/public/order",
@@ -1454,7 +1522,8 @@
             "apps/admin/lib/destination-kelurahan.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
             "apps/admin/lib/public-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment."
         },
         {
           "url": "/api/public/pay/callback",
@@ -1476,7 +1545,8 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/commerce-lifecycle.test.ts"
-          ]
+          ],
+          "whatItIs": "PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`."
         },
         {
           "url": "/api/public/promo",
@@ -1496,7 +1566,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": true,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Voucher check for the checkout (deliberately specific error copy)."
         },
         {
           "url": "/api/uploads/[name]",
@@ -1514,7 +1585,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/image-content.test.ts"
-          ]
+          ],
+          "whatItIs": "Serves merchant uploads with `?w=` resizing."
         },
         {
           "url": "/daftar",
@@ -1533,7 +1605,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Self-serve store sign-up → review queue in Super Admin."
         },
         {
           "url": "/faktur/[number]",
@@ -1555,7 +1628,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Printable subscription invoice (renders the STORED tax)."
         },
         {
           "url": "/impersonate/exit",
@@ -1573,7 +1647,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Ends an impersonation session and logs it."
         },
         {
           "url": "/impersonate",
@@ -1592,7 +1667,8 @@
           "tests": [
             "apps/admin/lib/impersonation.test.ts",
             "packages/lib/src/session-cookie.test.ts"
-          ]
+          ],
+          "whatItIs": "One-time exchange of an opaque grant → 30-minute merchant session for a Super Admin operator."
         },
         {
           "url": "/",
@@ -1606,7 +1682,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "layout"
         },
         {
           "url": "/login",
@@ -1627,7 +1704,8 @@
           "tests": [
             "apps/super-admin/lib/platform-shell-contract.test.ts",
             "packages/lib/src/no-published-credentials.test.ts"
-          ]
+          ],
+          "whatItIs": "Seller login (rate-limited per IP + per account; no published credentials)."
         }
       ]
     },
@@ -1651,7 +1729,8 @@
           "ownerDb": false,
           "tests": [
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice)."
         },
         {
           "url": "/",
@@ -1674,7 +1753,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "layout"
         },
         {
           "url": "/log-sistem",
@@ -1696,7 +1776,8 @@
             "apps/super-admin/lib/activity-log.test.ts",
             "apps/super-admin/lib/audit-writes.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Log Sistem' — the whole `platform_activity` audit log, filtered and paged in the database."
         },
         {
           "url": "/",
@@ -1719,7 +1800,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Platform dashboard (MRR, revenue, merchant float, latest invoices) — `admin` rank; support is forwarded to its landing."
         },
         {
           "url": "/paket",
@@ -1744,7 +1826,8 @@
           "tests": [
             "apps/super-admin/lib/invoice-flip-is-bookkeeping.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Paket' — the single plan's prices/trial (legacy tiers unused)."
         },
         {
           "url": "/pencairan",
@@ -1768,7 +1851,8 @@
           "ownerDb": false,
           "tests": [
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Pencairan' — seller payout queue; complete = compare-and-swap `diproses → selesai`."
         },
         {
           "url": "/pengaturan",
@@ -1795,7 +1879,8 @@
             "apps/super-admin/lib/audit-writes.test.ts",
             "apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators."
         },
         {
           "url": "/tiket/[id]",
@@ -1819,7 +1904,8 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts"
-          ]
+          ],
+          "whatItIs": "One ticket thread (reply, close)."
         },
         {
           "url": "/tiket",
@@ -1842,7 +1928,8 @@
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Tiket' — merchant support desk."
         },
         {
           "url": "/toko/[id]",
@@ -1868,7 +1955,8 @@
           "tests": [
             "apps/admin/lib/uuid-guard.test.ts",
             "apps/super-admin/lib/add-store-user.test.ts"
-          ]
+          ],
+          "whatItIs": "Store detail: billing, users (add/reset — credential shown once), suspend with a reason, comp a month, 'Buka Dashboard Seller'."
         },
         {
           "url": "/toko",
@@ -1894,7 +1982,8 @@
             "apps/admin/lib/uuid-guard.test.ts",
             "apps/super-admin/lib/add-store-user.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Toko' — all stores by lifecycle segment (trial / first month / regular / VIP) + review queue."
         },
         {
           "url": "/update-log",
@@ -1915,7 +2004,8 @@
           "tests": [
             "apps/super-admin/lib/list-page.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
-          ]
+          ],
+          "whatItIs": "'Update Log' — the product changelog shown to operators (`dev-logs.ts`), paged."
         },
         {
           "url": "/api/auth/signout",
@@ -1931,7 +2021,8 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Deletes the operator cookie."
         },
         {
           "url": "/",
@@ -1945,7 +2036,8 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "layout"
         },
         {
           "url": "/login",
@@ -1964,7 +2056,8 @@
           "tests": [
             "apps/super-admin/lib/platform-shell-contract.test.ts",
             "packages/lib/src/no-published-credentials.test.ts"
-          ]
+          ],
+          "whatItIs": "Operator login (front door, rank re-read from `platform_admins` on every request)."
         }
       ]
     },
@@ -1986,7 +2079,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Not found (also what a wrong Host resolves to)."
         },
         {
           "url": "/api/chat/poll",
@@ -2005,7 +2099,8 @@
             "rate-limit"
           ],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Chat polling."
         },
         {
           "url": "/api/chat/read",
@@ -2024,7 +2119,8 @@
             "rate-limit"
           ],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Mark chat read."
         },
         {
           "url": "/api/chat/send",
@@ -2043,7 +2139,8 @@
             "rate-limit"
           ],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Shopper → store chat message."
         },
         {
           "url": "/api/checkout-session",
@@ -2063,7 +2160,8 @@
             "bot"
           ],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Progressive checkout capture (debounced beacons; tenant from Host; fails quiet)."
         },
         {
           "url": "/api/search",
@@ -2081,7 +2179,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Search index for the palette; returns per-row srcset built on the server."
         },
         {
           "url": "/api/track",
@@ -2101,7 +2200,8 @@
             "bot"
           ],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "First-party page-view/event tracker → `analytics_events` + conversion queue."
         },
         {
           "url": "/blog/[handle]",
@@ -2122,7 +2222,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "One article."
         },
         {
           "url": "/blog",
@@ -2142,7 +2243,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Blog index."
         },
         {
           "url": "/cari",
@@ -2160,7 +2262,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Search results page (the ⌘K palette uses `/api/search`)."
         },
         {
           "url": "/checkout",
@@ -2181,7 +2284,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`."
         },
         {
           "url": "/checkout/sukses",
@@ -2199,7 +2303,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only."
         },
         {
           "url": "/feed/google.xml",
@@ -2217,7 +2322,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Google Merchant product feed (`<g:id>` = `retailerId()` — same id as the pixels)."
         },
         {
           "url": "/feed/tiktok.xml",
@@ -2235,7 +2341,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "TikTok catalog feed (same id scheme)."
         },
         {
           "url": "/halaman/[handle]",
@@ -2255,7 +2362,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Static page."
         },
         {
           "url": "/",
@@ -2275,7 +2383,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction."
         },
         {
           "url": "/kategori/[handle]",
@@ -2295,7 +2404,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "One collection: CategoryHero always, then the `category` template body."
         },
         {
           "url": "/kategori",
@@ -2317,7 +2427,8 @@
           "setHtml": false,
           "tests": [
             "apps/storefront/src/lib/safe-href.test.ts"
-          ]
+          ],
+          "whatItIs": "All collections."
         },
         {
           "url": "/keranjang",
@@ -2338,7 +2449,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Cart (client-side lines; the server prices everything at order time)."
         },
         {
           "url": "/kontak",
@@ -2356,7 +2468,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Contact + WhatsApp."
         },
         {
           "url": "/lp/[slug]",
@@ -2377,7 +2490,8 @@
           "db": false,
           "gate": [],
           "setHtml": true,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Merchant landing page (raw HTML EXECUTES here) with the COD order form."
         },
         {
           "url": "/produk/[handle]",
@@ -2399,7 +2513,8 @@
           "setHtml": false,
           "tests": [
             "apps/storefront/src/components/product-ratio-locked.test.ts"
-          ]
+          ],
+          "whatItIs": "Product page — gallery, variant picker, buy box, reviews; `product` template renders the tail."
         },
         {
           "url": "/produk",
@@ -2419,7 +2534,8 @@
           "setHtml": false,
           "tests": [
             "apps/storefront/src/components/product-ratio-locked.test.ts"
-          ]
+          ],
+          "whatItIs": "Catalogue with server-side sort + pagination ('Daftar Produk')."
         },
         {
           "url": "/promo/[handle]",
@@ -2440,7 +2556,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "One promo/flash sale."
         },
         {
           "url": "/promo",
@@ -2461,7 +2578,8 @@
           "tests": [
             "apps/storefront/src/lib/order-forms-post-kodepos.test.ts",
             "apps/storefront/src/lib/safe-href.test.ts"
-          ]
+          ],
+          "whatItIs": "Promo hub — live vouchers and flash sales (`nonaktif` + date window)."
         },
         {
           "url": "/robots.txt",
@@ -2477,7 +2595,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Per-tenant robots (Cloudflare Managed robots.txt sits in front — see the file's note)."
         },
         {
           "url": "/sitemap.xml",
@@ -2495,7 +2614,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Per-tenant sitemap."
         },
         {
           "url": "/thanks",
@@ -2513,7 +2633,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Post-payment thank-you."
         }
       ]
     },
@@ -2535,7 +2656,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Not found."
         },
         {
           "url": "/cara-kerja",
@@ -2551,7 +2673,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "How it works."
         },
         {
           "url": "/demo",
@@ -2567,7 +2690,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Link/frame to the demo store."
         },
         {
           "url": "/faq",
@@ -2583,7 +2707,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "FAQ."
         },
         {
           "url": "/fitur",
@@ -2599,7 +2724,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Feature overview."
         },
         {
           "url": "/",
@@ -2615,7 +2741,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "tokophi.com front door."
         },
         {
           "url": "/kontak",
@@ -2633,7 +2760,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Contact."
         },
         {
           "url": "/pembayaran-pengiriman",
@@ -2649,7 +2777,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Payment channels + shipping/COD explained for prospects."
         },
         {
           "url": "/privasi",
@@ -2667,7 +2796,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Privacy policy."
         },
         {
           "url": "/sitemap.xml",
@@ -2683,7 +2813,8 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": []
+          "tests": [],
+          "whatItIs": "Sitemap for the apex."
         }
       ]
     }

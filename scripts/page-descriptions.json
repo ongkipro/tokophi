@@ -1,0 +1,213 @@
+{
+  "$comment": "Hand-curated. Merged into PAGE_MAP.md by scripts/gen-page-map.mjs as the 'what it is' column. Keys are '<app>:<url>' exactly as the generator derives them; the generator FAILS when a route has no entry here or an entry names a route that no longer exists, so this file cannot rot. Write one line per route: what a person sees / what the endpoint decides, in plain words, with the Indonesian menu label in quotes so a grep on either language finds it.",
+  "routes": {
+    "admin:/": "Dashboard Seller — today's sales, orders, KPIs and the 7/30-day chart, all derived live from `orders` (never `analytics_daily`).",
+    "admin:/akun/profil": "'Profil' — the signed-in user's name/email/avatar.",
+    "admin:/akun/keamanan": "'Keamanan' — change password (revokes other sessions), 2FA/TOTP.",
+    "admin:/akun/langganan": "'Langganan' — the store's plan, trial/period countdown, payment history, link to the printable faktur.",
+    "admin:/analitik": "'Analitik' — sales, funnel, devices, products; every figure from `orders`/`analytics_events`, '—' when there is no source.",
+    "admin:/bantuan": "'Bantuan' — the merchant's support tickets list (writes go to the Super Admin ticket desk).",
+    "admin:/bantuan/[id]": "One support ticket thread; UUID-guarded.",
+    "admin:/blog": "'Blog' — article list.",
+    "admin:/blog/baru": "New article.",
+    "admin:/blog/[id]": "Article editor (content:write); media upload.",
+    "admin:/crm": "'CRM' landing — redirects/overview of pipeline, follow-ups, templates.",
+    "admin:/crm/pipeline": "'Pipeline' — leads by stage (drag/drop).",
+    "admin:/crm/followup": "'Follow-up' — due follow-ups, mark done → `followups.status`.",
+    "admin:/crm/template": "'Template' — WhatsApp message templates used by CRM and abandoned-cart recovery.",
+    "admin:/diskon": "'Diskon' (vouchers) — list; status shown from `nonaktif` + dates, never dates alone.",
+    "admin:/diskon/baru": "New voucher.",
+    "admin:/diskon/[id]": "Voucher editor — a blank period = no end date; an edit never moves `starts_at`.",
+    "admin:/files": "'File' — media library (uploads under `/api/uploads`).",
+    "admin:/flash-sale": "'Flash Sale' — list with live/upcoming badge computed on the server clock.",
+    "admin:/flash-sale/baru": "New flash sale.",
+    "admin:/flash-sale/[id]": "Flash sale editor — price reaches variant rows, not only the headline.",
+    "admin:/halaman": "'Halaman' — static pages list.",
+    "admin:/halaman/baru": "New static page.",
+    "admin:/halaman/[id]": "Static page editor.",
+    "admin:/keuangan": "'Keuangan' — the seller's money overview (entitlement = goods + goods PPN − shipping debits).",
+    "admin:/keuangan/penghasilan": "'Penghasilan' — per-order earnings breakdown (fees, PPN, shipping delta).",
+    "admin:/navigasi": "'Navigasi' — storefront menus; Simpan = delete + re-insert the tree.",
+    "admin:/obrolan": "'Obrolan' — the storefront chat inbox (WhatsApp-style, per store).",
+    "admin:/pelanggan": "'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case.",
+    "admin:/pelanggan/[id]": "Customer detail: orders, tags, notes.",
+    "admin:/pelanggan/keranjang": "'Keranjang ditinggal' — abandoned checkouts; recovery over WhatsApp ('WA dibuka', never 'terkirim'); rate = rescued/abandoned only.",
+    "admin:/pelanggan/segmen": "'Segmen' — customer segments (create/delete).",
+    "admin:/pelanggan/ulasan": "'Ulasan' — product reviews moderation.",
+    "admin:/pemasaran": "'Pemasaran' — ad channels (Meta/Google/TikTok) connection, catalog id scheme, conversion queue health; 'dari pesanan toko Anda', never 'menurut Meta'.",
+    "admin:/pengaturan": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision).",
+    "admin:/pesanan": "'Pesanan' — orders list with status tabs; URL params validated before any enum cast.",
+    "admin:/pesanan/[id]": "Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking.",
+    "admin:/pesanan/massal": "'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'.",
+    "admin:/produk": "'Produk' — product list (archive-delete), 'Berat belum diisi' warnings.",
+    "admin:/produk/baru": "New product.",
+    "admin:/produk/[id]": "Product editor — variants grid, media (upload/drag), dimensions (they price ongkir), taxonomy.",
+    "admin:/produk/inventori": "'Inventori' — stock per variant/location, bulk save.",
+    "admin:/produk/kategori": "'Kategori' (collections) — list.",
+    "admin:/produk/kategori/baru": "New collection.",
+    "admin:/produk/kategori/[id]": "Collection editor (manual/conditions).",
+    "admin:/produk/pembelian": "'Pembelian' — purchase orders: build lines, 'Terima barang' adds stock, cancel = delete.",
+    "admin:/promo": "'Promo' hub — vouchers, flash sales and landing pages in one place.",
+    "admin:/promo/[id]": "Promo campaign detail.",
+    "admin:/promo/html/baru": "New landing HTML (`/lp/<slug>`) — raw markup EXECUTES on the shop origin; `landing:html` is owner-only.",
+    "admin:/promo/html/[id]": "Landing HTML editor (same owner-only rule for the markup).",
+    "admin:/saldo": "'Saldo' — pending/available balance derived from the ledger, payout requests (never joins `orders` when summing).",
+    "admin:/tema": "'Tema' (Store Builder) — homepage/category/product templates list.",
+    "admin:/tema/[id]": "Puck editor for one template; palette is per template type.",
+    "admin:/daftar": "Self-serve store sign-up → review queue in Super Admin.",
+    "admin:/faktur/[number]": "Printable subscription invoice (renders the STORED tax).",
+    "admin:/login": "Seller login (rate-limited per IP + per account; no published credentials).",
+    "admin:/api/admin/labels": "Renders 100×150 mm shipping labels (Code 128) for orders that already have a real AWB.",
+    "admin:/api/auth/google/start": "Google sign-in start.",
+    "admin:/api/auth/google/callback": "Google sign-in callback → session cookie.",
+    "admin:/api/auth/signout": "Deletes the session cookie (a Server Component cannot).",
+    "admin:/api/cron/billing": "Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`).",
+    "admin:/api/cron/domains": "Custom-domain verification sweep.",
+    "admin:/api/cron/order-expiry": "Expires unpaid prepaid orders after their window.",
+    "admin:/api/cron/payment-advice": "Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing.",
+    "admin:/api/cron/tracking": "Every 15 min pulls KiriminAja tracking for booked orders: fills `orders.awb`, advances status forward-only.",
+    "admin:/api/cron/tracking-events": "Every 60 s delivers queued conversions (Meta CAPI / GA4 / TikTok) with retries + dead-letter.",
+    "admin:/api/health/env": "Reports which integrations are configured (header-gated), used by the deploy probe.",
+    "admin:/api/public/kiriminaja/webhook": "Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth.",
+    "admin:/api/public/ongkir": "Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate.",
+    "admin:/api/public/order": "THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment.",
+    "admin:/api/public/pay/callback": "PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`.",
+    "admin:/api/public/promo": "Voucher check for the checkout (deliberately specific error copy).",
+    "admin:/api/uploads/[name]": "Serves merchant uploads with `?w=` resizing.",
+    "admin:/impersonate": "One-time exchange of an opaque grant → 30-minute merchant session for a Super Admin operator.",
+    "admin:/impersonate/exit": "Ends an impersonation session and logs it.",
+    "super-admin:/": "Platform dashboard (MRR, revenue, merchant float, latest invoices) — `admin` rank; support is forwarded to its landing.",
+    "super-admin:/analitik": "Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice).",
+    "super-admin:/log-sistem": "'Log Sistem' — the whole `platform_activity` audit log, filtered and paged in the database.",
+    "super-admin:/paket": "'Paket' — the single plan's prices/trial (legacy tiers unused).",
+    "super-admin:/pencairan": "'Pencairan' — seller payout queue; complete = compare-and-swap `diproses → selesai`.",
+    "super-admin:/pengaturan": "'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators.",
+    "super-admin:/tiket": "'Tiket' — merchant support desk.",
+    "super-admin:/tiket/[id]": "One ticket thread (reply, close).",
+    "super-admin:/toko": "'Toko' — all stores by lifecycle segment (trial / first month / regular / VIP) + review queue.",
+    "super-admin:/toko/[id]": "Store detail: billing, users (add/reset — credential shown once), suspend with a reason, comp a month, 'Buka Dashboard Seller'.",
+    "super-admin:/update-log": "'Update Log' — the product changelog shown to operators (`dev-logs.ts`), paged.",
+    "super-admin:/login": "Operator login (front door, rank re-read from `platform_admins` on every request).",
+    "super-admin:/api/auth/signout": "Deletes the operator cookie.",
+    "storefront:/": "Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction.",
+    "storefront:/produk": "Catalogue with server-side sort + pagination ('Daftar Produk').",
+    "storefront:/produk/[handle]": "Product page — gallery, variant picker, buy box, reviews; `product` template renders the tail.",
+    "storefront:/kategori": "All collections.",
+    "storefront:/kategori/[handle]": "One collection: CategoryHero always, then the `category` template body.",
+    "storefront:/promo": "Promo hub — live vouchers and flash sales (`nonaktif` + date window).",
+    "storefront:/promo/[handle]": "One promo/flash sale.",
+    "storefront:/lp/[slug]": "Merchant landing page (raw HTML EXECUTES here) with the COD order form.",
+    "storefront:/keranjang": "Cart (client-side lines; the server prices everything at order time).",
+    "storefront:/checkout": "Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`.",
+    "storefront:/checkout/sukses": "Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only.",
+    "storefront:/thanks": "Post-payment thank-you.",
+    "storefront:/blog": "Blog index.",
+    "storefront:/blog/[handle]": "One article.",
+    "storefront:/halaman/[handle]": "Static page.",
+    "storefront:/cari": "Search results page (the ⌘K palette uses `/api/search`).",
+    "storefront:/kontak": "Contact + WhatsApp.",
+    "storefront:/404": "Not found (also what a wrong Host resolves to).",
+    "storefront:/api/checkout-session": "Progressive checkout capture (debounced beacons; tenant from Host; fails quiet).",
+    "storefront:/api/search": "Search index for the palette; returns per-row srcset built on the server.",
+    "storefront:/api/track": "First-party page-view/event tracker → `analytics_events` + conversion queue.",
+    "storefront:/api/chat/send": "Shopper → store chat message.",
+    "storefront:/api/chat/poll": "Chat polling.",
+    "storefront:/api/chat/read": "Mark chat read.",
+    "storefront:/feed/google.xml": "Google Merchant product feed (`<g:id>` = `retailerId()` — same id as the pixels).",
+    "storefront:/feed/tiktok.xml": "TikTok catalog feed (same id scheme).",
+    "storefront:/sitemap.xml": "Per-tenant sitemap.",
+    "storefront:/robots.txt": "Per-tenant robots (Cloudflare Managed robots.txt sits in front — see the file's note).",
+    "landing:/": "tokophi.com front door.",
+    "landing:/fitur": "Feature overview.",
+    "landing:/cara-kerja": "How it works.",
+    "landing:/pembayaran-pengiriman": "Payment channels + shipping/COD explained for prospects.",
+    "landing:/demo": "Link/frame to the demo store.",
+    "landing:/faq": "FAQ.",
+    "landing:/kontak": "Contact.",
+    "landing:/privasi": "Privacy policy.",
+    "landing:/404": "Not found.",
+    "landing:/sitemap.xml": "Sitemap for the apex."
+  },
+  "howto": [
+    [
+      "change how ongkir is priced (weight, box, origin)",
+      "`apps/admin/lib/shipping-quote.ts` (the ONE price producer) + `lib/shipping-weight.ts` (`stackedDims`)"
+    ],
+    [
+      "change what is sent to the courier when booking",
+      "`packages/lib/src/kiriminaja.ts` `kaCreateOrder` + `apps/admin/lib/actions/shipping.ts` `createShipment` — `KIRIMINAJA.md` §0.4 lists every field"
+    ],
+    [
+      "change who may pay COD",
+      "`apps/admin/lib/cod.ts` (five conditions) — never an `if (courier === \"spx\")`"
+    ],
+    [
+      "change a checkout fee / tax",
+      "`packages/lib/src/payment-fees.ts` + `FINANCE.md`; `/api/public/order` is the boundary"
+    ],
+    [
+      "change subscription pricing",
+      "`packages/lib/src/billing.ts`; PPN is the global toggle in Super Admin → Pengaturan → Keuangan"
+    ],
+    [
+      "add a Seller page",
+      "`apps/admin/app/(admin)/<route>/page.tsx` + read in `lib/data/<entity>.ts` (inside `withCurrentTenant`) + `lib/nav.ts`; then add its line to `scripts/page-descriptions.json` and run `node scripts/gen-page-map.mjs`"
+    ],
+    [
+      "add a Super Admin page",
+      "`apps/super-admin/app/(platform)/<route>/page.tsx` with `platformRouteGate(path)` as its FIRST await + classify it in `lib/route-roles.ts`"
+    ],
+    [
+      "add a mutation (server action)",
+      "`lib/actions/<entity>.ts`: `requireCapability(...)` first, then `withTenant(storeId, …)`; child tables with no `store_id` need the parent read back inside the same txn"
+    ],
+    [
+      "add a DB column",
+      "hand-written idempotent migration in `packages/db/drizzle/` (copy `0109`), journal entry with a stamp ABOVE the newest, `schema.ts`, `npm run verify-migrations -w @tokophi/db`; never `npm run generate`"
+    ],
+    [
+      "change the storefront look for every store",
+      "`packages/sections` (Store Builder sections) + `apps/storefront/src/components`; a saved template keeps rendering old section types (renderer `default:` is a guard)"
+    ],
+    [
+      "change checkout validation",
+      "`packages/lib/src/validate.ts` (the rule) + `apps/storefront/src/pages/checkout.astro` (the early UX copy); test on an `en-US` browser"
+    ],
+    [
+      "change what a pixel/CAPI receives",
+      "`apps/admin/lib/tracking-events.ts` (from the ORDER ROW) + `packages/lib/src/tracking-ids.ts` (catalog id) — both halves of an id flip together"
+    ],
+    [
+      "change the order status machine",
+      "`apps/admin/lib/order-status.ts` `applyOrderStatusChange` (`ALLOWED` table) — the only writer of `orders.status`"
+    ],
+    [
+      "change the ledger / balance",
+      "`apps/admin/lib/actions/ledger.ts` + `order-finance.ts`; three partial unique indexes make a double-credit impossible; never join `orders` when summing"
+    ],
+    [
+      "change login / session / rank rules",
+      "Seller: `apps/admin/lib/auth.ts`, `rbac.ts`, `rbac-policy.ts`; Super Admin: `platform-session.ts`, `platform-rank.ts`, `route-roles.ts`"
+    ],
+    [
+      "change a cron cadence or add one",
+      "`docker-compose.coolify.yml` sidecars (header `x-cron-secret`, never `?secret=`) + `apps/admin/app/api/cron/<name>/route.ts` through `lib/cron-auth.ts`"
+    ],
+    [
+      "change the reference areas / postcodes / coordinates",
+      "`packages/db/scripts/build-kelurahan.mjs`, `build-ka-kelurahan-ids.mjs`, `build-area-coords.mjs` → the CSVs in `packages/db/data/` (reloaded by `seed-areas.ts` on deploy)"
+    ],
+    [
+      "change the demo data",
+      "`packages/db/src/seed.ts` — the seed is NOT a migration: an existing store needs an explicit data fix"
+    ],
+    [
+      "find why a screen shows a wrong number",
+      "`STATUS.md` (real / seeded / fake per figure) then `lib/data/*` for that page in this map"
+    ],
+    [
+      "release / deploy",
+      "`RELEASE.md` + `DEPLOY.md`; merges are serialised; Markdown-only merges do not deploy (`!**/*.md`)"
+    ]
+  ]
+}
