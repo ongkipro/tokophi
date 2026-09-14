@@ -146,6 +146,16 @@ export type KaRate = {
   // THIS quote (from item_value + shipping cost + insurance). Numbers arrive as strings sometimes —
   // `cost` above already does — so parse through kaCodFee(), never Number() at a call site.
   setting?: { cod_fee?: string | number; minimum_cod_fee?: string | number; cod_fee_amount?: string | number } | null;
+  /**
+   * The insurance FEE for this quote, IDR (present when the quote asked `insurance: 1`). KiriminAja's
+   * UAT review (2026-09-14): *"value dari param insurance_amount didapatkan dari param insurance saat
+   * get pricing"* — the booking's `insurance_amount` is THIS number, never the goods value.
+   */
+  insurance?: string | number | null;
+  /** The service insures every parcel; the booking must carry `insurance_amount` even when unasked. */
+  force_insurance?: boolean;
+  /** The service routes on coordinates (instant/same-day). Regular services report false. */
+  use_geolocation?: boolean;
 };
 
 /** The COD fee KiriminAja charges on a rate, parsed (N31). All-null when the vendor sent nothing. */
@@ -264,19 +274,44 @@ function kelurahanField<K extends "kelurahan_id" | "destination_kelurahan_id">(
   return { [field]: assertKaKelurahanId(value, field) } as Record<K, number>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SINK GUARD FOR COORDINATES (Task 8.14, 0109 — KiriminAja's UAT review, 2026-09-14)
+//
+// v6.2 marks `latitude`/`longitude` (sender) and `destination_latitude`/`destination_longitude`
+// (each package) REQUIRED. Until 0109 this product held no coordinate for anyone and sent none —
+// and KiriminAja read that payload as "still v6.1". What it can honestly send now is a CENTROID:
+// the kelurahan's when the checkout collected one, else the district's, both from the Kemendagri
+// boundaries dataset (`@tokophi/db` `resolveAreaCoords`). Two rules, both enforced here rather than
+// at each caller:
+//   · BOTH OR NEITHER. A lone latitude is meaningless and the vendor would bind the other as 0.
+//   · NEVER 0,0 AND NEVER OUTSIDE INDONESIA. `0,0` is a real point in the Gulf of Guinea, not "no
+//     data"; a dispatcher on a geolocated service would route on it. Out-of-range is a dataset or
+//     unit bug (lng/lat swapped is the classic) and must fail loudly, like `assertKaKelurahanId`.
+export function coordFields<P extends "latitude" | "destination_latitude">(
+  prefix: P,
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): Record<string, number> {
+  if (lat == null && lng == null) return {};
+  const lngKey = prefix === "latitude" ? "longitude" : "destination_longitude";
+  if (lat == null || lng == null) {
+    throw new Error(`KiriminAja ${prefix}/${lngKey}: got one coordinate without the other (${lat}, ${lng}). Send both or neither.`);
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+    throw new Error(`KiriminAja ${prefix}/${lngKey}: ${lat},${lng} is not a coordinate. 0,0 means "unknown" to nobody — omit the fields instead.`);
+  }
+  if (lat < -11.5 || lat > 6.5 || lng < 94.5 || lng > 141.5) {
+    throw new Error(`KiriminAja ${prefix}/${lngKey}: ${lat},${lng} is outside Indonesia (latitude −11,5…6,5 · longitude 94,5…141,5) — swapped axes or a bad row.`);
+  }
+  return { [prefix]: lat, [lngKey]: lng };
+}
+
 // create an express shipment (pickup request) → returns AWB / KiriminAja order id
 //
-// 🔴 WHAT THE v6.2 SPEC MARKS REQUIRED AND WE STILL DO NOT SEND — Task 8.14, 2026-09-09.
-// The vendor's OpenAPI (`info.version 6.2.0`) lists `latitude`/`longitude` on the sender and
-// `destination_latitude`/`destination_longitude` on every package as REQUIRED. **We do not have
-// them, and we never send a placeholder.** `op === "instant"` was removed and its own note records
-// that it was the only consumer of coordinates, so NOTHING in this product geocodes anything:
-// `store_settings.sender_lat/sender_lng` are dead columns (nothing reads or writes them), the
-// orders table has no coordinate columns, and `kiriminaja_areas`/`kelurahan` carry no centroid —
-// checked column by column, not assumed. A zero pair is not "no data" to a courier, it is a point
-// in the Gulf of Guinea that a dispatcher would route on, so the fields are OMITTED and their
-// absence is asserted by `kiriminaja-v62.test.ts`. Filling them is a data-model change (a geocode
-// at Pengaturan → Alamat and one per destination district), not a client edit.
+// ✅ THE v6.2 FIELDS THE SPEC MARKS REQUIRED ARE ALL SENT WHEN WE HOLD THEM — Task 8.14, closed
+// 2026-09-14 after KiriminAja's UAT review. Both postal codes, both subdistrict ids, the `items`
+// manifest (with `metadata.sku`/`variant_label`) and, since 0109, both coordinate pairs as
+// centroids. Each stays CONDITIONAL: a value we do not have is omitted, never sent as `0`/`""`.
 //
 // 🔴 `kelurahan_id` / `destination_kelurahan_id` TAKE KIRIMINAJA'S OWN SUBDISTRICT ID AND NOTHING
 // ELSE — Task 8.17. Two id spaces exist for one village and they are not interchangeable:
@@ -303,11 +338,20 @@ export type KaSender = {
   kecamatanId: number; kelurahanId?: number | null;
   /** Sender postal code (`store_settings.sender_postcode`). Spec-required; omitted when we have none. */
   zipcode?: string | null;
+  /**
+   * Pickup coordinates — spec-required since v6.2 (KiriminAja's UAT review, 2026-09-14). The
+   * value this product can honestly produce is the CENTROID of the seller's kelurahan (or district)
+   * from `@tokophi/db` `resolveAreaCoords`; a street-level geocode does not exist here. Both or
+   * neither: a lone coordinate is omitted with its pair, and `0,0` is refused by `coordFields`.
+   */
+  latitude?: number | null; longitude?: number | null;
 };
 /** One line of the parcel, as the v6.2 `packages[].items` schema wants it. `price` is PER UNIT. */
 export type KaItem = {
   name: string; price: number; weight: number; qty: number;
   width: number; length: number; height: number;
+  /** v6.2 `items[].metadata` — free-form partner data the spec names: SKU and variant label. */
+  metadata?: { sku?: string | null; variant_label?: string | null } | null;
 };
 export type KaPackage = {
   orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`, ≤ 20 chars total — see buildKaOrderRef
@@ -318,6 +362,10 @@ export type KaPackage = {
   cod?: number; // COD amount to collect (0 = non-COD)
   insuranceAmount?: number; // 0/undefined = no insurance
   qty?: number; width?: number; length?: number; height?: number; packageTypeId?: number;
+  /** Recipient coordinates — same rule as `KaSender.latitude`: a centroid, both or neither. */
+  destLatitude?: number | null; destLongitude?: number | null;
+  /** v6.2 `packages[].note` — free text for the courier (optional in the spec; omitted when empty). */
+  note?: string | null;
   /**
    * The order's real lines. REQUIRED on the type, not optional: the spec requires the field, and a
    * caller that forgets it must fail `tsc` rather than silently book a parcel with no manifest
@@ -367,6 +415,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     name: sender.name, phone: sender.phone, address: sender.address,
     kecamatan_id: sender.kecamatanId,
     ...kelurahanField("kelurahan_id", sender.kelurahanId),
+    ...coordFields("latitude", sender.latitude, sender.longitude),
     // Spec-required (Task 8.14). It has always been in `store_settings.sender_postcode` and rode
     // only inside the written pickup `address`; it is now ALSO its own field, which is what the
     // vendor documents. Omitted, never sent as `""`/`0`, when the seller has no kelurahan-derived
@@ -380,8 +429,13 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       destination_name: pkg.destName, destination_phone: pkg.destPhone, destination_address: pkg.destAddress,
       destination_kecamatan_id: pkg.destKecamatanId,
       ...kelurahanField("destination_kelurahan_id", pkg.destKelurahanId),
+      ...coordFields("destination_latitude", pkg.destLatitude, pkg.destLongitude),
       weight: pkg.weight, width: pkg.width ?? 10, length: pkg.length ?? 10, height: pkg.height ?? 10,
-      qty: pkg.qty ?? 1, item_value: pkg.itemValue, item_name: pkg.itemName,
+      // KiriminAja's UAT review (2026-09-14): the package `qty` IS the sum of `items[].qty`. Derived
+      // from the manifest whenever there is one, so the two cannot disagree; `pkg.qty` only stands
+      // in for a caller with no lines.
+      qty: pkg.items.length ? pkg.items.reduce((n, i) => n + Math.max(1, i.qty), 0) : pkg.qty ?? 1,
+      item_value: pkg.itemValue, item_name: pkg.itemName,
       service: pkg.service, service_type: pkg.serviceType, shipping_cost: pkg.shippingCost,
       cod: pkg.cod ?? 0, package_type_id: pkg.packageTypeId ?? 7,
       // Sent EXPLICITLY rather than left to the vendor's default, which is not stated anywhere in
@@ -393,12 +447,23 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       drop: false,
       ...(pkg.insuranceAmount ? { insurance_amount: pkg.insuranceAmount } : {}),
       ...(pkg.destZipcode ? { destination_zipcode: pkg.destZipcode } : {}),
+      ...(pkg.note?.trim() ? { note: pkg.note.trim() } : {}),
       // Spec-required (Task 8.14): the parcel's real manifest, one entry per `order_line_items`
       // row — never one synthetic line, which is what `item_name` ("Pesanan INV-…") already is.
       // `price` is PER UNIT per the schema, and every numeric field carries `minimum: 1`, so the
       // caller floors them; see `createShipment` for where each number comes from. Omitted rather
       // than sent as `[]` when a caller genuinely has no lines — the schema says `minItems: 1`.
-      ...(pkg.items.length ? { items: pkg.items.map((i) => ({ name: i.name, price: i.price, weight: i.weight, qty: i.qty, width: i.width, length: i.length, height: i.height })) } : {}),
+      ...(pkg.items.length
+        ? {
+            items: pkg.items.map((i) => ({
+              name: i.name, price: i.price, weight: i.weight, qty: i.qty, width: i.width, length: i.length, height: i.height,
+              // Only the keys the spec names, only when they carry a value — `metadata: {}` says nothing.
+              ...(i.metadata?.sku || i.metadata?.variant_label
+                ? { metadata: { ...(i.metadata.sku ? { sku: i.metadata.sku } : {}), ...(i.metadata.variant_label ? { variant_label: i.metadata.variant_label } : {}) } }
+                : {}),
+            })),
+          }
+        : {}),
     }],
   });
   const d = r.details?.[0];

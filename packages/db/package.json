@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./client": "./src/client.ts",
-    "./article-order": "./src/article-order.ts"
+    "./article-order": "./src/article-order.ts",
+    "./area-coords": "./src/area-coords.ts"
   },
   "scripts": {
     "generate": "dotenv -e ../../.env -e ../../../../../.env -- drizzle-kit generate",

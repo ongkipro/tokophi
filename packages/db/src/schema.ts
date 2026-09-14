@@ -11,6 +11,7 @@ import {
   smallint,
   bigint,
   real,
+  doublePrecision,
   date,
   timestamp,
   jsonb,
@@ -1751,6 +1752,11 @@ export const kiriminajaAreas = pgTable("kiriminaja_areas", {
   cityName: text().notNull(),
   provinceId: integer(),
   provinceName: text().notNull(),
+  // Centroid of the kecamatan this district was matched to (0109; scripts/build-area-coords.mjs).
+  // Sent as the v6.2 booking's coordinates when no kelurahan is known — the honest point for an
+  // address we only know to the district. NULL (~4%: districts with no kelurahan rows) ⇒ omitted.
+  lat: doublePrecision(),
+  lng: doublePrecision(),
 });
 
 // Kelurahan (village) + its postcode, under a KiriminAja district. Migration 0046 created the
@@ -1777,6 +1783,12 @@ export const kelurahan = pgTable(
     // NULLABLE on purpose: the vendor has no subdistrict data for part of its own district list,
     // and a name match can fail. NULL means "we do not know it" and the caller omits the field.
     kaKelurahanId: integer(),
+    // Village centroid from the Kemendagri boundaries dataset, keyed by `id` (0109). The most
+    // precise coordinate this product can honestly claim for a shopper's address; the booking
+    // sends it as destination_latitude/longitude (or latitude/longitude for the seller). NULL ⇒
+    // fall back to the district centroid, then omit — never 0,0.
+    lat: doublePrecision(),
+    lng: doublePrecision(),
   },
   // The ONLY access pattern: "give me the kelurahan of the district the shopper just picked".
   // 78k rows, read on every checkout — without this it is a seq scan (25ms) per selection.

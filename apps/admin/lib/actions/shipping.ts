@@ -1,5 +1,5 @@
 "use server";
-import { db, schema } from "@tokophi/db";
+import { db, schema, resolveAreaCoords } from "@tokophi/db";
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
@@ -12,6 +12,7 @@ import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, bu
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
+import { stackedDims } from "@/lib/shipping-weight";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 
 // `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
@@ -26,6 +27,10 @@ export type Rate = {
   cod: boolean;
   group: string;
   codFee: KaCodFee;
+  /** KiriminAja's insurance fee for this quote, IDR — what the booking sends as `insurance_amount`. */
+  insurance: number;
+  /** The service insures every parcel; the booking carries `insurance_amount` even when unasked. */
+  forceInsurance: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,6 +103,10 @@ async function packageRows(db: Tx, orderId: string) {
       // quote and the booking cannot describe different contents (the N30 lesson, one level down).
       title: schema.orderLineItems.title,
       unitPrice: schema.orderLineItems.priceIdr,
+      // v6.2 `items[].metadata` (sku, variant_label) — the same row, so the manifest cannot name a
+      // variant the parcel does not contain.
+      sku: schema.productVariants.sku,
+      variantTitle: schema.productVariants.title,
     })
     .from(schema.orderLineItems)
     .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderLineItems.variantId))
@@ -229,9 +238,9 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
 
   const actualWeight = ctx.pkgRows.reduce((sum, row) => sum + (row.weight ?? 0) * (row.qty ?? 1), 0);
   const weight = Math.max(1000, actualWeight);
-  const lengthCm = Math.max(0, ...ctx.pkgRows.map((row) => row.l ?? 0)) || undefined;
-  const widthCm = Math.max(0, ...ctx.pkgRows.map((row) => row.w ?? 0)) || undefined;
-  const heightCm = Math.max(0, ...ctx.pkgRows.map((row) => row.h ?? 0)) || undefined;
+  // ONE rule for the box (`stackedDims`): the quote here, the checkout quote and the booking below
+  // must all describe the parcel the vendor prices — Σ item volumes, not the largest item.
+  const { lengthCm, widthCm, heightCm } = stackedDims(ctx.pkgRows);
   const itemValue = Number(ctx.order?.subtotal ?? 0);
   const r = await kaShippingPrice({
     origin,
@@ -241,7 +250,11 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
     widthCm,
     heightCm,
     itemValue,
-    insurance: 0,
+    // Quoted WITH insurance so every rate carries its insurance fee: the booking's `insurance_amount`
+    // must be that number (KiriminAja's UAT review, 2026-09-14), and a `force_insurance` service
+    // needs it even when the seller did not ask. `cost` is the same either way (the fee is its own
+    // field), so the checkout quote (insurance 0) and this one still agree to the rupiah.
+    insurance: 1,
   });
   if (!r.ok)
     return {
@@ -274,6 +287,9 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
         cod: x.cod && cod.allows(x.service, x.service_type),
         group: x.group,
         codFee: kaCodFee(x),
+        // The vendor's insurance fee for THIS quote (IDR) and whether the service insures regardless.
+        insurance: Math.max(0, Math.round(Number(x.insurance) || 0)),
+        forceInsurance: !!x.force_insurance,
       })),
   };
 }
@@ -826,6 +842,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
     };
   }
   const serverCost = Math.max(0, Math.round(selectedRate.cost));
+  const insured = !!input.insurance || selectedRate.forceInsurance;
   if (serverCost !== Math.max(0, Math.round(input.cost))) {
     return {
       ok: false,
@@ -1005,9 +1022,10 @@ export async function createShipment(input: { orderNumber: string; service: stri
   const pkgRows = data.pkgRows;
   const actualWeight = pkgRows.reduce((a, r) => a + (r.weight ?? 0) * (r.qty ?? 1), 0);
   const weight = Math.max(1000, actualWeight);
-  const length = Math.max(0, ...pkgRows.map((r) => r.l ?? 0)) || undefined;
-  const width = Math.max(0, ...pkgRows.map((r) => r.w ?? 0)) || undefined;
-  const height = Math.max(0, ...pkgRows.map((r) => r.h ?? 0)) || undefined;
+  // The SAME box the quote priced (`stackedDims`, see shipping-weight.ts): Σ item volumes stacked on
+  // the largest footprint. The v6.2 validator prices `items[]` (measured 2026-09-14), so the package
+  // dimensions, the quote and the manifest below all have to agree.
+  const { lengthCm: length, widthCm: width, heightCm: height } = stackedDims(pkgRows);
 
   // ── The v6.2 spec-required fields we can honestly produce (Task 8.14) ───────────────────────
   // Both zipcodes: the stored one first — the shopper's kodepos has been REQUIRED at checkout
@@ -1026,10 +1044,25 @@ export async function createShipment(input: { orderNumber: string; service: stri
     price: Math.max(0, Number(row.unitPrice ?? 0)),
     weight: Math.max(1, row.weight ?? 0),
     qty: Math.max(1, row.qty ?? 1),
-    width: Math.max(1, row.w ?? width ?? 10),
-    length: Math.max(1, row.l ?? length ?? 10),
-    height: Math.max(1, row.h ?? height ?? 10),
+    // The line's OWN box, never the parcel's: the vendor sums items[] volumes × qty, so a line that
+    // borrowed the package dimensions would count the whole parcel once per line and per unit. A
+    // product that declared none sends the schema minimum (1 cm) — no volume it never claimed.
+    width: Math.max(1, row.w ?? 1),
+    length: Math.max(1, row.l ?? 1),
+    height: Math.max(1, row.h ?? 1),
+    // "Default" is drizzle's placeholder for a product with no options, not a variant label.
+    metadata: { sku: row.sku?.trim() || null, variant_label: row.variantTitle && row.variantTitle !== "Default" ? row.variantTitle : null },
   }));
+  // Coordinates (0109): the centroid of the smallest area each address is known to be in. The
+  // destination kelurahan is trusted only when the district is the one it was derived against —
+  // the same guard `destKelurahanId` below applies — and `resolveAreaCoords` returns null rather
+  // than a coordinate for a mismatched pair. Null ⇒ the fields are omitted, never 0,0. Reference
+  // tables, no tenant → the owner handle, exactly as `resolveArea` above.
+  const destKelurahanForBooking = destDistrictId === o.shipDistrictId ? o.shipKelurahanId : null;
+  const [senderCoords, destCoords] = await Promise.all([
+    resolveAreaCoords(db, { districtId: s.senderKecamatanId, kaKelurahanId: s.senderKelurahanId }),
+    resolveAreaCoords(db, { districtId: destDistrictId, kaKelurahanId: destKelurahanForBooking }),
+  ]);
 
   let r: Awaited<ReturnType<typeof kaCreateOrder>>;
   try {
@@ -1046,6 +1079,8 @@ export async function createShipment(input: { orderNumber: string; service: stri
         kecamatanId: s.senderKecamatanId,
         kelurahanId: s.senderKelurahanId,
         zipcode: senderZipcode,
+        latitude: senderCoords?.lat,
+        longitude: senderCoords?.lng,
       },
       {
         orderRef: providerReference,
@@ -1059,8 +1094,10 @@ export async function createShipment(input: { orderNumber: string; service: stri
         // subdistrict id belongs to exactly one district, so pairing a stored id with a guessed
         // district would send the courier a village that is not in the kecamatan on the same
         // request — a wrong id, which this whole task exists to avoid. Guessed ⇒ omit.
-        destKelurahanId: destDistrictId === o.shipDistrictId ? o.shipKelurahanId : null,
+        destKelurahanId: destKelurahanForBooking,
         destZipcode: destZipcode || undefined,
+        destLatitude: destCoords?.lat,
+        destLongitude: destCoords?.lng,
         weight,
         width,
         length,
@@ -1070,8 +1107,16 @@ export async function createShipment(input: { orderNumber: string; service: stri
         service: input.service,
         serviceType: input.serviceType,
         shippingCost: serverCost,
+        // COD value = goods + shipping + the COD fee (3% + PPN 11% on goods + shipping, the platform
+        // schedule) — which is exactly `orders.total_idr` at checkout, and exactly KiriminAja's own
+        // formula (T&C §5, 2026-09-14) for an uninsured parcel. Insurance on a COD parcel is the
+        // SELLER's choice at booking, after the buyer's total was fixed, so it is the seller's cost
+        // and is deliberately NOT added to what the courier collects.
         cod: o.isCod ? o.total || o.subtotal || 0 : 0,
-        insuranceAmount: input.insurance ? o.subtotal || o.total || 0 : 0,
+        // KiriminAja's UAT review (2026-09-14): `insurance_amount` is the `insurance` FEE the pricing
+        // call returned for this service — never the goods value — and a `force_insurance` service
+        // carries it whether or not the seller ticked the box.
+        insuranceAmount: insured ? selectedRate.insurance : 0,
         items,
       },
       schedule,

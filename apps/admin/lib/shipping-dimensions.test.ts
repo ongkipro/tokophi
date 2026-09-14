@@ -58,8 +58,14 @@ describe("volumetric dimensions reach the quote", () => {
   it("both entry points return them — the cart AND an existing order", () => {
     // weightForOrder feeds the admin re-quote. If only the cart half carries dimensions, a merchant
     // re-quoting an order gets the old, cheaper, wrong number.
+    // `stackedDims` (2026-09-14, replaces the max-per-axis `maxDims`): the SAME rule in both, and in
+    // the two booking-side call sites in actions/shipping.ts — the quote, the re-quote and the
+    // booking must describe one box, and it is the box the v6.2 validator prices (Σ item volumes).
     const src = admin("./shipping-weight.ts");
-    expect(src.match(/\.\.\.\s*maxDims\s*\(/g) ?? []).toHaveLength(2);
+    expect(src.match(/\.\.\.\s*stackedDims\s*\(/g) ?? []).toHaveLength(2);
+    expect(src).not.toMatch(/maxDims/);
+    const booking = admin("./actions/shipping.ts");
+    expect(booking.match(/=\s*stackedDims\s*\(/g) ?? []).toHaveLength(2);
   });
 
   it("the quote forwards them to KiriminAja", () => {

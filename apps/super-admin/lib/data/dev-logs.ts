@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.7.0-kiriminaja-v62-payload-uat-revision-3",
+    version: "v1.7.0",
+    date: "2026-09-14",
+    title: "The Courier Booking Speaks v6.2 In Full — Coordinates, Manifest, Quoted Insurance, The Right COD Value — After Two Vendor Reviews In One Day",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Database & RLS", "Seller Admin"],
+    summary: "KiriminAja reviewed our UAT sheet twice on the same day. The first review said the endpoint was v6.2 but the payload was still v6.1; the second went booking by booking through the corrected run. Every remark is now enforced where the request is built: both coordinate pairs as village or district centroids, the item manifest with SKU and variant, the package quantity derived from that manifest, the insurance amount taken from the pricing call, force-insured services insured whether or not the seller asked, and the COD value on the vendor's own formula. The simulation re-booked eight of eight, including 4-kilogram volumetric parcels at their quoted price.",
+    problem: "Nothing in the product held a coordinate for anyone — the seller's pickup columns were dead, the order had none, and the area tables carried no centroid — while the v6.2 schema marks four coordinate fields required. The insurance amount had been the goods value on every insured booking ever made; the vendor wants its own quoted fee. The package quantity was always 1. And, measured with four probe bookings, the v6.2 validator prices the manifest — the sum of every line's volume times its quantity — not the package box, so a quote built on the largest item per axis under-priced any multi-line order and the booking was refused as 'Ongkir tidak sesuai'.",
+    solution: "A migration adds a centroid to every village and district from the Kemendagri boundaries dataset, keyed by the same codes the village table already carries, loaded through the reference CSVs the deploy already seeds; a single resolver picks the village centroid, else the district's, else nothing, and a sink guard refuses 0,0, a lone coordinate, or a point outside Indonesia. The parcel's box is now one rule for the checkout quote, the seller's re-quote and the booking: the largest footprint with a height that holds the summed item volumes, rounded up. The seller's rate list is quoted with insurance so every service carries its fee and its force-insurance flag; the booking uses that fee, forced or chosen. The package quantity is the manifest's sum. The COD value is the buyer's checkout total — goods plus shipping plus the 3 percent fee plus VAT — which is the vendor's formula for an uninsured parcel; insurance on a COD parcel is the seller's own cost and is not collected from the buyer.",
+    verification: "Eight of eight sandbox bookings from the allow-listed production container with the full v6.2 body, four of them at 4.000 g volumetric on the vendor's own quote; the scenario-one request body captured off the wire and printed verbatim on the sheet. The manifest-volume rule proved by three accepted and one refused probe booking that differed in nothing but item volume. Full suite 1.518 tests, 0 failed; the new guards pin the centroid resolver against real Postgres, the box rule, the derived quantity, the quoted insurance, and that no coordinate can reach the vendor as zero. Still owner-gated: submitting revision 3 of the sheet, and the first real production booking."
+  },
+  {
     id: "v1.6.0-super-admin-front-door-mobile-nav",
     version: "v1.6.0",
     date: "2026-09-11",

@@ -4,7 +4,16 @@
 > ▶ **The queue itself lives in [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with AC.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-08-15) · **TokoΦ v1.0.0 RELEASED & LIVE ON `tokophi.com`** · Monorepo updated to v1.0.0 · 80 PostgreSQL Tables · 95 Migrations (`0000` through `0094_magical_salo`) · 53 Store-Scoped RLS Tables · 90 Vitest Test Suites (722/722 Tests Passed Green) · Storefront & Landing Astro Checks 0 Errors · Production Witness Probe Verified Live (All 5 Surfaces OK, DB Ongkir OK, Disk 16%, Watchdog Heartbeat Active) · Master README & AI/Collaborator Protocol Fully Synchronized
+## ▶ CURRENT STATE (2026-09-14) · **TokoΦ v1.7.0** · 83 PostgreSQL Tables · 110 Migrations (`0000` through `0109_area_coords`) · RLS 54/55 store-scoped tables (run `verify-rls`) · 175 Vitest files, **1.518/1.518 tests green** · KiriminAja booking on the full v6.2 payload, UAT sheet revision 3 filled and awaiting the owner's submission · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9)
+
+## 2026-09-14 — KiriminAja v6.2 payload in full, two vendor reviews, UAT sheet revision 3 (PR #397)
+
+- **Scope:** KiriminAja reviewed UAT revision 1 ("endpoint v6.2, payload masih v6.1") and then revision 2 per OID. Every remark now lives in code; the sheet was re-filled twice the same day. Branch `docs/uat-mitraapi-v1`, PR #397 (now code + migration, deploys on merge).
+- **Code:** migration `0109_area_coords` (village + district centroids from the Kemendagri boundaries dataset; `packages/db/scripts/build-area-coords.mjs` → the reference CSVs; `resolveAreaCoords` the one producer; `coordFields` the sink guard) · `stackedDims` in `apps/admin/lib/shipping-weight.ts` (the parcel box = Σ item volumes stacked on the largest footprint, for quote AND booking — the v6.2 validator prices the manifest, measured with 4 probe bookings) · `kaCreateOrder`: `qty` = Σ `items[].qty`, `items[].metadata`, `note`, both coordinate pairs · `createShipment`: `insurance_amount` = the quoted `insurance` fee, forced on `force_insurance` services; rate list quoted with `insurance: 1`; COD value = `orders.total_idr` (= the T&C §5 formula for an uninsured parcel).
+- **Simulation:** run 3 from the allow-listed admin container, **8/8 booked** (`5758-UAT1080737`…`UAT8080746`), incl. 4 kg volumetric at the quoted price. Cancel N/A (no sandbox AWB).
+- **Docs:** `KIRIMINAJA.md` (integration map + both reviews), sheet `specs/docs/uat/…2026-09-14.md` → PDF via `ops/uat-sheet-render.mjs` (9 pages), Update Log v1.7.0, `TASKS.md` 8.14 closed in full / 8.9 revision 3, `BUILD-LOG.md` two entries.
+- **Verification:** verify-migrations ✓ · tsc lib/db/admin 0 · admin lint 0 · full vitest 1.518/1.518 · PR CI green (tests, astro check, typecheck, 3 builds).
+- **Next:** owner submits revision 3 → provider approval → Task 8.9 cutover (`KIRIMINAJA_ENV=production` + key in Coolify, one real booking). Open: rate picker does not yet show force-insurance/fee; forced insurance fee not posted to the seller ledger; `!specs/**` for Coolify watch paths.
 
 ## 2026-08-15 — TokoΦ v1.0.0 Release Edition & Master README Overhaul
 

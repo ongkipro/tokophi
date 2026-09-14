@@ -3892,3 +3892,103 @@ RLS verified · storefront 8/8.
 **Also landed while this ran — deploy 538 (`49e5f45`, PR #391 ADR 0004) verified on production:** admin
 container healthy, `TokoΦ Kirim` present in 8 server-bundle files, the old `KiriminAja belum
 dikonfigurasi` string in 0.
+
+
+## 2026-09-12 — KiriminAja UAT sheet (MitraAPI V1 template) filled, rendered to PDF with vector logos (Main Session)
+
+**Scope:** owner request *"Template UAT - KiriminAja - MitraAPI V1 … analisa lengkap, pastikan logo presisi, isi dan
+sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downloads/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.pdf` (+ `.html`).
+
+- **The template** (docx, 221 paragraphs, 6 tables, **0 embedded images**): 1 Informasi Dokumen · 2 Scope (12 features)
+  · 3 Hasil (16 scenarios, Pass/Fail/N/A) · 4 Evidence Label (fields + 13-item mandatory checklist). No converter on
+  this machine (no pandoc/LibreOffice/python-docx) and none installed: the docx XML was read directly, the sheet was
+  rebuilt as print-CSS HTML, and Chromium (Playwright, already present) printed A4. **5 pages, 0,18 MB.**
+- **"Logo presisi":** TokoΦ mark drawn from `apps/landing/public/favicon.svg` geometry (Φ as strokes, not a font, so it
+  renders identically everywhere) + the wordmark rule (`Toko` + primary-coloured `Φ`); KiriminAja's mark from their own
+  `developer.kiriminaja.com/favicon.svg` (1024-unit vector). Both inline SVG — no raster, no font dependency.
+- **Every cell is evidence, and three things are stated rather than glossed:** (1) the 8 OIDs/pickups and the pricing
+  pair come from the 2026-08-24 simulation record; (2) **Tracking/Cancel could not be exercised** because the sandbox
+  never issued an AWB — Cancel is marked N/A with the ask, not Pass; (3) **KA Credit is N/A on measurement**, not
+  assumption — `GET v6.2/credit/balance` (the exact OpenAPI path) answered "Unable to find your endpoint target" in
+  three rounds with `province` passing as the control each time (2026-09-11). Section 4's label is rendered by the
+  product's own `shipping-label.ts` for OID `5758-UAT5032514` with a SAMPLE AWB that the sheet labels as such — the
+  module will not print a booking ref as a resi, and inventing a waybill would be worse than the gap. The checklist
+  marks Sorting Code, Insurance Information and courier logo as **not yet printed**; the action items ask for them.
+- **Review loop, honest:** first render had three defects (a "◐" glyph falling back to a bullet, a width rule I scoped
+  to every table's last column — pages 5 → 7 — and a footer spilling onto a stub page). Fixed, re-rendered, re-read.
+- **Not in scope:** submitting the sheet (owner), and production cutover (Task 8.9).
+
+
+## 2026-09-14 02:20 UTC — UAT artefact moved into the repo; three docs stopped saying the sheet was unfilled (Main Session)
+
+**Scope:** perfecting PR #397 (`docs/uat-mitraapi-v1`, Task 8.9 status) before merge. Markdown + one HTML file, no code.
+
+- **The sheet lived only in `~/Downloads`.** The 2026-09-12 entry above recorded a path on one laptop; the
+  repo's own rule is "hand off in the repo, not in chat". The self-contained `.html` (inline vector logos,
+  the sample label as a data URI, no external fetch, no API key — grepped for `api key|secret|token|
+  bearer|password` and phone numbers: the only number is the platform PIC's, already in
+  `packages/lib/src/autolaris.ts`) now sits at `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.html`.
+  The PDF is NOT tracked — derivable by Chromium from that file; its sha256 is recorded in `KIRIMINAJA.md`
+  so the submitted copy can be verified against the source.
+- **Three documents contradicted the 2026-09-12 entry** and were corrected: `specs/docs/tasks/OPEN.md`
+  ("the UAT sheet from 2026-08-24 is still unsent" → filled 2026-09-12, not yet submitted), `specs/docs/TASKS.md`
+  Epic entries for the aggregator and KA-UAT ("UAT sheet unsent" / "SISA: … isi sheet"), and root `TASKS.md`
+  Task 8.9 (repo path added beside the Downloads path). `KIRIMINAJA.md` gained a short section that owns
+  where the sheet is, how the PDF is re-rendered, and where the status lives (Task 8.9 — one place).
+- **Verification:** `git diff --stat`, `npx vitest run test/release-guards.test.ts packages/db/src/doc-counts.test.ts`
+  (the two guards that read `specs/`), and `node scripts/verify-doc-authority.mjs` on `specs/README.md` — outputs below.
+- ⚠️ **Correction, same pass:** the PR body first said "merging deploys nothing". FALSE for this commit — the
+  Coolify watch rule is exclusion-only (`!**/*.md`, `DEPLOY.md`), and the `.html` is not Markdown, so merging
+  #397 rebuilds all five images once (the ~81 s 503 swap window, measured 2026-08-19) for a change no image
+  reads. Checked: no Dockerfile copies `specs/` (the landing Dockerfile only *mentions* it in a comment) and
+  no runtime code imports from it. Recommendation to the owner, not applied here (Coolify setting): add
+  `!specs/**` beside `!**/*.md`, so documentation artefacts that are not Markdown stop costing a deploy.
+  Until then: merge #397 at a quiet moment or together with the next code merge.
+- **Not in scope:** submitting the sheet (owner), merging #397 (owner's call), production cutover (Task 8.9).
+
+
+### [2026-09-14 04:30 UTC] — SHIPPING · KiriminAja UAT review: the v6.2 payload, in full — coordinates as centroids, Σ-items volumetric rule, sheet revision 2 (Main Session)
+
+- **Executor:** Main Session. **Scope IDs:** `8.14` (closed in full), `8.9` (sheet revision 2), N30 (one level down).
+- **Trigger:** KiriminAja's review of UAT revision 1 — *"endpoint yang digunakan sudah versi 6.2 namun struktur payload yang digunakan masih versi 6.1."* Diffing their OpenAPI (`info.version 6.2.0`, `/api/mitra/v6.1/request_pickup` vs `v6.2`): v6.2 adds `items[]` (+ `metadata.sku`/`variant_label`), makes `zipcode`/`destination_zipcode`, `kelurahan_id`/`destination_kelurahan_id`, `qty` and BOTH coordinate pairs required, and adds `payment_method`/`pin`/`note`. The 2026-08-24 simulation predated Task 8.14, so what they reviewed was genuinely the old shape.
+- **Files:** **new** `packages/db/drizzle/0109_area_coords.sql` (stamp 1787545351751, above 0108) · **new** `packages/db/scripts/build-area-coords.mjs` · **new** `packages/db/src/area-coords.ts` + `area-coords.test.ts` · **new** `apps/admin/lib/shipping-weight.test.ts` · **new** `ops/uat-sheet-render.mjs` · **new** `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.md` + `label-5758-UAT5032514.png` · `packages/db/src/{schema.ts,seed-areas.ts,index.ts,kelurahan-csv.test.ts}` · `packages/db/package.json` · `packages/db/data/{kelurahan.csv,kiriminaja-areas.csv}` (two `lat,lng` columns appended) · `packages/db/drizzle/meta/_journal.json` · `packages/lib/src/{kiriminaja.ts,kiriminaja-v62.test.ts}` · `apps/admin/lib/{shipping-weight.ts,shipping-dimensions.test.ts,destination-kelurahan.test.ts,shipping-manifest.test.ts}` · `apps/admin/lib/actions/shipping.ts` · `ops/kiriminaja-uat-sim.ts` · `AGENTS.md` · `TASKS.md` · `specs/docs/{KIRIMINAJA.md,SCHEMA.md,CODE_MAP.md,STATUS.md,TASKS.md,tasks/OPEN.md}`.
+
+**Coordinates, honestly.** A shopper gives a street, a WhatsApp number, a kecamatan and (where the kodepos is ambiguous) a kelurahan; nothing here geocodes a street, and `0,0` is a real point in the Gulf of Guinea. The truthful coordinate is the CENTROID of the smallest area the address is known to be in. `build-area-coords.mjs` reads `cahyadsn/wilayah_boundaries` (Kemendagri, MIT — the SAME codes `kelurahan.id` carries, so the village join is an exact key match; a district's centroid is the kecamatan most of its kelurahan rows belong to) and appends `lat,lng` to both reference CSVs, which `seed-areas.ts` loads on every deploy. Coverage: **78 415 / 78 764 kelurahan (99,6%) · 6 735 / 7 030 districts (95,8%)**; the rest stay NULL and the fields are omitted. `resolveAreaCoords(db, {districtId, kaKelurahanId})` is the ONE producer (kelurahan, else district, else null; a kelurahan id is trusted only under the district it was derived against). `coordFields` in `kiriminaja.ts` is the sink guard — both or neither, never 0,0, never outside Indonesia (lat −11,5…6,5 · lng 94,5…141,5; a swapped pair fails loudly). `store_settings.sender_lat/lng` stay dead — the seller's pickup coordinate is the same centroid rule.
+
+**🔴 Measured on the way — the v6.2 validator prices `items[]`, not the package box.** The first v6.2 run of the simulation put the box's dimensions on every manifest line × qty (3× the volume) and every volumetric-dominant scenario was refused *"Ongkir tidak sesuai"* (`5758-UAT2040947/4040949/6040950/8040951`) while the four actual-dominant ones booked. Four probe bookings of the same 15×15×24 cm / 400 g parcel at its own quoted price (AnterAja REG Rp7.000): items 1×1×1 → **OK** `5758-PRB11159`; one line = box, rest 1×1×1 → **OK** `5758-PRB21159`; one line = box → **OK** `5758-PRB31200`; two lines EACH = box (2× volume) → **refused** (`5758-PRB41201`). Chargeable weight = max(actual, Σ items volume ÷ divisor). The product's box was "the largest value per axis" — quantity ignored, every line but the biggest ignored — so any multi-line order was quoted BELOW what the booking now costs: the N30 mismatch one level down. **`stackedDims`** (`shipping-weight.ts`) is the one rule for the checkout quote, the seller's re-quote and the booking: largest footprint, height that holds Σ item volumes, rounded UP (a quote above the vendor's figure is accepted — probe A). The manifest carries each line's OWN box (a line with none sends 1 cm, never the package's). The simulation's items now stack to the parcel (½ + ¼×2 of the height).
+
+**Simulation, v6.2, from the allow-listed admin container** (overlay of this branch's `packages/lib/src` + `ops/` under `/tmp/uat`, `server-only` stubbed, prod runtime files untouched): **8/8 booked, 0 failed** — non-COD AnterAja REG `5758-UAT1041324` (EPR-6346838037), `UAT2041326` (EPR-8910566130), `UAT3041327` (EPR-9712898248), `UAT4041329` (EPR-8140126988); COD SPX Economy Rp11.100 / cod Rp161.100 `UAT5041330` (EPR-4794919569), `UAT6041331` (EPR-8026043252), `UAT7041332` (EPR-4179217916), `UAT8041333` (EPR-6802561965). Pricing evidence 14/09 (SPX): 5.000 g/10×10×10 → Rp124.546; 1.000 g/40×30×20 → Rp99.637 (4 kg volumetric). Cancel: AWB still unissued after 60 s → N/A, as before. The scenario-1 request body is captured off the wire (fetch wrapped) and printed verbatim on the sheet.
+
+**Sheet revision 2** — `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.md` (Markdown, so it deploys nothing; the owner's copy at `~/Downloads/UAT - KiriminAja - MitraAPI V1.md` is identical) → `ops/uat-sheet-render.mjs` (micromark + GFM, print CSS + both vector logos from revision 1, images inlined, Chromium) → `~/Downloads/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.pdf`, **7 pages, 0,22 MB**, sha256 `dd6845035613cfcacaa44fc3eb68fe35dc96a624b2bd6e0059e677a5227451f8`. First render was 11 pages (the evidence column squeezed "Fitur" to one character per line) — fixed with shape-keyed column widths and one checkbox option per line, re-read page by page. Six action items for the vendor: the Σ-items volumetric rule, centroid coordinates for regular services, sandbox AWB, sorting codes, webhook auth header, KA Credit account status. The label screenshot is the 2026-09-12 render for run-1 OID `5758-UAT5032514` and the sheet says so.
+
+**Verification.** `verify-migrations` ✓ (journal sane, 0109 above 0108) · shared dev DB migrated to 0109 + `seed:areas` reloaded (announced here: reference tables only, truncated and reloaded exactly as every deploy does; `count(lat)` 78 415 / 6 735) · `tsc` packages/lib, packages/db, apps/admin all 0 · `npm run lint -w @tokophi/admin --quiet` 0 · **full `npx vitest run`: 175 files / 1 516 tests, 0 failed** after two guards were updated to the new shape (`destination-kelurahan.test.ts`, `shipping-manifest.test.ts` — both now pin the new invariant, not the absence) · new: `area-coords.test.ts` 4 (real Postgres, rolled back), `shipping-weight.test.ts` 5, `kiriminaja-v62.test.ts` +4 (both pairs sent / omitted / guard refuses 0,0 + lone + swapped / metadata + note).
+- **Not done:** the seller's pickup form has no coordinate override (the centroid is the rule; `sender_lat/lng` stay dead) · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9 — owner submits revision 2) · no real production booking.
+
+
+### [2026-09-14 08:20 UTC] — SHIPPING · KiriminAja's second UAT review, same day: force_insurance, the quoted insurance fee, Σ qty, the T&C COD value — sheet revision 3 (Main Session)
+
+- **Executor:** Main Session. **Scope IDs:** `8.14` (extended), `8.9` (sheet revision 3).
+- **Trigger:** the vendor's per-OID review of revision 2. Every remark is one of four rules: (1) uninsured parcels only on a service whose quote says `force_insurance: false`; (2) `insurance_amount` = the pricing call's `insurance` fee, not the goods value; (3) package `qty` = Σ `items[].qty`; (4) COD value = goods + shipping + insurance + fee, fee = base × (3% or 4%) + PPN 11%, min Rp2.500 (T&C §5, read from kiriminaja.com/syarat-ketentuan — table of 19 couriers, J&T Express the only 4%); plus "re-book the volumetric scenarios at ≥ 2 kg".
+- **Files:** `packages/lib/src/{kiriminaja.ts,kiriminaja-v62.test.ts}` · `apps/admin/lib/actions/shipping.ts` · `apps/admin/lib/shipping-manifest.test.ts` · `ops/kiriminaja-uat-sim.ts` · `ops/uat-sheet-render.mjs` · `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.md` (revision 3 replaces revision 2 in place) · `TASKS.md` · `specs/docs/{KIRIMINAJA.md,TASKS.md,tasks/OPEN.md}`.
+
+**In code, not in the simulation only.** `KaRate` now types `insurance`, `force_insurance`, `use_geolocation`. `getShippingRates` quotes with `insurance: 1` so every rate carries its fee (measured 1 kg on the route: SPX Rp300 · AnterAja Rp300 · JNE Rp2.500 · Ninja Rp2.775 · J&T Cargo Rp5.000; `cost` unchanged by the flag) and exposes `insurance` + `forceInsurance` per rate. `createShipment`: `insured = input.insurance || selectedRate.forceInsurance`; `insuranceAmount = insured ? selectedRate.insurance : 0` — it was `o.subtotal`, the goods value, i.e. wrong on every insured booking this product has ever made. `kaCreateOrder` derives `qty` from the manifest. **COD value stays `orders.total_idr`**: the checkout already builds it as goods + shipping + 3% + PPN 11% on the fee, which IS the T&C formula for an uninsured parcel; insurance on a COD parcel is the seller's choice after the buyer's total was fixed, so it is the seller's cost and is not added to what the courier collects (recorded on the sheet as a question to the vendor). ⚠️ J&T Express is 4% in the T&C while the platform fee is 3% — no mismatch today because COD is SPX-only; widening COD to J&T must move the fee with it (`KIRIMINAJA.md`).
+
+**Simulation, run 3 (15:07 WIB, from the allow-listed container), 8/8 booked, 0 failed.** Uninsured on the cheapest `force_insurance: false` service — `5758-UAT1080737` SPX Economy Rp11.100 (EPR-4013535722), `UAT2080740` NCS NRS Rp37.000 at **4 kg volumetric** (EPR-2040982418); insured on AnterAja REG (`force_insurance: true`) with `insurance_amount: 300` — `UAT3080741` (EPR-7509496809), `UAT4080742` Rp28.000 at 4 kg (EPR-9928362293); COD SPX Economy with the T&C value — `UAT5080743` cod 166.465 (fee 5.365; EPR-4027071442), `UAT6080744` 4 kg Rp80.728 cod 238.411 (EPR-4903125061), `UAT7080745` +insurance cod 166.775 (EPR-5869210641), `UAT8080746` 4 kg +insurance cod 238.721 (EPR-4069998505). The August "Ongkir tidak sesuai above 1 kg" sandbox drift is gone under v6.2 — multi-kg bookings at their own quote were accepted. Cancel still N/A (no AWB after 60 s). Overlay removed from the VPS afterwards.
+
+**Sheet revision 3** — same Markdown path, both copies (`~/Downloads/UAT - KiriminAja - MitraAPI V1.md`) identical → `~/Downloads/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.pdf`, **9 pages, 0,22 MB**, sha256 `029684b7721391a80e0d5ed5e597440c8885f1bdd8160216f46b9110d7f6843e`. Renderer: the template's `&nbsp;` spacer paragraphs dropped, lists kept whole, the signature line made a `.foot` block that cannot land alone on a page (it did, twice, before being read page by page). Action item 2 asks the vendor to confirm the four rules as implemented, in particular that `cod` may exceed the formula by rounding and that insurance on COD is the seller's cost.
+
+**Verification.** `tsc` packages/lib + apps/admin 0 · **full `npx vitest run`: 1 518 tests, 0 failed** (new: `kiriminaja-v62.test.ts` "derives the package qty from the manifest"; `shipping-manifest.test.ts` pins `insured`/`insuranceAmount`/the `insurance: 1` quote and that the goods-value form is gone).
+- **Not done:** the seller's rate picker does not yet SHOW that a service is force-insured or what the fee is (data is on the rate; UI is a separate visual task) · the insurance fee on a forced service is charged to the seller by the vendor and is not yet posted to the ledger.
+
+
+### [2026-09-14 08:50 UTC] — DOCS · development map, Update Log v1.7.0, worklog, and the one-page KiriminAja integration map (Main Session)
+
+- **Files:** `apps/super-admin/lib/data/dev-logs.ts` (v1.7.0 — the two vendor reviews and what changed) · `specs/docs/WORKLOG.md` (current-state line + 2026-09-14 entry) · `specs/docs/CODE_MAP.md` (db `./area-coords` + the populators; a "Shipping helpers" row naming `stackedDims`, `shipping-quote.ts`, `cod.ts`, the insured rate list) · `specs/docs/SYSTEM_MAP.md` §9 (the full v6.2 booking in one bullet) · `specs/docs/KIRIMINAJA.md` **§0 "The whole integration on one page"** — environment/identity, every endpoint we call with its one rule, every table/CSV and its producer, the v6.2 payload field by field with the rule that produced it, the seller's flow in 8 steps, the vendor's money rules (all measured), operations, the guard list, what is open. Deliberately a section of the existing doc, not a rival file (one owner per concern).
+- **Verification:** doc-counts + release-guards + super-admin suites 166/166 · `verify-doc-authority` ok · super-admin `tsc` 0.
+
+
+### [2026-09-14 09:05 UTC] — DOCS · PAGE_MAP gains "what it is" per route + a Quick-find table, both guarded (Main Session)
+
+- **Files:** **new** `scripts/page-descriptions.json` (131 routes across the 4 surfaces, one hand-written line each, with the Indonesian menu label quoted; + 20 "I want to change X → start here" rows) · `scripts/gen-page-map.mjs` (merges the column, renders the Quick-find section, writes `whatItIs` into `page-map.json`, and **refuses to run** when a page/API/endpoint has no line or a line names a route that no longer exists) · regenerated `specs/docs/PAGE_MAP.md` + `page-map.json`.
+- **Why:** the generated map answered "which URL is which file, what it reads, what gates it" but not "what is this page for" or "where do I start for X" — the two questions a person actually has when searching. Hand-written text in a generated file rots, so the text lives beside the generator and the generator is the guard: `test/page-map-fresh.test.ts` (which runs `--check`) now also fails when a new page lacks its line.
+- **Verification:** `node scripts/gen-page-map.mjs --check` fresh · `page-map-fresh` + `release-guards` 15/15.

@@ -22,6 +22,138 @@ Source: the captured docs at `~/Documents/kiriminaja/documents/` — 34 pages, 1
 `Authorization: Bearer {api_key}`, `Accept: application/json`, `Content-Type: application/json`.
 **The API is otherwise identical between the two** — cutover is an endpoint swap, not a port (#145).
 
+## 0. The whole integration on one page (peta integrasi — read this first, 2026-09-14)
+
+Everything KiriminAja touches in TokoΦ, by layer. The sections below this one are the vendor
+contract and the history; this is the map. When a row here disagrees with the code, the code wins
+and this row is a bug.
+
+### 0.1 Environment and identity
+
+| item | value | where |
+|---|---|---|
+| Base URL | sandbox `https://tdev.kiriminaja.com` · production `https://client.kiriminaja.com` — **same API** (owner ruling 2026-08-03) | `packages/lib/src/kiriminaja.ts` (`KIRIMINAJA_ENV`, default **sandbox**) |
+| Credential | `KIRIMINAJA_API_KEY` (`Authorization: Bearer`) — **never in a body, a URL or a document** | Coolify env; the super-admin Pengaturan card shows the active env (N35) |
+| Account prefix | `KIRIMINAJA_ORDER_PREFIX` = `5758` (sandbox) — `order_id` ≤ 20 chars INCLUDING the prefix (Task 8.20) | `buildKaOrderRef` / `kaOrderId` throw rather than truncate |
+| IP allow-list | the platform's egress IP `45.77.33.112` must be allow-listed per environment at the vendor portal; a lapse reads as `401` naming the IP, NOT as a bad key | §"The sandbox enforces an IP ALLOW-LIST"; re-request it for production at cutover (Task 8.9) |
+| Production state | **`KIRIMINAJA_ENV=sandbox`** until the UAT sheet is accepted and the production key issued | Task 8.9 (owner) |
+
+### 0.2 Endpoints we call — and the one rule per endpoint
+
+| step | endpoint | caller | the rule that keeps it honest |
+|---|---|---|---|
+| area search | `POST /api/mitra/v2/get_address_by_name` (live fallback) · local `kiriminaja_areas` first | `apps/admin/lib/data/areas.ts` | ranked so a CITY beats a same-named village; `%`/`_` escaped |
+| kelurahan of a district | `POST /api/mitra/kelurahan` → `results[].id` = the vendor's subdistrict id | `packages/db/scripts/build-ka-kelurahan-ids.mjs` → `kelurahan.ka_kelurahan_id` (`0107`) | the ONLY id ever sent as `kelurahan_id`; `kelurahan.id` is a Kemendagri code and `assertKaKelurahanId` refuses it |
+| courier roster | `shipping_price` on one reference route (there is no list endpoint) | `kaServices()`, super-admin `syncCouriersFromKiriminaja` | roster = `platform_couriers`; COD allowance per service (`codAllowed`, SPX only) |
+| quote | `POST /api/mitra/v6.1/shipping_price` (v6.1 IS the current one; there is no v6.2 rate endpoint) | `apps/admin/lib/shipping-quote.ts` — **the one price producer** — for `/api/public/ongkir` AND the re-quote inside `/api/public/order`; `getShippingRates` for the seller (quoted with `insurance: 1`) | origin = the seller's pickup district, never the client's; weight + `stackedDims` box from the seller's catalogue; cached 10 min keyed on all of it |
+| book + pickup | `POST /api/mitra/v6.2/request_pickup` | `kaCreateOrder` ← `createShipment` (single order, seller picks a service) and `bulkGenerateResi` (the service the shopper paid for) | the FULL v6.2 payload (§0.4); schedule = tomorrow 10:00 WIB; `drop: false` pinned; `awb` written only from `details[0].awb` (a booking ref is never a resi) |
+| tracking | `POST /api/mitra/tracking` (`order_id` ≤ 20) | `api/cron/tracking` every 15 min (batch 100) + "Lacak" | fills `orders.awb`, maps courier status → order status forward-only (`ka-tracking.ts`, `ka-status-codes.test.ts`) |
+| cancel | `POST /api/mitra/v3/cancel_shipment` — **by AWB, never the order id** | `cancelShipment` | refused before the call when no AWB exists; `status:true` = queued for cancellation (≤ 48 h), not cancelled |
+| webhook | `POST https://app.tokophi.com/api/public/kiriminaja/webhook` (registered via `set_callback`) | `api/public/kiriminaja/webhook/route.ts` | hint-only: fails closed on a missing/wrong Bearer, logs the SHAPE of a rejection, never advances state without a tracking pull |
+| province / health | `POST /api/mitra/province` (`{}` body, answers in `datas`) | super-admin "Test koneksi" | 37 provinces = healthy; `Unauthorized` = key, `401 + IP` = allow-list |
+| not called | `v6.2/credit/balance`, `pin/validate` (account is Term-of-Payment — "Unable to find your endpoint target"), `v6.1/awb/print` (we render the label ourselves), `v4/instant/*` (removed) | — | §"Endpoints the spec documents that we do not use" |
+
+### 0.3 Data — what we store, and where it comes from
+
+| table / file | rows | purpose | producer |
+|---|---|---|---|
+| `kiriminaja_areas` (+ `lat`,`lng` `0109`) | 7 030 | the vendor's districts: ongkir origin/destination ids, province for the COD allow-list, district centroid (95,8%) | `packages/db/data/kiriminaja-areas.csv` ← vendor export; centroids ← `scripts/build-area-coords.mjs` (Kemendagri boundaries) |
+| `kelurahan` (`id` Kemendagri · `ka_kelurahan_id` vendor · `postcode` · `lat`,`lng`) | 78 764 | postcode auto-fill at checkout; the vendor's subdistrict id (94,0%); village centroid (99,6%) | `data/kelurahan.csv` ← `build-kelurahan.mjs` (wilayah + kodepos) + `build-ka-kelurahan-ids.mjs` (vendor walk, claim-once) + `build-area-coords.mjs` — all reloaded by `seed-areas.ts` on every deploy (truncate + insert; reference data, not store data) |
+| `store_settings.sender_*` | per store | the seller's pickup: name, phone, address, `sender_kecamatan_id`, `sender_kelurahan_id` (vendor id), `sender_postcode`; `sender_lat/lng` are DEAD (the centroid rule replaces them) | Pengaturan → Alamat (`sender-address-card.tsx`) |
+| `store_shipping_methods` + `store_settings.couriers` (fallback) · `store_settings.cod_enabled` | per store | which services this seller offers; whether the seller opts into COD | Pengaturan → Pengiriman / Jasa Kirim |
+| `platform_couriers` (`services[].codAllowed`) · `platform_cod` (enabled, cap, provinces) | platform | the courier pool and the COD policy — `apps/admin/lib/cod.ts` is the ONE place that answers "may this be paid on delivery?" | Super Admin → Pengaturan |
+| `orders.ship_district_id` · `ship_kelurahan_id` (`0108`) · `ship_postcode` · `ship_address` · `courier` · `service_type` · `shipping_idr` · `awb` · `ka_order_id` · `label_printed_at` | per order | the destination the quote was issued for, the service the shopper paid for, and the booking's identity | `/api/public/order` (server re-derives; never the request's ids), `createShipment`, `cron/tracking`, `markLabelsPrinted` |
+| `shipment_bookings` · `ledger_entries` (`shipping-order-debit`, `shipping-balance-debit`) | per booking | the reservation and the reconciliation of quote vs actual courier cost (seller pays a costlier choice; a cheaper one is platform margin) | `createShipment` |
+
+### 0.4 The booking payload (v6.2) — every field, and which rule produced it
+
+| field | source | rule |
+|---|---|---|
+| `name`, `phone`, `address` (sender) | `store_settings.sender_*`; address composed with kelurahan + postcode | phone normalised to `62…` |
+| `kecamatan_id`, `kelurahan_id` | `sender_kecamatan_id`, `sender_kelurahan_id` | kelurahan omitted when NULL; vendor id only |
+| `zipcode` | `sender_postcode`, else the district's sole postcode | omitted, never `""` |
+| `latitude`, `longitude` | `resolveAreaCoords` (kelurahan centroid → district centroid) | both or neither; `coordFields` refuses 0,0 / outside Indonesia |
+| `schedule` | tomorrow 10:00 `Asia/Jakarta` | couriers enforce a cut-off; `now + 1h` is refused |
+| `packages[].order_id` | `buildKaOrderRef(order, attempt)` | ≤ 20 chars with prefix; unique per attempt |
+| `destination_*` (name, phone, address, kecamatan, kelurahan, zipcode, latitude, longitude) | the order's snapshot; kelurahan/centroid only when the district is the one the id was derived against (a guessed district ⇒ omitted) | never re-couriered, never a wrong id |
+| `weight`, `width`, `length`, `height` | Σ variant weight × qty (≥ 1 kg); **`stackedDims`** (largest footprint, height holds Σ item volumes, rounded up) | the SAME box the quote priced — the validator prices the manifest |
+| `qty` | Σ `items[].qty` | derived, never 1 by default |
+| `item_value`, `item_name` | goods subtotal; `Pesanan <number>` | — |
+| `service`, `service_type`, `shipping_cost` | the service booked; `shipping_cost` = the FRESH quote's `cost` (`serverCost`), refused if it moved from what the seller saw | never the browser's number |
+| `cod` | `orders.total_idr` for a COD order (goods + shipping + 3% + PPN 11% = T&C §5), else 0 | derived from `payments.method`, refuses a caller that disagrees; insurance on COD is the seller's cost |
+| `insurance_amount` | the quote's `insurance` fee when the seller ticked insurance OR the service is `force_insurance` | never the goods value |
+| `package_type_id` | 7 | 9's semantics undocumented — conservative |
+| `drop` | `false` | pickup flow, pinned |
+| `note` | optional free text | omitted when empty |
+| `items[]` | one per `order_line_items` row: name, price PER UNIT, weight (≥ 1 g), the line's OWN box (≥ 1 cm; never the package's), qty, `metadata.sku` / `variant_label` | a manifest that cannot contradict the parcel |
+
+### 0.5 The seller's flow, end to end
+
+1. **Pengaturan → Alamat**: pickup district + kelurahan (vendor id) + postcode. **Pengiriman / Jasa Kirim**: services offered, COD opt-in.
+2. **Checkout** (`checkout.astro` → `/api/public/ongkir`): kecamatan search, kelurahan when the kodepos is ambiguous, quote from the seller's pickup district over the seller's catalogue weight + box; COD only when all five conditions hold (`cod.ts`), with a one-line reason when not.
+3. **Order** (`/api/public/order`): re-quotes with the same function, stores OUR price for the service picked, re-derives district/kelurahan ids server-side.
+4. **Proses → Atur pengiriman**: `bulkGenerateResi` books the paid service; the single-order "Cek Ongkir" lets the seller pick any service with the cost difference reconciled to the seller's ledger.
+5. **Resi terbit**: `awb` arrives when a courier accepts the pickup — `cron-tracking` (15 min sidecar) fills it; "Ambil resi"/"Lacak" are shortcuts, not the mechanism.
+6. **Cetak label**: `/api/admin/labels` renders our own 100×150 mm label (`shipping-label.ts`, Code 128) only once a real AWB exists; `markLabelsPrinted` reports what it wrote.
+7. **Tracking → status**: courier status mapped forward-only onto `orders.status` through `applyOrderStatusChange`; webhook is a hint, tracking pull is the truth.
+8. **Cancel**: by AWB only, before collection; non-COD voids are queued up to 48 h.
+
+Full narrative with the money side: `FLOWS.md` §5 (shipping) and §1 (the COD gate).
+
+### 0.6 Money rules the vendor enforces (all measured)
+
+- **Volumetric weight** applies whenever it exceeds actual weight; the divisor is the courier's (`÷ 6` regular, `÷ 4` trucking) — we send dimensions and never hard-code a divisor. **The v6.2 validator prices Σ `items[].(w×l×h×qty)`**, so the quote's box is built from the same sum (`stackedDims`).
+- **COD**: fee = (goods + shipping + insurance) × 3% (J&T Express 4%) + PPN 11%, min Rp2.500; COD value = base + fee; platform bounds Rp10.000–Rp3.000.000 (T&C §5). Our checkout charges exactly that fee to the buyer on SPX (`@tokophi/lib/payment-fees`).
+- **Insurance**: the fee is the quote's `insurance` field (SPX Rp300, JNE Rp2.500, J&T Cargo Rp5.000 at 1 kg); some services force it (`force_insurance: true` — AnterAja REG, Ninja, J&T Cargo on the UAT route).
+- **Return cost** on a refused COD parcel: SPX / IDX / SAP / Ninja / Lion free (period-bound), others 50–100% of the outbound fare — the reason COD is SPX-only here (T&C §6).
+- **Non-COD shipping cost is owed by us** to the vendor (VA / Term-of-Payment); an unpaid booking never gets a waybill (`shipment-payment.ts` separates the two flows).
+
+### 0.7 Operations
+
+| concern | how |
+|---|---|
+| resi not appearing | check the `cron-tracking` sidecar container first (`docker logs cron-tracking`); `awbFilled` sat at 0 for a week when it was down |
+| every rate 401 with the VPS IP in the text | the allow-list lapsed at the vendor portal — owner re-adds `45.77.33.112`; the key is fine |
+| a UAT / contract experiment | `ops/kiriminaja-uat-sim.ts` — SANDBOX ONLY (refuses production), run from the allow-listed admin container (overlay under `/tmp/uat`, `server-only` stubbed; BUILD-LOG 2026-09-14 has the recipe); prints the scenario-1 body off the wire |
+| the UAT sheet | Markdown at `specs/docs/uat/` → `node ops/uat-sheet-render.mjs <sheet.md> <out.pdf>` (vector logos, images inlined, Chromium) |
+| cutover (Task 8.9) | owner submits the sheet → production key → `KIRIMINAJA_ENV=production` + key in Coolify → redeploy → the env badge reads `production` → one real booking a courier collects → `DEPLOY.md` records the date. Re-request the production allow-list first |
+| sensitive: never | the key in a body/URL/doc; a booking ref stored as `awb`; a cancel by order id; a coordinate of `0,0`; a client-posted origin, weight or price |
+
+### 0.8 Guards (what fails if a rule above is broken)
+
+`packages/lib/src/kiriminaja.test.ts` (client) · `kiriminaja-v62.test.ts` (the v6.2 payload: path, `drop`, no `add_cost`, zipcodes, items + metadata + note, qty = Σ, both coordinate pairs / omitted / 0,0 refused, kelurahan ids, empty-string AWB, HTTP-400 refusals) · `ka-kelurahan-id.test.ts` (the id-space sink) · `packages/db/src/area-coords.test.ts` (centroid resolver, real Postgres) · `kelurahan-csv.test.ts` (one vendor id per village) · `apps/admin/lib/shipping-weight.test.ts` (`stackedDims`) · `shipping-dimensions.test.ts` (dimensions threaded end to end, one box rule in 4 places) · `shipping-manifest.test.ts` (manifest, postcodes, quoted insurance, coordinates only from the resolver) · `destination-kelurahan.test.ts` (guessed district ⇒ no village id) · `cod-policy.test.ts` (the five conditions) · `ka-status-codes.test.ts` · `ka-webhook.test.ts` + `webhook/route.auth.test.ts` · `shipping-label.test.ts` · `bulk-shipping.test.ts` · `provider-label.test.ts` (the brand never reaches a merchant string) · `tracking-ids.test.ts`.
+
+### 0.9 What is still open
+
+- Production has never booked: `KIRIMINAJA_ENV=sandbox` (Task 8.9, owner-gated on the UAT sheet).
+- The seller's rate picker does not yet show "asuransi wajib" / the fee per service (the data is on `Rate`; visual task).
+- The insurance fee on a forced service is charged to the seller by the vendor and not yet posted to the seller ledger.
+- Sorting code / courier logo on the label await the vendor's inputs (UAT action items 4); the webhook's auth header contract is undeclared (action item 5).
+- Whether Lion / Pos need a precise coordinate rather than a centroid (action item 2).
+
+## The UAT sheet (what unlocks production) — `specs/docs/uat/`
+
+KiriminAja grants a production key against a filled UAT sheet on THEIR template ("Template UAT -
+KiriminAja - MitraAPI V1"). The filled sheet is tracked here so it does not live on one laptop:
+
+| File | What it is |
+|---|---|
+| `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-14.md` | **revision 2 — the current sheet**, Markdown (tracked; Markdown does not trigger a deploy). Filled after KiriminAja's review of revision 1 ("endpoint v6.2, payload still v6.1"): all 8 scenarios re-booked 2026-09-14 with the full v6.2 payload, the request body of scenario 1 printed verbatim as evidence |
+| `specs/docs/uat/label-5758-UAT5032514.png` | the sample label the sheet embeds (rendered 2026-09-12 by `shipping-label.ts` for the run-1 COD OID; the module is unchanged) |
+| `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.html` | revision 1, as submitted and reviewed (self-contained HTML, no API key). Kept as the record of what the vendor saw |
+
+**Render:** `node ops/uat-sheet-render.mjs specs/docs/uat/<sheet>.md ~/Downloads/<sheet>.pdf` —
+micromark + GFM tables (already a transitive dependency) into the same print CSS and vector header as
+revision 1, images inlined, Chromium via Playwright. Revision 2 renders to **8 pages, 0,22 MB**
+(portal cap 10 MB). The PDF is deliberately not tracked (derivable; the repo has no binary documents);
+the copy rendered 2026-09-14 has sha256 recorded in `BUILD-LOG.md` under that date.
+**Status and next step: root `TASKS.md` Task 8.9** — the owner submits the sheet, the provider
+approves, then `KIRIMINAJA_ENV=production` + the production key in Coolify.
+
+⚠️ Revision 1 was tracked as `.html`, and a commit touching a non-Markdown file under `specs/` DOES
+deploy (the Coolify watch rule is exclusion-only, `!**/*.md` — `DEPLOY.md` → Watch Paths). That is why
+revision 2 is Markdown. Adding `!specs/**` to that rule is the owner-side fix.
+
 ## ⚠️ The sandbox enforces an IP ALLOW-LIST — and the platform's egress IP is the VPS IP
 
 Learned 2026-09-07, after the VPS came back from a 70-hour billing suspension (`STATUS.md`,
@@ -362,26 +494,61 @@ extra keys and the added fields change no price. ⚠️ Only the array ORDER var
 compare `results[0]` across two calls. `request_pickup` was NOT called, so nothing yet proves the
 booking validator accepts these; that needs a real sandbox pickup and the owner's say-so.
 
-### What the spec originally said we were NOT sending
+### ✅ Every field the v6.2 spec marks required is sent when we hold it — closed 2026-09-14
 
-`v6.2/request_pickup` marks these **required**, and `kaCreateOrder` omits them or sends them
-conditionally. Sandbox bookings succeed regardless (measured 2026-08-20, `5758-…`), so the server is
-lenient TODAY — that is a grace period, not a contract.
+KiriminAja's review of UAT revision 1 (2026-09-14) said it in one line: *"endpoint yang digunakan
+sudah versi 6.2 namun struktur payload yang digunakan masih versi 6.1."* Diffing the two schemas in
+their OpenAPI, "v6.2 structure" means exactly: `items[]` (with `metadata.sku`/`variant_label`),
+`zipcode` + `destination_zipcode` required, `kelurahan_id` + `destination_kelurahan_id` required,
+`qty` required, and **both coordinate pairs required**. The 2026-08-24 simulation predated Task 8.14,
+so what the vendor reviewed was genuinely the old shape.
 
-| field | ours |
+| field | ours (since) |
 |---|---|
-| `zipcode` (sender) | absent |
-| `latitude`, `longitude` (sender) | absent |
-| `kelurahan_id` (sender) | conditional — a REAL KA id since 0107, still omitted when NULL |
-| `destination_zipcode` | conditional |
-| `destination_kelurahan_id` | conditional — no producer yet (`orders` has no kelurahan column) |
-| `destination_latitude`, `destination_longitude` | absent |
-| `items` (per package) | absent |
+| `zipcode` / `destination_zipcode` | sent (8.14, 2026-09-09) — stored postcode, else the district's sole postcode; omitted when neither exists |
+| `kelurahan_id` / `destination_kelurahan_id` | sent (8.17, 0107/0108) — KiriminAja's own id, omitted when NULL |
+| `items[]` + `metadata` | sent (8.14) — one line per `order_line_items` row, price PER UNIT, `sku`/`variant_label` from the variant |
+| `latitude`/`longitude` + `destination_*` | **sent (0109, 2026-09-14)** — the CENTROID of the kelurahan, else the district (`resolveAreaCoords`), from the Kemendagri boundaries dataset. NEVER `0,0`; `coordFields` in `kiriminaja.ts` throws on 0,0, a lone coordinate, or a point outside Indonesia |
+| `note` | sent when non-empty |
 
-⚠️ **The coordinates are not merely unsent — we do not HAVE them.** `op === "instant"` was removed and
-its own note records that it *"was the only consumer of shopper/store coordinates"*. Supplying them is
-a data-model change (a geocode on the seller's pickup address and on the shopper's), not a client edit.
-Tracked as a task; do not "fix" it by sending zeroes, which is a lie the courier would route on.
+**Why a centroid is the honest coordinate.** A shopper gives a street, a WhatsApp number, a kecamatan
+and (where the kodepos is ambiguous) a kelurahan; nothing here geocodes a street. For a REGULAR
+courier the vendor's own pricing response says `use_geolocation: false`, so the coordinate is
+informational and the centroid of the smallest known area is the truthful value. Whether Lion/Pos
+need a precise point is action item 2 on the UAT sheet. Coverage: 78 415 / 78 764 kelurahan (99,6%)
+and 6 735 / 7 030 districts (95,8%) carry a centroid; the rest omit the fields, as before.
+
+### The vendor's second review (2026-09-14, on revision 2) — four rules, all now in code
+
+KiriminAja answered revision 2 per OID. Every remark reduces to one of four rules, and each is now
+enforced where the payload is built, not left to a caller:
+
+| rule (their words) | ours |
+|---|---|
+| *"paket tanpa asuransi … courier service dengan param `force_insurance: false`"* | a service whose quote says `force_insurance: true` is insured whether or not the seller ticked the box: `insured = input.insurance \|\| selectedRate.forceInsurance` in `createShipment`. The rate list now carries `forceInsurance` per service |
+| *"value dari param `insurance_amount` didapatkan dari param `insurance` saat get pricing"* | `insurance_amount` = the quote's own `insurance` FEE (Rp300 on SPX, Rp2.500 on JNE, Rp5.000 on J&T Cargo at 1 kg — measured), **never the goods value**, which is what it was. The seller's rate list is quoted with `insurance: 1` so the fee is known for every service; `cost` is unaffected |
+| *"param `qty` diluar array of items merupakan total dari param `qty` dalam array of item"* | derived in `kaCreateOrder` from the manifest (`Σ items[].qty`); `pkg.qty` only stands in for a caller with no lines |
+| *"cod amount = cod fee + item value + shipping cost + insurance; cod fee = (…) × (3% atau 4%) + 11%"* (T&C §5) | `cod` = `orders.total_idr`, which the checkout already builds as goods + shipping + 3% + PPN 11% on the fee — the same formula. Insurance on a COD parcel is the seller's choice AFTER the buyer's total was fixed, so it is the seller's cost and is NOT added to what the courier collects. ⚠️ J&T Express is 4% in the T&C; COD is SPX-only here (3%), so no mismatch today — widen COD to J&T and the platform fee must follow |
+
+*"request pickup ulang dengan kalkulasi volume minimal 2kg"*: the volumetric scenarios were re-booked
+at 40×30×20 cm / 400 g = 4.000 g volumetric, and the sandbox accepted the multi-kg bookings at their
+own quoted price (`5758-UAT2080740` NCS Rp37.000, `UAT4080742` AnterAja Rp28.000, `UAT6080744` /
+`UAT8080746` SPX Rp80.728) — the August "Ongkir tidak sesuai above 1 kg" drift is gone under v6.2.
+
+🔴 **AND THE BOOKING VALIDATOR PRICES `items[]`, NOT THE PACKAGE BOX — measured 2026-09-14.** Four
+probe bookings of one 15×15×24 cm / 400 g parcel at its own quoted price (AnterAja REG Rp7.000):
+items of 1×1×1 → accepted (`5758-PRB11159`); one line = the box, the rest 1×1×1 → accepted
+(`5758-PRB21159`); one line = the box → accepted (`5758-PRB31200`); **two lines EACH = the box, i.e.
+2× the volume → "Ongkir tidak sesuai"** (`5758-PRB41201`, not created). The first v6.2 run of the
+simulation, whose manifest carried the box's dimensions on every line × qty (3× the volume), was
+refused on all four volumetric scenarios the same way. So the chargeable weight is
+`max(actual, Σ items[].(w×l×h×qty) ÷ divisor)`, and a quote built on "the largest item per axis" —
+which ignored quantity and every line but the biggest — under-prices any multi-line order: the N30
+mismatch one level down. `stackedDims` (`apps/admin/lib/shipping-weight.ts`) is now the ONE rule for
+the box in the checkout quote, the seller's re-quote and the booking: the largest footprint, and a
+height that holds Σ item volumes, rounded UP (a quote above the vendor's own figure is accepted —
+probe A). The manifest carries each line's OWN dimensions (a line with none sends 1 cm, never the
+package's). Pinned by `shipping-weight.test.ts` and `shipping-dimensions.test.ts`.
 
 ### Endpoints the spec documents that we do not use
 

@@ -87,9 +87,13 @@ describe("the order route derives the id and never reads one", () => {
 
 describe("the booking omits the id when the district was guessed", () => {
   it("pairs the stored id only with the district it was derived against", () => {
+    // Since 0109 the guarded id is bound ONCE (`destKelurahanForBooking`) and feeds both the
+    // `destination_kelurahan_id` field and the coordinate lookup, so the two cannot disagree.
     expect(SHIPPING).toMatch(
-      /destKelurahanId\s*:\s*destDistrictId\s*===\s*o\s*\.\s*shipDistrictId\s*\?\s*o\s*\.\s*shipKelurahanId\s*:\s*null/,
+      /const\s+destKelurahanForBooking\s*=\s*destDistrictId\s*===\s*o\s*\.\s*shipDistrictId\s*\?\s*o\s*\.\s*shipKelurahanId\s*:\s*null/,
     );
+    expect(SHIPPING).toMatch(/destKelurahanId\s*:\s*destKelurahanForBooking/);
+    expect(SHIPPING).toMatch(/kaKelurahanId\s*:\s*destKelurahanForBooking/);
     // 77 orders carry no `ship_district_id`, so the guess branch is live. Handing it the stored id
     // would send a village that is not in the kecamatan on the same request.
     const unguarded = /destKelurahanId\s*:\s*o\s*\.\s*shipKelurahanId\s*,/;

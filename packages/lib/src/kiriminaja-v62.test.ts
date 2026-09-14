@@ -98,21 +98,64 @@ describe("kaCreateOrder speaks v6.2", () => {
     expect(sent.packages[0].item_name).toBe("Kain");
   });
 
+  // KiriminAja's UAT review (2026-09-14): the package `qty` is the SUM of `items[].qty`, never 1.
+  it("derives the package qty from the manifest", async () => {
+    const { sent } = await book(BOOKED);
+    expect(sent.packages[0].qty).toBe(3); // 2 + 1
+    const noLines = await book(BOOKED, { pkg: { items: [], qty: 4 } });
+    expect(noLines.sent.packages[0].qty).toBe(4);
+  });
+
   it("omits items rather than sending an empty array (the schema says minItems: 1)", async () => {
     const { sent } = await book(BOOKED, { pkg: { items: [] } });
     expect(sent.packages[0]).not.toHaveProperty("items");
   });
 
-  // 🔴 THE DELIBERATE ABSENCE. The spec marks all four REQUIRED; nothing in this product geocodes
-  // anything (`sender_lat`/`sender_lng` are dead columns, `orders` has no coordinates, and the
-  // area tables carry no centroid), so there is no honest value to send. Zeroes are not "no data"
-  // to a courier — they are a point in the Gulf of Guinea that a dispatcher would route on. If a
-  // geocode is ever added, this test is the one to change, deliberately.
-  it("sends NO coordinates at all — not even zeroes — because we do not have any", async () => {
+  // ── Coordinates (0109, KiriminAja's UAT review 2026-09-14) ──────────────────────────────────
+  // The spec marks all four REQUIRED. What we hold is a CENTROID (kelurahan, else district) from
+  // `resolveAreaCoords`; the client sends it when given and omits it when not — never 0,0, which
+  // is a real point in the Gulf of Guinea, not "unknown".
+  it("sends both coordinate pairs when it has them", async () => {
+    const { sent } = await book(BOOKED, {
+      sender: { latitude: -7.2729, longitude: 112.7495 },
+      pkg: { destLatitude: -6.2493, destLongitude: 106.8248 },
+    });
+    expect(sent.latitude).toBe(-7.2729);
+    expect(sent.longitude).toBe(112.7495);
+    expect(sent.packages[0].destination_latitude).toBe(-6.2493);
+    expect(sent.packages[0].destination_longitude).toBe(106.8248);
+  });
+
+  it("omits coordinates it does not have — never zeroes", async () => {
     const { sent } = await book(BOOKED);
     for (const k of ["latitude", "longitude"]) expect(sent, `sender ${k} must be absent, not 0`).not.toHaveProperty(k);
     for (const k of ["destination_latitude", "destination_longitude"]) expect(sent.packages[0], `${k} must be absent, not 0`).not.toHaveProperty(k);
     expect(JSON.stringify(sent)).not.toMatch(/latitude|longitude/);
+  });
+
+  it("refuses 0,0, a lone coordinate, and a point outside Indonesia", async () => {
+    const { coordFields } = await import("./kiriminaja");
+    expect(() => coordFields("latitude", 0, 0)).toThrow(/0,0/);
+    expect(() => coordFields("destination_latitude", -7.2, null)).toThrow(/both or neither/i);
+    // lat/lng swapped — the classic unit bug — lands in the Indian Ocean far south of Java.
+    expect(() => coordFields("latitude", 112.7495, -7.2729)).toThrow(/outside Indonesia/);
+    expect(coordFields("latitude", null, undefined)).toEqual({});
+    expect(coordFields("destination_latitude", -6.2493, 106.8248)).toEqual({ destination_latitude: -6.2493, destination_longitude: 106.8248 });
+  });
+
+  it("sends items[].metadata with only the keys that carry a value, and the package note", async () => {
+    const { sent } = await book(BOOKED, {
+      pkg: {
+        note: "  Titip di satpam  ",
+        items: [
+          { ...items[0], metadata: { sku: "BTK-001", variant_label: "Merah / L" } },
+          { ...items[1], metadata: { sku: null, variant_label: null } },
+        ],
+      },
+    });
+    expect(sent.packages[0].note).toBe("Titip di satpam");
+    expect(sent.packages[0].items[0].metadata).toEqual({ sku: "BTK-001", variant_label: "Merah / L" });
+    expect(sent.packages[0].items[1]).not.toHaveProperty("metadata");
   });
 
   // Two ids exist for one village: `kelurahan.id` is a KEMENDAGRI code (text, dotted) and
