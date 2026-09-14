@@ -22,6 +22,26 @@ Source: the captured docs at `~/Documents/kiriminaja/documents/` — 34 pages, 1
 `Authorization: Bearer {api_key}`, `Accept: application/json`, `Content-Type: application/json`.
 **The API is otherwise identical between the two** — cutover is an endpoint swap, not a port (#145).
 
+## The UAT sheet (what unlocks production) — `specs/docs/uat/`
+
+KiriminAja grants a production key against a filled UAT sheet on THEIR template ("Template UAT -
+KiriminAja - MitraAPI V1"). The filled sheet is tracked here so it does not live on one laptop:
+
+| File | What it is |
+|---|---|
+| `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.html` | the sheet as submitted, self-contained (inline vector logos, the sample label as a data URI, no external fetch, **no API key**) |
+
+The PDF the owner uploads is rendered from that file by Chromium (Playwright is already a dev
+dependency; `page.pdf({ format: "A4", printBackground: true })`) — 5 pages, 0,18 MB. The copy
+rendered 2026-09-12 has sha256 `240a8dc62cbe1798e53d78a2977e635ca49d535b2f01d29c7156f9e71be70535`;
+the PDF is deliberately not tracked because it is derivable and would be the repo's first binary
+document. Every "Actual / Evidence" cell is a measured fact — sources: the 8 sandbox OIDs from the
+2026-08-24 simulation (`ops/kiriminaja-uat-sim.ts`), the volumetric pricing pair, province 200
+(re-measured 2026-09-12), the webhook's 401 fail-closed on production, and `credit/balance` absent on
+this key (KA Credit marked N/A on measurement). Tracking/Cancel are N/A because the sandbox never
+issued an AWB. **Status and next step: root `TASKS.md` Task 8.9** — the owner submits the sheet, the
+provider approves, then `KIRIMINAJA_ENV=production` + the production key in Coolify.
+
 ## ⚠️ The sandbox enforces an IP ALLOW-LIST — and the platform's egress IP is the VPS IP
 
 Learned 2026-09-07, after the VPS came back from a 70-hour billing suspension (`STATUS.md`,

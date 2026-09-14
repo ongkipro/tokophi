@@ -3917,3 +3917,24 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Review loop, honest:** first render had three defects (a "◐" glyph falling back to a bullet, a width rule I scoped
   to every table's last column — pages 5 → 7 — and a footer spilling onto a stub page). Fixed, re-rendered, re-read.
 - **Not in scope:** submitting the sheet (owner), and production cutover (Task 8.9).
+
+
+## 2026-09-14 02:20 UTC — UAT artefact moved into the repo; three docs stopped saying the sheet was unfilled (Main Session)
+
+**Scope:** perfecting PR #397 (`docs/uat-mitraapi-v1`, Task 8.9 status) before merge. Markdown + one HTML file, no code.
+
+- **The sheet lived only in `~/Downloads`.** The 2026-09-12 entry above recorded a path on one laptop; the
+  repo's own rule is "hand off in the repo, not in chat". The self-contained `.html` (inline vector logos,
+  the sample label as a data URI, no external fetch, no API key — grepped for `api key|secret|token|
+  bearer|password` and phone numbers: the only number is the platform PIC's, already in
+  `packages/lib/src/autolaris.ts`) now sits at `specs/docs/uat/UAT-TokoPhi-KiriminAja-MitraAPI-V1-2026-09-12.html`.
+  The PDF is NOT tracked — derivable by Chromium from that file; its sha256 is recorded in `KIRIMINAJA.md`
+  so the submitted copy can be verified against the source.
+- **Three documents contradicted the 2026-09-12 entry** and were corrected: `specs/docs/tasks/OPEN.md`
+  ("the UAT sheet from 2026-08-24 is still unsent" → filled 2026-09-12, not yet submitted), `specs/docs/TASKS.md`
+  Epic entries for the aggregator and KA-UAT ("UAT sheet unsent" / "SISA: … isi sheet"), and root `TASKS.md`
+  Task 8.9 (repo path added beside the Downloads path). `KIRIMINAJA.md` gained a short section that owns
+  where the sheet is, how the PDF is re-rendered, and where the status lives (Task 8.9 — one place).
+- **Verification:** `git diff --stat`, `npx vitest run test/release-guards.test.ts packages/db/src/doc-counts.test.ts`
+  (the two guards that read `specs/`), and `node scripts/verify-doc-authority.mjs` on `specs/README.md` — outputs below.
+- **Not in scope:** submitting the sheet (owner), merging #397 (owner's call), production cutover (Task 8.9).
