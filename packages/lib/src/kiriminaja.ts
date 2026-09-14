@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheGet, cacheSet } from "./cache";
 import { isConfigured } from "./integration-status";
+import { parseKaTracking, type KaTracking } from "./kiriminaja-tracking";
 
 // KiriminAja Mitra API client (platform-managed courier aggregator). Endpoints + version
 // prefixes verified against the sandbox Postman collection — versions vary PER endpoint.
@@ -504,9 +505,13 @@ export async function kaCancelShipment(awb: string, reason: string): Promise<{ o
 }
 
 // express tracking by order id / AWB
-export async function kaTrack(orderId: string): Promise<{ ok: boolean; data?: unknown; error?: string; httpStatus: number }> {
-  const { body: r, httpStatus } = await ka<{ status: boolean; text?: string; data?: unknown }>("/api/mitra/tracking", { order_id: orderId });
-  return { ok: !!r.status, data: r.data, error: r.status ? undefined : r.text, httpStatus };
+// Tracking. ⚠️ The answer is `{ status, text, status_code, details, histories }` — there is NO `data`
+// key, and reading one is how every successful pull came back empty until 2026-09-14 (see
+// `kiriminaja-tracking.ts`). The raw body is parsed HERE, once, into `tracking`; callers never touch
+// the envelope, so the shape cannot be guessed differently in three places again.
+export async function kaTrack(orderId: string): Promise<{ ok: boolean; tracking?: KaTracking; error?: string; httpStatus: number }> {
+  const { body: r, httpStatus } = await ka<{ status: boolean; text?: string }>("/api/mitra/tracking", { order_id: orderId });
+  return { ok: !!r.status, tracking: r.status ? parseKaTracking(r) : undefined, error: r.status ? undefined : r.text, httpStatus };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

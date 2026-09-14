@@ -49,7 +49,10 @@ body = body.replace(/(☐|☑) (Pass|Fail|N\/A|Diuji|COD|Non-COD|Dashboard Kirim
 
 // The last paragraph is the sheet's signature line: small, and never alone on a page of its own.
 body = body.replace(/<p>&#x26;nbsp;<\/p>|<p>&nbsp;<\/p>/g, ""); // the template's spacer lines; h2 carries its own margin
-body = body.replace(/<p>([\s\S]*?)<\/p>\s*$/, '<div class="foot">$1</div>');
+// ⚠️ The LAST paragraph only: the capture may not cross another `<p>`. A lazy `<p>([\s\S]*?)<\/p>$`
+// starts at the FIRST paragraph and wrapped the whole sheet in one unbreakable footer block — page 1
+// came out blank below the title (revision-3 PDF, found on revision 4).
+body = body.replace(/<p>((?:(?!<p>)[\s\S])*?)<\/p>\s*$/, '<div class="foot">$1</div>');
 
 const HEADER = `<div class="hdr"><div class="brand"><svg width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><ellipse cx="16" cy="16" rx="7.2" ry="8.8" fill="none" stroke="#fff" stroke-width="2.6"/><rect x="14.7" y="3.6" width="2.6" height="24.8" rx="1.3" fill="#fff"/></svg><div><div class="wm">Toko<span class="phi">Φ</span></div><div class="sub">Mitra API · Sandbox 5758</div></div></div>
 <div class="vendor"><svg width="22" height="22" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">

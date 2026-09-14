@@ -4,6 +4,7 @@ import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { buildLabelHtml, composeSenderLine, formatWeight } from "@/components/admin/pesanan/shipping-label";
 import { DEFAULT_WEIGHT_GRAMS, MIN_BILLABLE_GRAMS } from "@/lib/shipping-weight";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
+import { courierNeedsSortingCode } from "@tokophi/lib/kiriminaja-tracking";
 
 // Many thermal labels, one printable document.
 //
@@ -34,19 +35,22 @@ import { latestPaymentFirst } from "@/lib/data/order-payment";
 // Postgres — the same seam `dailyStatsRows` uses, and for the same reason: a test that re-types the
 // SQL guards nothing.
 
-export async function getBulkLabels(numbers: string[]): Promise<{ html: string | null; skipped: string[] }> {
+/** Printed, but for a courier that requires a sorting code and has none yet — named, never hidden. */
+export type BulkLabelResult = { html: string | null; skipped: string[]; missingSortingCode: string[] };
+
+export async function getBulkLabels(numbers: string[]): Promise<BulkLabelResult> {
   return withCurrentTenant((db) => bulkLabels(db, numbers));
 }
 
 export async function bulkLabels(
   db: Tx,
   numbers: string[],
-): Promise<{ html: string | null; skipped: string[] }> {
+): Promise<BulkLabelResult> {
   {
     // RLS scopes this to the caller's store: a number from another tenant simply returns no row, so
     // a label cannot be minted for someone else's parcel even by guessing.
     const rows = (await db.execute(sql`
-      select o.number, o.awb, o.courier, o.service_type, s->>'name' as service_name,
+      select o.number, o.awb, o.sorting_code, o.courier, o.service_type, s->>'name' as service_name,
              o.ka_order_id, o.total_idr::int as total,
              coalesce(o.ship_recipient, c.name, '—') as recipient,
              o.ship_phone, o.ship_address, o.ship_postcode,
@@ -86,6 +90,11 @@ export async function bulkLabels(
     const found = new Set(rows.map((r) => String(r.number)));
     const skipped = numbers.filter((n) => !found.has(n));
     const parts: string[] = [];
+    // The label draws the slot as missing; this list is what lets the SCREEN say so before the stack
+    // reaches a courier (KiriminAja requires the code for spx/idx/jnt/jtcargo).
+    const missingSortingCode = rows
+      .filter((r) => courierNeedsSortingCode(r.courier as string | null) && !(r.sorting_code as string | null)?.trim())
+      .map((r) => String(r.number));
 
     const idr = (n: number) =>
       new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
@@ -113,6 +122,7 @@ export async function bulkLabels(
             destinationPostcode: (r.ship_postcode as string)?.trim() || null,
             recipientPhone: (r.ship_phone as string) ?? null,
             kaOrderId: (r.ka_order_id as string) ?? null,
+            sortingCode: (r.sorting_code as string | null) ?? null,
             cod: isCod,
             totalLabel: idr(Number(r.total ?? 0)),
             paymentLabel: isCod ? "COD (Bayar di Tempat)" : (r.method ? String(r.method).toUpperCase() : "Sudah dibayar"),
@@ -128,7 +138,7 @@ export async function bulkLabels(
         skipped.push(String(r.number));
       }
     }
-    if (!parts.length) return { html: null, skipped };
+    if (!parts.length) return { html: null, skipped, missingSortingCode };
 
     // Each part is a full document from buildLabelHtml; take the <body> of each and stack them so the
     // browser prints one job. The page size comes from the @page rule carried in each part's <style>.
@@ -137,6 +147,6 @@ export async function bulkLabels(
     const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Resi (${bodies.length})</title>${head}
 <style>.label{page-break-after:always}.label:last-child{page-break-after:auto}</style>
 </head><body>${bodies.join("\n")}</body></html>`;
-    return { html, skipped };
+    return { html, skipped, missingSortingCode };
   }
 }

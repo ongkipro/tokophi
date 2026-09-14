@@ -1245,7 +1245,7 @@
           "dynamic": false,
           "ownerDb": false,
           "tests": [],
-          "whatItIs": "Renders 100×150 mm shipping labels (Code 128) for orders that already have a real AWB."
+          "whatItIs": "Renders 100×150 mm shipping labels (Code 128) for orders that already have a real AWB; prints the courier's sorting code above the barcode (always drawn for SPX/ID Express/J&T/J&T Cargo) and returns `missingSortingCode`."
         },
         {
           "url": "/api/auth/google/callback",
@@ -1425,9 +1425,10 @@
           "ownerDb": true,
           "tests": [
             "apps/admin/lib/cancel-reconcile.test.ts",
-            "apps/admin/lib/cron-auth.test.ts"
+            "apps/admin/lib/cron-auth.test.ts",
+            "apps/admin/lib/ka-sorting-code.test.ts"
           ],
-          "whatItIs": "Every 15 min pulls KiriminAja tracking for booked orders: fills `orders.awb`, advances status forward-only."
+          "whatItIs": "Every 15 min pulls KiriminAja tracking for booked orders (`parseKaTracking`: `details` + package `status_code`): fills a REAL `orders.awb` (never `MOCK-<ref>`), the sorting code, and advances status forward-only."
         },
         {
           "url": "/api/health/env",
@@ -1468,9 +1469,10 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/ka-sorting-code.test.ts",
             "apps/admin/lib/ka-webhook.test.ts"
           ],
-          "whatItIs": "Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth."
+          "whatItIs": "Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill."
         },
         {
           "url": "/api/public/ongkir",

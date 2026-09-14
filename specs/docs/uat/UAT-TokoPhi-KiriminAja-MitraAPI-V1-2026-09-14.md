@@ -5,7 +5,7 @@ User Acceptance Test — KiriminAja
 | Ketentuan upload: pdf, maksimal 10 MB. Jangan tampilkan secret/API key penuh. Label pengiriman wajib mengikuti dokumentasi KiriminAja dan dilampirkan screenshot jika digunakan. |
 | :---- |
 
-Dokumen ini tidak memuat API key. **Revisi 3 (14 September 2026)** — menindaklanjuti dua review KiriminAja di hari yang sama. Review 1: *"endpoint sudah v6.2 namun struktur payload masih v6.1"* → payload v6.2 lengkap (`kelurahan_id`, `zipcode`, `latitude`/`longitude`, `items[]` + `metadata`, `note`). Review 2 (per OID revisi 2) → empat aturan diterapkan di kode: paket tanpa asuransi hanya pada layanan `force_insurance: false`; `insurance_amount` = nilai `insurance` dari get pricing; `qty` paket = Σ `qty` dalam `items`; COD value sesuai S&K §5 (fee COD = (barang + ongkir + asuransi) × 3% + PPN 11%, min Rp2.500); skenario volumetrik dibooking ulang dengan volume 4 kg. Seluruh 8 skenario dijalankan ulang (run 3, 15:07 WIB) — semua OID di bawah adalah hasil run tersebut; contoh request body di §3 no. 4.
+Dokumen ini tidak memuat API key. **Revisi 4 (14 September 2026)** — review ketiga (order sudah sesuai; label wajib sorting code untuk SPX, ID Express, J&T, J&T Cargo) ditindaklanjuti: field sorting code disiapkan end-to-end, lihat §4. Riwayat revisi 3 — menindaklanjuti dua review KiriminAja di hari yang sama. Review 1: *"endpoint sudah v6.2 namun struktur payload masih v6.1"* → payload v6.2 lengkap (`kelurahan_id`, `zipcode`, `latitude`/`longitude`, `items[]` + `metadata`, `note`). Review 2 (per OID revisi 2) → empat aturan diterapkan di kode: paket tanpa asuransi hanya pada layanan `force_insurance: false`; `insurance_amount` = nilai `insurance` dari get pricing; `qty` paket = Σ `qty` dalam `items`; COD value sesuai S&K §5 (fee COD = (barang + ongkir + asuransi) × 3% + PPN 11%, min Rp2.500); skenario volumetrik dibooking ulang dengan volume 4 kg. Seluruh 8 skenario dijalankan ulang (run 3, 15:07 WIB) — semua OID di bawah adalah hasil run tersebut; contoh request body di §3 no. 4.
 
 &nbsp;
 
@@ -19,7 +19,7 @@ Dokumen ini tidak memuat API key. **Revisi 3 (14 September 2026)** — menindakl
 | Nomor HP PIC | 081227168633 |
 | Environment UAT | Sandbox MitraAPI — https://tdev.kiriminaja.com · prefix akun 5758 (OID di bawah) · dipanggil dari IP egress produksi 45.77.33.112 (allow-list aktif) |
 | Tanggal UAT | 14 September 2026 (run 3, payload v6.2 + aturan review kedua); run pertama 24 Agustus 2026 |
-| Versi Dokumen | V 1.0 — revisi 3 (payload v6.2, review kedua) |
+| Versi Dokumen | V 1.0 — revisi 4 (sorting code label, review ketiga) |
 
 &nbsp;
 
@@ -37,9 +37,9 @@ Centang fitur yang diuji dan beri catatan jika tidak digunakan.
 | Create Paket Insurance | ☑ Diuji ☐ N/A | Declare insurance amount/type: `insurance: 1` pada quote → `insurance_amount` booking = nilai `insurance` hasil pricing (SPX Rp300, AnterAja Rp300, JNE Rp2.500, J&T Cargo Rp5.000 pada 1 kg — diukur 14/09), bukan nilai barang (4 skenario) |
 | Create Paket KA Credit | ☐ Diuji ☑ N/A | Declare payment method KA Credit: tidak dipakai. `GET v6.2/credit/balance` menjawab "Unable to find your endpoint target" (3× pada 11–12/09, kontrol `province` sukses) — akun tampaknya Term-of-Payment; `payment_method`/`pin` tidak dikirim |
 | Label Pengiriman | ☑ Diuji ☐ N/A | Dirender aplikasi member (100×150 mm, Code 128) — screenshot §4 |
-| Tracking | ☑ Diuji ☐ N/A | `POST /api/mitra/tracking` dipoll otomatis tiap 15 menit + pemetaan status → order |
+| Tracking | ☑ Diuji ☐ N/A | `POST /api/mitra/tracking` dipoll otomatis tiap 15 menit; `details.awb`, `details.sorting_code` dan `status_code` paket dibaca dan dipetakan ke order |
 | Webhook / Callback | ☑ Diuji ☐ N/A | Jika digunakan: receiver LIVE di produksi, Bearer fail-closed (401 diuji); URL didaftarkan via `set_callback` (2026-09-09) |
-| Cancel / Void | ☐ Diuji ☑ N/A | Jika digunakan: diimplementasi (`v3/cancel_shipment`, kirim AWB bukan OID) — belum dapat dieksekusi karena sandbox tidak menerbitkan AWB untuk OID UAT |
+| Cancel / Void | ☐ Diuji ☑ N/A | Jika digunakan: diimplementasi (`v3/cancel_shipment`, kirim AWB bukan OID) — belum dieksekusi: AWB sandbox berbentuk `MOCK-<order_id>`, bukan resi kurir, dan sistem menolak memakainya sebagai resi |
 
 &nbsp;
 
@@ -61,10 +61,10 @@ Isi ringkas hasil pengujian. Evidence dapat berupa screenshot, response log, ord
 | 10 | Create COD | Create shipment COD dengan kriteria berat volume lebih tinggi daripada berat barang | COD tercatat di response & label | **4 kg volumetrik** (400 g / 40×30×20), SPX Economy Rp80.728, `qty: 3`; base 230.728 → fee Rp7.683 → `cod: 238411` → **OID 5758-UAT6080744 · EPR-4903125061** | Tidak Wajib ( Wajib jika menggunakan COD ) | ☑ Pass ☐ Fail ☐ N/A |
 | 11 | Create COD menggunakan asuransi | Create shipment COD dengan kriteria berat volume lebih tinggi daripada berat barang menggunakan asuransi | COD tercatat di response & label | idem + `insurance_amount: 300`; base 231.028 → fee Rp7.693 → `cod: 238721` → **OID 5758-UAT8080746 · EPR-4069998505** | Tidak Wajib (ketentuan asuransi per kurir/package type dipatuhi) | ☑ Pass ☐ Fail ☐ N/A |
 | 12 | Create KA Credit | Create shipment payment KA Credit | Payment tervalidasi / error handling jelas | Tidak digunakan. Bukti: `GET /api/mitra/v6.2/credit/balance` (path persis OpenAPI) → `{"status":false,"text":"Unable to find your endpoint target"}` pada 3 ronde, dengan kontrol `province` sukses di ronde yang sama — bukan throttle. Mohon konfirmasi akun ini Term-of-Payment (KA Credit tidak berlaku). | Tidak Wajib | ☐ Pass ☐ Fail ☑ N/A |
-| 13 | Label Pengiriman | Generate/ambil label | Label tampil & field wajib lengkap | Label 100×150 mm dirender sistem member dari data order (Section 4). Barcode Code 128 asli. Screenshot §4 — dirender 12/09 untuk OID COD run pertama (5758-UAT5032514, masih ada di akun 5758); modul dan tata letaknya tidak berubah sejak. | Wajib | ☑ Pass ☐ Fail ☐ N/A |
-| 14 | Tracking | Tracking order/AWB | Status tampil | `POST /api/mitra/tracking` dipoll otomatis tiap 15 menit; status kurir dipetakan ke status order (booked → shipped → delivered/returned/canceled, forward-only). Pada 8 OID UAT sandbox menjawab "Tracking tidak tersedia" karena AWB belum terbit — ditangani sebagai "menunggu", bukan error. | Wajib | ☑ Pass ☐ Fail ☐ N/A |
-| 15 | Webhook | Terima callback jika digunakan | Payload diterima benar | Receiver: `POST https://app.tokophi.com/api/public/kiriminaja/webhook` — LIVE; auth `Authorization: Bearer {api_key}` fail-closed (tanpa/salah bearer → 401, diuji di produksi); payload dipakai sebagai HINT lalu diverifikasi lewat tracking pull; idempoten pada (`awb`, `order_id`). Didaftarkan via `set_callback` (2026-09-09). Belum ada event nyata — sandbox tidak menerbitkan AWB. | Tidak Wajib | ☑ Pass ☐ Fail ☐ N/A |
-| 16 | Cancel / Void | Cancel/void jika digunakan | Response sesuai aturan | Diimplementasi sesuai kontrak: kirim AWB, bukan order id; booking tanpa AWB ditolak sebelum memanggil API. Belum dapat dieksekusi: target 5758-UAT1080737 belum punya AWB setelah 60 detik polling tracking. Mohon terbitkan AWB sandbox agar skenario ini bisa dijalankan. | Tidak Wajib | ☐ Pass ☐ Fail ☑ N/A |
+| 13 | Label Pengiriman | Generate/ambil label | Label tampil & field wajib lengkap | Label 100×150 mm dirender sistem member dari data order (Section 4). Barcode Code 128 asli. Screenshot §4 — dirender 14/09 untuk OID COD run 3 (5758-UAT5080743) dengan slot **Sorting Code** baru. | Wajib | ☑ Pass ☐ Fail ☐ N/A |
+| 14 | Tracking | Tracking order/AWB | Status tampil | `POST /api/mitra/tracking` dipoll otomatis tiap 15 menit; status kurir dipetakan ke status order (booked → shipped → delivered/returned/canceled, forward-only). Diukur 14/09 pada 8 OID UAT: `status_code: 105` "Menunggu Pickup", `details.awb` = `MOCK-<order_id>`, `details.sorting_code: null`, `histories: []`. AWB berbentuk `MOCK-…` / berisi order_id kami **ditolak** sebagai resi (label tidak dicetak dengan nomor tiruan); status 105 dipetakan ke "diproses". | Wajib | ☑ Pass ☐ Fail ☐ N/A |
+| 15 | Webhook | Terima callback jika digunakan | Payload diterima benar | Receiver: `POST https://app.tokophi.com/api/public/kiriminaja/webhook` — LIVE; auth `Authorization: Bearer {api_key}` fail-closed (tanpa/salah bearer → 401, diuji di produksi); payload dipakai sebagai HINT lalu diverifikasi lewat tracking pull; idempoten pada (`awb`, `order_id`). Didaftarkan via `set_callback` (2026-09-09). Event `processed_packages`: `sorting_code` diterima dari baris webhook hanya bila `awb` baris itu sama dengan AWB terverifikasi order tersebut (tracking pull); nilai dari tracking diutamakan. Belum ada event nyata di sandbox. | Tidak Wajib | ☑ Pass ☐ Fail ☐ N/A |
+| 16 | Cancel / Void | Cancel/void jika digunakan | Response sesuai aturan | Diimplementasi sesuai kontrak: kirim AWB, bukan order id; booking tanpa AWB ditolak sebelum memanggil API. Belum dieksekusi: AWB sandbox untuk OID UAT adalah `MOCK-<order_id>` (diukur 14/09), bukan resi kurir, sehingga cancel-by-AWB tidak dapat diuji terhadap nomor yang sah. Mohon arahan: apakah cancel sandbox menerima AWB `MOCK-…`? | Tidak Wajib | ☐ Pass ☐ Fail ☑ N/A |
 
 &nbsp;
 
@@ -76,15 +76,15 @@ Acuan field label mengikuti dokumentasi KiriminAja: [https://developer.kiriminaj
 
 | Field | Nilai |
 | :---- | :---- |
-| Order ID / Reference ID | PHI-UAT5032514 (order member) · ref booking 5758-UAT5032514 (skenario COD run pertama, 24/08 — modul label tidak berubah) |
-| AWB / Tracking Number | SPXID0UATSAMPLE01 — CONTOH: sandbox belum menerbitkan waybill untuk OID UAT; sistem hanya mencetak label setelah AWB asli terbit (ref booking tidak pernah dipakai sebagai resi) |
+| Order ID / Reference ID | PHI-UAT5080743 (order member) · ref booking 5758-UAT5080743 (skenario COD run 3, 14/09) |
+| AWB / Tracking Number | SPXID0UATSAMPLE01 — CONTOH: tracking sandbox mengembalikan `MOCK-5758-UAT5080743`, yang sistem tolak sebagai resi; label hanya dicetak dengan AWB kurir asli (ref booking dan AWB tiruan tidak pernah dipakai sebagai resi) |
 | Courier / Service | SPX · SPX Economy |
 | Shipping Type | ☑ COD ☐ Non-COD |
-| COD Value | Rp161.100 (nilai barang Rp150.000 + ongkir Rp11.100) |
+| COD Value | Rp166.465 (barang Rp150.000 + ongkir Rp11.100 + fee COD Rp5.365) |
 | Insurance Information | Tidak ditampilkan pada label — lihat catatan validasi (gap yang diketahui) |
 | Sumber Label | ☐ Dashboard KiriminAja ☐ API ☑ Sistem Member |
-| Screenshot Label Pengiriman | ![Label pengiriman contoh — SPX Economy, COD Rp161.100](label-5758-UAT5032514.png) |
-| Catatan Validasi Label | Dirender oleh modul label sistem member (Code 128 asli; 100×150 mm). Field yang BELUM dicetak dan menunggu masukan KiriminAja: Sorting Code (nilai per kurir, khususnya SPX 2 kolom — mohon dikirimkan / hadir di webhook `processed_packages`), Insurance Information, dan logo kurir (saat ini nama kurir). Simbologi: Code 128-B (dokumentasi menyebut 128A; keduanya decode ke string yang sama untuk AWB alfanumerik kapital). |
+| Screenshot Label Pengiriman | Sandbox (sorting code `null`): ![Label SPX Economy COD, slot sorting code belum tersedia](label-5758-UAT5080743-sorting-missing.png) Produksi (contoh nilai dari dokumentasi KiriminAja `JOG-JOG1000-JKT2010`): ![Label SPX Economy COD dengan sorting code](label-5758-UAT5080743-sorting-example.png) |
+| Catatan Validasi Label | Dirender oleh modul label sistem member (Code 128 asli; 100×150 mm). **Sorting Code disiapkan (review ketiga):** kolom `orders.sorting_code`; diisi dari `details.sorting_code` tracking atau dari webhook `processed_packages` (hanya bila `awb` baris cocok dengan AWB terverifikasi); dicetak besar di atas barcode. Untuk SPX, ID Express, J&T, J&T Cargo slot **selalu** tampil — berisi kode, atau bergaris putus "Belum tersedia" bila kurir belum menerbitkan (sandbox selalu `null`), dan layar cetak massal memberi peringatan. Kode divalidasi (huruf/angka dan `- . / : _`, maks 64) sebelum disimpan. Belum dicetak: Insurance Information dan logo kurir (saat ini nama kurir). Simbologi: Code 128-B (dokumentasi menyebut 128A; keduanya decode ke string yang sama untuk AWB alfanumerik kapital). |
 
 &nbsp;
 
@@ -97,7 +97,7 @@ Acuan field label mengikuti dokumentasi KiriminAja: [https://developer.kiriminaj
 | AWB Barcode | Ya | ☑ Code 128 asli (varian B); decode identik dengan 128A untuk AWB |
 | AWB Label | Ya | ☑ AWB tertulis di bawah barcode, monospace |
 | Shipping Type | Ya | ☑ COD/Non-COD; jika COD, kotak COD + nilai |
-| Sorting Code | Ya | ☐ Belum — menunggu nilai sorting/routing per kurir dari PIC KiriminAja |
+| Sorting Code | Ya | ☑ Disiapkan — slot label (wajib SPX/ID Express/J&T/J&T Cargo) + kolom + ingest dari tracking & webhook `processed_packages`; terisi otomatis di produksi |
 | Sender & Recipient Details | Ya | ☑ Nama, HP, alamat lengkap, kode pos di slot terpisah |
 | Shipment Weight | Ya | ☑ Berat tertagih dalam gram/kg |
 | Item Quantity | Ya | ☑ Jumlah item + pcs |
@@ -113,7 +113,7 @@ Acuan field label mengikuti dokumentasi KiriminAja: [https://developer.kiriminaj
 1. Label dicetak jelas 100×150 mm (thermal) dan ditempel aman pada paket.
 2. Barcode AWB dapat discan (Code 128 asli); order reference dicetak sebagai teks, bukan barcode.
 3. JNE Drop-Off (CASHLESS COD/Non-COD) belum berlaku — integrasi hanya memakai pickup request (`drop: false`).
-4. SPX / J&T Cargo: sorting/routing code akan ditambahkan begitu nilainya diterima dari PIC KiriminAja.
+4. SPX, ID Express, J&T, J&T Cargo: sorting code dicetak dari event `processed_packages` / tracking; bila belum terbit, slot ditandai "Belum tersedia" dan seller diperingatkan sebelum cetak massal.
 
 &nbsp;
 
@@ -122,11 +122,11 @@ Acuan field label mengikuti dokumentasi KiriminAja: [https://developer.kiriminaj
 1. **Konfirmasi aturan berat volumetrik v6.2**: validator booking tampak menghitung dari Σ `items[].(width×length×height)×qty` (bukti no. 6). Mohon konfirmasi produksi berperilaku sama, dan apakah `packages[].width/length/height` masih dipakai untuk pricing.
 1. **Konfirmasi penerapan review kedua** (semua sudah di kode sistem member): layanan `force_insurance: true` otomatis diasuransikan dengan `insurance_amount` = `insurance` pricing meski seller tidak memilih asuransi; `qty` paket diturunkan dari Σ `items[].qty`; COD value untuk pesanan nyata = total checkout pembeli = barang + ongkir + fee 3% + PPN 11% (asuransi COD adalah biaya seller, tidak ditagihkan ke penerima). Mohon konfirmasi bahwa `cod` boleh lebih besar dari rumus (pembulatan) dan bahwa untuk J&T Express (4%) fee mengikuti tabel S&K.
 2. **Konfirmasi koordinat**: `latitude`/`longitude` dan `destination_latitude`/`destination_longitude` dikirim sebagai **centroid kelurahan** (fallback centroid kecamatan) dari dataset batas wilayah Kemendagri — pembeli hanya mengisi alamat, WA, kecamatan, kelurahan/kode pos. Mohon konfirmasi ini memadai untuk layanan reguler (`use_geolocation: false`), dan layanan mana (Lion/Pos?) yang memerlukan titik presisi.
-3. Penerbitan AWB sandbox untuk OID di atas agar skenario Tracking (riwayat) dan Cancel/Void dapat dieksekusi.
-4. Nilai sorting code per kurir (khususnya SPX 2 kolom) dan ketentuan logo kurir pada label.
+3. AWB sandbox untuk OID di atas adalah `MOCK-<order_id>`: mohon konfirmasi apakah Cancel/Void sandbox menerima AWB tiruan ini, atau ada cara menguji cancel sebelum produksi.
+4. Sorting code: field sudah disiapkan (§4). Mohon konfirmasi (a) `details.sorting_code` pada tracking produksi terisi sama dengan webhook `processed_packages`, (b) tata letak khusus bila ada (mis. SPX dua kolom), dan (c) ketentuan logo kurir pada label.
 5. Kontrak autentikasi webhook: dokumentasi mendeklarasikan event tanpa security scheme; receiver kami memerlukan `Authorization: Bearer {api_key}`. Mohon konfirmasi header yang dikirim.
 6. Konfirmasi status akun terkait KA Credit (endpoint `credit/balance` tidak dilayani untuk akun ini).
 
 &nbsp;
 
-TokoΦ × KiriminAja · UAT MitraAPI V1 · revisi 3, 14 Sep 2026 (run 3 — payload v6.2 + aturan review kedua) · PIC Ongki (Mas Ongkie) · billing@tokophi.id · 081227168633
+TokoΦ × KiriminAja · UAT MitraAPI V1 · revisi 4, 14 Sep 2026 (sorting code label; order run 3 — payload v6.2 + aturan review kedua) · PIC Ongki (Mas Ongkie) · billing@tokophi.id · 081227168633

@@ -149,10 +149,14 @@ export async function POST(req: NextRequest) {
   let known = 0;
   let changed = 0;
   for (const row of rows) {
-    const id = row && typeof row === "object" ? (row as { order_id?: unknown }).order_id : null;
+    const r0 = row && typeof row === "object" ? (row as { order_id?: unknown; awb?: unknown; sorting_code?: unknown }) : null;
+    const id = r0?.order_id;
     if (typeof id !== "string" || !id || id.length > 40) continue;
     try {
-      const r = await verifyKaHint(id);
+      // `processed_packages` is where KiriminAja delivers the sorting code. The row's `awb` and
+      // `sorting_code` are passed as an UNTRUSTED hint: verifyKaHint accepts the code only when that
+      // awb equals the waybill it verifies for the order (sortingCodeFromHint).
+      const r = await verifyKaHint(id, { awb: r0?.awb, sortingCode: r0?.sorting_code });
       if (r.known) known++;
       if (r.changed.length) changed++;
     } catch (err) {

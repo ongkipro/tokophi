@@ -11,6 +11,14 @@
 // waybills, and it round-trips — the same widths a scanner reads decode back to the exact AWB
 // string (verified by decoding the emitted pattern back to text).
 //
+// ── About the sorting code ───────────────────────────────────────────────────────────────────
+// KiriminAja (2026-09-14): SPX, ID Express, J&T and J&T Cargo labels MUST carry the courier's sorting
+// code (`orders.sorting_code`, 0110). It is issued in production only, so for those four couriers the
+// slot is ALWAYS drawn: filled when the code exists, and visibly marked missing when it does not —
+// never left out, because a label that silently omits a required field reads as complete. Other
+// couriers show the slot only when a code happens to exist. The value is printed as given (escaped);
+// how a courier splits it into columns is the courier's layout, not something to guess here.
+//
 // It only ever renders a REAL AWB. `buildLabelHtml` refuses to produce a label when
 // `orders.awb` is null, so there is no path by which an unscannable or invented number reaches a
 // parcel. See lib/actions/shipping.ts for why `awb` is legitimately null right after booking.
@@ -75,6 +83,8 @@ export function barcodeSvg(text: string, opts: { height?: number; module?: numbe
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${total.toFixed(2)}" height="${height}" viewBox="0 0 ${total.toFixed(2)} ${height}" shape-rendering="crispEdges" role="img" aria-label="Barcode Code 128 resi ${text}">${rects.join("")}</svg>`;
 }
 
+import { courierNeedsSortingCode } from "@tokophi/lib/kiriminaja-tracking";
+
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -98,6 +108,8 @@ export type LabelInput = {
   recipientPhone?: string | null;
   /** KiriminAja booking reference — printed small, clearly labelled, never as the resi. */
   kaOrderId?: string | null;
+  /** The courier's sorting code (`orders.sorting_code`). Required on the label for spx/idx/jnt/jtcargo. */
+  sortingCode?: string | null;
   cod: boolean;
   totalLabel: string;
   paymentLabel: string;
@@ -142,6 +154,13 @@ export function buildLabelHtml(i: LabelInput): string {
   const svg = barcodeSvg(awb);
   // If the AWB somehow isn't Code 128-B encodable we print the number alone and SAY there is no
   // barcode — we never draw decorative bars in its place.
+  const sorting = i.sortingCode?.trim() || null;
+  const needsSorting = courierNeedsSortingCode(i.courier);
+  const sortingBlock = sorting
+    ? `<div class="sort"><div class="lbl">Sorting code</div><div class="sortv">${esc(sorting)}</div></div>`
+    : needsSorting
+      ? `<div class="sort missing"><div class="lbl">Sorting code</div><div class="sortm">Belum tersedia — terbit dari kurir saat resi diproses</div></div>`
+      : "";
   const barcodeBlock = svg
     ? `<div class="bc">${svg}</div>`
     : `<div class="nobc">Barcode tidak dapat dibuat untuk format resi ini — gunakan nomor resi di bawah.</div>`;
@@ -159,6 +178,10 @@ export function buildLabelHtml(i: LabelInput): string {
   .bc { text-align: center; padding: 1mm 0 0 }
   .bc svg { max-width: 100%; height: 14mm }
   .nobc { border: 1px dashed #000; padding: 1.5mm; font-size: 7.5pt; text-align: center }
+  .sort { border: 2px solid #000; padding: .8mm 2mm; display: flex; align-items: center; justify-content: space-between; gap: 2mm }
+  .sort.missing { border-style: dashed; border-width: 1px }
+  .sortv { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14pt; font-weight: 800; letter-spacing: .04em; line-height: 1.1; text-align: right; overflow-wrap: anywhere }
+  .sortm { font-size: 7pt; font-weight: 600; text-align: right }
   .resi { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13pt; font-weight: 700; letter-spacing: .14em; text-align: center; padding-bottom: 1mm; border-bottom: 1px solid #000 }
   .box { border-top: 1px solid #000; padding-top: 1.4mm }
   .lbl { font-size: 6.5pt; text-transform: uppercase; letter-spacing: .09em; color: #555 }
@@ -183,6 +206,7 @@ export function buildLabelHtml(i: LabelInput): string {
       }
     </div>
 
+    ${sortingBlock}
     ${barcodeBlock}
     <div class="resi">${esc(awb)}</div>
 

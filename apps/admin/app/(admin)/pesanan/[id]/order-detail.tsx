@@ -543,6 +543,7 @@ export function OrderDetail({
         destinationPostcode: usableAddress?.postcode ?? null,
         recipientPhone: usableAddress?.phone ?? buyer?.phone ?? null,
         kaOrderId: shipment.kaOrderId,
+        sortingCode: shipment.sortingCode,
         cod: isCod,
         totalLabel: IDR(money.total),
         paymentLabel: payment?.methodLabel ?? "Belum ada pembayaran",

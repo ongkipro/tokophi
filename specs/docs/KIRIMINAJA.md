@@ -47,7 +47,7 @@ and this row is a bug.
 | courier roster | `shipping_price` on one reference route (there is no list endpoint) | `kaServices()`, super-admin `syncCouriersFromKiriminaja` | roster = `platform_couriers`; COD allowance per service (`codAllowed`, SPX only) |
 | quote | `POST /api/mitra/v6.1/shipping_price` (v6.1 IS the current one; there is no v6.2 rate endpoint) | `apps/admin/lib/shipping-quote.ts` — **the one price producer** — for `/api/public/ongkir` AND the re-quote inside `/api/public/order`; `getShippingRates` for the seller (quoted with `insurance: 1`) | origin = the seller's pickup district, never the client's; weight + `stackedDims` box from the seller's catalogue; cached 10 min keyed on all of it |
 | book + pickup | `POST /api/mitra/v6.2/request_pickup` | `kaCreateOrder` ← `createShipment` (single order, seller picks a service) and `bulkGenerateResi` (the service the shopper paid for) | the FULL v6.2 payload (§0.4); schedule = tomorrow 10:00 WIB; `drop: false` pinned; `awb` written only from `details[0].awb` (a booking ref is never a resi) |
-| tracking | `POST /api/mitra/tracking` (`order_id` ≤ 20) | `api/cron/tracking` every 15 min (batch 100) + "Lacak" | fills `orders.awb`, maps courier status → order status forward-only (`ka-tracking.ts`, `ka-status-codes.test.ts`) |
+| tracking | `POST /api/mitra/tracking` (`order_id` ≤ 20) → `{ status, text, status_code, details: { awb, sorting_code, … }, histories }` — **no `data` key** | `api/cron/tracking` every 15 min (batch 100) + "Lacak" + the webhook's verified pull — all through `kaTrack` → `parseKaTracking` (`@tokophi/lib/kiriminaja-tracking`) | fills `orders.awb` only through `realWaybill` (refuses our ref, `MOCK-<ref>`, DEMO/TEST), `orders.sorting_code`, and maps the top-level package `status_code` → order status forward-only (`ka-tracking.ts`) |
 | cancel | `POST /api/mitra/v3/cancel_shipment` — **by AWB, never the order id** | `cancelShipment` | refused before the call when no AWB exists; `status:true` = queued for cancellation (≤ 48 h), not cancelled |
 | webhook | `POST https://app.tokophi.com/api/public/kiriminaja/webhook` (registered via `set_callback`) | `api/public/kiriminaja/webhook/route.ts` | hint-only: fails closed on a missing/wrong Bearer, logs the SHAPE of a rejection, never advances state without a tracking pull |
 | province / health | `POST /api/mitra/province` (`{}` body, answers in `datas`) | super-admin "Test koneksi" | 37 provinces = healthy; `Unauthorized` = key, `401 + IP` = allow-list |
@@ -62,6 +62,7 @@ and this row is a bug.
 | `store_settings.sender_*` | per store | the seller's pickup: name, phone, address, `sender_kecamatan_id`, `sender_kelurahan_id` (vendor id), `sender_postcode`; `sender_lat/lng` are DEAD (the centroid rule replaces them) | Pengaturan → Alamat (`sender-address-card.tsx`) |
 | `store_shipping_methods` + `store_settings.couriers` (fallback) · `store_settings.cod_enabled` | per store | which services this seller offers; whether the seller opts into COD | Pengaturan → Pengiriman / Jasa Kirim |
 | `platform_couriers` (`services[].codAllowed`) · `platform_cod` (enabled, cap, provinces) | platform | the courier pool and the COD policy — `apps/admin/lib/cod.ts` is the ONE place that answers "may this be paid on delivery?" | Super Admin → Pengaturan |
+| `orders.sorting_code` (`0110`) | per order | the courier's routing code for the AWB — required on the label for SPX, ID Express, J&T, J&T Cargo; cleared with the AWB; sandbox always NULL | `syncOrderFromKa` only — from `details.sorting_code`, or a webhook `processed_packages` row whose `awb` equals the verified AWB (`sortingCodeFromHint`) |
 | `orders.ship_district_id` · `ship_kelurahan_id` (`0108`) · `ship_postcode` · `ship_address` · `courier` · `service_type` · `shipping_idr` · `awb` · `ka_order_id` · `label_printed_at` | per order | the destination the quote was issued for, the service the shopper paid for, and the booking's identity | `/api/public/order` (server re-derives; never the request's ids), `createShipment`, `cron/tracking`, `markLabelsPrinted` |
 | `shipment_bookings` · `ledger_entries` (`shipping-order-debit`, `shipping-balance-debit`) | per booking | the reservation and the reconciliation of quote vs actual courier cost (seller pays a costlier choice; a cheaper one is platform margin) | `createShipment` |
 
@@ -93,8 +94,8 @@ and this row is a bug.
 2. **Checkout** (`checkout.astro` → `/api/public/ongkir`): kecamatan search, kelurahan when the kodepos is ambiguous, quote from the seller's pickup district over the seller's catalogue weight + box; COD only when all five conditions hold (`cod.ts`), with a one-line reason when not.
 3. **Order** (`/api/public/order`): re-quotes with the same function, stores OUR price for the service picked, re-derives district/kelurahan ids server-side.
 4. **Proses → Atur pengiriman**: `bulkGenerateResi` books the paid service; the single-order "Cek Ongkir" lets the seller pick any service with the cost difference reconciled to the seller's ledger.
-5. **Resi terbit**: `awb` arrives when a courier accepts the pickup — `cron-tracking` (15 min sidecar) fills it; "Ambil resi"/"Lacak" are shortcuts, not the mechanism.
-6. **Cetak label**: `/api/admin/labels` renders our own 100×150 mm label (`shipping-label.ts`, Code 128) only once a real AWB exists; `markLabelsPrinted` reports what it wrote.
+5. **Resi terbit**: `awb` arrives when a courier accepts the pickup — `cron-tracking` (15 min sidecar) fills it; "Ambil resi"/"Lacak" are shortcuts, not the mechanism. The **sorting code** arrives with it (`processed_packages` / `details.sorting_code`) on the same write.
+6. **Cetak label**: `/api/admin/labels` renders our own 100×150 mm label (`shipping-label.ts`, Code 128) only once a real AWB exists; the **sorting code** is printed large above the barcode, and for SPX / ID Express / J&T / J&T Cargo the slot is always drawn — filled, or dashed "Belum tersedia" — while the bulk screen warns (`missingSortingCode`) before the stack is printed; `markLabelsPrinted` reports what it wrote.
 7. **Tracking → status**: courier status mapped forward-only onto `orders.status` through `applyOrderStatusChange`; webhook is a hint, tracking pull is the truth.
 8. **Cancel**: by AWB only, before collection; non-COD voids are queued up to 48 h.
 
@@ -119,16 +120,36 @@ Full narrative with the money side: `FLOWS.md` §5 (shipping) and §1 (the COD g
 | cutover (Task 8.9) | owner submits the sheet → production key → `KIRIMINAJA_ENV=production` + key in Coolify → redeploy → the env badge reads `production` → one real booking a courier collects → `DEPLOY.md` records the date. Re-request the production allow-list first |
 | sensitive: never | the key in a body/URL/doc; a booking ref stored as `awb`; a cancel by order id; a coordinate of `0,0`; a client-posted origin, weight or price |
 
+### 0.7b Two tracking defects found while wiring the sorting code (2026-09-14)
+
+🔴 **The tracking body was never read.** `POST /api/mitra/tracking` answers `details` + a top-level
+`status_code` (measured from the allow-listed container, and their OpenAPI says the same). All three
+consumers — the poller, the webhook's verified pull, "Lacak" — cast `r.data`, a key the response has
+never had, so every successful pull parsed to `{}`. Production's own evidence line recorded
+`ok=true statusType="undefined"` with no `keys` on every row. Nothing could fill `awb`, move a status,
+or read a sorting code, whatever the courier did. `kaTrack` now parses once (`parseKaTracking`) and
+returns `tracking`, never the envelope, so `tsc` refuses a consumer that guesses the shape again.
+
+🔴 **The sandbox's "waybill" is `MOCK-<our booking ref>`** (all eight UAT parcels: `MOCK-5758-UAT1080737`,
+…, status 105 "Menunggu Pickup"). It is not equal to our ref, so the old `awb !== ref` test would have
+ACCEPTED it: with the parser fixed and that test left in place, the production poller (still on the
+sandbox) would have stamped `MOCK-5758-PHI4970` into `orders.awb` and the label would have printed a
+resi no courier can scan. `realWaybill(awb, ref)` refuses our ref, anything containing it, and
+MOCK/DEMO/TEST/DUMMY-prefixed values, and is the ONE test all three consumers use. This also corrects
+what the UAT sheet said through revision 3: the sandbox did not "fail to issue an AWB" — it issued a mock
+one we could not see; cancel-by-AWB still cannot be exercised against a legitimate number.
+
 ### 0.8 Guards (what fails if a rule above is broken)
 
-`packages/lib/src/kiriminaja.test.ts` (client) · `kiriminaja-v62.test.ts` (the v6.2 payload: path, `drop`, no `add_cost`, zipcodes, items + metadata + note, qty = Σ, both coordinate pairs / omitted / 0,0 refused, kelurahan ids, empty-string AWB, HTTP-400 refusals) · `ka-kelurahan-id.test.ts` (the id-space sink) · `packages/db/src/area-coords.test.ts` (centroid resolver, real Postgres) · `kelurahan-csv.test.ts` (one vendor id per village) · `apps/admin/lib/shipping-weight.test.ts` (`stackedDims`) · `shipping-dimensions.test.ts` (dimensions threaded end to end, one box rule in 4 places) · `shipping-manifest.test.ts` (manifest, postcodes, quoted insurance, coordinates only from the resolver) · `destination-kelurahan.test.ts` (guessed district ⇒ no village id) · `cod-policy.test.ts` (the five conditions) · `ka-status-codes.test.ts` · `ka-webhook.test.ts` + `webhook/route.auth.test.ts` · `shipping-label.test.ts` · `bulk-shipping.test.ts` · `provider-label.test.ts` (the brand never reaches a merchant string) · `tracking-ids.test.ts`.
+`packages/lib/src/kiriminaja-tracking.test.ts` (the measured tracking envelope, `realWaybill` vs `MOCK-<ref>`, sorting-code normaliser, the four couriers, the webhook-hint binding, `kaTrack` returns parsed tracking) · `apps/admin/lib/ka-sorting-code.test.ts` (the one writer against real Postgres: with a waybill, never without, replaced with a new AWB, never cleared by silence, cleared on void, malformed refused; + source claims that the receiver passes the row as a hint, the verifier binds it, no consumer reads `r.data` or a bare `!== ref`) · `packages/lib/src/kiriminaja.test.ts` (client) · `kiriminaja-v62.test.ts` (the v6.2 payload: path, `drop`, no `add_cost`, zipcodes, items + metadata + note, qty = Σ, both coordinate pairs / omitted / 0,0 refused, kelurahan ids, empty-string AWB, HTTP-400 refusals) · `ka-kelurahan-id.test.ts` (the id-space sink) · `packages/db/src/area-coords.test.ts` (centroid resolver, real Postgres) · `kelurahan-csv.test.ts` (one vendor id per village) · `apps/admin/lib/shipping-weight.test.ts` (`stackedDims`) · `shipping-dimensions.test.ts` (dimensions threaded end to end, one box rule in 4 places) · `shipping-manifest.test.ts` (manifest, postcodes, quoted insurance, coordinates only from the resolver) · `destination-kelurahan.test.ts` (guessed district ⇒ no village id) · `cod-policy.test.ts` (the five conditions) · `ka-status-codes.test.ts` · `ka-webhook.test.ts` + `webhook/route.auth.test.ts` · `shipping-label.test.ts` · `bulk-shipping.test.ts` · `provider-label.test.ts` (the brand never reaches a merchant string) · `tracking-ids.test.ts`.
 
 ### 0.9 What is still open
 
 - Production has never booked: `KIRIMINAJA_ENV=sandbox` (Task 8.9, owner-gated on the UAT sheet).
 - The seller's rate picker does not yet show "asuransi wajib" / the fee per service (the data is on `Rate`; visual task).
 - The insurance fee on a forced service is charged to the seller by the vendor and not yet posted to the seller ledger.
-- Sorting code / courier logo on the label await the vendor's inputs (UAT action items 4); the webhook's auth header contract is undeclared (action item 5).
+- Sorting code is PREPARED end to end (column `0110`, ingest from tracking + `processed_packages`, label slot, bulk warning) but has never carried a real value — production-only. Open with the vendor: whether production tracking fills `details.sorting_code` like the webhook, and any per-courier layout (SPX two columns?) (UAT action item 4). Courier logo on the label is still a name. The webhook's auth header contract is undeclared (action item 5).
+- Cancel-by-AWB cannot be tested on the sandbox: its AWB is `MOCK-<ref>` (action item 3).
 - Whether Lion / Pos need a precise coordinate rather than a centroid (action item 2).
 
 ## The UAT sheet (what unlocks production) — `specs/docs/uat/`

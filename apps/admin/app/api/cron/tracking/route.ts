@@ -4,6 +4,7 @@ import { db } from "@tokophi/db";
 import { sql } from "drizzle-orm";
 import { KaTransportError, kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
+import { realWaybill } from "@tokophi/lib/kiriminaja-tracking";
 import { isNotFoundReply } from "@/lib/cancel-reconcile";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 import { cronAuthorized } from "@/lib/cron-auth";
@@ -124,6 +125,7 @@ export async function GET(req: NextRequest) {
 
   let advanced = 0;
   let awbFilled = 0;
+  let sortingFilled = 0;
   let problems = 0;
   let problemsCleared = 0;
   let cancelsReconciled = 0;
@@ -194,18 +196,18 @@ export async function GET(req: NextRequest) {
       }
       continue;
     }
-    // `text`/`status_text` are read ONLY for the evidence log — nothing maps off them. Both spellings
-    // have been seen in KiriminAja responses and neither is guaranteed; `r.data` is `unknown`, so
-    // widening the cast here costs nothing and keeps the log free of extra assertions.
-    const data = (r.data ?? {}) as {
-      awb?: string; waybill?: string; status?: string | number; text?: string; status_text?: string;
-    };
-    // A waybill is only real if it isn't our own booking ref echoed back.
-    const realAwb = [data.awb, data.waybill].find((x) => !!x && x !== ref) ?? null;
-    // Pass the raw status (number OR text); an unmapped status is `null`, which fills the AWB and
-    // changes nothing. It is NOT forced to "shipped" — doing that pinned a delivered parcel at
-    // `dikirim` forever, so COD was never collected and the merchant never credited.
-    const outcome = outcomeFromTrackingCode(data.status);
+    // 🔴 THE BODY IS PARSED ONCE, IN `kaTrack` (`parseKaTracking`). This loop used to cast `r.data`,
+    // a key the tracking response has never had (it answers `details` + a top-level `status_code`),
+    // so every successful pull read as empty — the production evidence line said `statusType=
+    // "undefined"` on every row, and `awbFilled` stayed 0 while the sandbox had issued real waybills.
+    const t = r.tracking ?? { awb: null, sortingCode: null, statusCode: null, text: null, histories: [], keys: [] };
+    // Not our own ref echoed back, and not the sandbox's `MOCK-<ref>` — which the old `!== ref` test
+    // would have accepted and printed on a label (realWaybill).
+    const realAwb = realWaybill(t.awb, ref);
+    // Pass the package status code (number, or legacy text); an unmapped status is `null`, which
+    // fills the AWB and changes nothing. It is NOT forced to "shipped" — doing that pinned a
+    // delivered parcel at `dikirim` forever, so COD was never collected and the merchant never credited.
+    const outcome = outcomeFromTrackingCode(t.statusCode);
 
     // Log BEFORE the `continue` below and BEFORE any mapping is acted on. The unmapped case
     // (`outcome=null`) is the single most valuable line in this file — it is a status KiriminAja
@@ -217,20 +219,22 @@ export async function GET(req: NextRequest) {
       ref,
       sentAs: o.kaOrderId ? "ka_order_id" : "awb",
       ok: true,
-      status: data.status ?? null,
-      statusType: typeof data.status,
-      awb: short(data.awb),
-      waybill: short(data.waybill),
-      awbIsRef: !!(data.awb && data.awb === ref) || !!(data.waybill && data.waybill === ref),
+      status: t.statusCode,
+      statusType: typeof t.statusCode,
+      awb: short(t.awb),
+      awbIsRef: !!(t.awb && t.awb === ref),
+      // The vendor answered SOMETHING in `awb` that is not a courier waybill (the sandbox's MOCK-<ref>).
+      awbRefused: !!t.awb && !realAwb,
+      // A routing code, not personal data — printed on the parcel itself. Logged so the first
+      // production value is visible without a database query.
+      sortingCode: t.sortingCode,
       outcome: outcome ?? "unmapped",
-      // KiriminAja's own wording for the status. `kaTrack` only surfaces the envelope's `text` on
-      // failure, so on success the human-readable string — the thing that will actually settle
-      // "200 = delivered or picked up?" — can only come from inside `data`. Both spellings observed.
-      text: short(data.text ?? data.status_text),
-      keys: Object.keys(data).sort().join(","),
+      // KiriminAja's own wording for the status ("Menunggu Pickup"). Evidence only; nothing maps off it.
+      text: short(t.text),
+      keys: t.keys.join(","),
     });
 
-    if (!realAwb && !outcome) continue;
+    if (!realAwb && !outcome && !t.sortingCode) continue;
     // A pending cancellation reaches the reconciler through the SAME sync call — it is keyed on the
     // booking row, not on this flag, so the healthy path needs nothing extra here.
     // A stuck/problem parcel is not a state change but it IS something a merchant must act on. It now
@@ -240,12 +244,13 @@ export async function GET(req: NextRequest) {
     let problemNote: string | null = null;
     if (outcome === "problem") {
       problems++;
-      problemNote = `Kurir melaporkan kendala pengiriman (kode ${String(data.status ?? "-")}). Hubungi kurir atau pembeli untuk memastikan paket.`;
-      console.warn("[cron/tracking] problem parcel", o.number, "status", data.status);
+      problemNote = `Kurir melaporkan kendala pengiriman (kode ${String(t.statusCode ?? "-")}). Hubungi kurir atau pembeli untuk memastikan paket.`;
+      console.warn("[cron/tracking] problem parcel", o.number, "status", t.statusCode);
     }
     try {
-      const s = await syncOrderFromKa(o.number, outcome, realAwb, problemNote);
+      const s = await syncOrderFromKa(o.number, outcome, realAwb, problemNote, undefined, t.sortingCode);
       if (s.changed.some((c) => c.startsWith("awb"))) awbFilled++;
+      if (s.changed.some((c) => c.startsWith("sorting"))) sortingFilled++;
       if (s.changed.some((c) => c.startsWith("status"))) advanced++;
       // A parcel that started moving again. Worth its own number: it is how you tell "3 problems"
       // meaning "3 parcels are stuck right now" from "3 parcels hiccuped and recovered".
@@ -261,7 +266,7 @@ export async function GET(req: NextRequest) {
   // The SAME summary is returned to the caller and stored. `docker logs` keeps its line; the row is
   // what a human sees without going looking. Storing the counts, not just the timestamp, is the half
   // that matters here: `awbFilled` was 0 for a week and "the cron ran" would have been true all week.
-  const summary = { scanned: orders.length, advanced, awbFilled, problems, problemsCleared, cancelsReconciled, errors: errors.length };
+  const summary = { scanned: orders.length, advanced, awbFilled, sortingFilled, problems, problemsCleared, cancelsReconciled, errors: errors.length };
   // ⚠️ `ok` IS DERIVED FROM `errors`, NOT HARD-CODED. It was `ok: true`, so a tick in which every
   // single sync threw wrote a GREEN `cron_runs` row — over the one job whose week-long silence is
   // the reason this table exists at all. `order-expiry` beside it already computes

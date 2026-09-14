@@ -4,7 +4,14 @@
 > ▶ **The queue itself lives in [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with AC.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-09-14) · **TokoΦ v1.7.0** · 83 PostgreSQL Tables · 110 Migrations (`0000` through `0109_area_coords`) · RLS 54/55 store-scoped tables (run `verify-rls`) · 175 Vitest files, **1.518/1.518 tests green** · KiriminAja booking on the full v6.2 payload, UAT sheet revision 3 filled and awaiting the owner's submission · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9)
+## ▶ CURRENT STATE (2026-09-14, later) · **TokoΦ v1.7.1** · 83 PostgreSQL Tables · 111 Migrations (`0000` through `0110_order_sorting_code`) · 177 Vitest files, **1.551/1.551 tests green** · KiriminAja: full v6.2 booking (live), sorting code prepared on branch `feat/ka-sorting-code`, tracking parser fixed (it never read the body) · UAT sheet revision 4 · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9)
+
+## 2026-09-14 (later) — Sorting code on the label + the tracking body nobody read (Task 8.23, branch `feat/ka-sorting-code`)
+
+- **Scope:** KiriminAja UAT review 3 — orders correct; SPX / ID Express / J&T / J&T Cargo labels need the sorting code from `processed_packages`; prepare it on sandbox.
+- **Done:** `orders.sorting_code` (`0110`) with one writer; ingest from the tracking pull and from webhook rows bound to the verified AWB; label slot above the barcode (always drawn for the four couriers); bulk-print warning. Fixed on the way: `kaTrack` consumers read `r.data`, which the response never has (production logged `statusType="undefined"` on every pull); sandbox AWB is `MOCK-<ref>` and is now refused by `realWaybill`. UAT sheet revision 4 (9-page PDF, renderer footer bug fixed).
+- **Verification:** full vitest 1.551/1.551 · 8 mutations, 8 reds · verify-rls ✓ · lint 0 · label rendered in Chromium, no overflow.
+- **Next:** merge + deploy (owner approval — production gate) · owner submits revision 4 · the first production `processed_packages` event proves the code on a real label.
 
 ## 2026-09-14 — KiriminAja v6.2 payload in full, two vendor reviews, UAT sheet revision 3 (PR #397)
 
