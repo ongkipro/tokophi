@@ -42,6 +42,10 @@ this key (KA Credit marked N/A on measurement). Tracking/Cancel are N/A because 
 issued an AWB. **Status and next step: root `TASKS.md` Task 8.9** — the owner submits the sheet, the
 provider approves, then `KIRIMINAJA_ENV=production` + the production key in Coolify.
 
+⚠️ A commit that touches this directory **deploys**: the Coolify watch rule is `!**/*.md` and this file
+is HTML. Nothing in any image reads `specs/`, so the rebuild is pure cost (`DEPLOY.md` → Watch Paths);
+adding `!specs/**` to that rule is the fix, and it is a Coolify setting, not a repo change.
+
 ## ⚠️ The sandbox enforces an IP ALLOW-LIST — and the platform's egress IP is the VPS IP
 
 Learned 2026-09-07, after the VPS came back from a 70-hour billing suspension (`STATUS.md`,

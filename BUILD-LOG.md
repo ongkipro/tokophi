@@ -3937,4 +3937,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
   where the sheet is, how the PDF is re-rendered, and where the status lives (Task 8.9 — one place).
 - **Verification:** `git diff --stat`, `npx vitest run test/release-guards.test.ts packages/db/src/doc-counts.test.ts`
   (the two guards that read `specs/`), and `node scripts/verify-doc-authority.mjs` on `specs/README.md` — outputs below.
+- ⚠️ **Correction, same pass:** the PR body first said "merging deploys nothing". FALSE for this commit — the
+  Coolify watch rule is exclusion-only (`!**/*.md`, `DEPLOY.md`), and the `.html` is not Markdown, so merging
+  #397 rebuilds all five images once (the ~81 s 503 swap window, measured 2026-08-19) for a change no image
+  reads. Checked: no Dockerfile copies `specs/` (the landing Dockerfile only *mentions* it in a comment) and
+  no runtime code imports from it. Recommendation to the owner, not applied here (Coolify setting): add
+  `!specs/**` beside `!**/*.md`, so documentation artefacts that are not Markdown stop costing a deploy.
+  Until then: merge #397 at a quiet moment or together with the next code merge.
 - **Not in scope:** submitting the sheet (owner), merging #397 (owner's call), production cutover (Task 8.9).
