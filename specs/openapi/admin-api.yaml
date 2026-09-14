@@ -147,8 +147,11 @@ paths:
       tags: [Cron]
       summary: Poll courier tracking for active shipments
       description: |
-        Polls up to 100 booked, non-terminal orders, fills newly assigned AWBs,
-        advances order state forward, and records encountered tracking problems.
+        Polls booked, non-terminal orders — up to 5 per store per tick, round-robin
+        across stores — fills newly assigned courier AWBs (a sandbox MOCK-<ref> value is
+        refused), writes the courier sorting code, advances order state forward, records
+        tracking problems, and lowers a stale permanent-rejection flag once the vendor
+        answers with HTTP 2xx.
       security:
         - cronHeaderAuth: []
       parameters:
@@ -268,7 +271,7 @@ components:
             minLength: 1
     BulkLabelsSuccess:
       type: object
-      required: [html, skipped]
+      required: [html, skipped, missingSortingCode]
       properties:
         html:
           type: string
@@ -277,6 +280,13 @@ components:
         skipped:
           type: array
           description: Submitted order numbers that were missing, cross-tenant, or lacked a usable AWB.
+          items:
+            type: string
+        missingSortingCode:
+          type: array
+          description: >-
+            Printed, but the courier (spx, idx, jnt, jtcargo) requires a sorting code that has not been
+            issued yet; the label draws the slot as missing (orders.sorting_code, migration 0110).
           items:
             type: string
     BillingCronResult:
@@ -307,14 +317,16 @@ components:
         errors: { type: integer, minimum: 0 }
     TrackingCronResult:
       type: object
-      required: [ok, scanned, advanced, awbFilled, problems, problemsCleared, errors]
+      required: [ok, scanned, advanced, awbFilled, sortingFilled, problems, problemsCleared, cancelsReconciled, errors]
       properties:
-        ok: { const: true }
-        scanned: { type: integer, minimum: 0, maximum: 100 }
+        ok: { type: boolean, description: "true when no order in the sweep failed to sync (errors = 0)." }
+        scanned: { type: integer, minimum: 0, description: "Orders polled this tick: at most 5 per store." }
         advanced: { type: integer, minimum: 0 }
-        awbFilled: { type: integer, minimum: 0 }
+        awbFilled: { type: integer, minimum: 0, description: "Orders that received a courier-issued waybill. A sandbox MOCK-<ref> value is refused and never counted." }
+        sortingFilled: { type: integer, minimum: 0, description: "Orders whose courier sorting code was written (production only)." }
         problems: { type: integer, minimum: 0 }
         problemsCleared: { type: integer, minimum: 0 }
+        cancelsReconciled: { type: integer, minimum: 0 }
         errors: { type: integer, minimum: 0 }
     TrackingEventsCronResult:
       type: object

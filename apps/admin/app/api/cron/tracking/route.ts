@@ -3,7 +3,7 @@ import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
 import { db } from "@tokophi/db";
 import { sql } from "drizzle-orm";
 import { KaTransportError, kaTrack, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
-import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
+import { TRACKING_REJECTION_MARK, clearStaleTrackingRejection, outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
 import { realWaybill } from "@tokophi/lib/kiriminaja-tracking";
 import { isNotFoundReply } from "@/lib/cancel-reconcile";
 import { cronIntervalSec, recordCronRun } from "../record-run";
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
   const flagPermanentError = async (orderNumber: string, httpStatus: number, detail?: string) => {
     problems++;
     const suffix = detail ? `: ${detail}` : ".";
-    const note = `${SHIPPING_SERVICE} menolak permintaan pelacakan secara permanen (HTTP ${httpStatus})${suffix}`;
+    const note = `${SHIPPING_SERVICE} ${TRACKING_REJECTION_MARK} (HTTP ${httpStatus})${suffix}`;
     console.warn("[cron/tracking] permanent courier rejection", orderNumber, "HTTP", httpStatus);
     try {
       await syncOrderFromKa(orderNumber, "problem", null, note);
@@ -166,6 +166,18 @@ export async function GET(req: NextRequest) {
         errors.push(o.number);
       }
       continue;
+    }
+    // The vendor ANSWERED with a 2xx — a real status or "Tracking tidak tersedia" alike. Whatever else is
+    // true, it is no longer rejecting us, so an old permanent-rejection flag is false: lower it, and
+    // only it (clearStaleTrackingRejection matches that note alone). Before the ok/failed split on
+    // purpose — an answered-but-unmapped pull proves the same thing and would otherwise clear nothing.
+    if (r.httpStatus >= 200 && r.httpStatus < 300) {
+      try {
+        if (await clearStaleTrackingRejection(o.number)) problemsCleared++;
+      } catch (err) {
+        console.error("[cron/tracking] stale rejection clear failed", o.number, err);
+        errors.push(o.number);
+      }
     }
     if (!r.ok) {
       // A permanent client rejection will never heal through retries. Flag it and rank it behind

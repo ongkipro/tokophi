@@ -105,7 +105,10 @@ describe("realWaybill — what may be printed as a resi", () => {
   it("refuses our own ref, a value containing it, blanks, and marked placeholders", () => {
     expect(realWaybill("5758-UAT1", "5758-UAT1")).toBeNull();
     expect(realWaybill("X-5758-UAT1-Y", "5758-UAT1")).toBeNull();
-    for (const a of [null, undefined, "", "  ", "DEMO-123", "demo_123", "TEST 1", "dummy-9"]) expect(realWaybill(a, "5758-X"), String(a)).toBeNull();
+    for (const a of [null, undefined, "", "  ", "DEMO-123", "demo_123", "TEST 1", "dummy-9", "MOCK123"]) expect(realWaybill(a, "5758-X"), String(a)).toBeNull();
+    // `fillDemoResi` (sandbox preview) stamps DEMO + the order's tail with NO separator — found in
+    // production on PHI-292894347VRC as `DEMO2894347VRC`. It must never bind a webhook sorting code.
+    expect(realWaybill("DEMO2894347VRC", "5758-PHI292894347VRC")).toBeNull();
   });
   it("passes a courier waybill through, trimmed", () => {
     expect(realWaybill(" SPXID057802455131 ", "5758-UAT1080737")).toBe("SPXID057802455131");

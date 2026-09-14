@@ -81,14 +81,16 @@ export function parseKaTracking(body: unknown): KaTracking {
 /**
  * The courier-issued waybill, or null. Refuses, in one place, the three things that look like one and
  * are not: our own booking ref echoed back, a value that CONTAINS that ref (the sandbox's
- * `MOCK-<ref>`), and anything marked MOCK/DEMO/TEST. A label is printed from what this returns.
+ * `MOCK-<ref>`), and anything marked as a placeholder — MOCK/DUMMY/DEMO at the start in any form
+ * (`fillDemoResi` stamps `DEMO<order>` with no separator), TEST only with a separator so a real
+ * waybill that happens to start with those letters survives. A label is printed from what this returns.
  */
 export function realWaybill(awb: string | null | undefined, ref: string | null | undefined): string | null {
   const a = typeof awb === "string" ? awb.trim() : "";
   if (!a) return null;
   const r = typeof ref === "string" ? ref.trim() : "";
   if (r && (a === r || a.includes(r))) return null;
-  if (/^(mock|demo|test|dummy)[-_ ]/i.test(a)) return null;
+  if (/^(mock|dummy|demo)/i.test(a) || /^test[-_ ]/i.test(a)) return null;
   return a;
 }
 
