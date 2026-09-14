@@ -4045,3 +4045,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 
 **Verification.** full vitest **177 files / 1 556 tests, 0 failed** (+5: stale-rejection clearer against real Postgres incl. the literal production note, courier obstacle untouched, no-op; placement claim; DEMO-without-separator) · **4 mutations, 4 reds** (clearer ignoring the note kind · clearing only on 4xx · DEMO accepted · stored DEMO AWB binding a hint), files restored · `verify:openapi` ok · doc-counts/release-guards/page-map 33/33 · admin lint 0 · tsc 0.
 - **Not done:** a schema-level OpenAPI response check (would have caught finding 1) · the order detail screen does not display the sorting code outside the label.
+
+
+### [2026-09-14 15:15 UTC] — RELEASE · PR #399 (audit fixes) merged and deployed — witnessed on production (Main Session)
+
+- **Merge:** `6518a33` (merge of `fix/ka-tracking-audit`: `311cedd` code + contract, `95a6f95` Markdown sweep + Update Log v1.7.2). CI green on the head commit `95a6f95` (check runs verified against that SHA, not the previous one): tests · astro check · typecheck, build admin / super-admin / landing. `main` had not moved.
+- **Pre-merge validation:** full vitest 177 files / 1 556 tests, 0 failed · `verify:guards` ok (source-size, openapi, doc-authority, traceability, migrations, RLS) · lint 0 (admin, super-admin) · tsc 0 (admin, super-admin, lib, db) · stale-claim sweep over every `.md` → none left ("sandbox never issues an AWB" corrected in PRD, REQUIREMENTS, STATUS ×3, BACKLOG, SCHEMA, UAT sheet; "batch 100" in BACKLOG). UAT PDF re-rendered (9 pages) from the corrected sheet.
+- **Deploy:** Coolify row **542**, `in_progress` 14:55:24 → `finished` 15:08:17 UTC. Admin image `…_admin:6518a3359dc953b7a94031e6dce2d67fb8785949`; `migrate` and `seed` exited 0; all six services `healthy`. Hosts 200 / 307 / 307 / 200.
+- **The fix, witnessed:** the tracking sidecar's first tick returned `{"ok":true,"scanned":3,…,"problemsCleared":1,…,"errors":0}` and `cron_runs.ok = t`. `PHI-206107047PVE` now reads `problem_at NULL, problem_note NULL` — the 2026-08-27 branded 401 note is gone — and a count of notes carrying the rejection mark across all orders is **0**. No `error`/`exception` line in the admin log since the deploy.
