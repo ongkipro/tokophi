@@ -57,9 +57,13 @@ const DEST = 2107; // Mampang Prapatan, Jakarta Selatan — served, COD-capable 
 // the quote's own number, which is correct; the drift is between KA's two sandbox engines and is
 // flagged to their team in the UAT notes. Volumetric PRICING at multi-kg is still demonstrated —
 // quote-only, below — because the pricing rows of the UAT sheet need no OID.
+// ⚠️ KiriminAja's UAT review (2026-09-14) asked the volumetric scenarios to be re-booked "dengan
+// kalkulasi volume minimal 2kg": 400 g real vs 40×30×20 cm ⇒ 4.000 g volumetric. That deliberately
+// leaves the 1-kg band the note above describes; if the sandbox validator refuses the multi-kg
+// booking at its own quoted price, that is recorded on the sheet, not hidden.
 const PARCELS = {
   actual: { weight: 1_000, lengthCm: 10, widthCm: 10, heightCm: 10 },
-  volumetric: { weight: 400, lengthCm: 15, widthCm: 15, heightCm: 24 },
+  volumetric: { weight: 400, lengthCm: 40, widthCm: 30, heightCm: 20 },
 } as const;
 const ITEM_VALUE = 150_000; // declared goods value — the insurance base where insurance is on
 
@@ -97,17 +101,28 @@ async function runScenario(sim: number, opts: { cod: boolean; parcel: keyof type
     itemValue: ITEM_VALUE, insurance: opts.insurance ? 1 : 0,
   });
   if (!quote.ok || !quote.results.length) return fail(sim, label, `quote: ${quote.error ?? "no rates"}`);
-  // COD rides SPX only (platform policy); non-COD takes the cheapest rate on the list.
-  const candidates = opts.cod
-    ? quote.results.filter((r) => r.service.toLowerCase() === "spx" && r.setting?.cod_fee != null)
-    : quote.results;
+  // KiriminAja's UAT review (2026-09-14): an UNINSURED parcel must ride a service whose quote says
+  // `force_insurance: false`; an insured one may ride any. COD rides SPX only (platform policy);
+  // non-COD takes the cheapest eligible rate.
+  const candidates = quote.results
+    .filter((r) => opts.insurance || !r.force_insurance)
+    .filter((r) => !opts.cod || (r.service.toLowerCase() === "spx" && r.setting?.cod_fee != null));
   // The vendor sometimes returns numeric fields as STRINGS (the client's own comment at item_value
   // says so) — normalise before math and before echoing into the booking body, whose Go server
   // demands a real int for shipping_cost.
   const rate = [...candidates].map((r) => ({ ...r, cost: Number(r.cost) })).sort((a, b) => a.cost - b.cost)[0];
   if (!rate) return fail(sim, label, "no eligible rate (COD needs an SPX service on this route)");
 
-  const codAmount = opts.cod ? ITEM_VALUE + rate.cost : 0;
+  // Insurance fee = the quote's own `insurance` (the review: "value dari param insurance_amount
+  // didapatkan dari param insurance saat get pricing"), never the goods value.
+  const insuranceAmount = opts.insurance ? Math.round(Number(rate.insurance) || 0) : 0;
+  // COD value per KiriminAja T&C §5: goods + shipping + insurance(if used) + COD fee, where the fee
+  // is (goods + shipping + insurance) × the service's rate, floored at the minimum, + PPN 11%.
+  const codBase = ITEM_VALUE + rate.cost + insuranceAmount;
+  const feePct = Number(rate.setting?.cod_fee ?? 0.03);
+  const feeMin = Number(rate.setting?.minimum_cod_fee ?? 2500);
+  const codFee = Math.round(Math.max(feeMin, codBase * feePct) * 1.11);
+  const codAmount = opts.cod ? codBase + codFee : 0;
   const r = await kaCreateOrder(
     SENDER,
     {
@@ -118,13 +133,14 @@ async function runScenario(sim: number, opts: { cod: boolean; parcel: keyof type
       itemValue: ITEM_VALUE, itemName: `UAT skenario ${sim}`,
       service: rate.service, serviceType: String(rate.service_type), shippingCost: rate.cost,
       cod: codAmount,
-      insuranceAmount: opts.insurance ? ITEM_VALUE : 0,
+      insuranceAmount,
       // The manifest (v6.2 `items`, price PER UNIT): two lines whose prices total ITEM_VALUE, whose
       // weights sum to the parcel's, and whose VOLUMES (× qty) sum to the parcel's — the last one is
       // load-bearing. MEASURED 2026-09-14 (4 probe bookings): the v6.2 validator derives the
       // chargeable weight from Σ items[].(w×l×h×qty), not from the package dimensions. Two lines
       // each carrying the whole box's dimensions = 2× the volume = a higher band than quoted =
       // "Ongkir tidak sesuai". The stack: line 1 is half the box height, line 2 a quarter, twice.
+      // The package `qty` (3) is derived by the client from these lines — the review's fourth rule.
       items: [
         { name: "Kain Batik Tulis Motif Parang", price: 100_000, weight: Math.ceil(p.weight * 0.6), qty: 1, width: p.widthCm, length: p.lengthCm, height: Math.ceil(p.heightCm / 2), metadata: { sku: "BTK-PRG-001", variant_label: "Merah / 2 m" } },
         { name: "Selendang Batik Cap", price: 25_000, weight: Math.floor(p.weight * 0.2), qty: 2, width: p.widthCm, length: p.lengthCm, height: Math.floor(p.heightCm / 4), metadata: { sku: "SLD-CAP-002", variant_label: "Biru" } },
@@ -136,7 +152,11 @@ async function runScenario(sim: number, opts: { cod: boolean; parcel: keyof type
   rows.push({
     sim, label, service: `${rate.service} ${rate.service_name ?? rate.service_type}`, quoted: rate.cost,
     oid: r.kaOrderId ?? "-", pickup: r.pickupNumber ?? "-",
-    note: opts.cod ? `COD tagih Rp${codAmount.toLocaleString("id-ID")}` : "",
+    note: [
+      `force_insurance=${rate.force_insurance ? "true" : "false"}`,
+      opts.insurance ? `asuransi Rp${insuranceAmount.toLocaleString("id-ID")}` : "",
+      opts.cod ? `COD tagih Rp${codAmount.toLocaleString("id-ID")} (fee Rp${codFee.toLocaleString("id-ID")})` : "",
+    ].filter(Boolean).join(" · "),
   });
 }
 
@@ -168,6 +188,10 @@ async function main() {
   // ── UAT sheet rows 2–3 (pricing, no OID needed): volumetric pricing demonstrated at multi-kg ──
   const pActual = await kaShippingPrice({ origin: ORIGIN, destination: DEST, weight: 5_000, lengthCm: 10, widthCm: 10, heightCm: 10, itemValue: ITEM_VALUE, insurance: 0 });
   const pVol = await kaShippingPrice({ origin: ORIGIN, destination: DEST, weight: 1_000, lengthCm: 40, widthCm: 30, heightCm: 20, itemValue: ITEM_VALUE, insurance: 0 });
+  // Evidence for the sheet: the services on the route with their force_insurance flag + insurance fee.
+  const pIns = await kaShippingPrice({ origin: ORIGIN, destination: DEST, weight: 1_000, lengthCm: 10, widthCm: 10, heightCm: 10, itemValue: ITEM_VALUE, insurance: 1 });
+  console.log("── SERVICES (1 kg, insurance:1) ──");
+  for (const r of pIns.results) console.log(`  ${r.service} ${r.service_type}\tcost=${r.cost}\tinsurance=${r.insurance}\tforce_insurance=${r.force_insurance}\tcod=${r.cod}\tcod_fee=${r.setting?.cod_fee}/min ${r.setting?.minimum_cod_fee}`);
   const spxA = pActual.results.find((r) => r.service === "spx");
   const spxV = pVol.results.find((r) => r.service === "spx");
   console.log("── PRICING EVIDENCE (quote-only, sheet rows 2–3) ──");

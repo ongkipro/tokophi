@@ -98,6 +98,14 @@ describe("kaCreateOrder speaks v6.2", () => {
     expect(sent.packages[0].item_name).toBe("Kain");
   });
 
+  // KiriminAja's UAT review (2026-09-14): the package `qty` is the SUM of `items[].qty`, never 1.
+  it("derives the package qty from the manifest", async () => {
+    const { sent } = await book(BOOKED);
+    expect(sent.packages[0].qty).toBe(3); // 2 + 1
+    const noLines = await book(BOOKED, { pkg: { items: [], qty: 4 } });
+    expect(noLines.sent.packages[0].qty).toBe(4);
+  });
+
   it("omits items rather than sending an empty array (the schema says minItems: 1)", async () => {
     const { sent } = await book(BOOKED, { pkg: { items: [] } });
     expect(sent.packages[0]).not.toHaveProperty("items");

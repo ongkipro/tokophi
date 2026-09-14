@@ -409,6 +409,23 @@ informational and the centroid of the smallest known area is the truthful value.
 need a precise point is action item 2 on the UAT sheet. Coverage: 78 415 / 78 764 kelurahan (99,6%)
 and 6 735 / 7 030 districts (95,8%) carry a centroid; the rest omit the fields, as before.
 
+### The vendor's second review (2026-09-14, on revision 2) — four rules, all now in code
+
+KiriminAja answered revision 2 per OID. Every remark reduces to one of four rules, and each is now
+enforced where the payload is built, not left to a caller:
+
+| rule (their words) | ours |
+|---|---|
+| *"paket tanpa asuransi … courier service dengan param `force_insurance: false`"* | a service whose quote says `force_insurance: true` is insured whether or not the seller ticked the box: `insured = input.insurance \|\| selectedRate.forceInsurance` in `createShipment`. The rate list now carries `forceInsurance` per service |
+| *"value dari param `insurance_amount` didapatkan dari param `insurance` saat get pricing"* | `insurance_amount` = the quote's own `insurance` FEE (Rp300 on SPX, Rp2.500 on JNE, Rp5.000 on J&T Cargo at 1 kg — measured), **never the goods value**, which is what it was. The seller's rate list is quoted with `insurance: 1` so the fee is known for every service; `cost` is unaffected |
+| *"param `qty` diluar array of items merupakan total dari param `qty` dalam array of item"* | derived in `kaCreateOrder` from the manifest (`Σ items[].qty`); `pkg.qty` only stands in for a caller with no lines |
+| *"cod amount = cod fee + item value + shipping cost + insurance; cod fee = (…) × (3% atau 4%) + 11%"* (T&C §5) | `cod` = `orders.total_idr`, which the checkout already builds as goods + shipping + 3% + PPN 11% on the fee — the same formula. Insurance on a COD parcel is the seller's choice AFTER the buyer's total was fixed, so it is the seller's cost and is NOT added to what the courier collects. ⚠️ J&T Express is 4% in the T&C; COD is SPX-only here (3%), so no mismatch today — widen COD to J&T and the platform fee must follow |
+
+*"request pickup ulang dengan kalkulasi volume minimal 2kg"*: the volumetric scenarios were re-booked
+at 40×30×20 cm / 400 g = 4.000 g volumetric, and the sandbox accepted the multi-kg bookings at their
+own quoted price (`5758-UAT2080740` NCS Rp37.000, `UAT4080742` AnterAja Rp28.000, `UAT6080744` /
+`UAT8080746` SPX Rp80.728) — the August "Ongkir tidak sesuai above 1 kg" drift is gone under v6.2.
+
 🔴 **AND THE BOOKING VALIDATOR PRICES `items[]`, NOT THE PACKAGE BOX — measured 2026-09-14.** Four
 probe bookings of one 15×15×24 cm / 400 g parcel at its own quoted price (AnterAja REG Rp7.000):
 items of 1×1×1 → accepted (`5758-PRB11159`); one line = the box, the rest 1×1×1 → accepted

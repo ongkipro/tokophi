@@ -146,6 +146,16 @@ export type KaRate = {
   // THIS quote (from item_value + shipping cost + insurance). Numbers arrive as strings sometimes —
   // `cost` above already does — so parse through kaCodFee(), never Number() at a call site.
   setting?: { cod_fee?: string | number; minimum_cod_fee?: string | number; cod_fee_amount?: string | number } | null;
+  /**
+   * The insurance FEE for this quote, IDR (present when the quote asked `insurance: 1`). KiriminAja's
+   * UAT review (2026-09-14): *"value dari param insurance_amount didapatkan dari param insurance saat
+   * get pricing"* — the booking's `insurance_amount` is THIS number, never the goods value.
+   */
+  insurance?: string | number | null;
+  /** The service insures every parcel; the booking must carry `insurance_amount` even when unasked. */
+  force_insurance?: boolean;
+  /** The service routes on coordinates (instant/same-day). Regular services report false. */
+  use_geolocation?: boolean;
 };
 
 /** The COD fee KiriminAja charges on a rate, parsed (N31). All-null when the vendor sent nothing. */
@@ -421,7 +431,11 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
       ...kelurahanField("destination_kelurahan_id", pkg.destKelurahanId),
       ...coordFields("destination_latitude", pkg.destLatitude, pkg.destLongitude),
       weight: pkg.weight, width: pkg.width ?? 10, length: pkg.length ?? 10, height: pkg.height ?? 10,
-      qty: pkg.qty ?? 1, item_value: pkg.itemValue, item_name: pkg.itemName,
+      // KiriminAja's UAT review (2026-09-14): the package `qty` IS the sum of `items[].qty`. Derived
+      // from the manifest whenever there is one, so the two cannot disagree; `pkg.qty` only stands
+      // in for a caller with no lines.
+      qty: pkg.items.length ? pkg.items.reduce((n, i) => n + Math.max(1, i.qty), 0) : pkg.qty ?? 1,
+      item_value: pkg.itemValue, item_name: pkg.itemName,
       service: pkg.service, service_type: pkg.serviceType, shipping_cost: pkg.shippingCost,
       cod: pkg.cod ?? 0, package_type_id: pkg.packageTypeId ?? 7,
       // Sent EXPLICITLY rather than left to the vendor's default, which is not stated anywhere in

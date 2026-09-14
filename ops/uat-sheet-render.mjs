@@ -47,6 +47,10 @@ body = body.replace(/<table>\s*<thead>\s*<tr>((?:\s*<th[^>]*>[\s\S]*?<\/th>)+)\s
 // One checkbox option per line, so "☑ Pass ☐ Fail ☐ N/A" never wraps mid-word in a narrow column.
 body = body.replace(/(☐|☑) (Pass|Fail|N\/A|Diuji|COD|Non-COD|Dashboard KiriminAja|API|Sistem Member)/g, '<span class="opt">$1 $2</span>');
 
+// The last paragraph is the sheet's signature line: small, and never alone on a page of its own.
+body = body.replace(/<p>&#x26;nbsp;<\/p>|<p>&nbsp;<\/p>/g, ""); // the template's spacer lines; h2 carries its own margin
+body = body.replace(/<p>([\s\S]*?)<\/p>\s*$/, '<div class="foot">$1</div>');
+
 const HEADER = `<div class="hdr"><div class="brand"><svg width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><ellipse cx="16" cy="16" rx="7.2" ry="8.8" fill="none" stroke="#fff" stroke-width="2.6"/><rect x="14.7" y="3.6" width="2.6" height="24.8" rx="1.3" fill="#fff"/></svg><div><div class="wm">Toko<span class="phi">Φ</span></div><div class="sub">Mitra API · Sandbox 5758</div></div></div>
 <div class="vendor"><svg width="22" height="22" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g clip-path="url(#clip0_35_12724)">
@@ -119,6 +123,8 @@ td, th { overflow-wrap: anywhere }
 .cols-7 td { font-size: 8.6pt }
 img.label { max-width: 56mm }
 h1 { margin-top: 0 }
+ol, ul { page-break-inside: avoid }
+.foot { margin-top: 6px; page-break-before: avoid }
 </style></head><body>${HEADER}${body}</body></html>`;
 const htmlPath = pdfPath.replace(/\.pdf$/i, ".html");
 writeFileSync(htmlPath, html);

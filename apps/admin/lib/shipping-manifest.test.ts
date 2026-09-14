@@ -85,6 +85,17 @@ describe("the booking carries the order's real lines and postcodes", () => {
   // Coordinates (0109) come from ONE producer, `resolveAreaCoords` — a kelurahan/district centroid
   // or null — and reach the client through optional chaining, never a `?? 0`: a zero pair is how a
   // courier would be routed to the Gulf of Guinea. The sink guard (`coordFields`) refuses 0,0 too.
+  // KiriminAja's UAT review (2026-09-14): `insurance_amount` is the pricing call's `insurance` fee
+  // (never the goods value), a `force_insurance` service is insured whether or not the seller asked,
+  // and the rate list is quoted WITH insurance so the fee is known for every service.
+  it("insurance_amount is the quoted fee, forced when the service forces it — never the goods value", () => {
+    const src = shipping();
+    expect(src).toMatch(/const\s+insured\s*=\s*!\s*!\s*input\s*\.\s*insurance\s*\|\|\s*selectedRate\s*\.\s*forceInsurance/);
+    expect(src).toMatch(/insuranceAmount\s*:\s*insured\s*\?\s*selectedRate\s*\.\s*insurance\s*:\s*0/);
+    expect(src).not.toMatch(/insuranceAmount\s*:\s*input\s*\.\s*insurance\s*\?\s*o\s*\./);
+    expect(src).toMatch(/insurance\s*:\s*1\s*,?\s*\}\s*\)/); // the seller's quote asks for the fee
+  });
+
   it("the booking's coordinates come only from resolveAreaCoords, never a literal or ?? 0", () => {
     const src = shipping();
     expect(src).toMatch(/latitude\s*:\s*senderCoords\s*\?\.\s*lat/);

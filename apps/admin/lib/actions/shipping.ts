@@ -27,6 +27,10 @@ export type Rate = {
   cod: boolean;
   group: string;
   codFee: KaCodFee;
+  /** KiriminAja's insurance fee for this quote, IDR — what the booking sends as `insurance_amount`. */
+  insurance: number;
+  /** The service insures every parcel; the booking carries `insurance_amount` even when unasked. */
+  forceInsurance: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,7 +250,11 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
     widthCm,
     heightCm,
     itemValue,
-    insurance: 0,
+    // Quoted WITH insurance so every rate carries its insurance fee: the booking's `insurance_amount`
+    // must be that number (KiriminAja's UAT review, 2026-09-14), and a `force_insurance` service
+    // needs it even when the seller did not ask. `cost` is the same either way (the fee is its own
+    // field), so the checkout quote (insurance 0) and this one still agree to the rupiah.
+    insurance: 1,
   });
   if (!r.ok)
     return {
@@ -279,6 +287,9 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
         cod: x.cod && cod.allows(x.service, x.service_type),
         group: x.group,
         codFee: kaCodFee(x),
+        // The vendor's insurance fee for THIS quote (IDR) and whether the service insures regardless.
+        insurance: Math.max(0, Math.round(Number(x.insurance) || 0)),
+        forceInsurance: !!x.force_insurance,
       })),
   };
 }
@@ -831,6 +842,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
     };
   }
   const serverCost = Math.max(0, Math.round(selectedRate.cost));
+  const insured = !!input.insurance || selectedRate.forceInsurance;
   if (serverCost !== Math.max(0, Math.round(input.cost))) {
     return {
       ok: false,
@@ -1095,8 +1107,16 @@ export async function createShipment(input: { orderNumber: string; service: stri
         service: input.service,
         serviceType: input.serviceType,
         shippingCost: serverCost,
+        // COD value = goods + shipping + the COD fee (3% + PPN 11% on goods + shipping, the platform
+        // schedule) — which is exactly `orders.total_idr` at checkout, and exactly KiriminAja's own
+        // formula (T&C §5, 2026-09-14) for an uninsured parcel. Insurance on a COD parcel is the
+        // SELLER's choice at booking, after the buyer's total was fixed, so it is the seller's cost
+        // and is deliberately NOT added to what the courier collects.
         cod: o.isCod ? o.total || o.subtotal || 0 : 0,
-        insuranceAmount: input.insurance ? o.subtotal || o.total || 0 : 0,
+        // KiriminAja's UAT review (2026-09-14): `insurance_amount` is the `insurance` FEE the pricing
+        // call returned for this service — never the goods value — and a `force_insurance` service
+        // carries it whether or not the seller ticked the box.
+        insuranceAmount: insured ? selectedRate.insurance : 0,
         items,
       },
       schedule,
