@@ -1308,7 +1308,9 @@
           ],
           "file": "apps/admin/app/api/cron/billing/route.ts",
           "clients": [],
-          "data": [],
+          "data": [
+            "platform-finance"
+          ],
           "actions": [],
           "gate": [
             "cron"
