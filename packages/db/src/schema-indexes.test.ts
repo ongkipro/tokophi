@@ -89,6 +89,12 @@ const INDEX_CENSUS: Record<string, Census> = {
   orders_one_per_checkout_session: "sql-only: partial unique index, not expressible in schema.ts",
   impersonation_grants_token_hash_key: "drizzle",
   impersonation_grants_store_idx: "drizzle",
+  // Task 8.31 (0112). PARTIAL (`where status in ('menunggu','diproses')`) — "one OPEN refund per
+  // payment", so a settled row must not block a later obligation; same reason as
+  // `orders_one_per_checkout_session`: the schema builder cannot express the WHERE.
+  refunds_one_open_per_payment: "sql-only: partial unique index (one OPEN row per payment), not expressible in schema.ts",
+  refunds_store_idx: "drizzle",
+  refunds_order_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:

@@ -1,7 +1,8 @@
 import { platformRouteGate } from "@/lib/platform-auth";
 import { RouteDenied } from "@/components/route-denied";
-import { getPayouts, getPayoutSummary, getPayoutPolicy } from "@/lib/data";
+import { getPayouts, getPayoutSummary, getPayoutPolicy, getRefunds, getRefundSummary } from "@/lib/data";
 import { PencairanClient } from "./pencairan-client";
+import { RefundQueue } from "./refund-queue";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,13 @@ export default async function PencairanPage() {
   const gate = await platformRouteGate("/pencairan");
   if (!gate.ok) return <RouteDenied need={gate.need} role={gate.role} reason={gate.reason} landing={gate.landing} />;
 
-  const [payouts, summary, policy] = await Promise.all([getPayouts(), getPayoutSummary(), getPayoutPolicy()]);
+  const [payouts, summary, policy, refunds, refundSummary] = await Promise.all([
+    getPayouts(),
+    getPayoutSummary(),
+    getPayoutPolicy(),
+    getRefunds(),
+    getRefundSummary(),
+  ]);
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       <div>
@@ -22,6 +29,8 @@ export default async function PencairanPage() {
         </p>
       </div>
       <PencairanClient payouts={payouts} summary={summary} policy={policy} />
+      {/* Task 8.31 — the other direction of money: what we owe BUYERS on cancelled prepaid orders. */}
+      <RefundQueue refunds={refunds} summary={refundSummary} />
     </div>
   );
 }

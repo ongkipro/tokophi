@@ -259,6 +259,12 @@ export type PlatformFloat = {
   pending: number; // not yet settled
   payoutObligation: number; // payouts menunggu + diproses — transfers we still owe
   payoutPendingCount: number;
+  // BUYERS' money we hold for cancelled prepaid orders (`refunds` menunggu + diproses, Task 8.31).
+  // A separate figure from the payout obligation on purpose: that one is owed to MERCHANTS out of
+  // their ledger balance; this one never entered any ledger — it is the buyer's, and the only record
+  // that we owe it is this table. Summing the two would hide which side of the counter is waiting.
+  refundObligation: number;
+  refundPendingCount: number;
   storesWithBalance: number;
 };
 export async function getPlatformFloat(): Promise<PlatformFloat> {
@@ -275,11 +281,19 @@ export async function getPlatformFloat(): Promise<PlatformFloat> {
       count(*) filter (where status in ('menunggu','diproses'))::int                        as "cnt"
     from payouts
   `)) as unknown as { owed: string; cnt: number }[];
+  const [rf] = (await db.execute(sql`
+    select
+      coalesce(sum(amount_idr) filter (where status in ('menunggu','diproses')), 0)::bigint as "owed",
+      count(*) filter (where status in ('menunggu','diproses'))::int                        as "cnt"
+    from refunds
+  `)) as unknown as { owed: string; cnt: number }[];
   return {
     available: Number(led?.available ?? 0),
     pending: Number(led?.pending ?? 0),
     payoutObligation: Number(po?.owed ?? 0),
     payoutPendingCount: Number(po?.cnt ?? 0),
+    refundObligation: Number(rf?.owed ?? 0),
+    refundPendingCount: Number(rf?.cnt ?? 0),
     storesWithBalance: Number(led?.stores ?? 0),
   };
 }
@@ -1036,6 +1050,82 @@ export async function getPayoutSummary(): Promise<PayoutSummary> {
     .select({ status: schema.payouts.status, amount: schema.payouts.amountIdr })
     .from(schema.payouts);
   const s: PayoutSummary = { pendingCount: 0, pendingAmount: 0, processingCount: 0, processingAmount: 0, paidCount: 0, paidAmount: 0 };
+  for (const r of rows) {
+    if (r.status === "menunggu") { s.pendingCount++; s.pendingAmount += r.amount; }
+    else if (r.status === "diproses") { s.processingCount++; s.processingAmount += r.amount; }
+    else if (r.status === "selesai") { s.paidCount++; s.paidAmount += r.amount; }
+  }
+  return s;
+}
+
+// ── Refunds — the buyer's money on a cancelled prepaid order (Task 8.31) ───────────────────────────
+// Written ONLY by `applyOrderStatusChange` (apps/admin/lib/order-status.ts) when an order carrying a
+// `berhasil` non-COD payment moves to batal/retur; settled by hand from /pencairan. Same operator
+// queue shape as payouts: open first, newest first inside each bucket, settled rows sink.
+export type RefundStatus = "menunggu" | "diproses" | "selesai" | "gagal";
+export type RefundRow = {
+  id: string;
+  storeId: string;
+  storeName: string;
+  orderId: string;
+  orderNumber: string;
+  buyerName: string | null;
+  buyerPhone: string | null;
+  method: string; // payments.method — which rail the money came in on (where it goes back)
+  amount: number;
+  status: RefundStatus;
+  reason: string | null; // why the obligation exists (cancellation / return reason)
+  note: string | null; // transfer reference on selesai, refusal reason on gagal
+  requestedAt: Date;
+  paidAt: Date | null;
+  minutesAgo: number;
+};
+
+const REFUND_RANK = sql<number>`case ${schema.refunds.status}
+  when 'menunggu' then 0 when 'diproses' then 1 when 'selesai' then 2 else 3 end`;
+
+export async function getRefunds(): Promise<RefundRow[]> {
+  const rows = await db
+    .select({
+      id: schema.refunds.id,
+      storeId: schema.refunds.storeId,
+      storeName: schema.stores.name,
+      orderId: schema.refunds.orderId,
+      orderNumber: schema.orders.number,
+      // The order's SNAPSHOT (0042) — who this money goes back to, as they were at purchase.
+      buyerName: schema.orders.shipRecipient,
+      buyerPhone: schema.orders.shipPhone,
+      method: schema.payments.method,
+      amount: schema.refunds.amountIdr,
+      status: schema.refunds.status,
+      reason: schema.refunds.reason,
+      note: schema.refunds.note,
+      requestedAt: schema.refunds.requestedAt,
+      paidAt: schema.refunds.paidAt,
+    })
+    .from(schema.refunds)
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.refunds.storeId))
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.refunds.orderId))
+    .innerJoin(schema.payments, eq(schema.payments.id, schema.refunds.paymentId))
+    .orderBy(asc(REFUND_RANK), desc(schema.refunds.requestedAt));
+  const now = Date.now();
+  return rows.map((r) => ({
+    ...r,
+    minutesAgo: Math.max(0, Math.round((now - r.requestedAt.getTime()) / 60_000)),
+  }));
+}
+
+export type RefundSummary = {
+  pendingCount: number;
+  pendingAmount: number;
+  processingCount: number;
+  processingAmount: number;
+  paidCount: number;
+  paidAmount: number;
+};
+export async function getRefundSummary(): Promise<RefundSummary> {
+  const rows = await db.select({ status: schema.refunds.status, amount: schema.refunds.amountIdr }).from(schema.refunds);
+  const s: RefundSummary = { pendingCount: 0, pendingAmount: 0, processingCount: 0, processingAmount: 0, paidCount: 0, paidAmount: 0 };
   for (const r of rows) {
     if (r.status === "menunggu") { s.pendingCount++; s.pendingAmount += r.amount; }
     else if (r.status === "diproses") { s.processingCount++; s.processingAmount += r.amount; }
