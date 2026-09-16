@@ -291,12 +291,18 @@ components:
             type: string
     BillingCronResult:
       type: object
-      required: [ok, stores, statusSynced, invoicesCreated]
+      required: [ok, stores, statusSynced, invoicesCreated, invoiceErrors]
       properties:
         ok: { const: true }
         stores: { type: integer, minimum: 0 }
         statusSynced: { type: integer, minimum: 0 }
         invoicesCreated: { type: integer, minimum: 0 }
+        invoiceErrors:
+          type: integer
+          minimum: 0
+          description: >-
+            Stores whose renewal invoice was refused or threw (Task 8.24). Counted per store so one
+            failure never aborts the sweep; the reason is in the container log.
     DomainCronResult:
       type: object
       required: [ok, scanned, activated, pending, failed]

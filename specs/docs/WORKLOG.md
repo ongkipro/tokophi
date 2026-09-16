@@ -4,7 +4,14 @@
 > ▶ **The queue itself lives in [`tasks/NEXT.md`](./tasks/NEXT.md)** — ordered, sized, with AC.
 > Pairs with `TASKS.md` (the plan) + `BACKLOG.md` (priorities). Repo: `github.com/ongkipro/tokophi` (private) — commit + push each increment.
 
-## ▶ CURRENT STATE (2026-09-14, evening) · **TokoΦ v1.7.2** · 83 PostgreSQL Tables · 111 Migrations (`0000` through `0110_order_sorting_code`) · 177 Vitest files, **1.556/1.556 tests green** · KiriminAja: v6.2 booking + sorting code + tracking parser live (deploy 541); audit fixes in PR #399 (stale rejection flags, DEMO resi, OpenAPI drift) · UAT sheet revision 4 · production still `KIRIMINAJA_ENV=sandbox` (Task 8.9)
+## ▶ CURRENT STATE (2026-09-17) · **TokoΦ v1.8.0** · 84 PostgreSQL Tables · 115 Migrations (`0000` through `0114_invoices_plan_key_default`) · full vitest green on the merged branch (count in BUILD-LOG 2026-09-17 integration entry) · **Finance Overhaul II landed** (Tasks 8.24–8.33 on `feat/finance-overhaul-ii`: we bill the gateway fee, refunds table, comps ≠ MRR, demo money flagged, Keuangan = collected only, COD floor Rp2.500, one invoice creator, provider keys + env from Super Admin) · KiriminAja: v6.2 booking + sorting code + tracking parser live (deploy 541) · production still on the sandbox key — the switch is now a Super Admin card action (8.33), owner-gated (8.34)
+
+## 2026-09-17 — Finance Overhaul II (`/goal` fan-out, six lanes, one branch)
+
+- **Programme:** audit doc `tasks/2026-09-16-finance-pricing-audit.md` → Tasks 8.24–8.34 → six worktree lanes (A 8.33 · B 8.31 · C 8.24+F9 · D 8.28+8.29 · E 8.25 · F 8.26+8.27) merged into `feat/finance-overhaul-ii` in the order D, E, B, F, C, A; main session did the seller re-bill fee fix, the Lane F follow-ups (seed `is_demo`, "Gratis" label), Task 8.30 docs + `0114`, and the integration gate after each merge.
+- **Journal:** `0111_provider_config` · `0112_refunds` · `0113_comp_invoices_and_demo_flag` · `0114_invoices_plan_key_default`, idx re-sequenced ONCE at the last merge, stamps ascending (`verify-migrations` ✓).
+- **Owner-gated, deliberately not done:** OVO probe/disable (8.10), every real-money step of 8.34, the demo-store purge (flagged instead).
+- **Next:** PR `feat/finance-overhaul-ii` → main, witness the deploy (migrate exit 0 through `0114`, hosts 200/307), then 8.34 with the owner.
 
 ## 2026-09-14 (evening) — Audit of the day's KiriminAja release (PR #399, branch `fix/ka-tracking-audit`)
 

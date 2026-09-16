@@ -5,11 +5,20 @@ import { kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
 import { cached } from "@tokophi/lib/cache";
 import { classifyKaProbe, type KaProbe } from "./ka-probe";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
+import { getProviderConfig, maskKey, resolveAutolaris, resolveKiriminaja, type ProviderEnv } from "@tokophi/lib/provider-config";
+import { encryptionAvailable } from "@tokophi/lib/crypto";
+import { autolarisRow, kiriminajaRow, loadProviderRows } from "@tokophi/db/provider-config";
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import { likeContains } from "@tokophi/lib/like";
 import { LOG_PAGE_SIZE, logPages, type LogQuery } from "./activity-log";
 import { type Store, type StoreStatus, type Invoice, type PActivity } from "./types";
-import { BILLING, computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
+import { computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
+import { subscriptionKpiBucket } from "./subscription-kpi";
+
+// Task 8.27 — the seeded demo store (`stores.is_demo`) is flagged, not purged, and every platform
+// money figure joins through this so its fixture orders never read as marketplace GMV.
+// An INNER join on purpose: an order whose store is gone is not platform money either.
+const NOT_DEMO = sql`join stores sd on sd.id = o.store_id and sd.is_demo = false`;
 
 // Every relative figure ("N hari lalu", 30-day windows) is measured from the REAL clock.
 //
@@ -35,6 +44,7 @@ const BILL_TO_UI: Record<"trial" | "active" | "past_due" | "suspended", StoreSta
 type StoreRow = {
   id: string; name: string; city: string | null;
   trialEndsAt: string | null; currentPeriodEnd: string | null; firstInvoicePaid: boolean; comped: boolean;
+  isDemo: boolean;
   suspendedAt: string | null; suspendedReason: string | null; approvedAt: string | null;
   createdAt: string; owner: string | null; email: string | null;
   gmv: string | number; orders: number; orders30d: number; products: number; lastOrderAt: string | null;
@@ -61,6 +71,7 @@ function rowToStore(r: StoreRow): Store {
     status: BILL_TO_UI[state.status],
     segment: storeSegment(bill),
     comped: r.comped,
+    isDemo: r.isDemo,
     operatorSuspended: state.operatorSuspended,
     pendingApproval: state.pendingApproval,
     gmv: Number(r.gmv ?? 0),
@@ -83,7 +94,7 @@ const STORES_SQL = sql`
     s.suspended_at         as "suspendedAt",
     s.approved_at          as "approvedAt",
     s.suspended_reason     as "suspendedReason",
-    s.comped, s.created_at as "createdAt",
+    s.comped, s.is_demo as "isDemo", s.created_at as "createdAt",
     u.name  as "owner",
     u.email as "email",
     coalesce(o.gmv, 0)::bigint  as "gmv",
@@ -122,27 +133,72 @@ export async function getStoreById(id: string): Promise<Store | null> {
 }
 
 // Platform-wide subscription breakdown (computed from every store's real lifecycle state).
-export type SubStats = { trial: number; active: number; pastDue: number; suspended: number; vip: number; mrr: number; trialEndingSoon: number; total: number };
+//
+// ⚠️ `active` is PAYING stores only — the ones whose current period is backed by a PAID invoice
+// (Task 8.26, finance audit F3). A period granted by "Gratiskan N bulan" is `comped`: an active
+// panel, no revenue, never MRR. Before this, production counted 12 comped stores as Rp600.000 of
+// MRR. The rule itself is `subscriptionKpiBucket` (pure, table-tested); this function only feeds it
+// the two invoice facts it needs — the newest paid subscription invoice and the newest comp (0113).
+//
+// `demo` is the seeded demo store (`stores.is_demo`, Task 8.27): counted here so the Status Toko
+// slices still sum to every store, and EXCLUDED from every money figure on the dashboard.
+export type SubStats = {
+  trial: number;
+  active: number; // paying — MRR
+  comped: number; // active on a granted period — NOT MRR
+  pastDue: number;
+  suspended: number; // operator-suspended + lapsed
+  vip: number;
+  demo: number;
+  mrr: number;
+  trialEndingSoon: number;
+  total: number;
+};
 export async function getSubscriptionStats(): Promise<SubStats> {
-  const rows = await db
-    .select({ trialEndsAt: schema.stores.trialEndsAt, currentPeriodEnd: schema.stores.currentPeriodEnd, firstInvoicePaid: schema.stores.firstInvoicePaid, comped: schema.stores.comped, suspendedAt: schema.stores.suspendedAt })
-    .from(schema.stores);
-  const s: SubStats = { trial: 0, active: 0, pastDue: 0, suspended: 0, vip: 0, mrr: 0, trialEndingSoon: 0, total: rows.length };
+  const rows = (await db.execute(sql`
+    select
+      s.trial_ends_at       as "trialEndsAt",
+      s.current_period_end  as "currentPeriodEnd",
+      s.first_invoice_paid  as "firstInvoicePaid",
+      s.comped,
+      s.suspended_at        as "suspendedAt",
+      s.is_demo             as "isDemo",
+      -- newest PAID subscription invoice (legacy seeded rows carry kind NULL and count as subscription)
+      (select max(coalesce(i.paid_at, i.issued_at)) from invoices i
+        where i.store_id = s.id and i.status = 'dibayar' and coalesce(i.kind, 'subscription') <> 'comp') as "lastPaidAt",
+      -- newest period the platform GRANTED (0113)
+      (select max(i.issued_at) from invoices i
+        where i.store_id = s.id and i.kind = 'comp') as "lastCompAt"
+    from stores s
+  `)) as unknown as {
+    trialEndsAt: string | Date | null; currentPeriodEnd: string | Date | null; firstInvoicePaid: boolean; comped: boolean;
+    suspendedAt: string | Date | null; isDemo: boolean; lastPaidAt: string | Date | null; lastCompAt: string | Date | null;
+  }[];
+  const at = (v: string | Date | null) => (v ? new Date(v) : null);
+  const s: SubStats = { trial: 0, active: 0, comped: 0, pastDue: 0, suspended: 0, vip: 0, demo: 0, mrr: 0, trialEndingSoon: 0, total: rows.length };
+  const now = new Date();
   for (const r of rows) {
-    const b = computeBilling(r);
-    // Operator suspension is counted BEFORE VIP: a comped store an operator locked is suspended,
-    // not "VIP, free and fine". This bucket feeds the Status Toko card and the "Toko aktif" KPI, and
-    // counting a locked store as active is exactly the lie the suspend button was already telling.
-    if (b.operatorSuspended) { s.suspended++; continue; }
-    if (r.comped) { s.vip++; continue; } // VIP: active but no MRR, tracked separately
-    if (b.status === "trial") {
-      s.trial++;
-      if (b.daysLeft <= 1) s.trialEndingSoon++;
-    } else if (b.status === "active") {
-      s.active++;
-      s.mrr += r.firstInvoicePaid ? BILLING.MONTHLY_IDR : BILLING.FIRST_MONTH_IDR; // first month contributes the promo rate
-    } else if (b.status === "past_due") s.pastDue++;
-    else s.suspended++;
+    const v = subscriptionKpiBucket({
+      trialEndsAt: at(r.trialEndsAt),
+      currentPeriodEnd: at(r.currentPeriodEnd),
+      firstInvoicePaid: r.firstInvoicePaid,
+      comped: r.comped,
+      suspendedAt: at(r.suspendedAt),
+      isDemo: r.isDemo,
+      lastPaidAt: at(r.lastPaidAt),
+      lastCompAt: at(r.lastCompAt),
+    }, now);
+    s.mrr += v.mrr;
+    if (v.trialEndingSoon) s.trialEndingSoon++;
+    switch (v.bucket) {
+      case "demo": s.demo++; break;
+      case "suspended": case "lapsed": s.suspended++; break;
+      case "vip": s.vip++; break;
+      case "trial": s.trial++; break;
+      case "paid": s.active++; break;
+      case "comped": s.comped++; break;
+      case "pastDue": s.pastDue++; break;
+    }
   }
   return s;
 }
@@ -163,8 +219,13 @@ export type FinanceStats = {
 export async function getFinanceStats(): Promise<FinanceStats> {
   const [sub, invs, gmvRow] = await Promise.all([
     getSubscriptionStats(),
-    db.select({ status: schema.invoices.status, amount: schema.invoices.amountIdr }).from(schema.invoices),
-    db.execute(sql`select coalesce(sum(total_idr) filter (where status <> 'batal'), 0)::bigint as "gmv" from orders`) as unknown as Promise<{ gmv: string }[]>,
+    // A comp invoice (0113) is a granted period, not a bill: Rp0, never revenue, never counted.
+    // The demo store's bills are seed fixtures (8.27) — out.
+    db.select({ status: schema.invoices.status, amount: schema.invoices.amountIdr })
+      .from(schema.invoices)
+      .leftJoin(schema.stores, eq(schema.stores.id, schema.invoices.storeId))
+      .where(and(sql`coalesce(${schema.invoices.kind}, 'subscription') <> 'comp'`, sql`coalesce(${schema.stores.isDemo}, false) = false`)),
+    db.execute(sql`select coalesce(sum(o.total_idr) filter (where o.status <> 'batal'), 0)::bigint as "gmv" from orders o ${NOT_DEMO}`) as unknown as Promise<{ gmv: string }[]>,
   ]);
   const sum = (st: string) => invs.filter((i) => i.status === st).reduce((a, i) => a + i.amount, 0);
   const cnt = (st: string) => invs.filter((i) => i.status === st).length;
@@ -240,6 +301,7 @@ export async function getCourierCostAbsorbed(conn: Pick<typeof db, "execute"> = 
       count(*) filter (where o.ka_shipping_cost_idr is null)::int as "unrecordedOrders"
       from orders o
       left join payments p on p.order_id = o.id
+      ${NOT_DEMO}
      where o.ka_order_id is not null
        and o.status = 'selesai'
   `)) as unknown as {
@@ -259,6 +321,12 @@ export type PlatformFloat = {
   pending: number; // not yet settled
   payoutObligation: number; // payouts menunggu + diproses — transfers we still owe
   payoutPendingCount: number;
+  // BUYERS' money we hold for cancelled prepaid orders (`refunds` menunggu + diproses, Task 8.31).
+  // A separate figure from the payout obligation on purpose: that one is owed to MERCHANTS out of
+  // their ledger balance; this one never entered any ledger — it is the buyer's, and the only record
+  // that we owe it is this table. Summing the two would hide which side of the counter is waiting.
+  refundObligation: number;
+  refundPendingCount: number;
   storesWithBalance: number;
 };
 export async function getPlatformFloat(): Promise<PlatformFloat> {
@@ -268,18 +336,28 @@ export async function getPlatformFloat(): Promise<PlatformFloat> {
       coalesce(sum(amount_idr) filter (where status = 'pending'), 0)::bigint   as "pending",
       count(distinct store_id)::int                                            as "stores"
     from ledger_entries
+    where store_id not in (select id from stores where is_demo) -- 8.27: demo money is not float
   `)) as unknown as { available: string; pending: string; stores: number }[];
   const [po] = (await db.execute(sql`
     select
       coalesce(sum(amount_idr) filter (where status in ('menunggu','diproses')), 0)::bigint as "owed",
       count(*) filter (where status in ('menunggu','diproses'))::int                        as "cnt"
     from payouts
+    where store_id not in (select id from stores where is_demo)
+  `)) as unknown as { owed: string; cnt: number }[];
+  const [rf] = (await db.execute(sql`
+    select
+      coalesce(sum(amount_idr) filter (where status in ('menunggu','diproses')), 0)::bigint as "owed",
+      count(*) filter (where status in ('menunggu','diproses'))::int                        as "cnt"
+    from refunds
   `)) as unknown as { owed: string; cnt: number }[];
   return {
     available: Number(led?.available ?? 0),
     pending: Number(led?.pending ?? 0),
     payoutObligation: Number(po?.owed ?? 0),
     payoutPendingCount: Number(po?.cnt ?? 0),
+    refundObligation: Number(rf?.owed ?? 0),
+    refundPendingCount: Number(rf?.cnt ?? 0),
     storesWithBalance: Number(led?.stores ?? 0),
   };
 }
@@ -311,6 +389,8 @@ export async function getRevenueSeries(months = 12): Promise<RevenuePoint[]> {
     from span
     left join invoices i
       on i.status = 'dibayar' and date_trunc('month', i.issued_at) = span.m
+     and coalesce(i.kind, 'subscription') <> 'comp'                                -- a comp is Rp0, not collected
+     and i.store_id not in (select id from stores where is_demo)                   -- 8.27
     group by span.m
     order by span.m
   `)) as unknown as { month: string; collected: string; invoices: number }[];
@@ -343,9 +423,11 @@ export async function getConversion(): Promise<Conversion> {
       select
         st.id,
         (st.trial_ends_at is not null and st.trial_ends_at < now()) or st.current_period_end is not null as trial_ended,
-        exists (select 1 from invoices i where i.store_id = st.id and i.status = 'dibayar')              as ever_paid
+        exists (select 1 from invoices i where i.store_id = st.id and i.status = 'dibayar'
+                   and coalesce(i.kind, 'subscription') <> 'comp')                                  as ever_paid -- a comp is not a conversion
       from stores st
       where st.comped = false   -- VIP never had to convert; counting them flatters the rate
+        and st.is_demo = false  -- 8.27
     )
     select
       count(*) filter (where trial_ended)::int                as "trialsEnded",
@@ -370,10 +452,62 @@ export async function getConversion(): Promise<Conversion> {
  * ONE reader, called by both surfaces that print it (Analitik → Sistem, and the connection card on
  * Pengaturan → Kurir). A second `process.env.KIRIMINAJA_ENV ?? "sandbox"` next to the card would be
  * a second place to drift, and the two would then disagree about which environment is live — the
- * exact failure the card exists to prevent. The default matches `@tokophi/lib/kiriminaja`, which is
- * what actually chooses the base URL.
+ * exact failure the card exists to prevent. Since Task 8.33 it reads the SAME seam that chooses the
+ * base URL (`@tokophi/lib/provider-config`: the Super Admin's row first, `KIRIMINAJA_ENV` second),
+ * so the badge cannot disagree with the booking.
  */
-export const kaEnvName = () => process.env.KIRIMINAJA_ENV ?? "sandbox";
+export const kaEnvName = async (): Promise<ProviderEnv> => (await getProviderConfig()).kiriminaja.env;
+
+/**
+ * What Super Admin → Pengaturan shows about the platform's own provider keys (Task 8.33): WHICH
+ * environment is live and where that decision came from, whether a key is stored per environment,
+ * its MASKED tail, and when it last passed a live test. Never the key itself — `maskKey` is the only
+ * shape that leaves the server, and the row's ciphertext never leaves `packages/db`.
+ */
+export type ProviderKeyStatus = {
+  /** A key exists for this slot — stored in the DB row, or (fallback) in the container env. */
+  present: boolean;
+  source: "db" | "env" | "none";
+  /** `…1234` — the last four characters — or `—`. */
+  masked: string;
+  /** ISO timestamp of the last successful live test of the STORED key; null = never / not stored. */
+  testedAt: string | null;
+};
+export type ProviderStatus = {
+  /** `INTEGRATION_TOKEN_KEY` is set, so a key can be stored at all. Without it the inputs are disabled, with the reason. */
+  encryptionAvailable: boolean;
+  kiriminaja: {
+    activeEnv: ProviderEnv;
+    envSource: "db" | "env" | "default";
+    sandbox: ProviderKeyStatus;
+    production: ProviderKeyStatus;
+  };
+  autolaris: ProviderKeyStatus;
+};
+export async function getProviderStatus(): Promise<ProviderStatus> {
+  const [rows, ka, al] = await Promise.all([loadProviderRows(), kiriminajaRow(), autolarisRow()]);
+  const env = {
+    KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
+    KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+    AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
+    AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+  };
+  const active = resolveKiriminaja({ row: rows.kiriminaja, env });
+  // Each slot is resolved AS IF it were the active env, so a slot shows the same key the platform
+  // would use after switching to it — including the env-var fallback, which is what "present" means
+  // on a deploy that has never opened this card.
+  const slot = (e: ProviderEnv): ProviderKeyStatus => {
+    const r = resolveKiriminaja({ row: { ...rows.kiriminaja, activeEnv: e }, env });
+    const testedAt = e === "production" ? ka?.productionTestedAt : ka?.sandboxTestedAt;
+    return { present: !!r.key, source: r.keySource, masked: maskKey(r.key), testedAt: r.keySource === "db" ? (testedAt?.toISOString() ?? null) : null };
+  };
+  const alCfg = resolveAutolaris({ row: rows.autolaris, env });
+  return {
+    encryptionAvailable: encryptionAvailable(),
+    kiriminaja: { activeEnv: active.env, envSource: active.envSource, sandbox: slot("sandbox"), production: slot("production") },
+    autolaris: { present: !!alCfg.key, source: alCfg.keySource, masked: maskKey(alCfg.key), testedAt: alCfg.keySource === "db" ? (al?.testedAt?.toISOString() ?? null) : null },
+  };
+}
 
 /**
  * One compose cron sidecar's last tick, as recorded by `apps/admin/app/api/cron/record-run.ts`.
@@ -402,10 +536,11 @@ const KA_PROBE_TIMEOUT_MS = 4_000;
 
 export async function getKiriminajaProbe(): Promise<KaProbe> {
   return cached("ka:probe", KA_PROBE_TTL_MS, async () => {
+    const env = await kaEnvName();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<KaTestResult>((resolve) => {
       timer = setTimeout(
-        () => resolve({ ok: false, env: kaEnvName(), configured: true, message: `Tidak ada jawaban dari KiriminAja dalam ${KA_PROBE_TIMEOUT_MS / 1000} detik.` }),
+        () => resolve({ ok: false, env, configured: true, message: `Tidak ada jawaban dari KiriminAja dalam ${KA_PROBE_TIMEOUT_MS / 1000} detik.` }),
         KA_PROBE_TIMEOUT_MS,
       );
     });
@@ -450,7 +585,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     kiriminaja: kiriminajaProbe.state === "ok",
     kiriminajaProbe,
     autolaris: autolarisConfigured(),
-    kaEnv: kaEnvName(),
+    kaEnv: await kaEnvName(),
     stores,
     dbOk,
     region: process.env.DEPLOY_REGION ?? "lokal", // was hardcoded "Singapore" on a laptop
@@ -472,11 +607,12 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 export type GeoRow = { city: string; gmv: number; orders: number };
 export async function getGmvByCity(limit = 8): Promise<GeoRow[]> {
   const rows = (await db.execute(sql`
-    select coalesce(nullif(city, ''), '—') as "city",
-           sum(total_idr)::bigint          as "gmv",
+    select coalesce(nullif(o.city, ''), '—') as "city",
+           sum(o.total_idr)::bigint          as "gmv",
            count(*)::int                   as "orders"
-    from orders
-    where status <> 'batal'
+    from orders o
+    ${NOT_DEMO}
+    where o.status <> 'batal'
     group by 1
     order by "gmv" desc
     limit ${limit}
@@ -537,7 +673,7 @@ export type Platform = {
 export async function getPlatform(): Promise<Platform> {
   const [sub, gmvRes, totalRes, new30dRes] = await Promise.all([
     getSubscriptionStats(),
-    db.execute(sql`select coalesce(sum(total_idr), 0)::bigint as gmv from orders where status <> 'batal'`),
+    db.execute(sql`select coalesce(sum(o.total_idr), 0)::bigint as gmv from orders o ${NOT_DEMO} where o.status <> 'batal'`),
     db.execute(sql`select count(*)::int as count from stores`),
     db.execute(sql`select count(*)::int as count from stores where created_at >= now() - interval '30 days'`),
   ]);
@@ -549,7 +685,7 @@ export async function getPlatform(): Promise<Platform> {
     mrr: sub.mrr,
     gmv, // merchants' transaction value across ALL stores — NOT our revenue
     totalStores,
-    activeStores: sub.active + sub.vip,
+    activeStores: sub.active + sub.comped + sub.vip, // panels that are open — paying or not
     trialStores: sub.trial,
     pastDueStores: sub.pastDue,
     suspendedStores: sub.suspended,
@@ -569,15 +705,20 @@ export async function getPlatform(): Promise<Platform> {
 // Its key is deliberately NOT `StoreStatus` — that union describes a store's *billing* status badge
 // and has no VIP member; widening it would put a value into every badge component that none of them
 // render. This card owns its own key.
-export type StatusSlice = "aktif" | "trial" | "menunggak" | "ditangguhkan" | "vip";
+//
+// `digratiskan` (a granted period, 8.26) and `demo` (8.27) are slices for the same reason: a store
+// in either is a store, and folding it into Aktif would put it back into the MRR headcount.
+export type StatusSlice = "aktif" | "digratiskan" | "trial" | "menunggak" | "ditangguhkan" | "vip" | "demo";
 export async function getStatusDistribution(): Promise<{ status: StatusSlice; label: string; count: number }[]> {
   const s = await getSubscriptionStats();
   return [
-    { status: "aktif", label: "Aktif", count: s.active },
+    { status: "aktif", label: "Aktif (berbayar)", count: s.active },
+    { status: "digratiskan", label: "Digratiskan", count: s.comped },
     { status: "vip", label: "VIP (gratis)", count: s.vip },
     { status: "trial", label: "Trial", count: s.trial },
     { status: "menunggak", label: "Menunggak", count: s.pastDue },
     { status: "ditangguhkan", label: "Ditangguhkan", count: s.suspended },
+    { status: "demo", label: "Demo", count: s.demo },
   ];
 }
 
@@ -882,7 +1023,7 @@ export async function getAggregator(): Promise<{ provider: string; env: string }
   // N35: the card said WHICH aggregator but never WHICH KEY. "Terhubung" against the sandbox and
   // "Terhubung" against production read identically, and only one of them moves a real parcel — the
   // operator had to press Test koneksi (whose message carries it) or leave for Analitik to find out.
-  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", env: kaEnvName() };
+  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", env: await kaEnvName() };
 }
 
 // Single-row platform finance config (0101). Missing row = the migration default: PPN OFF —
@@ -1036,6 +1177,82 @@ export async function getPayoutSummary(): Promise<PayoutSummary> {
     .select({ status: schema.payouts.status, amount: schema.payouts.amountIdr })
     .from(schema.payouts);
   const s: PayoutSummary = { pendingCount: 0, pendingAmount: 0, processingCount: 0, processingAmount: 0, paidCount: 0, paidAmount: 0 };
+  for (const r of rows) {
+    if (r.status === "menunggu") { s.pendingCount++; s.pendingAmount += r.amount; }
+    else if (r.status === "diproses") { s.processingCount++; s.processingAmount += r.amount; }
+    else if (r.status === "selesai") { s.paidCount++; s.paidAmount += r.amount; }
+  }
+  return s;
+}
+
+// ── Refunds — the buyer's money on a cancelled prepaid order (Task 8.31) ───────────────────────────
+// Written ONLY by `applyOrderStatusChange` (apps/admin/lib/order-status.ts) when an order carrying a
+// `berhasil` non-COD payment moves to batal/retur; settled by hand from /pencairan. Same operator
+// queue shape as payouts: open first, newest first inside each bucket, settled rows sink.
+export type RefundStatus = "menunggu" | "diproses" | "selesai" | "gagal";
+export type RefundRow = {
+  id: string;
+  storeId: string;
+  storeName: string;
+  orderId: string;
+  orderNumber: string;
+  buyerName: string | null;
+  buyerPhone: string | null;
+  method: string; // payments.method — which rail the money came in on (where it goes back)
+  amount: number;
+  status: RefundStatus;
+  reason: string | null; // why the obligation exists (cancellation / return reason)
+  note: string | null; // transfer reference on selesai, refusal reason on gagal
+  requestedAt: Date;
+  paidAt: Date | null;
+  minutesAgo: number;
+};
+
+const REFUND_RANK = sql<number>`case ${schema.refunds.status}
+  when 'menunggu' then 0 when 'diproses' then 1 when 'selesai' then 2 else 3 end`;
+
+export async function getRefunds(): Promise<RefundRow[]> {
+  const rows = await db
+    .select({
+      id: schema.refunds.id,
+      storeId: schema.refunds.storeId,
+      storeName: schema.stores.name,
+      orderId: schema.refunds.orderId,
+      orderNumber: schema.orders.number,
+      // The order's SNAPSHOT (0042) — who this money goes back to, as they were at purchase.
+      buyerName: schema.orders.shipRecipient,
+      buyerPhone: schema.orders.shipPhone,
+      method: schema.payments.method,
+      amount: schema.refunds.amountIdr,
+      status: schema.refunds.status,
+      reason: schema.refunds.reason,
+      note: schema.refunds.note,
+      requestedAt: schema.refunds.requestedAt,
+      paidAt: schema.refunds.paidAt,
+    })
+    .from(schema.refunds)
+    .innerJoin(schema.stores, eq(schema.stores.id, schema.refunds.storeId))
+    .innerJoin(schema.orders, eq(schema.orders.id, schema.refunds.orderId))
+    .innerJoin(schema.payments, eq(schema.payments.id, schema.refunds.paymentId))
+    .orderBy(asc(REFUND_RANK), desc(schema.refunds.requestedAt));
+  const now = Date.now();
+  return rows.map((r) => ({
+    ...r,
+    minutesAgo: Math.max(0, Math.round((now - r.requestedAt.getTime()) / 60_000)),
+  }));
+}
+
+export type RefundSummary = {
+  pendingCount: number;
+  pendingAmount: number;
+  processingCount: number;
+  processingAmount: number;
+  paidCount: number;
+  paidAmount: number;
+};
+export async function getRefundSummary(): Promise<RefundSummary> {
+  const rows = await db.select({ status: schema.refunds.status, amount: schema.refunds.amountIdr }).from(schema.refunds);
+  const s: RefundSummary = { pendingCount: 0, pendingAmount: 0, processingCount: 0, processingAmount: 0, paidCount: 0, paidAmount: 0 };
   for (const r of rows) {
     if (r.status === "menunggu") { s.pendingCount++; s.pendingAmount += r.amount; }
     else if (r.status === "diproses") { s.processingCount++; s.processingAmount += r.amount; }

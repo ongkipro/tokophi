@@ -54,7 +54,7 @@ export default async function PenghasilanPage({
             {num(mismatches.length)} pesanan perlu direkonsiliasi
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Periksa alokasi checkout, biaya provider, dan ledger pada{" "}
+            Periksa alokasi checkout, biaya admin yang kita tagihkan, dan ledger pada{" "}
             {mismatches.slice(0, 3).map((row, index) => (
               <span key={row.orderNumber}>
                 {index > 0 && ", "}

@@ -1,11 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
-import { computeBilling, quote, subscriptionCharge } from "@tokophi/lib/billing";
-import { getSubscriptionPpnEnabled } from "@/lib/data/platform-finance";
-import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
-
-import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { createSubscriptionInvoice } from "@tokophi/db/subscription-invoice";
+import { eq } from "drizzle-orm";
+import { computeBilling } from "@tokophi/lib/billing";
+import { autolarisConfigured } from "@tokophi/lib/autolaris";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 import { cronAuthorized } from "@/lib/cron-auth";
 // Daily billing job (schedule via Coolify Scheduled Task / external cron → GET with the secret):
@@ -21,6 +19,10 @@ import { cronAuthorized } from "@/lib/cron-auth";
 // log to say it had been undone. `computeBilling` now folds `stores.suspended_at` into `status`, so
 // the sync propagates the operator's decision instead of erasing it, and the invoice branch below
 // reads `billingStatus` so the money half stays keyed on the subscription alone.
+// The renewal bill rides a bank VA the provider offers on this account (`platform_payment_channels`
+// VABCA, measured 2026-09-10). A channel CODE, never a bank nickname — `"BCA"` was the bug.
+const RENEWAL_CHANNEL = "VABCA";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,6 @@ export async function GET(req: NextRequest) {
     const stores = await db
       .select({
         id: schema.stores.id,
-        accountId: schema.stores.accountId,
         slug: schema.stores.slug,
         status: schema.stores.status,
         trialEndsAt: schema.stores.trialEndsAt,
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest) {
 
     let statusSynced = 0;
     let invoicesCreated = 0;
+    let invoiceErrors = 0;
     for (const s of stores) {
       const b = computeBilling(s);
       if (b.status !== s.status) {
@@ -63,65 +65,30 @@ export async function GET(req: NextRequest) {
       }
 
       if ((b.billingStatus === "past_due" || b.billingStatus === "suspended") && autolarisConfigured()) {
-        const [pending] = await db
-          .select({ id: schema.invoices.id })
-          .from(schema.invoices)
-          .where(
-            and(
-              eq(schema.invoices.storeId, s.id),
-              eq(schema.invoices.kind, "subscription"),
-              eq(schema.invoices.status, "menunggu"),
-            ),
-          )
-          .limit(1);
-
-        if (!pending) {
-          const q = quote("monthly", s.firstInvoicePaid);
-          // Platform PPN toggle (0101, owner ruling 2026-08-24): OFF → flat DPP, zero tax. Applied
-          // at CREATION; issued invoices are never rewritten.
-          const charge = subscriptionCharge(q.amount, await getSubscriptionPpnEnabled());
-          const totalWithPpn = charge.total;
-          const reffId = `SUB-${s.slug.slice(0, 8)}-${Date.now()}`;
-          const number = "SUB-" + Date.now().toString().slice(-9);
-          const callbackUrl = payCallbackUrl(reffId);
-          const r = await alCreatePayment({
-            reffId,
-            channelCode: "BCA",
-            amount: totalWithPpn,
-            customerId: s.id,
-            customerName: s.slug,
-            customerPhone: "081200000000",
-            customerEmail: "merchant@tokophi.id",
-            callbackUrl,
-          });
-          if (r.ok) {
-            await db.insert(schema.invoices).values({
-              number,
-              accountId: s.accountId,
-              storeId: s.id,
-              kind: "subscription",
-              planKey: "bisnis",
-              amountIdr: totalWithPpn,
-              taxIdr: charge.taxIdr,
-              cycle: q.cycle,
-              periodMonths: q.months,
-              reffId,
-              trxId: r.trxId,
-              channel: "BCA",
-              virtualAccount: r.virtualAccount ?? null,
-              qr: r.qr ?? null,
-              paymentUrl: r.url ?? null,
-              status: "menunggu",
-            });
-            invoicesCreated++;
-          }
+        // 🔴 Task 8.24 (finance audit F1): this block used to build its own bill — `alCreatePayment`
+        // with `channelCode: "BCA"`, a code the provider has never known. The provider refused, no
+        // invoice row was written, nothing was logged, and a lapsed store sat suspended with
+        // nothing to pay. The ONE creator (`@tokophi/db` createSubscriptionInvoice) reuses a pending
+        // invoice, submits with a real channel code and the owner's e-mail, and stores amount + tax.
+        // A refusal is now LOGGED, so `invoicesCreated: 0` can be read.
+        // One store's failure must cost one store, never the sweep: a thrown error here used to
+        // escape to the outer catch and leave every store behind it unbilled for the day.
+        try {
+          const r = await createSubscriptionInvoice({ storeId: s.id, cycle: "monthly", channelCode: RENEWAL_CHANNEL, actor: "cron" });
+          if (!r.ok) {
+            console.error("[cron/billing] renewal invoice refused for", s.slug, "—", r.error);
+            invoiceErrors++;
+          } else if (!r.reused) invoicesCreated++;
+        } catch (err) {
+          console.error("[cron/billing] renewal invoice failed for", s.slug, err);
+          invoiceErrors++;
         }
       }
     }
 
     // Liveness row (0091) — see `../record-run.ts`. A DAILY job is the one whose silence is hardest to
     // notice: a fortnight of no renewal invoices looks exactly like a fortnight where nothing was due.
-    const summary = { stores: stores.length, statusSynced, invoicesCreated };
+    const summary = { stores: stores.length, statusSynced, invoicesCreated, invoiceErrors };
     await recordCronRun("billing", { ok: true, startedAt, intervalSec: cronIntervalSec(req), result: summary });
     return NextResponse.json({ ok: true, ...summary });
   } catch (error) {

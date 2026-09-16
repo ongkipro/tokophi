@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { alInquirePaymentStatus } from "./autolaris";
 import {
+  payCallbackBodyShape,
   PAY_CALLBACK_PARAM,
   payCallbackAmountMatches,
   payCallbackUrl,
@@ -155,5 +156,40 @@ describe("alInquirePaymentStatus", () => {
       ok: false,
       error: "Tidak ditemukan",
     });
+  });
+});
+
+// F9 (finance audit 2026-09-16): the shape line for a refused PAID callback. The vendor's callback
+// payload is unpublished and production has never completed a gateway payment, so the first real
+// rejection is the only evidence there will be — and it must not leak what it describes.
+describe("payCallbackBodyShape — names, types and lengths, never a value", () => {
+  const body = { trx_id: "875114", reff_id: "PHI-768771328ISC", status: "PAID", amount: "197372", customer_name: "Siti Aminah", customer_phone: "081234567890", data: { va: "8808" } };
+
+  it("describes the body without reproducing any value", () => {
+    const line = payCallbackBodyShape(body, 196_000);
+    expect(line).toBe("fields=amount:string(6),customer_name:string(11),customer_phone:string(12),data:object(1),reff_id:string(16),status:string(4),trx_id:string(6) amount=digits expectedDigits=6");
+    for (const v of ["875114", "PHI-768771328ISC", "Siti", "Aminah", "0812", "196000", "8808", "PAID"]) expect(line).not.toContain(v);
+  });
+
+  it("names the amount's kind: absent / null / int / number / digits / string", () => {
+    expect(payCallbackBodyShape({ status: "PAID" }, 1000)).toContain("amount=absent");
+    expect(payCallbackBodyShape({ amount: null }, 1000)).toContain("amount=null");
+    expect(payCallbackBodyShape({ amount: 1000 }, 1000)).toContain("amount=int");
+    expect(payCallbackBodyShape({ amount: 1000.5 }, 1000)).toContain("amount=number");
+    expect(payCallbackBodyShape({ amount: "1.000" }, 1000)).toContain("amount=string");
+    expect(payCallbackBodyShape({ amount: "1000" }, 1000)).toContain("amount=digits");
+  });
+
+  it("survives a non-object body", () => {
+    expect(payCallbackBodyShape(null, 5)).toBe("body=null");
+    expect(payCallbackBodyShape([1], 5)).toBe("body=array");
+    expect(payCallbackBodyShape("x", 5)).toBe("body=string");
+  });
+
+  // Mutation self-check: a shape function that printed a value would trip the loop above. Prove the
+  // loop can fire by feeding it a line that DOES carry a value.
+  it("the no-value assertion is live", () => {
+    const leaky = `fields=amount:string(6) amount=${body.amount}`;
+    expect(["875114", "197372"].some((v) => leaky.includes(v))).toBe(true);
   });
 });

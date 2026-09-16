@@ -1,19 +1,31 @@
 "use server";
 import { db, schema } from "@tokophi/db";
+import { createSubscriptionInvoice } from "@tokophi/db/subscription-invoice";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { platformGate } from "./platform-auth";
 import { markPayoutPaidInTxn, type PayoutConflict } from "./payout-transition";
+import { processRefundInTxn, markRefundPaidInTxn, rejectRefundInTxn, type RefundConflict } from "./refund-transition";
 import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } from "@tokophi/lib/impersonation";
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
-import { alTestConnection, alProbeChannels, compareChannelFees, alCreateOrder, type FeeComparisonRow } from "@tokophi/lib/autolaris";
-import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
+import { alTestConnection, alProbeChannels, compareChannelFees, type FeeComparisonRow } from "@tokophi/lib/autolaris";
+import { BILLING, addMonths, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
-import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
+import { buildCompInvoice } from "./comp-invoice";
+import { isProviderEnv, type ProviderEnv } from "@tokophi/lib/provider-config";
+import {
+  loadProviderRows,
+  markAutolarisTested,
+  markKiriminajaTested,
+  writeAutolarisKey,
+  writeKiriminajaActiveEnv,
+  writeKiriminajaKey,
+} from "@tokophi/db/provider-config";
+import { saveCredentials, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -678,6 +690,64 @@ export async function testAutolarisConnection(): Promise<{ ok: boolean; message:
   return alTestConnection();
 }
 
+// ---- Task 8.33: provider credentials + environment, managed here instead of by redeploy ----
+//
+// The rules (store only after a passed test; switch env only after the TARGET key passed a test)
+// live in `provider-credentials.ts` with every side effect injected, so they are tested against a
+// stubbed provider. This file supplies the real ones. The plaintext key crosses exactly two
+// boundaries — the cipher and the provider's test call — and is never logged, returned or stored
+// bare; the audit line carries the operator's e-mail and `maskKey()`'s four-character tail.
+const credentialDeps: CredentialDeps = {
+  rows: loadProviderRows,
+  env: () => ({
+    KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
+    KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+    AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
+    AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+  }),
+  testKiriminaja: kaTestConnection,
+  testAutolaris: alTestConnection,
+  writeKiriminajaKey,
+  markKiriminajaTested,
+  writeKiriminajaActiveEnv,
+  writeAutolarisKey,
+  markAutolarisTested,
+  log: logPlatform,
+};
+
+const isProviderId = (v: unknown): v is ProviderId => v === "kiriminaja" || v === "autolaris";
+
+/** OWNER only: a stored key outranks the container env on every replica, so this is a platform-wide credential change. */
+export async function saveProviderCredentials(provider: string, env: string, key: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isProviderId(provider) || !isProviderEnv(env)) return { ok: false, message: "Provider atau lingkungan tidak dikenal." };
+  const r = await saveCredentials(credentialDeps, gate.admin.email, provider, env, key);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+/** OWNER only: flips which KiriminAja host bookings go to. Tests the TARGET env's key first and refuses on failure. */
+export async function setProviderEnv(provider: string, env: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (provider !== "kiriminaja") return { ok: false, message: "Hanya KiriminAja yang punya lingkungan sandbox/production." };
+  if (!isProviderEnv(env)) return { ok: false, message: "Lingkungan tidak dikenal." };
+  const r = await switchKiriminajaEnv(credentialDeps, gate.admin.email, env);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+/** `admin` rank, like the two test buttons above: re-tests the key a slot resolves to and re-stamps `tested_at`. */
+export async function testProviderKey(provider: string, env: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isProviderId(provider) || !isProviderEnv(env)) return { ok: false, message: "Provider atau lingkungan tidak dikenal." };
+  const r = await testStoredKey(credentialDeps, provider, env as ProviderEnv);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
 // ---- platform team: invite another operator (real platform_admins row) ----
 /**
  * 🔴 This was a PRIVILEGE-ESCALATION PATH, and it quietly undid the role hierarchy added earlier
@@ -768,43 +838,14 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
   const gate = await platformGate();
   if (!gate.ok) return gate;
   // reuse an existing unpaid subscription invoice — never duplicate
-  const [pending] = await db
-    .select({ number: schema.invoices.number, virtualAccount: schema.invoices.virtualAccount })
-    .from(schema.invoices)
-    .where(and(eq(schema.invoices.storeId, storeId), eq(schema.invoices.kind, "subscription"), eq(schema.invoices.status, "menunggu")))
-    .limit(1);
-  if (pending) return { ok: true, number: pending.number, virtualAccount: pending.virtualAccount ?? undefined, reused: true };
-
-  const [store] = await db
-    .select({ accountId: schema.stores.accountId, slug: schema.stores.slug, firstInvoicePaid: schema.stores.firstInvoicePaid, name: schema.stores.name })
-    .from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
-  if (!store) return { ok: false, error: "Toko tidak ditemukan." };
-  const [owner] = await db
-    .select({ email: schema.users.email }).from(schema.storeUsers)
-    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
-    .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.role, "owner"))).limit(1);
-
-  const q = quote(cycle, store.firstInvoicePaid);
-  // Platform PPN toggle (0101, owner ruling 2026-08-24) — same gate as the cron and the merchant's
-  // own pay flow, read from platform_finance so all three creators can never disagree.
-  const [finRow] = await db.select({ on: schema.platformFinance.subscriptionPpnEnabled }).from(schema.platformFinance).where(eq(schema.platformFinance.id, 1)).limit(1);
-  const charge = subscriptionCharge(q.amount, finRow?.on ?? false);
-  const amount = charge.total;
-  const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = payCallbackUrl(reffId);
-  // AL-ORDER: digital order (courir_id=1) — same contract as the merchant pay flow; see alCreateOrder.
-  const r = await alCreateOrder({ reffId, channelCode: "VABCA", amount, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl, items: [{ name: "Langganan TokoPhi (manual)", qty: 1, unitPrice: amount }] });
-  if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
-
-  const number = "SUB-" + Date.now().toString().slice(-9);
-  await db.insert(schema.invoices).values({
-    number, accountId: store.accountId, storeId, planKey: "bisnis", amountIdr: amount, taxIdr: charge.taxIdr, status: "menunggu",
-    kind: "subscription", cycle: q.cycle, periodMonths: q.months, reffId, trxId: r.trxId, channel: "VABCA",
-    virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null,
-  });
-  await logStore(storeId, `Tagihan manual Rp${amount.toLocaleString("id-ID")} (${q.cycle === "annual" ? "tahunan" : "bulanan"}) dibuat oleh platform`);
+  // ONE creator for the cron, the merchant's own flow and this button (Task 8.24). It reuses a
+  // pending invoice, submits with a real channel code and the owner's e-mail, stores amount + tax.
+  const r = await createSubscriptionInvoice({ storeId, cycle, channelCode: "VABCA", actor: "platform" });
+  if (!r.ok) return { ok: false, error: r.error };
+  if (r.reused) return { ok: true, number: r.detail.number, virtualAccount: r.detail.virtualAccount ?? undefined, reused: true };
+  await logStore(storeId, `Tagihan manual Rp${r.detail.amountIdr.toLocaleString("id-ID")} (${r.detail.cycle === "annual" ? "tahunan" : "bulanan"}) dibuat oleh platform`);
   revalidatePath(`/toko/${storeId}`); revalidatePath("/paket");
-  return { ok: true, number, virtualAccount: r.virtualAccount ?? undefined };
+  return { ok: true, number: r.detail.number, virtualAccount: r.detail.virtualAccount ?? undefined };
 }
 
 export async function sendPaymentReminder(storeId: string): Promise<{ ok: boolean; error?: string }> {
@@ -862,7 +903,7 @@ export async function setTicketStatus(ticketId: string, status: "open" | "answer
 export async function compStore(storeId: string, months = 1): Promise<{ ok: boolean; until?: string; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  const [s] = await db.select({ currentPeriodEnd: schema.stores.currentPeriodEnd }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+  const [s] = await db.select({ currentPeriodEnd: schema.stores.currentPeriodEnd, accountId: schema.stores.accountId }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
   if (!s) return { ok: false };
   const now = new Date();
   const base = s.currentPeriodEnd && s.currentPeriodEnd > now ? s.currentPeriodEnd : now;
@@ -872,7 +913,15 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
   // and its first real invoice becomes Rp305.250 instead of Rp55.500 — Rp249.750 too much, charged to
   // the merchant we were trying to compensate. `computeBilling` reads `active` from
   // `currentPeriodEnd` alone (billing.ts), so the comp works without it.
-  await db.update(schema.stores).set({ currentPeriodEnd: until }).where(eq(schema.stores.id, storeId));
+  //
+  // THE PERIOD MOVE AND ITS RECORD LAND TOGETHER (Task 8.26 / 0113). A comp used to leave nothing a
+  // KPI could read, so MRR counted every comped store as paying. The Rp0 `kind='comp'` invoice is
+  // what lets `getSubscriptionStats` tell this period apart from a paid one — written in the same
+  // transaction so the store can never be extended without the row that says why.
+  await db.transaction(async (tx) => {
+    await tx.update(schema.stores).set({ currentPeriodEnd: until }).where(eq(schema.stores.id, storeId));
+    await tx.insert(schema.invoices).values(buildCompInvoice({ storeId, accountId: s.accountId, months, at: now }));
+  });
   // `status` is DERIVED, never asserted — a comp does not unlock a store an operator suspended.
   const state = await syncStoredStatus(storeId);
   await logStore(
@@ -1212,6 +1261,61 @@ export async function rejectPayout(payoutId: string, reason: string): Promise<{ 
   revalidatePath("/pencairan");
   revalidatePath(`/toko/${r.storeId}`);
   return { ok: true, restored: r.restored };
+}
+
+// ── REFUNDS — the BUYER's money on a cancelled prepaid order (Task 8.31) ─────────────────────────
+// Three actions, one shape each: the gate, ONE compare-and-swap in `refund-transition.ts`, the audit
+// line, the revalidate. No status is read or written here (two writers is two rules — the payout
+// lesson, F-M15), and NOTHING touches the ledger on any path: this money never entered the seller's
+// book, so there is nothing to post when it leaves ours.
+
+/** Menunggu → Diproses: an operator has started the transfer back to the buyer. */
+export async function processRefund(refundId: string): Promise<{ ok: boolean; error?: string; conflict?: RefundConflict }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const r = await db.transaction(async (tx) => processRefundInTxn(tx, refundId));
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
+  await logStore(r.storeId, `Refund ${rupiah(r.amount)} ke pembeli diproses (transfer dimulai)`);
+  revalidatePath("/pencairan");
+  revalidatePath("/");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
+}
+
+/** Diproses → Selesai: the money reached the buyer. `ref` is the transfer reference, kept on `note`. */
+export async function markRefundPaid(refundId: string, ref?: string): Promise<{ ok: boolean; error?: string; conflict?: RefundConflict }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const reference = ref?.trim() || null;
+  const r = await db.transaction(async (tx) => markRefundPaidInTxn(tx, refundId, reference));
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
+  await logStore(
+    r.storeId,
+    `Refund ${rupiah(r.amount)} ke pembeli SELESAI — dana sudah dikembalikan${reference ? ` (ref: ${reference})` : ""}`,
+  );
+  revalidatePath("/pencairan");
+  revalidatePath("/");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
+}
+
+/**
+ * → Gagal: the refund is refused, with a reason. Unlike a rejected PAYOUT nothing is restored
+ * anywhere — there is no ledger row to reverse — so the reason is the whole record of why a buyer
+ * who paid was not paid back. It is required for that reason, and the seller's order detail shows it.
+ */
+export async function rejectRefund(refundId: string, reason: string): Promise<{ ok: boolean; error?: string; conflict?: RefundConflict }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const why = reason?.trim();
+  if (!why) return { ok: false, error: "Alasan penolakan wajib diisi." };
+  const r = await db.transaction(async (tx) => rejectRefundInTxn(tx, refundId, why));
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
+  await logStore(r.storeId, `Refund ${rupiah(r.amount)} ke pembeli DITOLAK — “${why}”`);
+  revalidatePath("/pencairan");
+  revalidatePath("/");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
 }
 
 /**

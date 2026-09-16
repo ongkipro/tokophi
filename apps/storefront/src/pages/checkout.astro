@@ -6,6 +6,7 @@ import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip
 import { noVariantChoice } from "../lib/cart-variant";
 import { getRecoveredCheckout } from "../data/checkout";
 import { PAYMENT_FEES, channelFeeValue, type FeeKind } from "@tokophi/lib/payment-fees";
+import { COD_FEE_MIN_IDR, COD_FEE_RATE } from "@tokophi/lib/order-finance";
 
 // ADR 0009 §4 — checkout is LOCKED (not part of the Store Builder); its only per-store variance is
 // branding read from the store profile: the logo (stores.logo_url) + the brand colour. BOTH now live
@@ -106,6 +107,9 @@ const FS = await storeFreeShip(store.id);
 const FREE_SHIP_ENABLED = FS.enabled;
 const FREE_SHIP_MIN = FS.minIdr;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
+// The COD fee's rate and FLOOR come from the engine (Task 8.29) — the mirror must not carry its own numbers.
+const COD_FEE_MIN = COD_FEE_MIN_IDR;
+const COD_FEE_PCT = COD_FEE_RATE;
 const COD_PROVINCES = COD.allowedProvinces; // [] = every province
 
 // ── CARTS POISONED BY THE OLD PDP SIZE PICKER (see produk/[handle].astro) ────────────────────────
@@ -945,7 +949,7 @@ const RECOVER = recovered && {
 
 {/* Two thumbnail boxes, both fixed and `shrink-0` (Task 6.12): the summary line `h-16 w-14` = 56 px,
     and the mobile summary bar's `#summary2-thumb` `h-10 w-9` = 36 px. */}
-<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, STORE_SLUG, COD_ENABLED, COD_MAX, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER, NO_CHOICE_HANDLES, UPLOAD_WIDTHS, THUMB_SIZES: "56px", BAR_THUMB_SIZES: "36px" }}>
+<script is:inline define:vars={{ ONGKIR_API, ORDER_API, PROMO_API, STORE_SLUG, COD_ENABLED, COD_MAX, COD_FEE_MIN, COD_FEE_PCT, COD_PROVINCES, TAX_ENABLED, TAX_RATE, TAX_INCLUSIVE, FREE_SHIP_ENABLED, FREE_SHIP_MIN, RECOVER, NO_CHOICE_HANDLES, UPLOAD_WIDTHS, THUMB_SIZES: "56px", BAR_THUMB_SIZES: "36px" }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -1314,13 +1318,14 @@ const RECOVER = recovered && {
 
     // Owner ruling 2026-08-24. COD = 3% of (goods omset + shipping) — NOT the old gross-up
     // `× 0.03 / 0.97`, and NOT on the payable (that would tax the goods PPN) — plus PPN 11% on the
-    // fee itself. This mirrors calculateOrderFinance; /api/public/order recomputes and is the
-    // boundary, as always.
+    // fee itself, FLOORED at the courier's Rp2.500 minimum (Task 8.29; both numbers arrive from the
+    // engine via define:vars — COD_FEE_PCT / COD_FEE_MIN — so this file holds no rate of its own).
+    // This mirrors calculateOrderFinance; /api/public/order recomputes and is the boundary, as always.
     function omset() {
       return Math.max(0, subtotal - voucherPriceOff);
     }
     function codCharges() {
-      var beforeVat = Math.round((omset() + selectedShipping()) * 0.03);
+      var beforeVat = Math.max(COD_FEE_MIN, Math.round((omset() + selectedShipping()) * COD_FEE_PCT));
       var vat = Math.round(beforeVat * 0.11);
       return { fee: beforeVat, vat: vat, label: "Biaya COD" };
     }

@@ -121,3 +121,36 @@ export function payCallbackAmountMatches(provided: unknown, expectedAmountIdr: n
   const amount = Number(provided);
   return Number.isSafeInteger(amount) && amount === expectedAmountIdr;
 }
+
+/**
+ * The SHAPE of a paid-callback body that the amount gate refused — for the log line, never the
+ * body (finance audit 2026-09-16, F9).
+ *
+ * The provider's callback payload is unpublished ("Payload callback belum dipublikasikan"), the
+ * gate above is an exact integer equality, and production has never completed a gateway payment —
+ * so the first real PAID callback that carries `amount` differently (absent, a string with
+ * separators, the collected total instead of the base) will be IGNORED, and the only way to learn
+ * why is this line. It names field names (sorted), each value's JSON type and, for strings, its
+ * LENGTH; whether `amount` parses as an integer; and the DIGIT COUNT of the amount we expected.
+ * It never emits a value: a callback carries a payer's name, phone and the amount itself, and this
+ * line is read casually and pasted into tickets.
+ */
+export function payCallbackBodyShape(body: unknown, expectedAmountIdr: number): string {
+  const b = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  if (!b) return `body=${body === null ? "null" : Array.isArray(body) ? "array" : typeof body}`;
+  const fields = Object.keys(b)
+    .sort()
+    .map((k) => {
+      const v = b[k];
+      const t = v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+      return t === "string" ? `${k}:string(${(v as string).length})` : t === "object" ? `${k}:object(${Object.keys(v as object).length})` : `${k}:${t}`;
+    });
+  const amount = b.amount;
+  const amountKind =
+    typeof amount === "number"
+      ? Number.isSafeInteger(amount) ? "int" : "number"
+      : typeof amount === "string"
+        ? /^\d+$/.test(amount) ? "digits" : "string"
+        : amount === undefined ? "absent" : amount === null ? "null" : typeof amount;
+  return `fields=${fields.join(",") || "-"} amount=${amountKind} expectedDigits=${String(Math.abs(Math.trunc(expectedAmountIdr))).length}`;
+}

@@ -33,7 +33,11 @@ export default async function LanggananPage() {
     menunggu: { label: "Menunggu", cls: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
     gagal: { label: "Gagal", cls: "bg-destructive/12 text-destructive" },
   };
-  const jenis = (a: number) => (a >= 2_000_000 ? "Tahunan" : a <= 100_000 ? "Bln pertama" : "Bulanan");
+  // A comp (Task 8.26, migration 0113) is a Rp0 invoice already `dibayar` — the STATUS badge says
+  // "Lunas" truthfully (nothing is owed) but the kind is a gift, not a payment, so the Jenis column
+  // says so instead of guessing "Bln pertama" from the amount.
+  const jenis = (inv: { amount: number; kind: string | null }) =>
+    inv.kind === "comp" ? "Gratis" : inv.amount >= 2_000_000 ? "Tahunan" : inv.amount <= 100_000 ? "Bln pertama" : "Bulanan";
   const fmtDue = bill?.dueDate ? new Date(bill.dueDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
   return (
@@ -126,7 +130,7 @@ export default async function LanggananPage() {
               {invoices.map((inv) => (
                 <Link key={inv.number} href={`/faktur/${inv.number}`} className="grid grid-cols-2 gap-x-2 gap-y-1 border-b px-6 py-3 text-sm transition-colors last:border-0 hover:bg-muted/40 sm:grid-cols-[1.3fr_1fr_1fr_0.9fr_1fr_auto] sm:items-center">
                   <span className="font-mono text-xs">{inv.number}</span>
-                  <span className="text-right text-muted-foreground sm:text-left">{jenis(inv.amount)}</span>
+                  <span className="text-right text-muted-foreground sm:text-left">{jenis(inv)}</span>
                   <span className="text-right tabular-nums">{IDR(inv.amount)}</span>
                   <span><Badge variant="secondary" className={`border-transparent ${INV_STATUS[inv.status].cls}`}>{INV_STATUS[inv.status].label}</Badge></span>
                   {/* A COLUMN of dates: 14,64–17,77px apart row to row, so the issue dates never

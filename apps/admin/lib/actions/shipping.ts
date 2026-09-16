@@ -16,6 +16,7 @@ import { stackedDims } from "@/lib/shipping-weight";
 import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
 import { realWaybill } from "@tokophi/lib/kiriminaja-tracking";
+import { activeKaEnv } from "@tokophi/lib/provider-config";
 
 // `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
 // from the merchant's COD payout, so wherever a merchant sees a COD-capable rate they see this too.
@@ -1528,7 +1529,9 @@ export async function trackShipment(orderNumber: string): Promise<TrackResult> {
 // with the real waybill the moment KiriminAja returns one.
 export async function fillDemoResi(orderNumber: string): Promise<{ ok: boolean; error?: string; awb?: string }> {
   const { storeId } = await requireCapability("orders:write");
-  if ((process.env.KIRIMINAJA_ENV ?? "sandbox") === "production") {
+  // Task 8.33: the SAME seam the booking reads — a demo resi decided by a stale env var is a fake
+  // waybill on a production order.
+  if ((await activeKaEnv()) === "production") {
     return {
       ok: false,
       error: "Isi resi contoh hanya untuk demo/sandbox — tidak tersedia di produksi.",

@@ -195,7 +195,7 @@ export function OrderDetail({
 }) {
   // Everything below is REAL: `detail` comes from order_line_items / orders / customers /
   // customer_addresses / payments.
-  const { lines, money, shipment, buyer, address, payment, sender, financial } =
+  const { lines, money, shipment, buyer, address, payment, refund, sender, financial } =
     detail;
   // The order's own destination (orders.city/province) — the only city this parcel is tied to.
   const destination =
@@ -491,6 +491,13 @@ export function OrderDetail({
         router.refresh();
       }
     });
+  };
+  // Task 8.31 — `refunds.status`. "Menunggu" = we owe it and nobody has started the transfer yet.
+  const REFUND_STATUS: Record<string, { label: string; cls: string }> = {
+    menunggu: { label: "Refund menunggu", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+    diproses: { label: "Refund diproses", cls: "bg-sky-500/12 text-sky-600 dark:text-sky-400" },
+    selesai: { label: "Refund selesai", cls: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+    gagal: { label: "Refund ditolak", cls: "bg-destructive/12 text-destructive" },
   };
   const PAY_STATUS: Record<string, { label: string; cls: string }> = {
     berhasil: {
@@ -1263,6 +1270,32 @@ export function OrderDetail({
                   <span className="text-muted-foreground">Total (+admin)</span>
                   <span className="font-medium tabular-nums">
                     {IDR(payment.total)}
+                  </span>
+                </div>
+              )}
+              {/* Task 8.31 — the buyer's money on a cancelled/returned PREPAID order. The row is
+                  written by the cancellation itself; the platform settles it. Read-only here: the
+                  seller cannot move it, but must be able to answer "mana uang saya?" from a buyer. */}
+              {refund && (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-muted-foreground">Pengembalian dana</span>
+                  <span className="text-right">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${REFUND_STATUS[refund.status].cls}`}
+                    >
+                      {REFUND_STATUS[refund.status].label} · {IDR(refund.amount)}
+                    </span>
+                    {refund.status === "selesai" && refund.paidAtLabel && (
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {refund.paidAtLabel}
+                        {refund.note ? ` · ref ${refund.note}` : ""}
+                      </span>
+                    )}
+                    {refund.status === "gagal" && refund.note && (
+                      <span className="mt-1 block max-w-[28ch] text-xs text-destructive">
+                        {refund.note}
+                      </span>
+                    )}
                   </span>
                 </div>
               )}

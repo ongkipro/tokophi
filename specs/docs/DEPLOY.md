@@ -724,7 +724,21 @@ decision, not a config chore. The key is never logged, never returned to the bro
 provider's own error text never reaches the merchant (ADR 0004) — only the HTTP status is
 `console.error`ed.
 
-See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY`, `AUTOLARIS_API_KEY`, `AUTOLARIS_CALLBACK_SECRET`, **`INTEGRATION_TOKEN_KEY`** (≥16 chars — encrypts the merchants' CAPI tokens; see the conversion-cron section, rotation is a code change). Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default **`cname.tokophi.cc`** — the SaaS zone; it read `.com` until 2026-08-08 and that was wrong).
+⚠️ **`KIRIMINAJA_API_KEY` / `KIRIMINAJA_ENV` / `AUTOLARIS_API_KEY` ARE FALLBACKS SINCE TASK 8.33
+(2026-09-17), NOT THE SOURCE OF TRUTH.** The keys and the live KiriminAja environment are managed on
+Super Admin → Pengaturan (Kurir / Pembayaran cards, owner rank), stored encrypted in the database
+(migration `0111`) and read with **DB row > env** precedence by every booking, quote, webhook check
+and health probe (`@tokophi/lib/provider-config`, 60 s in-process cache). A deploy whose card was
+never touched keeps working from these variables exactly as before; once a key is saved on the card
+the variable is ignored for that slot. Consequences for ops: (1) rotating a key or moving to
+production is a card action, **not a Coolify edit + redeploy**, and it reaches every replica within
+a minute; (2) `api/health/env` reports these three as optional and adds a `providers` block naming
+the SOURCE (`db` / `env` / `none`) per key — read that, not presence; (3) **`INTEGRATION_TOKEN_KEY`
+is now load-bearing for shipping and payments too** — without it the stored keys cannot be decrypted
+and the env fallback is all there is; (4) the "KiriminAja 401 after a restart" runbook above still
+applies, but check the card's active env and masked tail before reading the container env.
+
+See `.env.coolify.example`. Secrets: `POSTGRES_PASSWORD`, `AUTH_SECRET` (change!), `KIRIMINAJA_API_KEY` (fallback, see above), `AUTOLARIS_API_KEY` (fallback), `AUTOLARIS_CALLBACK_SECRET`, **`INTEGRATION_TOKEN_KEY`** (≥16 chars — encrypts the merchants' CAPI tokens AND the platform's provider keys; see the conversion-cron section, rotation is a code change). Cross-surface URLs (set AFTER domains assigned): `PUBLIC_APP_URL`, `ADMIN_URL`, `PUBLIC_ONGKIR_API`, `PUBLIC_ORDER_API` (⚠️ the storefront reads these at RUNTIME — must be the public admin URL, not localhost, or the kecamatan search / order / payment silently fail). Custom domains: `CUSTOM_DOMAIN_CNAME_TARGET` (default **`cname.tokophi.cc`** — the SaaS zone; it read `.com` until 2026-08-08 and that was wrong).
 
 ## ✅ `tokophi.com` is LIVE (cutover done 2026-07-13)
 > The runbook below is kept as the record of HOW it was done. Current live state:

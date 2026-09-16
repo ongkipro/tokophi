@@ -41,7 +41,7 @@ function SalesTile({ tile }: { tile: MoneyTile }) {
       value={IDR(tile.value, { compact: true })}
       // No previous period means there is no "vs" to name. Saying one anyway puts the claim the em
       // dash just refused back on the line underneath the figure — see `kpi-card.tsx`.
-      caption={tile.delta === null ? "belum ada pembanding" : `vs ${tile.compareLabel}`}
+      caption={`${tile.delta === null ? "belum ada pembanding" : `vs ${tile.compareLabel}`} · ${tile.note}`}
       aside={<Sparkline data={tile.spark} up={deltaUp(tile.delta)} />}
     />
   );

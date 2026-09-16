@@ -365,6 +365,9 @@ export function TokoClient({
                     {s.pendingApproval
                       ? <Badge variant="secondary" className="border-transparent bg-amber-500/12 text-amber-600 dark:text-amber-400">Menunggu persetujuan</Badge>
                       : <StatusBadge status={s.status} />}
+                    {/* 8.27 — the seeded demo store is a real row and a fake business: it stays on
+                        the list (operators test against it) and is excluded from every money KPI. */}
+                    {s.isDemo && <Badge variant="outline" className="ml-1 border-dashed text-muted-foreground">Demo</Badge>}
                   </TableCell>
                   <TableCell><HealthBadge verdict={verdictOf(s.id)} /></TableCell>
                   <TableCell className="text-right tabular-nums">{IDR(s.gmv, { compact: true })}</TableCell>

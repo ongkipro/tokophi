@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { alCreatePayment, autolarisConfigured } from "@tokophi/lib/autolaris";
+import { alCreateOrder, autolarisConfigured } from "@tokophi/lib/autolaris";
 import QRCode from "qrcode";
 import { calculateOrderFinance } from "@tokophi/lib/order-finance";
 import {
@@ -1110,7 +1110,13 @@ async function handle(req: Request) {
           provider: "autolaris",
           reffId: ord.number,
           channelCode,
-          total,
+          // Task 8.25 (a): WE collect the gateway fee. `admin_fee` is OUR scheduled fee and `total` is
+          // what the shopper was shown and will be billed (`buyerPayable`) — written here, at insert,
+          // never overwritten from the provider's echo later. The provider nets ITS fee against
+          // settlement (`submit` endpoint); the difference between the two fees is platform margin
+          // or absorption, and is reported, not charged.
+          adminFee: finance.gatewayFeeIdr,
+          total: finance.buyerPayableIdr,
         });
       }
 
@@ -1338,13 +1344,21 @@ async function handle(req: Request) {
   // same exit — the `payError` path that already existed, one line below. The order stands (it is
   // real and paid-for-later), nothing is written twice, and the merchant sees an order with no
   // payment row instead of two orders.
-  let pay: Awaited<ReturnType<typeof alCreatePayment>>;
+  // ── Task 8.25 (a) — THE SHOPPER PAYS EXACTLY THE NUMBER THE CHECKOUT SHOWED ─────────────────
+  // `alCreateOrder` is the `submit` endpoint: `total = grand_total`, the provider's own admin fee is
+  // NOT added to what the buyer pays — it nets against settlement (see the header comment on
+  // `alCreateOrder`). So we submit `buyerPayable` (= order payable + OUR scheduled gateway fee, the
+  // figure the checkout summary carries), the VA/QR asks for that exact amount, and the provider's
+  // `biaya_admin` becomes evidence for the margin report, never a surprise on the bill.
+  // `create_payment` used to be called with the PRE-fee `total`: the provider then added its own
+  // fee (0,7 % of the whole amount incl. ongkir for QRIS), so the shopper saw one number and was
+  // billed another — measured on production, `PHI-768771328ISC`: shown Rp1.323, billed Rp1.372.
+  let pay: Awaited<ReturnType<typeof alCreateOrder>>;
   try {
-    pay = await alCreatePayment({
+    pay = await alCreateOrder({
       reffId: order.number,
       channelCode,
-      amount: total,
-      customerId,
+      amount: finance.buyerPayableIdr,
       customerName: name,
       customerPhone: phone,
       customerEmail: email || "order@tokophi.id",
@@ -1352,9 +1366,12 @@ async function handle(req: Request) {
       // payment. The reference must be the one stored on the payment row (`payments.reff_id`), because
       // the callback binds the signature to the row it resolves. Both are `order.number`.
       callbackUrl: payCallbackUrl(order.number),
+      // One line carrying the whole amount — the proven shape the subscription and re-bill paths
+      // already use (the provider's `order_details` is CMS display, not pricing).
+      items: [{ name: `Pesanan ${order.number}`, qty: 1, unitPrice: finance.buyerPayableIdr }],
     });
   } catch (err) {
-    console.error("[order] alCreatePayment threw for", order.number, err);
+    console.error("[order] alCreateOrder threw for", order.number, err);
     pay = { ok: false, error: PAY_START_FAILED };
   }
   if (!pay.ok) {
@@ -1390,18 +1407,20 @@ async function handle(req: Request) {
   // Enrich the pending payment row (created atomically in the txn) with the gateway's VA/trxId/fees.
   // If this UPDATE were to fail, the order still has its payment row (pending) and the callback can
   // still match it by reffId — no orphaned order, no double bill on retry.
-  const actualGatewayFee = Math.max(
-    0,
-    Math.round(pay.admin ?? Math.max(0, (pay.total ?? total) - total)),
-  );
-  const actualBuyerPayable = Math.round(pay.total ?? total + actualGatewayFee);
+  // What the shopper pays is OUR figure, fixed above at insert. The provider's echo is evidence only:
+  // `providerFee` is what AutoLaris nets from the platform for this bill (margin/absorption report),
+  // and a `grand_total` that differs from what we submitted is a contract violation worth a log line
+  // — never a reason to change the number the shopper already agreed to.
+  const providerFee = Math.max(0, Math.round(pay.admin ?? 0));
+  const providerTotal = pay.total == null ? finance.buyerPayableIdr : Math.round(pay.total);
+  const feeMismatch = providerTotal !== finance.buyerPayableIdr;
+  if (feeMismatch) {
+    console.warn("[order] provider grand_total differs from buyerPayable", order.number, "ours", finance.buyerPayableIdr, "theirs", providerTotal);
+  }
   await db
     .update(schema.payments)
     .set({
       trxId: pay.trxId,
-      amountIdr: Math.round(pay.amount ?? total),
-      adminFee: actualGatewayFee,
-      total: actualBuyerPayable,
       virtualAccount: pay.virtualAccount,
       qr: pay.qr,
       url: pay.url,
@@ -1450,9 +1469,11 @@ async function handle(req: Request) {
       shippingDiscount: finance.shippingDiscountIdr,
       total,
       gatewayFeeExpected: finance.gatewayFeeIdr,
-      gatewayFeeActual: actualGatewayFee,
-      buyerPayable: actualBuyerPayable,
-      feeMismatch: actualGatewayFee !== finance.gatewayFeeIdr,
+      // The fee the shopper pays IS the scheduled fee now (8.25 a); `providerFee` is the vendor's.
+      gatewayFeeActual: finance.gatewayFeeIdr,
+      providerFee,
+      buyerPayable: finance.buyerPayableIdr,
+      feeMismatch,
       tracking,
       payment: {
         channel: {
@@ -1465,9 +1486,9 @@ async function handle(req: Request) {
         qrImage,
         paymentCode: pay.paymentCode,
         url: pay.url,
-        amount: pay.amount ?? total,
-        admin: actualGatewayFee,
-        total: actualBuyerPayable,
+        amount: total,
+        admin: finance.gatewayFeeIdr,
+        total: finance.buyerPayableIdr,
         expiresAt: pay.expiresAt,
       },
     },

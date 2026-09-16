@@ -2,13 +2,15 @@ import "server-only";
 import { cacheGet, cacheSet } from "./cache";
 import { isConfigured } from "./integration-status";
 import { parseKaTracking, type KaTracking } from "./kiriminaja-tracking";
+import { getProviderConfig, providerConfigSync, type KiriminajaConfig } from "./provider-config";
 
 // KiriminAja Mitra API client (platform-managed courier aggregator). Endpoints + version
 // prefixes verified against the sandbox Postman collection — versions vary PER endpoint.
 const PRICE_TTL = 10 * 60 * 1000; // 10 min — cuts repeated ongkir calls under ad-driven traffic
-const ENV = process.env.KIRIMINAJA_ENV ?? "sandbox";
-const BASE = ENV === "production" ? "https://client.kiriminaja.com" : "https://tdev.kiriminaja.com";
-const KEY = process.env.KIRIMINAJA_API_KEY ?? "";
+// Task 8.33: the environment, host and key are NOT module constants any more. They come from
+// `getProviderConfig()` on every call — the Super Admin's encrypted row first, `KIRIMINAJA_ENV` /
+// `KIRIMINAJA_API_KEY` as the fallback, cached in-process for 60 s. Reading them at import time is
+// what made a key rotation a redeploy and a wrong env invisible (N35).
 // order_id prefix must be REGISTERED in the KiriminAja dashboard, else request_pickup 400s.
 export const KA_ORDER_PREFIX = process.env.KIRIMINAJA_ORDER_PREFIX ?? "TOKOPHI";
 
@@ -89,7 +91,13 @@ export function kaOrderId(orderRef: string, prefix: string = KA_ORDER_PREFIX): s
   return id;
 }
 
-export const kiriminajaConfigured = () => isConfigured(KEY);
+/**
+ * Synchronous on purpose — it is read in render paths and route guards that were never async.
+ * `providerConfigSync()` answers from the cached row when one is loaded and from env before that
+ * (kicking the load off), so the first call on a fresh replica may say "not configured" for a key
+ * that exists only in the database until the load lands milliseconds later.
+ */
+export const kiriminajaConfigured = () => isConfigured(providerConfigSync().kiriminaja.key);
 
 /** A KiriminAja reply that was not JSON at all — a gateway HTML page, an empty 502, a proxy timeout. */
 export class KaTransportError extends Error {
@@ -105,10 +113,13 @@ async function ka<T = Record<string, unknown>>(
   path: string,
   body: unknown = {},
   method: "POST" | "GET" = "POST",
+  /** An explicit config — only the per-environment "Test koneksi" passes one; every booking uses the resolved active config. */
+  cfg?: KiriminajaConfig,
 ): Promise<KaHttpResponse<T>> {
-  const res = await fetch(`${BASE}${path}`, {
+  const { base, key } = cfg ?? (await getProviderConfig()).kiriminaja;
+  const res = await fetch(`${base}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${KEY}`, Accept: "application/json", "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${key ?? ""}`, Accept: "application/json", "Content-Type": "application/json" },
     body: method === "GET" ? undefined : JSON.stringify(body),
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
@@ -585,10 +596,17 @@ export type KaTestResult = {
   message: string;
 };
 
-export async function kaTestConnection(): Promise<KaTestResult> {
-  if (!KEY) return { ok: false, env: ENV, configured: false, message: "API key belum diisi (KIRIMINAJA_API_KEY)." };
+/**
+ * With no argument: tests the ACTIVE config (what bookings use). With `cfg`: tests exactly that
+ * key against exactly that environment — how Super Admin proves a stored production key BEFORE
+ * `setProviderEnv` flips `active_env` to it (Task 8.33).
+ */
+export async function kaTestConnection(cfg?: KiriminajaConfig): Promise<KaTestResult> {
+  const c = cfg ?? (await getProviderConfig()).kiriminaja;
+  const ENV = c.env;
+  if (!c.key) return { ok: false, env: ENV, configured: false, message: "API key belum diisi (Super Admin → Pengaturan → Kurir, atau KIRIMINAJA_API_KEY)." };
   try {
-    const { body: r, httpStatus } = await ka<{ status: boolean; datas?: unknown[]; text?: string; message?: string }>("/api/mitra/province", {});
+    const { body: r, httpStatus } = await ka<{ status: boolean; datas?: unknown[]; text?: string; message?: string }>("/api/mitra/province", {}, "POST", c);
     const n = (r.datas ?? []).length;
     if (r.status) return { ok: true, env: ENV, configured: true, httpStatus, provinces: n, message: `Terhubung ke KiriminAja (${ENV}) — ${n} provinsi.` };
     const text = r.text ?? r.message ?? "respons tidak valid";

@@ -109,6 +109,24 @@ export async function applyOrderStatusChange(
       .update(schema.payments)
       .set({ status: "gagal" })
       .where(and(eq(schema.payments.orderId, order.id), eq(schema.payments.status, "menunggu")));
+    // ── THE BUYER'S MONEY GETS A ROW (0112, Task 8.31) ──────────────────────────────────────────
+    // A payment that already reached `berhasil` is money we HOLD. Failing `menunggu` payments above
+    // and clawing back the seller's sale below (`settleOrderLedger`) settled our side; nothing said
+    // the buyer was owed anything. Written HERE, in the same transaction as the claw-back, so an
+    // order cannot be cancelled with the seller's credit reversed and the buyer's debt unrecorded.
+    // Never COD (collected at the door — a refused parcel collected nothing). One OPEN row per
+    // payment: the partial unique index makes a replayed cancellation a no-op, not a doubled debt.
+    // `amount_idr` is what the buyer paid TO US (pre-gateway-fee); the gateway's admin fee is theirs.
+    await db.execute(sql`
+      insert into refunds (store_id, order_id, payment_id, amount_idr, reason)
+      select p.store_id, p.order_id, p.id, p.amount_idr,
+             ${status === "retur" ? "Retur — " + (returnReason?.trim() || "Pembeli menolak paket") : "Pesanan dibatalkan"}
+        from payments p
+       where p.order_id = ${order.id}
+         and p.status = 'berhasil'
+         and p.method <> 'cod'
+      on conflict do nothing
+    `);
   }
 
   await db

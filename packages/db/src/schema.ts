@@ -277,6 +277,9 @@ export const stores = pgTable("stores", {
   comped: boolean().notNull().default(false),
   compedReason: text(),
   compedAt: ts(),
+  // The seeded demo store (0113). Excluded from every platform money KPI; still served and listed
+  // with a "Demo" badge. Flag rather than purge — the seed would recreate a purged store.
+  isDemo: boolean().notNull().default(false),
   // 🔴 OPERATOR SUSPENSION (0086) — a DELIBERATE ACT by the platform, not a consequence of an
   // unpaid invoice, and therefore its own column rather than a value of `status`.
   //
@@ -1676,6 +1679,40 @@ export const payouts = pgTable("payouts", {
   paidAt: ts(),
 });
 
+// ── Refund obligations (0112, Task 8.31) ──────────────────────────────────────────────────────
+// A paid prepaid order that is cancelled owes the BUYER their money. Written ONLY by
+// `applyOrderStatusChange` (same transaction as the seller claw-back), settled by hand from Super
+// Admin → Pencairan. Never COD. One OPEN row per payment (partial unique index in 0112).
+export const refundStatus = pgEnum("refund_status", ["menunggu", "diproses", "selesai", "gagal"]);
+export const refunds = pgTable(
+  "refunds",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id),
+    paymentId: uuid()
+      .notNull()
+      .references(() => payments.id),
+    /** `payments.amount_idr` at cancellation — pre-gateway-fee; the gateway's admin fee is not ours to refund. */
+    amountIdr: money().notNull().default(0),
+    status: refundStatus().notNull().default("menunggu"),
+    /** Why the money is owed ("Pesanan dibatalkan" / the return reason) — set at creation. */
+    reason: text(),
+    /** `selesai` ⇒ the bank-transfer reference; `gagal` ⇒ the refusal reason. Keyed by terminal status, like payouts. */
+    note: text(),
+    requestedAt: createdAt(),
+    paidAt: ts(),
+  },
+  (t) => ({
+    storeIdx: index("refunds_store_idx").on(t.storeId),
+    orderIdx: index("refunds_order_idx").on(t.orderId),
+  }),
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),
@@ -1743,9 +1780,13 @@ export const storeSettings = pgTable("store_settings", {
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {
   id: pk(),
   provider: gatewayProvider().notNull(),
+  // DEAD: nothing reads it (kept, not dropped). The live key is `credentialsEnc` (0111).
   credentials: jsonb(),
   enabled: boolean().notNull().default(false),
   isCod: boolean().notNull().default(false),
+  // Task 8.33 (0111): AutoLaris key encrypted at rest (scope provider:autolaris:key). NULL = env fallback.
+  credentialsEnc: text(),
+  testedAt: ts(),
 });
 
 // Platform reference: KiriminAja district (kecamatan) map — `id` = KiriminAja area id used by
@@ -1822,8 +1863,16 @@ export const productTaxonomy = pgTable(
 export const shippingAggregator = pgTable("shipping_aggregator", {
   id: pk(),
   provider: aggregatorProvider().notNull(),
+  // DEAD: nothing reads it (kept, not dropped). The live keys are the *_key_enc columns (0111).
   apiKey: text(),
   enabled: boolean().notNull().default(false),
+  // Task 8.33 (0111): per-environment KiriminAja keys encrypted at rest, the env the platform books
+  // against, and when each stored key last passed a live test. NULL key = fall back to env.
+  sandboxKeyEnc: text(),
+  productionKeyEnc: text(),
+  activeEnv: text().notNull().default("sandbox"),
+  sandboxTestedAt: ts(),
+  productionTestedAt: ts(),
 });
 
 export const platformCouriers = pgTable("platform_couriers", {
@@ -1927,7 +1976,8 @@ export const invoices = pgTable("invoices", {
     .notNull()
     .references(() => accounts.id),
   storeId: uuid().references(() => stores.id),
-  planKey: planKey().notNull(),
+  // LEGACY (0114): single-plan product; defaulted so no creator names a tier. Never read for pricing.
+  planKey: planKey().notNull().default("bisnis"),
   amountIdr: money().notNull().default(0),
   // PPN carried by THIS invoice, stored at creation (0101) — the faktur renders the stored value,
   // never a derivation: since the platform PPN toggle exists, "total / 1.11" would invent tax on a
@@ -1935,7 +1985,11 @@ export const invoices = pgTable("invoices", {
   taxIdr: money().notNull().default(0),
   status: invoiceStatus().notNull().default("menunggu"),
   // subscription payment (AutoLaris VA) matching + kind
-  kind: text(), // "subscription" for merchant subscription invoices
+  // "subscription" = a bill the merchant pays · "comp" = a period the platform GRANTED (0113):
+  // amount 0, status dibayar, cycle "comp", written by compStore and backfilled from the audit log,
+  // so MRR can tell a comp from a payment · NULL = seeded legacy rows. Free text on purpose (an enum
+  // ADD VALUE has no IF NOT EXISTS and aborts the whole pending batch).
+  kind: text(),
   cycle: text(), // "monthly" | "annual"
   periodMonths: integer(), // how many months this invoice extends the subscription (1/12/13)
   reffId: text(),
