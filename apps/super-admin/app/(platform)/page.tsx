@@ -44,10 +44,12 @@ export const dynamic = "force-dynamic";
 // it read "Toko aktif 2 / 7", and every share on it was a share of the wrong denominator.
 const STATUS_BAR: Record<StatusSlice, string> = {
   aktif: "bg-emerald-500",
+  digratiskan: "bg-teal-400", // active on a granted period — open, not paying (8.26)
   vip: "bg-violet-500",
   trial: "bg-amber-500",
   menunggak: "bg-orange-500",
   ditangguhkan: "bg-destructive",
+  demo: "bg-muted-foreground/40", // the seeded demo store — counted, never money (8.27)
 };
 
 export default async function PlatformDashboard() {
@@ -81,7 +83,7 @@ export default async function PlatformDashboard() {
   // KPIs. Every one of these is a number with a query behind it — there are no deltas, because
   // nothing in the schema records last month's value of any of them.
   const KPIS: { label: string; value: string; helper: string; icon: LucideIcon; tone?: string }[] = [
-    { label: "MRR", value: IDR(platform.mrr, { compact: true }), helper: `${num(subStats.active)} toko berbayar · ARPU ${IDR(platform.arpu, { compact: true })}`, icon: Wallet },
+    { label: "MRR", value: IDR(platform.mrr, { compact: true }), helper: `${num(subStats.active)} toko berbayar · ${num(subStats.comped)} digratiskan · ARPU ${IDR(platform.arpu, { compact: true })}${subStats.demo ? " · demo dikecualikan" : ""}`, icon: Wallet },
     { label: "ARR (proyeksi)", value: IDR(platform.mrr * 12, { compact: true }), helper: "MRR × 12", icon: Coins },
     { label: "Diterima (total)", value: IDR(fin.revenuePaid, { compact: true }), helper: `${num(fin.invoicesPaid)} tagihan lunas`, icon: Receipt },
     {
@@ -247,6 +249,7 @@ export default async function PlatformDashboard() {
             </div>
             {[
               { label: "Pelanggan berbayar", value: `${num(subStats.active)} · ${IDR(subStats.mrr, { compact: true })} MRR`, cls: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Digratiskan (comp)", value: num(subStats.comped), cls: "text-teal-600 dark:text-teal-400" },
               { label: "VIP (gratis)", value: num(subStats.vip), cls: "text-violet-600 dark:text-violet-400" },
               { label: "Uji coba", value: `${num(subStats.trial)}${subStats.trialEndingSoon ? ` · ${num(subStats.trialEndingSoon)} berakhir ≤1h` : ""}`, cls: "text-amber-600 dark:text-amber-400" },
               { label: "Menunggak", value: num(subStats.pastDue), cls: "text-orange-600 dark:text-orange-400" },

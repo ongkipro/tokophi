@@ -344,6 +344,7 @@
 |---|---|
 | `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `processPayout` `rejectPayout` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `saveCodAllowed` `saveCouriers` `saveGateways` `savePaymentChannels` `savePayoutPolicy` `sendPaymentReminder` `setInvoiceStatus` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` |
 | `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
+| `comp-invoice.ts` | `buildCompInvoice` |
 | `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getKiriminajaProbe` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
 | `health-types.ts` | `VERDICT_RANK` `checkToneClass` `verdictMeta` |
 | `health.ts` | `getHealthMap` `getStoreHealth` `healthFromSignals` |
@@ -357,6 +358,7 @@
 | `refused.ts` | `refused` |
 | `route-roles.ts` | `ROUTE_RULES` `canOpenPath` `landingForRole` `minRoleForPath` `reasonForPath` |
 | `session.ts` | `SESSION_COOKIE` `signSession` |
+| `subscription-kpi.ts` | `periodBackedBy` `subscriptionKpiBucket` |
 | `types.ts` | — |
 
 ### Storefront data — `apps/storefront/src/data`

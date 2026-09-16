@@ -87,6 +87,9 @@ const INDEX_CENSUS: Record<string, Census> = {
   // no way to express a partial unique index, so declaring it there would produce a DIFFERENT,
   // total index that would reject every second session-less order.
   orders_one_per_checkout_session: "sql-only: partial unique index, not expressible in schema.ts",
+  // Task 8.26 / 0113. PARTIAL (`where kind = 'comp'`): one comp invoice per (store, grant instant), which
+  // is what makes the audit-log backfill idempotent. Same reason as above — drizzle cannot express it.
+  invoices_one_comp_per_grant: "sql-only: partial unique index, not expressible in schema.ts",
   impersonation_grants_token_hash_key: "drizzle",
   impersonation_grants_store_idx: "drizzle",
 

@@ -3599,6 +3599,12 @@
         ]
       },
       {
+        "module": "comp-invoice.ts",
+        "exports": [
+          "buildCompInvoice"
+        ]
+      },
+      {
         "module": "data.ts",
         "exports": [
           "MOVEMENTS_PER_PAGE",
@@ -3740,6 +3746,13 @@
         "exports": [
           "SESSION_COOKIE",
           "signSession"
+        ]
+      },
+      {
+        "module": "subscription-kpi.ts",
+        "exports": [
+          "periodBackedBy",
+          "subscriptionKpiBucket"
         ]
       },
       {
