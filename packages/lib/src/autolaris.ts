@@ -1,13 +1,18 @@
 import "server-only";
 import { AUTOLARIS_RC_OK, isConfigured } from "./integration-status";
 import { PAYMENT_FEES, channelFeeValue, type FeeKind } from "./payment-fees";
+import { getProviderConfig, providerConfigSync, type AutolarisConfig } from "./provider-config";
 
 // AutoLaris payment-gateway client (platform-managed PSP). Create Payment → VA / QRIS / DANA.
-// Base + Bearer key from env (gitignored). Verified against ongkipro/autolaris-payment-gateway docs.
-const BASE = process.env.AUTOLARIS_BASE ?? "https://api-h2h.autolaris.com";
-const KEY = process.env.AUTOLARIS_API_KEY ?? "";
+// Verified against ongkipro/autolaris-payment-gateway docs.
+// Task 8.33: the base + Bearer key are resolved per call through `getProviderConfig()` — the Super
+// Admin's encrypted row first, `AUTOLARIS_API_KEY` / `AUTOLARIS_BASE` as the fallback, cached 60 s —
+// not read into module constants at import time (which made a key rotation a redeploy).
 
-export const autolarisConfigured = () => isConfigured(KEY);
+/** Synchronous on purpose (render paths, route guards) — see `kiriminajaConfigured` for the caveat. */
+export const autolarisConfigured = () => isConfigured(providerConfigSync().autolaris.key);
+
+const NO_KEY = "API key belum diisi (Super Admin → Pengaturan → Pembayaran, atau AUTOLARIS_API_KEY).";
 
 // channel_code → client-facing label (NO provider brand shown to merchants/shoppers).
 // Only channels ACTIVE on the platform account are listed — verified live against the gateway
@@ -135,11 +140,12 @@ export function parseListPayment(json: unknown): AlListPayment {
  * public route reaches this function.
  */
 export async function alListPayment(): Promise<AlListPayment> {
-  if (!KEY) return { ok: false, channels: [], error: "API key belum diisi (AUTOLARIS_API_KEY)." };
+  const { base, key } = (await getProviderConfig()).autolaris;
+  if (!key) return { ok: false, channels: [], error: NO_KEY };
   try {
-    const res = await fetch(`${BASE}/api/h2h/list_payment`, {
+    const res = await fetch(`${base}/api/h2h/list_payment`, {
       method: "GET",
-      headers: { Authorization: `Bearer ${KEY}`, Accept: "application/json" },
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
       cache: "no-store",
     });
     return parseListPayment(await res.json());
@@ -239,10 +245,11 @@ export function compareChannelFees(channels: AlChannelProbe[]): FeeComparisonRow
 // treats as "gagal terhubung" rather than as an answer.
 const AL_TIMEOUT_MS = 15_000;
 
-async function al<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+async function al<T = Record<string, unknown>>(path: string, body: unknown, cfg?: AutolarisConfig): Promise<T> {
+  const { base, key } = cfg ?? (await getProviderConfig()).autolaris;
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", Accept: "application/json" },
+    headers: { Authorization: `Bearer ${key ?? ""}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
     cache: "no-store",
     signal: AbortSignal.timeout(AL_TIMEOUT_MS),
@@ -285,7 +292,7 @@ export async function alCreatePayment(input: {
   reffId: string; channelCode: string; amount: number;
   customerId: string; customerName: string; customerPhone: string; customerEmail: string;
   callbackUrl: string;
-}): Promise<AlPayment> {
+}, cfg?: AutolarisConfig): Promise<AlPayment> {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const r = await al<{ rc: string; ket?: string; data?: {
     trx_id?: string; virtual_account?: string; qr?: string; payment_code?: string; url?: string;
@@ -300,7 +307,7 @@ export async function alCreatePayment(input: {
     expired: expiryStamp(expiresAt.getTime() - Date.now()),
     amount: String(input.amount),
     callback_url: input.callbackUrl,
-  });
+  }, cfg);
   if (r.rc !== AUTOLARIS_RC_OK || !r.data) return { ok: false, error: r.ket ?? `Gagal (rc=${r.rc})` };
   const d = r.data;
   return {
@@ -448,7 +455,7 @@ export function classifyAdvice(rc: string | null | undefined, ket: string | null
 export async function alAdvice(transactionId: string): Promise<AlAdvice> {
   const id = transactionId.trim();
   if (!id) return { ok: false, rc: "", ket: "", error: "transaction_id wajib diisi." };
-  if (!KEY) return { ok: false, rc: "", ket: "", error: "API key belum diisi (AUTOLARIS_API_KEY)." };
+  if (!(await getProviderConfig()).autolaris.key) return { ok: false, rc: "", ket: "", error: NO_KEY };
   try {
     const r = await al<{ rc?: string; ket?: string; data?: { awb?: string } }>("/api/h2h/advice", { transaction_id: id });
     return { ok: true, rc: String(r.rc ?? ""), ket: String(r.ket ?? ""), awb: r.data?.awb || undefined };
@@ -508,15 +515,17 @@ export async function alInquirePaymentStatus(trxId: string): Promise<AlPaymentSt
   };
 }
 
-// live connectivity check (super-admin) — creates a minimal QRIS bill and checks rc=00
-export async function alTestConnection(): Promise<{ ok: boolean; message: string }> {
-  if (!KEY) return { ok: false, message: "API key belum diisi (AUTOLARIS_API_KEY)." };
+// live connectivity check (super-admin) — creates a minimal QRIS bill and checks rc=00.
+// With `cfg`: tests exactly that key (how Super Admin proves a freshly saved key, Task 8.33).
+export async function alTestConnection(cfg?: AutolarisConfig): Promise<{ ok: boolean; message: string }> {
+  const c = cfg ?? (await getProviderConfig()).autolaris;
+  if (!c.key) return { ok: false, message: NO_KEY };
   try {
     const r = await alCreatePayment({
       reffId: `PING-${expiryStamp(0)}`, channelCode: "QRIS", amount: 10000,
       customerId: "0", customerName: "Konektivitas", customerPhone: "081200000000",
-      customerEmail: "ping@tokophi.id", callbackUrl: `${BASE}/noop`,
-    });
+      customerEmail: "ping@tokophi.id", callbackUrl: `${c.base}/noop`,
+    }, c);
     return r.ok
       ? { ok: true, message: `Terhubung ke payment gateway — biaya admin Rp${(r.admin ?? 0).toLocaleString("id-ID")}.` }
       : { ok: false, message: r.error ?? "Auth ditolak / respons tidak valid." };

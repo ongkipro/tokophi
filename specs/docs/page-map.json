@@ -1863,7 +1863,8 @@
           "methods": [],
           "file": "apps/super-admin/app/(platform)/pengaturan/page.tsx",
           "clients": [
-            "pengaturan-client.tsx"
+            "pengaturan-client.tsx",
+            "provider-keys.tsx"
           ],
           "data": [
             "data"
@@ -3581,8 +3582,10 @@
           "saveGateways",
           "savePaymentChannels",
           "savePayoutPolicy",
+          "saveProviderCredentials",
           "sendPaymentReminder",
           "setInvoiceStatus",
+          "setProviderEnv",
           "setStoreComped",
           "setStoreUserRole",
           "setSubscriptionPpn",
@@ -3591,7 +3594,8 @@
           "syncCouriersFromKiriminaja",
           "syncPaymentChannels",
           "testAutolarisConnection",
-          "testKiriminajaConnection"
+          "testKiriminajaConnection",
+          "testProviderKey"
         ]
       },
       {
@@ -3638,6 +3642,7 @@
           "getPlatformAdmins",
           "getPlatformFinance",
           "getPlatformFloat",
+          "getProviderStatus",
           "getRefundSummary",
           "getRefunds",
           "getRevenueSeries",
@@ -3732,6 +3737,16 @@
         "module": "platform-session.ts",
         "exports": [
           "resolvePlatformSession"
+        ]
+      },
+      {
+        "module": "provider-credentials.ts",
+        "exports": [
+          "keyError",
+          "kiriminajaConfigFor",
+          "saveCredentials",
+          "switchKiriminajaEnv",
+          "testStoredKey"
         ]
       },
       {

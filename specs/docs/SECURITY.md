@@ -205,8 +205,24 @@ architecture decision before the PostgREST cutover.
 - **Decision — fail closed.** `AUTH_SECRET` missing or weak in production **throws**
   (`@tokophi/lib/secret`). The throw is **lazy**, at first use rather than module load, because
   `next build` runs with `NODE_ENV=production` but without runtime env.
-- **Observed.** Provider credentials (KiriminAja, AutoLaris) live in Coolify environment variables and
-  gitignored `.env.local`; they are never in the repo.
+- **Decision (Task 8.33, 2026-09-17) — provider credentials are MANAGED FROM SUPER ADMIN and stored
+  ENCRYPTED; the container env is the fallback.** KiriminAja (one key per environment) and AutoLaris
+  live in `shipping_aggregator.sandbox_key_enc` / `production_key_enc` and
+  `platform_payment_gateways.credentials_enc` (migration 0111), AES-256-GCM under
+  `INTEGRATION_TOKEN_KEY` with the column as GCM scope (`provider:kiriminaja:<env>`,
+  `provider:autolaris:key`) — a blob moved between columns does not decrypt. **Precedence: DB row >
+  env var** (`@tokophi/lib/provider-config`, one resolver, cached in-process for 60 s and
+  invalidated by the writers), so a deploy that never opened the card keeps reading
+  `KIRIMINAJA_API_KEY` / `KIRIMINAJA_ENV` / `AUTOLARIS_API_KEY` exactly as before. The keys are
+  never in the repo and never returned to a browser: the card shows `maskKey()` — the last four
+  characters — and the last successful test time; `api/health/env` reports only the SOURCE
+  (`db` / `env` / `none`) per key. Writing a key or flipping `active_env` is **owner rank**
+  (`saveProviderCredentials`, `setProviderEnv`), audited to `platform_activity` with the operator's
+  e-mail and the masked tail, and both REFUSE unless the key just passed a live test against the
+  environment it is for — so a stored key is always one that worked, and the environment can only
+  move onto a proven key (N35: a sandbox booking is shaped like a production one, so a switch onto
+  a dead key would look healthy). Pinned by `packages/lib/src/provider-config.test.ts` and
+  `apps/super-admin/lib/provider-credentials.test.ts` (five mutations, five reds).
 - **Observed.** `packages/lib/src/no-published-credentials.test.ts` scans **every** app source for a
   credential printed on a shipped screen. It exists because both login pages once published a working
   account — and it was **four** sites, not the two visible `Dev:` lines: each email input's
@@ -238,8 +254,11 @@ architecture decision before the PostgREST cutover.
 
 ## 7. Encryption at rest
 
-- **Observed.** There is **exactly one** at-rest cipher in the repo: `apps/admin/lib/crypto.ts`
-  (AES via `createCipheriv`), used only for **CAPI tokens** in `store_tracking_channels`.
+- **Observed.** There is **exactly one** at-rest cipher in the repo: `@tokophi/lib/crypto`
+  (AES-256-GCM via `createCipheriv`; `apps/admin/lib/crypto.ts` re-exports it and carries the
+  `server-only` guard), used for **CAPI tokens** in `store_tracking_channels` and, since Task 8.33,
+  for the platform's own **provider keys** (§6). Both bind the ciphertext to its row/column through
+  the GCM scope.
 - **Decision.** Its key is derived with **scrypt**, not a bare SHA-256, because the env var is allowed
   to be a human-chosen string; scrypt makes offline GPU cracking expensive. Derived once and cached.
 - **Observed, and state it plainly:** everything else — orders, customer names, phone numbers,

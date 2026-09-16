@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { verifyKaHint } from "@/lib/ka-tracking";
 import { clientIp, readPublicBody } from "@/lib/public-guard";
+import { activeKaKey } from "@tokophi/lib/provider-config";
 
 // KiriminAja webhook receiver (KA-UAT, 2026-08-24) — the push half of tracking; cron/tracking's
 // poller remains the NET (this endpoint down = nothing lost, the next tick catches up).
@@ -21,10 +22,14 @@ export const dynamic = "force-dynamic";
 
 const MAX_HINTS = 50; // one webhook batch; a bigger flood is a bug or an attack either way
 
-// Timing-safe bearer check against KIRIMINAJA_API_KEY. FAIL CLOSED: no key configured means NO
-// (a misconfigured deploy must refuse, not wave every caller through) — same stance as cron-auth.
-function authorized(req: NextRequest): boolean {
-  const key = (process.env.KIRIMINAJA_API_KEY ?? "").trim();
+// Timing-safe bearer check against the platform's ACTIVE KiriminAja key — Task 8.33: the Super
+// Admin's stored key for the live environment, or `KIRIMINAJA_API_KEY` as the fallback, from the
+// same seam every booking uses, so a rotation done on the card is honoured here in the same minute.
+// FAIL CLOSED: no key configured means NO (a misconfigured deploy must refuse, not wave every
+// caller through) — same stance as cron-auth.
+const activeKey = async (): Promise<string> => ((await activeKaKey()) ?? "").trim();
+
+function authorized(req: NextRequest, key: string): boolean {
   if (!key) return false;
   const h = req.headers.get("authorization") ?? "";
   const presented = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
@@ -52,7 +57,8 @@ function authorized(req: NextRequest): boolean {
 //     → the spec is right, they authenticate some other way; adapt the gate to THAT header.
 //   · `auth=present scheme=bearer lenMatch=no` → they send a bearer, but not this key
 //     (wrong account key, or a key of theirs rather than ours) — a configuration fix.
-//   · `lenMatch=nokey` → OUR deploy has no `KIRIMINAJA_API_KEY`; nothing about the vendor.
+//   · `lenMatch=nokey` → OUR side has no key for the active env — nothing stored on the Super Admin
+//     card and no `KIRIMINAJA_API_KEY` in the container; nothing about the vendor.
 //   · `auth=absent hdrs=` empty, from a random IP → a probe. Ignore it.
 //
 // ⚠️ NOTHING HERE MAY BE A VALUE. Not the key, not a header's contents, not a prefix of either — a
@@ -78,8 +84,7 @@ const VENDORISH_NOISE = new Set([
  * a diagnosis that drifts from the gate is a wrong log line, while a gate that drifts to serve a log
  * line is a security bug. The gate above is untouched.
  */
-function rejectionShape(req: NextRequest): string {
-  const key = (process.env.KIRIMINAJA_API_KEY ?? "").trim();
+function rejectionShape(req: NextRequest, key: string): string {
   const header = req.headers.get("authorization");
 
   // The scheme is reported as a CLASS, not as the token the caller typed. A caller that sends the
@@ -123,13 +128,14 @@ function rejectionShape(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
-  if (!authorized(req)) {
+  const key = await activeKey();
+  if (!authorized(req, key)) {
     // 401, not silent 200: KA logs delivery failures, and a key mismatch should surface on THEIR
     // dashboard and ours rather than reading as "delivered" while every event is dropped.
     //
     // ONE line, prefix unchanged, original phrase kept verbatim so existing `[ka-webhook]` and
     // "unauthorized webhook call rejected" greps still match.
-    console.warn(`[ka-webhook] unauthorized webhook call rejected ${rejectionShape(req)}`);
+    console.warn(`[ka-webhook] unauthorized webhook call rejected ${rejectionShape(req, key)}`);
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 

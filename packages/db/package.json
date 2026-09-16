@@ -9,7 +9,8 @@
     "./client": "./src/client.ts",
     "./article-order": "./src/article-order.ts",
     "./area-coords": "./src/area-coords.ts",
-    "./subscription-invoice": "./src/subscription-invoice.ts"
+    "./subscription-invoice": "./src/subscription-invoice.ts",
+    "./provider-config": "./src/provider-config.ts"
   },
   "scripts": {
     "generate": "dotenv -e ../../.env -e ../../../../../.env -- drizzle-kit generate",

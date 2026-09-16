@@ -1780,9 +1780,13 @@ export const storeSettings = pgTable("store_settings", {
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {
   id: pk(),
   provider: gatewayProvider().notNull(),
+  // DEAD: nothing reads it (kept, not dropped). The live key is `credentialsEnc` (0111).
   credentials: jsonb(),
   enabled: boolean().notNull().default(false),
   isCod: boolean().notNull().default(false),
+  // Task 8.33 (0111): AutoLaris key encrypted at rest (scope provider:autolaris:key). NULL = env fallback.
+  credentialsEnc: text(),
+  testedAt: ts(),
 });
 
 // Platform reference: KiriminAja district (kecamatan) map — `id` = KiriminAja area id used by
@@ -1859,8 +1863,16 @@ export const productTaxonomy = pgTable(
 export const shippingAggregator = pgTable("shipping_aggregator", {
   id: pk(),
   provider: aggregatorProvider().notNull(),
+  // DEAD: nothing reads it (kept, not dropped). The live keys are the *_key_enc columns (0111).
   apiKey: text(),
   enabled: boolean().notNull().default(false),
+  // Task 8.33 (0111): per-environment KiriminAja keys encrypted at rest, the env the platform books
+  // against, and when each stored key last passed a live test. NULL key = fall back to env.
+  sandboxKeyEnc: text(),
+  productionKeyEnc: text(),
+  activeEnv: text().notNull().default("sandbox"),
+  sandboxTestedAt: ts(),
+  productionTestedAt: ts(),
 });
 
 export const platformCouriers = pgTable("platform_couriers", {

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkEnv } from "@/lib/env-health";
 import { cronAuthorized } from "@/lib/cron-auth";
+import { providerHealthSummary } from "@tokophi/lib/provider-config";
 
 /**
  * "Did the environment actually reach this container?" — one request, after every deploy (N60).
@@ -26,6 +27,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { ok, missing, checks } = checkEnv();
+  // Task 8.33: the provider keys resolve through the same seam every booking uses (Super Admin's
+  // encrypted row first, env second), so "present in env" stopped being the question. This block
+  // says WHICH side each key resolves from and which environment is live — presence and source
+  // only, never a value, never a masked tail either (a tail is still four characters of a secret).
+  const providers = await providerHealthSummary();
   // 200 even when something is missing: this endpoint's job is to REPORT, and a non-200 would make
   // a shell check (`curl -f`) hide the very body that says which variable is gone. `ok` is the verdict.
   return NextResponse.json(
@@ -34,6 +40,7 @@ export async function GET(req: NextRequest) {
       missing,
       app: "admin",
       checks: checks.map((c) => ({ name: c.name, present: c.present, required: c.required, why: c.why })),
+      providers,
     },
     { status: 200 },
   );

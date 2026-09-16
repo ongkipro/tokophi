@@ -38,6 +38,8 @@
     "./tracking-ids": "./src/tracking-ids.ts",
     "./pay-callback": "./src/pay-callback.ts",
     "./recovery": "./src/recovery.ts",
+    "./crypto": "./src/crypto.ts",
+    "./provider-config": "./src/provider-config.ts",
     "./env-file": "./src/env-file.mjs"
   },
   "dependencies": {
