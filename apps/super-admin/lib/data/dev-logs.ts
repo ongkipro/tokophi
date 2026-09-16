@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.8.0-finance-overhaul-ii",
+    version: "v1.8.0",
+    date: "2026-09-17",
+    title: "Finance Overhaul II: The Platform Bills The Fee It Shows, A Refund Has A Row, A Comp Is Not Revenue, And Provider Keys Move Into The Control Plane",
+    category: "major",
+    surfaces: ["Payments", "Super Admin", "Seller Admin", "Database & RLS", "Logistics"],
+    summary: "A read-only audit of every price and money path (13 findings) was turned into eight tasks and executed as six parallel lanes on one branch. The gateway fee the shopper sees is now the fee the platform bills, on both the checkout and the seller's re-issued bill. Cancelling a paid prepaid order writes a refund obligation the Super Admin settles from the payout screen. A free month leaves a zero-rupiah invoice so it can never count as MRR, and the demo store's money is flagged out of every platform KPI. The seller's finance screens count collected money only, the COD fee carries the courier's minimum, the renewal invoice has one creator that can actually create it, and the courier and payment keys plus the sandbox/production switch are managed, encrypted, from Super Admin.",
+    problem: "The shopper paid our prediction of the provider's fee, wrong whenever the two schedules differed. A paid order that was cancelled held the buyer's money with no row anywhere. Twelve stores read as paying customers on the strength of free months; the demo store owned 220 of 225 orders and every money tile summed it in. The seller's revenue counted unpaid virtual accounts as sales. A COD parcel under about Rp83.000 cost more in courier fee than it collected. The automatic renewal invoice could not be created as written. Switching to production keys meant editing the deploy platform by hand.",
+    solution: "The platform submits order payable plus its own fee as the grand total and writes admin fee and total itself, never from the provider's reply; the paid callback accepts that total. A refunds table with one open row per payment, written in the same transaction as the seller claw-back, settled by compare-and-swap. Comp invoices of kind comp; MRR reads only paid, non-comp, non-demo rows. Keuangan sums only orders whose payment was collected. The COD fee is the greater of Rp2.500 and three percent, mirrored in the checkout from the same two constants. One subscription-invoice creator serves the cron, the merchant and the operator. Provider credentials per environment live encrypted in the database, read before the environment, switched only after a passing live test, owner rank, audited.",
+    verification: "Five migrations 0111 to 0114 plus the refund table, idempotent, stamped in order. Integration gate on the merged branch: typecheck 0 across four packages, lint 0 errors, migration journal verified, page map fresh, guards ok, full test suite green including the real-Postgres money suites. Every lane proved its guards red against a mutation before trusting them. Nothing in this release touches production money until deployed; OVO's channel state and the daytime probe remain owner-gated (Task 8.10, recorded in FINANCE.md).",
+  },
+  {
     id: "v1.7.2-kiriminaja-release-audit",
     version: "v1.7.2",
     date: "2026-09-14",
