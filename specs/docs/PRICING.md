@@ -30,7 +30,7 @@ Label di storefront selalu generik/white-label (tanpa merek PSP — ADR 0004).
 
 | Metode | Biaya | Basis perhitungan |
 |---|---|---|
-| **COD** | **3%** + **PPN 11% atas fee-nya** | omset barang + ongkir yang ditagih |
+| **COD** | **3%** (**min Rp2.500**) + **PPN 11% atas fee-nya** | omset barang + ongkir yang ditagih |
 | **QRIS** | **0,7%** | **omset barang** saja (bukan total bayar) |
 | **Virtual Account BCA** | **Rp6.500** flat | per transaksi |
 | **Virtual Account bank lain** (BNI/BRI/Mandiri/Permata/…) | **Rp3.000** flat | per transaksi |

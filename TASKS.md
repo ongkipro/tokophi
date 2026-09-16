@@ -779,7 +779,7 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
 - **Target Files:** `apps/admin/lib/data/finance.ts`, `apps/admin/lib/data/dashboard.ts` / `analytics.ts`, the tile labels, `STATUS.md` (🟢/🟡 row)
 - **Change:** Keuangan "Omzet" should sum entitlement over COLLECTED orders (`financial_status = 'dibayar'`, i.e. paid prepaid + COD at `selesai`); unpaid prepaid orders (4 of `permata-store`'s 5 real orders today, Rp873.100) must not read as revenue. The dashboard tile either uses the same base or says what it sums ("termasuk ongkir, sebelum pembayaran"). One definition, or two clearly named ones — never two unnamed ones.
 - **Done when:** a store with one unpaid VA order shows Rp0 omzet in Keuangan; `daily-stats.test.ts`-style check pins the filter.
-- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+- **Status:** `[x]` **DONE 2026-09-17 (Lane D, branch `lane/8.28-8.29-seller-money`).** Keuangan (`financeSummaryRows` / `earningsRows` / `getChannelMix`) sums entitlement over `financial_status = 'dibayar'` only (`COLLECTED`, one definition); the dashboard money tile keeps its own base and now SAYS so (`SALES_TILE_NOTE` = "termasuk ongkir & biaya COD, sebelum pembayaran"). Pinned by `apps/admin/lib/data/finance-collected.test.ts` (real Postgres, tenant role: unpaid VA → Rp0; paid → its entitlement; delivered COD counts; cancelled-paid never). Proved red with the filter dropped.
 
 ### Task 8.29: 🟡 COD: Model KiriminAja's Rp2.500 Minimum Fee, and Name the Remittance Gap
 - **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F4); KiriminAja T&C §5 (3% + PPN 11%, min Rp2.500; J&T Express 4%); `ledger-credit.ts` `collectCodOnDelivery` credits the seller at `selesai`
@@ -788,7 +788,7 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
   1. `codFeeBeforeVatIdr = max(2_500, round(base × 0.03))` so a small COD order does not cost the platform more than it charges (base Rp50.000 today: shopper 1.500 + 165, courier 2.500 + 275 → −Rp1.110 per parcel). Mirror at checkout. If COD is ever widened to J&T, the rate must be per courier — say so in the code.
   2. `FINANCE.md`: the platform credits the seller at `selesai` while the courier remits COD on its own cycle; state the exposure (bounded by `release_on` and the min payout) and that no remittance fact exists yet (`cod_settled_at`).
 - **Done when:** `order-finance.test.ts` pins the floor; the checkout shows the same number; `FINANCE.md` carries the exposure paragraph.
-- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+- **Status:** `[x]` **DONE 2026-09-17 (Lane D, branch `lane/8.28-8.29-seller-money`).** `COD_FEE_MIN_IDR = 2_500` / `COD_FEE_RATE = 0.03` exported from `order-finance.ts`; `codFeeBeforeVatIdr = max(floor, round(base × rate))`, prepaid unaffected; `checkout.astro` imports the same constants via `define:vars` (guard `checkout-cod-floor.test.ts` fails on a literal rate or the old body). `FINANCE.md` §3 floor + per-courier warning, §4 remittance-gap paragraph (no `cod_settled_at` yet); `PRICING.md` §2 row. Three mutations, three reds.
 
 ### Task 8.30: 🟡 Price Card vs Setting, OVO vs Task 8.10, and the Stale Finance Lines in STATUS.md
 - **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F6, F7, F10)
