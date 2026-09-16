@@ -18,6 +18,7 @@ export type Store = {
   status: StoreStatus;
   segment: StoreSegment; // billing lifecycle: trial | first_month | regular | vip
   comped: boolean; // VIP: billing bypassed
+  isDemo: boolean; // seeded demo store (stores.is_demo, 8.27) — shown in the list, excluded from every money KPI
   // An OPERATOR suspended this store (stores.suspended_at), as opposed to `status === "ditangguhkan"`
   // which is also what an unpaid store reads once its grace period lapses. Never derive "did we
   // suspend this?" from the status badge — that is what made the Aktifkan button un-pressable.

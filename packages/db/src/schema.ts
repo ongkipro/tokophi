@@ -277,6 +277,9 @@ export const stores = pgTable("stores", {
   comped: boolean().notNull().default(false),
   compedReason: text(),
   compedAt: ts(),
+  // The seeded demo store (0113). Excluded from every platform money KPI; still served and listed
+  // with a "Demo" badge. Flag rather than purge — the seed would recreate a purged store.
+  isDemo: boolean().notNull().default(false),
   // 🔴 OPERATOR SUSPENSION (0086) — a DELIBERATE ACT by the platform, not a consequence of an
   // unpaid invoice, and therefore its own column rather than a value of `status`.
   //
@@ -1969,7 +1972,11 @@ export const invoices = pgTable("invoices", {
   taxIdr: money().notNull().default(0),
   status: invoiceStatus().notNull().default("menunggu"),
   // subscription payment (AutoLaris VA) matching + kind
-  kind: text(), // "subscription" for merchant subscription invoices
+  // "subscription" = a bill the merchant pays · "comp" = a period the platform GRANTED (0113):
+  // amount 0, status dibayar, cycle "comp", written by compStore and backfilled from the audit log,
+  // so MRR can tell a comp from a payment · NULL = seeded legacy rows. Free text on purpose (an enum
+  // ADD VALUE has no IF NOT EXISTS and aborts the whole pending batch).
+  kind: text(),
   cycle: text(), // "monthly" | "annual"
   periodMonths: integer(), // how many months this invoice extends the subscription (1/12/13)
   reffId: text(),

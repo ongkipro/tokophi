@@ -15,6 +15,7 @@ import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling,
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
+import { buildCompInvoice } from "./comp-invoice";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -863,7 +864,7 @@ export async function setTicketStatus(ticketId: string, status: "open" | "answer
 export async function compStore(storeId: string, months = 1): Promise<{ ok: boolean; until?: string; error?: string }> {
   const gate = await platformGate();
   if (!gate.ok) return gate;
-  const [s] = await db.select({ currentPeriodEnd: schema.stores.currentPeriodEnd }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+  const [s] = await db.select({ currentPeriodEnd: schema.stores.currentPeriodEnd, accountId: schema.stores.accountId }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
   if (!s) return { ok: false };
   const now = new Date();
   const base = s.currentPeriodEnd && s.currentPeriodEnd > now ? s.currentPeriodEnd : now;
@@ -873,7 +874,15 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
   // and its first real invoice becomes Rp305.250 instead of Rp55.500 — Rp249.750 too much, charged to
   // the merchant we were trying to compensate. `computeBilling` reads `active` from
   // `currentPeriodEnd` alone (billing.ts), so the comp works without it.
-  await db.update(schema.stores).set({ currentPeriodEnd: until }).where(eq(schema.stores.id, storeId));
+  //
+  // THE PERIOD MOVE AND ITS RECORD LAND TOGETHER (Task 8.26 / 0113). A comp used to leave nothing a
+  // KPI could read, so MRR counted every comped store as paying. The Rp0 `kind='comp'` invoice is
+  // what lets `getSubscriptionStats` tell this period apart from a paid one — written in the same
+  // transaction so the store can never be extended without the row that says why.
+  await db.transaction(async (tx) => {
+    await tx.update(schema.stores).set({ currentPeriodEnd: until }).where(eq(schema.stores.id, storeId));
+    await tx.insert(schema.invoices).values(buildCompInvoice({ storeId, accountId: s.accountId, months, at: now }));
+  });
   // `status` is DERIVED, never asserted — a comp does not unlock a store an operator suspended.
   const state = await syncStoredStatus(storeId);
   await logStore(
