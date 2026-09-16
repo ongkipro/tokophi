@@ -56,13 +56,6 @@ export type SubscriptionInvoiceResult =
   | { ok: true; detail: SubscriptionInvoiceDetail; reused: boolean }
   | { ok: false; error: string };
 
-/**
- * `plan_key` is `NOT NULL` with no default on `invoices` (0000), and its enum is the legacy tier
- * set (`pemula|bisnis|skala`) that the single-plan model abandoned. Every creator has always
- * written `bisnis`; dropping the column is a migration for Task 8.30, not this one. Named here once
- * so the three callers cannot drift on a value that means nothing.
- */
-const LEGACY_PLAN_KEY = "bisnis" as const;
 /** A payer e-mail the provider will accept when a store somehow has no owner row. Never a real inbox. */
 const FALLBACK_PAYER_EMAIL = "merchant@tokophi.id";
 /** The provider requires a phone; the merchant's is not collected for billing. Same placeholder all three paths used. */
@@ -159,7 +152,6 @@ export async function createSubscriptionInvoice(input: SubscriptionInvoiceInput)
     number,
     accountId: store.accountId,
     storeId: store.id,
-    planKey: LEGACY_PLAN_KEY,
     kind: "subscription",
     amountIdr: charge.total,
     taxIdr: charge.taxIdr,

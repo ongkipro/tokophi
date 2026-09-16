@@ -1964,7 +1964,8 @@ export const invoices = pgTable("invoices", {
     .notNull()
     .references(() => accounts.id),
   storeId: uuid().references(() => stores.id),
-  planKey: planKey().notNull(),
+  // LEGACY (0114): single-plan product; defaulted so no creator names a tier. Never read for pricing.
+  planKey: planKey().notNull().default("bisnis"),
   amountIdr: money().notNull().default(0),
   // PPN carried by THIS invoice, stored at creation (0101) — the faktur renders the stored value,
   // never a derivation: since the platform PPN toggle exists, "total / 1.11" would invent tax on a

@@ -19,7 +19,6 @@ export function buildCompInvoice({ storeId, accountId, months, at }: CompInvoice
     number: `COMP-${randomUUID().replace(/-/g, "").slice(0, 12)}`,
     accountId,
     storeId,
-    planKey: "bisnis" as const, // the single plan; the column is a legacy enum, not a tier
     amountIdr: 0,
     taxIdr: 0,
     status: "dibayar" as const,
