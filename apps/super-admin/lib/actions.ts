@@ -14,6 +14,16 @@ import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling,
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
+import { isProviderEnv, type ProviderEnv } from "@tokophi/lib/provider-config";
+import {
+  loadProviderRows,
+  markAutolarisTested,
+  markKiriminajaTested,
+  writeAutolarisKey,
+  writeKiriminajaActiveEnv,
+  writeKiriminajaKey,
+} from "@tokophi/db/provider-config";
+import { saveCredentials, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -676,6 +686,64 @@ export async function testAutolarisConnection(): Promise<{ ok: boolean; message:
   const gate = await platformGate();
   if (!gate.ok) return { ok: false, message: gate.error };
   return alTestConnection();
+}
+
+// ---- Task 8.33: provider credentials + environment, managed here instead of by redeploy ----
+//
+// The rules (store only after a passed test; switch env only after the TARGET key passed a test)
+// live in `provider-credentials.ts` with every side effect injected, so they are tested against a
+// stubbed provider. This file supplies the real ones. The plaintext key crosses exactly two
+// boundaries — the cipher and the provider's test call — and is never logged, returned or stored
+// bare; the audit line carries the operator's e-mail and `maskKey()`'s four-character tail.
+const credentialDeps: CredentialDeps = {
+  rows: loadProviderRows,
+  env: () => ({
+    KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
+    KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+    AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
+    AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+  }),
+  testKiriminaja: kaTestConnection,
+  testAutolaris: alTestConnection,
+  writeKiriminajaKey,
+  markKiriminajaTested,
+  writeKiriminajaActiveEnv,
+  writeAutolarisKey,
+  markAutolarisTested,
+  log: logPlatform,
+};
+
+const isProviderId = (v: unknown): v is ProviderId => v === "kiriminaja" || v === "autolaris";
+
+/** OWNER only: a stored key outranks the container env on every replica, so this is a platform-wide credential change. */
+export async function saveProviderCredentials(provider: string, env: string, key: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isProviderId(provider) || !isProviderEnv(env)) return { ok: false, message: "Provider atau lingkungan tidak dikenal." };
+  const r = await saveCredentials(credentialDeps, gate.admin.email, provider, env, key);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+/** OWNER only: flips which KiriminAja host bookings go to. Tests the TARGET env's key first and refuses on failure. */
+export async function setProviderEnv(provider: string, env: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (provider !== "kiriminaja") return { ok: false, message: "Hanya KiriminAja yang punya lingkungan sandbox/production." };
+  if (!isProviderEnv(env)) return { ok: false, message: "Lingkungan tidak dikenal." };
+  const r = await switchKiriminajaEnv(credentialDeps, gate.admin.email, env);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+/** `admin` rank, like the two test buttons above: re-tests the key a slot resolves to and re-stamps `tested_at`. */
+export async function testProviderKey(provider: string, env: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isProviderId(provider) || !isProviderEnv(env)) return { ok: false, message: "Provider atau lingkungan tidak dikenal." };
+  const r = await testStoredKey(credentialDeps, provider, env as ProviderEnv);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
 }
 
 // ---- platform team: invite another operator (real platform_admins row) ----

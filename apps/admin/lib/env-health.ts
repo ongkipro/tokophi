@@ -39,12 +39,18 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   CRON_SECRET: { required: true, why: "Gerbang semua route cron — kosong berarti route-nya menolak semua (fail closed), jadi resi berhenti terbit sendiri." },
   INTEGRATION_TOKEN_KEY: { required: true, why: "Kunci enkripsi token CAPI di store_tracking_channels. Kosong = token tersimpan tak bisa dibaca." },
 
-  KIRIMINAJA_API_KEY: { required: true, why: "Tanpa ini tidak ada tarif ongkir sama sekali — dan tanpa tarif, tidak ada pesanan." },
-  KIRIMINAJA_ENV: { required: true, why: "sandbox vs production. Salah setel TIDAK terlihat: booking sandbox berbentuk identik, tapi tak ada kurir yang menjemput." },
+  // Task 8.33: the three provider values below are FALLBACKS now. The Super Admin's encrypted row
+  // (`shipping_aggregator.*_key_enc` / `active_env`, `platform_payment_gateways.credentials_enc`)
+  // wins when present, so an empty env is not a defect on a deploy whose keys live in the database.
+  // Presence is still reported; `api/health/env` adds a `providers` block that says which side
+  // (db / env / none) each key actually resolves from. INTEGRATION_TOKEN_KEY is what stays required —
+  // without it the stored keys cannot be read and the env fallback is all there is.
+  KIRIMINAJA_API_KEY: { required: false, why: "Cadangan bila Super Admin belum menyimpan kunci. Tanpa kunci di mana pun: tidak ada tarif ongkir, tidak ada pesanan." },
+  KIRIMINAJA_ENV: { required: false, why: "Cadangan bila Super Admin belum memilih lingkungan (default sandbox). Salah setel TIDAK terlihat: booking sandbox berbentuk identik, tapi tak ada kurir yang menjemput." },
   KIRIMINAJA_ORDER_PREFIX: { required: false, why: "Prefiks nomor order ke kurir. Kosong = tanpa prefiks, sah." },
 
   AUTOLARIS_BASE: { required: true, why: "Basis URL PSP. Ada default di compose, tapi kosong berarti pembayaran menunjuk ke mana-mana." },
-  AUTOLARIS_API_KEY: { required: true, why: "Tanpa ini tidak ada VA/QRIS yang bisa dibuat — checkout prabayar mati." },
+  AUTOLARIS_API_KEY: { required: false, why: "Cadangan bila Super Admin belum menyimpan kunci. Tanpa kunci di mana pun: tidak ada VA/QRIS — checkout prabayar mati." },
   AUTOLARIS_CALLBACK_SECRET: { required: true, why: "Memverifikasi callback pembayaran. Kosong = callback tak terverifikasi diterima atau ditolak, dua-duanya buruk." },
 
   PUBLIC_APP_URL: { required: false, why: "Dipakai untuk menyusun tautan absolut; ada fallback." },

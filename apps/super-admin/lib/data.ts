@@ -5,6 +5,9 @@ import { kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
 import { cached } from "@tokophi/lib/cache";
 import { classifyKaProbe, type KaProbe } from "./ka-probe";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
+import { getProviderConfig, maskKey, resolveAutolaris, resolveKiriminaja, type ProviderEnv } from "@tokophi/lib/provider-config";
+import { encryptionAvailable } from "@tokophi/lib/crypto";
+import { autolarisRow, kiriminajaRow, loadProviderRows } from "@tokophi/db/provider-config";
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import { likeContains } from "@tokophi/lib/like";
 import { LOG_PAGE_SIZE, logPages, type LogQuery } from "./activity-log";
@@ -370,10 +373,62 @@ export async function getConversion(): Promise<Conversion> {
  * ONE reader, called by both surfaces that print it (Analitik → Sistem, and the connection card on
  * Pengaturan → Kurir). A second `process.env.KIRIMINAJA_ENV ?? "sandbox"` next to the card would be
  * a second place to drift, and the two would then disagree about which environment is live — the
- * exact failure the card exists to prevent. The default matches `@tokophi/lib/kiriminaja`, which is
- * what actually chooses the base URL.
+ * exact failure the card exists to prevent. Since Task 8.33 it reads the SAME seam that chooses the
+ * base URL (`@tokophi/lib/provider-config`: the Super Admin's row first, `KIRIMINAJA_ENV` second),
+ * so the badge cannot disagree with the booking.
  */
-export const kaEnvName = () => process.env.KIRIMINAJA_ENV ?? "sandbox";
+export const kaEnvName = async (): Promise<ProviderEnv> => (await getProviderConfig()).kiriminaja.env;
+
+/**
+ * What Super Admin → Pengaturan shows about the platform's own provider keys (Task 8.33): WHICH
+ * environment is live and where that decision came from, whether a key is stored per environment,
+ * its MASKED tail, and when it last passed a live test. Never the key itself — `maskKey` is the only
+ * shape that leaves the server, and the row's ciphertext never leaves `packages/db`.
+ */
+export type ProviderKeyStatus = {
+  /** A key exists for this slot — stored in the DB row, or (fallback) in the container env. */
+  present: boolean;
+  source: "db" | "env" | "none";
+  /** `…1234` — the last four characters — or `—`. */
+  masked: string;
+  /** ISO timestamp of the last successful live test of the STORED key; null = never / not stored. */
+  testedAt: string | null;
+};
+export type ProviderStatus = {
+  /** `INTEGRATION_TOKEN_KEY` is set, so a key can be stored at all. Without it the inputs are disabled, with the reason. */
+  encryptionAvailable: boolean;
+  kiriminaja: {
+    activeEnv: ProviderEnv;
+    envSource: "db" | "env" | "default";
+    sandbox: ProviderKeyStatus;
+    production: ProviderKeyStatus;
+  };
+  autolaris: ProviderKeyStatus;
+};
+export async function getProviderStatus(): Promise<ProviderStatus> {
+  const [rows, ka, al] = await Promise.all([loadProviderRows(), kiriminajaRow(), autolarisRow()]);
+  const env = {
+    KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
+    KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+    AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
+    AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+  };
+  const active = resolveKiriminaja({ row: rows.kiriminaja, env });
+  // Each slot is resolved AS IF it were the active env, so a slot shows the same key the platform
+  // would use after switching to it — including the env-var fallback, which is what "present" means
+  // on a deploy that has never opened this card.
+  const slot = (e: ProviderEnv): ProviderKeyStatus => {
+    const r = resolveKiriminaja({ row: { ...rows.kiriminaja, activeEnv: e }, env });
+    const testedAt = e === "production" ? ka?.productionTestedAt : ka?.sandboxTestedAt;
+    return { present: !!r.key, source: r.keySource, masked: maskKey(r.key), testedAt: r.keySource === "db" ? (testedAt?.toISOString() ?? null) : null };
+  };
+  const alCfg = resolveAutolaris({ row: rows.autolaris, env });
+  return {
+    encryptionAvailable: encryptionAvailable(),
+    kiriminaja: { activeEnv: active.env, envSource: active.envSource, sandbox: slot("sandbox"), production: slot("production") },
+    autolaris: { present: !!alCfg.key, source: alCfg.keySource, masked: maskKey(alCfg.key), testedAt: alCfg.keySource === "db" ? (al?.testedAt?.toISOString() ?? null) : null },
+  };
+}
 
 /**
  * One compose cron sidecar's last tick, as recorded by `apps/admin/app/api/cron/record-run.ts`.
@@ -402,10 +457,11 @@ const KA_PROBE_TIMEOUT_MS = 4_000;
 
 export async function getKiriminajaProbe(): Promise<KaProbe> {
   return cached("ka:probe", KA_PROBE_TTL_MS, async () => {
+    const env = await kaEnvName();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<KaTestResult>((resolve) => {
       timer = setTimeout(
-        () => resolve({ ok: false, env: kaEnvName(), configured: true, message: `Tidak ada jawaban dari KiriminAja dalam ${KA_PROBE_TIMEOUT_MS / 1000} detik.` }),
+        () => resolve({ ok: false, env, configured: true, message: `Tidak ada jawaban dari KiriminAja dalam ${KA_PROBE_TIMEOUT_MS / 1000} detik.` }),
         KA_PROBE_TIMEOUT_MS,
       );
     });
@@ -450,7 +506,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     kiriminaja: kiriminajaProbe.state === "ok",
     kiriminajaProbe,
     autolaris: autolarisConfigured(),
-    kaEnv: kaEnvName(),
+    kaEnv: await kaEnvName(),
     stores,
     dbOk,
     region: process.env.DEPLOY_REGION ?? "lokal", // was hardcoded "Singapore" on a laptop
@@ -882,7 +938,7 @@ export async function getAggregator(): Promise<{ provider: string; env: string }
   // N35: the card said WHICH aggregator but never WHICH KEY. "Terhubung" against the sandbox and
   // "Terhubung" against production read identically, and only one of them moves a real parcel — the
   // operator had to press Test koneksi (whose message carries it) or leave for Analitik to find out.
-  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", env: kaEnvName() };
+  return { provider: agg ? PROVIDER_NAME[agg.provider] ?? agg.provider : "—", env: await kaEnvName() };
 }
 
 // Single-row platform finance config (0101). Missing row = the migration default: PPN OFF —

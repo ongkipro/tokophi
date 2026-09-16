@@ -4,8 +4,9 @@ import { useState, useTransition, type Dispatch, type SetStateAction, type React
 import { useRouter } from "next/navigation";
 import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound, Receipt, CircleCheck, CircleX, WifiOff, CircleDashed } from "lucide-react";
 import { toast } from "sonner";
-import type { CourierRow } from "@/lib/data";
+import type { CourierRow, ProviderStatus } from "@/lib/data";
 import type { KaProbe, KaProbeState } from "@/lib/ka-probe";
+import { AutolarisKey, KiriminajaKeys } from "./provider-keys";
 
 import {
   Card,
@@ -85,6 +86,7 @@ export function PengaturanClient({
   team,
   finance,
   kaProbe,
+  providers,
   me,
 }: {
   gateways: Toggle[];
@@ -94,6 +96,8 @@ export function PengaturanClient({
   team: TeamMember[];
   finance: { subscriptionPpnEnabled: boolean };
   kaProbe: KaProbe;
+  /** Task 8.33 — masked provider keys, their test stamps, and the live env. Never a key value. */
+  providers: ProviderStatus;
   me: { adminId: string; role: string };
 }) {
   const router = useRouter();
@@ -345,6 +349,8 @@ export function PengaturanClient({
                     </p>
                   )}
                 </div>
+                {/* Task 8.33 — the PSP key itself (one environment). Owner-only input; the action gates. */}
+                <AutolarisKey status={providers.autolaris} canEdit={me.role === "owner"} encryptionAvailable={providers.encryptionAvailable} />
                 <p className="mb-3 text-xs text-muted-foreground">
                   Hanya channel <b>Aktif di AutoLaris</b> yang bisa di-on-kan — sisanya terkunci sampai diaktifkan di akun AutoLaris. Klik <b>Sync</b> untuk cek ulang status langsung ke AutoLaris. Toggle = ditawarkan ke merchant untuk checkout.
                 </p>
@@ -452,6 +458,9 @@ export function PengaturanClient({
                     </p>
                   )}
                 </div>
+                {/* Task 8.33 — the keys themselves, per environment, and the switch. Owner-only
+                    affordances are drawn only for an owner; the action's gate is the boundary. */}
+                <KiriminajaKeys status={providers.kiriminaja} canEdit={me.role === "owner"} encryptionAvailable={providers.encryptionAvailable} />
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="max-w-xl text-xs text-muted-foreground">
                     Kurir &amp; layanan datang langsung dari <b>KiriminAja</b> — bukan daftar yang kita tulis sendiri.

@@ -69,12 +69,16 @@ describe("every env var the admin reads is classified", () => {
 
   it("keeps the required set honest — the four that stop the app dead", () => {
     // Not "some are required": these specific ones, because each has a failure this repo has met.
-    for (const n of ["DATABASE_URL", "AUTH_SECRET", "CRON_SECRET", "KIRIMINAJA_ENV"]) {
+    // Task 8.33 swapped KIRIMINAJA_ENV for INTEGRATION_TOKEN_KEY: the provider env and keys are
+    // fallbacks behind the Super Admin's encrypted row now, and the encryption key is what makes
+    // that row readable at all.
+    for (const n of ["DATABASE_URL", "AUTH_SECRET", "CRON_SECRET", "INTEGRATION_TOKEN_KEY"]) {
       expect(ENV_CHECKS[n]?.required, `${n} must stay required`).toBe(true);
     }
     // …and the ones whose EMPTY state is a deliberate product decision must NOT be required, or the
-    // check screams every day about a closed signup and a hidden Google button.
-    for (const n of ["SIGNUP_ENABLED", "GOOGLE_CLIENT_ID"]) {
+    // check screams every day about a closed signup and a hidden Google button — and, since 8.33,
+    // about provider keys that live in the database instead of the container.
+    for (const n of ["SIGNUP_ENABLED", "GOOGLE_CLIENT_ID", "KIRIMINAJA_API_KEY", "KIRIMINAJA_ENV", "AUTOLARIS_API_KEY"]) {
       expect(ENV_CHECKS[n]?.required, `${n} must stay optional`).toBe(false);
     }
   });
@@ -82,15 +86,16 @@ describe("every env var the admin reads is classified", () => {
   it("treats a whitespace-only value as MISSING", () => {
     // Coolify writes `VAR: ''` when a value has not arrived — which is exactly the 5 August failure.
     // "Defined" is not the question an operator is asking.
-    const prev = process.env.KIRIMINAJA_ENV;
+    // (Was KIRIMINAJA_ENV until Task 8.33 made it a fallback; a REQUIRED one is what `missing` lists.)
+    const prev = process.env.INTEGRATION_TOKEN_KEY;
     try {
-      process.env.KIRIMINAJA_ENV = "   ";
-      expect(checkEnv().missing).toContain("KIRIMINAJA_ENV");
-      process.env.KIRIMINAJA_ENV = "sandbox";
-      expect(checkEnv().missing).not.toContain("KIRIMINAJA_ENV");
+      process.env.INTEGRATION_TOKEN_KEY = "   ";
+      expect(checkEnv().missing).toContain("INTEGRATION_TOKEN_KEY");
+      process.env.INTEGRATION_TOKEN_KEY = "test-key-for-unit-tests-only-0123456789";
+      expect(checkEnv().missing).not.toContain("INTEGRATION_TOKEN_KEY");
     } finally {
-      if (prev === undefined) delete process.env.KIRIMINAJA_ENV;
-      else process.env.KIRIMINAJA_ENV = prev;
+      if (prev === undefined) delete process.env.INTEGRATION_TOKEN_KEY;
+      else process.env.INTEGRATION_TOKEN_KEY = prev;
     }
   });
 });
