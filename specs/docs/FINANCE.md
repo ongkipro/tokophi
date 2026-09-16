@@ -19,12 +19,22 @@
   - **DEFAULT OFF at launch** (owner ruling): sellers pay the flat DPP — Rp275.000, no tax line.
   - Flipping it applies to the **next invoice** of every store, new or running. It never rewrites
     an issued invoice.
-- `subscriptionCharge(base, ppnEnabled)` (`@tokophi/lib/billing`) is the ONE charge function. All
-  **three invoice creators** read the toggle at creation time and store BOTH numbers on the invoice
-  (`invoices.amount_idr` = billed total, `invoices.tax_idr` = the PPN actually added, 0 when off):
-  1. billing cron — `apps/admin/app/api/cron/billing/route.ts`
+- `subscriptionCharge(base, ppnEnabled)` (`@tokophi/lib/billing`) is the ONE charge function, and
+  **`createSubscriptionInvoice()` (`@tokophi/db/subscription-invoice`) is the ONE invoice creator**
+  (Task 8.24, 2026-09-17). It reuses a pending `menunggu` invoice, reads the toggle at creation
+  time, submits to the provider with `alCreateOrder` (fee netted — never `create_payment`, where the
+  payer transfers `amount + admin` and the exact-amount gate in `pay/callback` would ignore the
+  payment), names the store OWNER as payer, and stores BOTH numbers on the row
+  (`invoices.amount_idr` = billed total, `invoices.tax_idr` = the PPN actually added, 0 when off).
+  Three paths call it and none builds a bill of its own:
+  1. billing cron — `apps/admin/app/api/cron/billing/route.ts` (`RENEWAL_CHANNEL = "VABCA"`; it
+     used to send `"BCA"`, a bank nickname no provider knows, so no renewal invoice was ever written)
   2. merchant pay flow — `apps/admin/lib/actions/billing.ts` (`createSubscriptionPayment`)
   3. super-admin manual invoice — `apps/super-admin/lib/actions.ts` (`createManualInvoice`)
+  Guard: `apps/admin/app/api/cron/billing/route.test.ts` (real Postgres, provider stubbed) — one
+  invoice for a `past_due` store, reused on the next tick, none for comped/in-period, promo price
+  when the first invoice was never paid; plus a source claim that the cron never calls
+  `alCreatePayment` or inserts into `invoices` itself.
 - **The faktur renders the STORED `tax_idr`, never a derived one** (`app/faktur/[number]/page.tsx`):
   an invoice billed with the toggle off must not display invented PPN. Display sites
   (`/akun/langganan`, the pay widget) read the same toggle so the number on screen equals the

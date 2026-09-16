@@ -8,6 +8,25 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-17 01:30 UTC] — FINANCE · Task 8.24 + 8.25 step 3 (F9): one subscription-invoice creator; the rejected-callback SHAPE is logged
+
+- **Executor:** Lane C (Claude, Fable 5.1 — parallel worker fork under the Finance Overhaul II goal). **Scope ID:** `8.24` (audit F1), `8.25` step 3 / F9 logging half. Branch `lane/8.24-invoice-creator`.
+- **Files:** **new** `packages/db/src/subscription-invoice.ts` · **new** `apps/admin/app/api/cron/billing/route.test.ts` · `packages/db/package.json` (subpath export `./subscription-invoice`) · `apps/admin/app/api/cron/billing/route.ts` · `apps/admin/lib/actions/billing.ts` · `apps/super-admin/lib/actions.ts` · `packages/lib/src/pay-callback.ts` · `packages/lib/src/pay-callback.test.ts` · `apps/admin/app/api/public/pay/callback/route.ts` · `specs/openapi/admin-api.yaml` · `specs/docs/FINANCE.md` §1 · `TASKS.md` (8.24 `[x]`, 8.25 step-3 note, 8.30 follow-up).
+
+**8.24 — three bills, one of them impossible.** The billing cron built its own renewal bill with `alCreatePayment` and `channelCode: "BCA"` — a bank nickname the provider has never known — so the provider refused, no `invoices` row was written, nothing was logged, and a lapsed store sat `suspended` with nothing to pay while the sweep reported a green `invoicesCreated: 0`. The merchant flow and the manual invoice each built theirs with `alCreateOrder`. Now `createSubscriptionInvoice({ storeId, cycle, channelCode, actor, provider? })` in `@tokophi/db/subscription-invoice` is the one creator: pending `menunggu` invoice reused, `quote()` + `subscriptionCharge()` under the global PPN toggle, `alCreateOrder` (submit, fee netted — `create_payment` would bill `amount + admin` and the exact-amount gate in `pay/callback` would then ignore the paid callback), the store OWNER as payer, `amount_idr` + `tax_idr` stored. All three callers rewired; the cron carries `RENEWAL_CHANNEL = "VABCA"`. `plan_key` (NOT NULL, no default, legacy tier enum) is still written via `LEGACY_PLAN_KEY = "bisnis"` — dropping it is a migration, filed under 8.30.
+
+**Two more defects the cron test found in the creator it was written for.** (1) `invoices.number` was minted from `Date.now()` alone, so two stores billed in the same millisecond collided on `invoices_number_unique` — and (2) that error escaped the per-store loop and **aborted the whole sweep**, leaving every store behind it unbilled for the day. A 3-symbol random tail on the number, a per-store `try/catch` counted as `invoiceErrors` (summary + `BillingCronResult` in the OpenAPI spec).
+
+**It is exported as a SUBPATH, not from the index — a lane-integration blocker, fixed.** The first draft re-exported the creator from `packages/db/src/index.ts` with a `server-only` import; the storefront bundles that index, and `npm run verify -w @tokophi/storefront` failed at build (`Rollup failed to resolve import "server-only"`). Removed from the index and from `server-only`; the three callers import `@tokophi/db/subscription-invoice`. Storefront verify now green (8/8 checks).
+
+**8.25 step 3 / F9 — the shape, never the value.** `payCallbackBodyShape(body, expectedAmountIdr)` renders `fields=<name:type(len),…> amount=<absent|null|int|number|digits|string> expectedDigits=<n>` (or `body=null|array|<typeof>`), and `pay/callback` logs it as `[pay/callback] paid-amount-mismatch shape=…` on both rejection branches (payments and subscription invoices). The gate is not loosened. The capture itself waits on the first real prepaid payment on production.
+
+**Verification.** `route.test.ts` 6/6 against real Postgres, provider stubbed at the module boundary (past_due ⇒ one `menunggu` invoice, `VABCA`, Rp275.000, tax 0 · second tick reuses · comped never billed · in-period not billed · first-invoice-unpaid ⇒ Rp50.000 · `codeOnly` source claim) · `pay-callback.test.ts` 15/15 · full `npx vitest run` **180 files, 1575 tests, 0 failed** · `tsc` admin / super-admin / db / lib **0 errors** · lint admin 0 errors (14 pre-existing warnings), super-admin 0 errors (3 pre-existing) · `npm run verify:openapi` ok · `npm run verify -w @tokophi/storefront` 8/8 green. **Three mutations, three reds, restored:** `"BCA"` back in the cron → red on `channel` (`expected {…} to match object { channel: 'VABCA' }`); the creator bypassed by an inline `db.insert(schema.invoices)` → source claim red; the shape logger printing `raw=${body.amount}` → `pay-callback.test.ts` red (`describes the body without reproducing any value`).
+
+⚠️ **The test DB carries ~5.300 leftover stores** from suites that never delete their fixtures; the cron walks all of them, so this suite runs 20–110 s and its timeout is 120 s. Not this lane's mess; a fixture-cleanup sweep across the other DB suites would bring it under 10 s. Not merged, not deployed, no seed touched.
+
+---
+
 ### [2026-09-16 18:06 UTC] — FINANCE · Tasks 8.28 + 8.29: Keuangan counts collected money; COD fee floor Rp2.500
 
 - **Executor:** Lane D (Claude, Fable 5.1 — parallel worker fork under the Finance Overhaul II goal). **Scope ID:** `8.28`, `8.29` (audit F4, F5). Branch `lane/8.28-8.29-seller-money`, base `ef6830a`.

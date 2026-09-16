@@ -1,15 +1,13 @@
 "use server";
 import { db, schema } from "@tokophi/db";
+import { createSubscriptionInvoice } from "@tokophi/db/subscription-invoice";
 import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
 import { getSession } from "@/lib/auth";
 import { requireCapability } from "@/lib/rbac";
-import { quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
-import { getSubscriptionPpnEnabled } from "@/lib/data/platform-finance";
-import { alCreateOrder, autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
-
-import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { type Cycle } from "@tokophi/lib/billing";
+import { autolarisConfigured, channelLabel } from "@tokophi/lib/autolaris";
 // Everything a payment UI needs to show a VA / QRIS for one (unpaid) invoice.
 export type PaymentDetail = {
   number: string; cycle: string | null; amount: number;
@@ -73,38 +71,14 @@ export async function createSubscriptionPayment(cycle: Cycle, channelCode: strin
   if (!autolarisConfigured()) return { ok: false, error: "Pembayaran belum dikonfigurasi oleh platform." };
   if (!channelCode) return { ok: false, error: "Pilih metode pembayaran dulu." };
 
-  const existing = await getPendingSubscription();
-  if (existing) return { ok: true, detail: existing, reused: true };
-
-  const [store] = await db
-    .select({ id: schema.stores.id, accountId: schema.stores.accountId, slug: schema.stores.slug, firstInvoicePaid: schema.stores.firstInvoicePaid })
-    .from(schema.stores).where(eq(schema.stores.id, session.storeId)).limit(1);
-  if (!store) return { ok: false, error: "Toko tidak ditemukan." };
-
-  const q = quote(cycle, store.firstInvoicePaid);
-  // Platform PPN toggle (0101): OFF → flat DPP. Same gate the cron and Super Admin use.
-  const charge = subscriptionCharge(q.amount, await getSubscriptionPpnEnabled());
-  const amount = charge.total;
-  const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = payCallbackUrl(reffId);
-  // AL-ORDER: digital order via /api/h2h/submit (courir_id=1) — appears in the AutoLaris CMS as an
-  // order; the buyer pays exactly `amount` (their admin fee nets against settlement, measured).
-  const r = await alCreateOrder({
-    reffId, channelCode, amount,
-    customerName: session.name || "Merchant", customerPhone: "081200000000", customerEmail: session.email, callbackUrl,
-    items: [{ name: `Langganan TokoPhi (${q.cycle === "annual" ? "tahunan" : "bulanan"})`, qty: 1, unitPrice: amount }],
-  });
-  if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
-
-  const number = "SUB-" + Date.now().toString().slice(-9);
-  await db.insert(schema.invoices).values({
-    number, accountId: store.accountId, storeId: store.id, planKey: "bisnis", amountIdr: amount, taxIdr: charge.taxIdr, status: "menunggu",
-    kind: "subscription", cycle: q.cycle, periodMonths: q.months, reffId, trxId: r.trxId,
-    channel: channelCode, virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null,
-  });
-  revalidatePath("/akun/langganan");
-  const detail = await toDetail({ number, cycle: q.cycle, amountIdr: amount, channel: channelCode, virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null });
-  return { ok: true, detail };
+  // ONE creator for the cron, this action and the Super Admin's manual invoice (Task 8.24). It
+  // reuses a pending invoice, submits with a real channel code and the OWNER's e-mail as payer.
+  const r = await createSubscriptionInvoice({ storeId: session.storeId, cycle, channelCode, actor: "merchant" });
+  if (!r.ok) return { ok: false, error: r.error };
+  if (!r.reused) revalidatePath("/akun/langganan");
+  const d = r.detail;
+  const detail = await toDetail({ number: d.number, cycle: d.cycle, amountIdr: d.amountIdr, channel: d.channel, virtualAccount: d.virtualAccount, qr: d.qr, paymentUrl: d.paymentUrl });
+  return { ok: true, detail, reused: r.reused };
 }
 
 // Cancel an unpaid subscription invoice (so the merchant can start a different cycle).

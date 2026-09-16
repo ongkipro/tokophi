@@ -6,6 +6,7 @@ import { addMonths } from "@tokophi/lib/billing";
 import {
   PAY_CALLBACK_PARAM,
   payCallbackAmountMatches,
+  payCallbackBodyShape,
   verifyPayCallbackRef,
   verifyPayCallbackSecret,
 } from "@tokophi/lib/pay-callback";
@@ -188,6 +189,9 @@ export async function POST(req: Request) {
 
       if (mapped === "berhasil" && matched.length !== candidates.length) {
         console.error("[pay/callback] PAID amount does not match payments.total / amount_idr — callback ignored.");
+        // F9: the SHAPE of what arrived (names, types, lengths — never a value), so the first real
+        // rejection explains itself. Same discipline as the KiriminAja webhook's rejection line.
+        for (const p of candidates) console.error(`[pay/callback] paid-amount-mismatch shape=${payCallbackBodyShape(body, p.total ?? p.amountIdr)}`);
       }
 
       const rows = matched.length === 0
@@ -283,6 +287,7 @@ export async function POST(req: Request) {
 
       if (mapped === "berhasil" && invoiceMatches.length !== invoiceCandidates.length) {
         console.error("[pay/callback] PAID amount does not match invoices.amount_idr — callback ignored.");
+        for (const i of invoiceCandidates) console.error(`[pay/callback] paid-amount-mismatch shape=${payCallbackBodyShape(body, i.amountIdr)}`);
       }
 
       const invRows = invoiceMatches.length === 0
