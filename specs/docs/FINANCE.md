@@ -111,6 +111,19 @@ base). On VA BCA: flat Rp6.500 whatever the amounts.
   statement as the status flip. `payouts.note` is keyed by terminal status: `gagal` ⇒ rejection
   reason, `selesai` ⇒ transfer reference; both render on the merchant's `/saldo` Penarikan rows
   (and the CSV export's `Keterangan` column), so both sides can reconcile against the bank statement.
+- **A paid PREPAID order that is cancelled or returned owes the BUYER — and that debt has a row
+  (`refunds`, migration `0112`, Task 8.31 / audit F12).** `applyOrderStatusChange` writes one
+  obligation per `berhasil` non-COD payment (amount = `payments.amount_idr`, the pre-gateway-fee sum
+  the buyer paid US; the gateway's admin fee is theirs) in the SAME transaction as the claw-back, so
+  the seller's credit cannot be reversed with the buyer's money silently kept. COD never appears here
+  (cash at the door; a refused parcel collected nothing). One OPEN row per payment is a partial unique
+  index, not a check. **Nothing about a refund touches the ledger**: this money never entered the
+  seller's book, so paying it back posts nothing. Settled by hand on Super Admin → Pencairan → *Refund
+  ke Pembeli*: `menunggu → diproses → selesai` (transfer reference on `note`) or `→ gagal` (reason
+  on `note`, required — with no ledger row to reverse, the reason is the whole record). Each step is
+  one compare-and-swap in `apps/super-admin/lib/refund-transition.ts`, the payout lesson applied
+  first. The dashboard float card shows *Refund ke pembeli* as its OWN tile beside *Wajib
+  ditransfer* — different creditor, never summed — and the seller's order detail shows the state.
 
 ## 5. Guards
 

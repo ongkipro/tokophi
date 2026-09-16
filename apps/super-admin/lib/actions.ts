@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { platformGate } from "./platform-auth";
 import { markPayoutPaidInTxn, type PayoutConflict } from "./payout-transition";
+import { processRefundInTxn, markRefundPaidInTxn, rejectRefundInTxn, type RefundConflict } from "./refund-transition";
 import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } from "@tokophi/lib/impersonation";
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
@@ -1212,6 +1213,61 @@ export async function rejectPayout(payoutId: string, reason: string): Promise<{ 
   revalidatePath("/pencairan");
   revalidatePath(`/toko/${r.storeId}`);
   return { ok: true, restored: r.restored };
+}
+
+// ── REFUNDS — the BUYER's money on a cancelled prepaid order (Task 8.31) ─────────────────────────
+// Three actions, one shape each: the gate, ONE compare-and-swap in `refund-transition.ts`, the audit
+// line, the revalidate. No status is read or written here (two writers is two rules — the payout
+// lesson, F-M15), and NOTHING touches the ledger on any path: this money never entered the seller's
+// book, so there is nothing to post when it leaves ours.
+
+/** Menunggu → Diproses: an operator has started the transfer back to the buyer. */
+export async function processRefund(refundId: string): Promise<{ ok: boolean; error?: string; conflict?: RefundConflict }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const r = await db.transaction(async (tx) => processRefundInTxn(tx, refundId));
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
+  await logStore(r.storeId, `Refund ${rupiah(r.amount)} ke pembeli diproses (transfer dimulai)`);
+  revalidatePath("/pencairan");
+  revalidatePath("/");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
+}
+
+/** Diproses → Selesai: the money reached the buyer. `ref` is the transfer reference, kept on `note`. */
+export async function markRefundPaid(refundId: string, ref?: string): Promise<{ ok: boolean; error?: string; conflict?: RefundConflict }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const reference = ref?.trim() || null;
+  const r = await db.transaction(async (tx) => markRefundPaidInTxn(tx, refundId, reference));
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
+  await logStore(
+    r.storeId,
+    `Refund ${rupiah(r.amount)} ke pembeli SELESAI — dana sudah dikembalikan${reference ? ` (ref: ${reference})` : ""}`,
+  );
+  revalidatePath("/pencairan");
+  revalidatePath("/");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
+}
+
+/**
+ * → Gagal: the refund is refused, with a reason. Unlike a rejected PAYOUT nothing is restored
+ * anywhere — there is no ledger row to reverse — so the reason is the whole record of why a buyer
+ * who paid was not paid back. It is required for that reason, and the seller's order detail shows it.
+ */
+export async function rejectRefund(refundId: string, reason: string): Promise<{ ok: boolean; error?: string; conflict?: RefundConflict }> {
+  const gate = await platformGate();
+  if (!gate.ok) return gate;
+  const why = reason?.trim();
+  if (!why) return { ok: false, error: "Alasan penolakan wajib diisi." };
+  const r = await db.transaction(async (tx) => rejectRefundInTxn(tx, refundId, why));
+  if (!r.ok) return { ok: false, error: r.error, conflict: r.conflict };
+  await logStore(r.storeId, `Refund ${rupiah(r.amount)} ke pembeli DITOLAK — “${why}”`);
+  revalidatePath("/pencairan");
+  revalidatePath("/");
+  revalidatePath(`/toko/${r.storeId}`);
+  return { ok: true };
 }
 
 /**

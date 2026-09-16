@@ -1676,6 +1676,40 @@ export const payouts = pgTable("payouts", {
   paidAt: ts(),
 });
 
+// ── Refund obligations (0112, Task 8.31) ──────────────────────────────────────────────────────
+// A paid prepaid order that is cancelled owes the BUYER their money. Written ONLY by
+// `applyOrderStatusChange` (same transaction as the seller claw-back), settled by hand from Super
+// Admin → Pencairan. Never COD. One OPEN row per payment (partial unique index in 0112).
+export const refundStatus = pgEnum("refund_status", ["menunggu", "diproses", "selesai", "gagal"]);
+export const refunds = pgTable(
+  "refunds",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id),
+    paymentId: uuid()
+      .notNull()
+      .references(() => payments.id),
+    /** `payments.amount_idr` at cancellation — pre-gateway-fee; the gateway's admin fee is not ours to refund. */
+    amountIdr: money().notNull().default(0),
+    status: refundStatus().notNull().default("menunggu"),
+    /** Why the money is owed ("Pesanan dibatalkan" / the return reason) — set at creation. */
+    reason: text(),
+    /** `selesai` ⇒ the bank-transfer reference; `gagal` ⇒ the refusal reason. Keyed by terminal status, like payouts. */
+    note: text(),
+    requestedAt: createdAt(),
+    paidAt: ts(),
+  },
+  (t) => ({
+    storeIdx: index("refunds_store_idx").on(t.storeId),
+    orderIdx: index("refunds_order_idx").on(t.orderId),
+  }),
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),

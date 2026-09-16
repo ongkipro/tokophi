@@ -173,6 +173,20 @@ export type OrderPaymentRecord = {
 };
 
 /**
+ * The BUYER's money on a cancelled/returned prepaid order (Task 8.31, `refunds`). Written by
+ * `applyOrderStatusChange` in the cancellation's own transaction; settled by Super Admin. `null` =
+ * no obligation exists (COD, unpaid, or a live order). The newest row wins if a payment ever had a
+ * settled one and a later open one.
+ */
+export type OrderRefundRecord = {
+  status: "menunggu" | "diproses" | "selesai" | "gagal";
+  amount: number;
+  /** transfer reference on selesai · refusal reason on gagal · null otherwise */
+  note: string | null;
+  paidAtLabel: string | null;
+};
+
+/**
  * The seller's pickup identity (`store_settings.sender_*`) — what the LABEL prints in its
  * "Pengirim" box. NULL when the seller has not saved a pickup address; the label then shows the
  * store name alone, exactly as before.
@@ -191,6 +205,7 @@ export type OrderDetail = {
   buyer: OrderBuyer | null;
   address: OrderAddress | null;
   payment: OrderPaymentRecord | null;
+  refund: OrderRefundRecord | null;
   sender: OrderSender | null;
   financial: OrderFinancialBreakdown;
 };
@@ -431,6 +446,17 @@ export async function getOrderDetail(
         }
       : null;
 
+    // Task 8.31 — under RLS (`refunds` has a tenant policy), so a merchant sees only their own.
+    const [rf] = await db
+      .select({ status: schema.refunds.status, amount: schema.refunds.amountIdr, note: schema.refunds.note, paidAt: schema.refunds.paidAt })
+      .from(schema.refunds)
+      .where(eq(schema.refunds.orderId, o.id))
+      .orderBy(desc(schema.refunds.requestedAt))
+      .limit(1);
+    const refund: OrderRefundRecord | null = rf
+      ? { status: rf.status, amount: rf.amount, note: rf.note ?? null, paidAtLabel: rf.paidAt ? FMT.format(rf.paidAt) : null }
+      : null;
+
     const [financial] = await db
       .select()
       .from(schema.orderFinancials)
@@ -569,6 +595,7 @@ export async function getOrderDetail(
       buyer,
       address,
       payment,
+      refund,
       sender,
       financial: financialBreakdown,
     };

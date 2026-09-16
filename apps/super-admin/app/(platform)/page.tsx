@@ -306,6 +306,17 @@ export default async function PlatformDashboard() {
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">{num(float.payoutPendingCount)} permintaan pencairan menunggu kami.</p>
             </div>
+            {/* Task 8.31 — the BUYERS' side of the counter: prepaid orders cancelled after payment.
+                Kept apart from the payout tile, which is money owed to MERCHANTS out of the ledger. */}
+            <div className={`rounded-xl border p-4 sm:col-span-3 ${float.refundPendingCount ? "border-rose-300 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/20" : ""}`}>
+              <div className="text-xs text-muted-foreground">Refund ke pembeli</div>
+              <div className={`mt-1 text-xl font-bold tabular-nums ${float.refundPendingCount ? "text-rose-700 dark:text-rose-400" : ""}`}>
+                {IDR(float.refundObligation)}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {num(float.refundPendingCount)} pesanan prabayar dibatalkan setelah dibayar — uang pembeli yang masih kami pegang. Sumber: <code className="font-mono text-[11px]">refunds</code>.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
