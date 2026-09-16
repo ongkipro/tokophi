@@ -667,6 +667,9 @@ components:
             orderNumber: { type: string }
             gatewayFeeExpected: { type: integer, minimum: 0 }
             gatewayFeeActual: { type: integer, minimum: 0 }
+            # The PSP's own fee as echoed by `submit` — evidence only; it nets against the platform's
+            # settlement and is never added to what the shopper pays (Task 8.25 (a)).
+            providerFee: { type: integer, minimum: 0 }
             feeMismatch: { type: boolean }
             payment:
               $ref: '#/components/schemas/PaymentInstructions'

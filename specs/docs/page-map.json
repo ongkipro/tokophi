@@ -1522,6 +1522,7 @@
           "tests": [
             "apps/admin/lib/commerce-lifecycle.test.ts",
             "apps/admin/lib/destination-kelurahan.test.ts",
+            "apps/admin/lib/fee-truth.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
             "apps/admin/lib/public-guard.test.ts"
           ],
@@ -1546,7 +1547,8 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
-            "apps/admin/lib/commerce-lifecycle.test.ts"
+            "apps/admin/lib/commerce-lifecycle.test.ts",
+            "apps/admin/lib/fee-truth.test.ts"
           ],
           "whatItIs": "PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`."
         },

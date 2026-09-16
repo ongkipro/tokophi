@@ -162,3 +162,63 @@ suite("pay/callback subscription invoices (real PostgreSQL)", () => {
     expect(after.periodEnd?.getTime(), "satu tagihan = satu bulan").toBe(once.periodEnd?.getTime());
   });
 });
+
+// Task 8.25 (a) — the bill is issued for `payments.total` (= buyerPayable, our fee included), so a
+// PSP that echoes what it collected reports THAT number, and a PAID at exactly `amount_idr` (the
+// pre-fee figure the old create_payment flow reported) must keep settling too. Anything else is
+// still ignored — the exact-amount gate is what stops a partial transfer marking an order paid.
+suite("the paid callback matches the amount we billed", () => {
+  let customerId = "";
+
+  beforeAll(async () => {
+    const [customer] = await client<{ id: string }[]>`
+      insert into customers (store_id, name, phone)
+      values (${storeId}, ${`Pembeli ${runId}`}, '628123450000') returning id`;
+    customerId = customer.id;
+  });
+
+  afterAll(async () => {
+    await client`delete from ledger_entries where store_id = ${storeId}`;
+    await client`delete from payments where store_id = ${storeId}`;
+    await client`delete from orders where store_id = ${storeId}`;
+    await client`delete from customers where id = ${customerId}`;
+  });
+
+  async function newPayment(label: string) {
+    const trx = `TRXP-${runId}-${label}`;
+    const [order] = await client<{ id: string }[]>`
+      insert into orders (store_id, customer_id, number, status, financial_status, subtotal_idr, total_idr)
+      values (${storeId}, ${customerId}, ${`PAY-${runId}-${label}`}, 'baru', 'pending', 100000, 100000) returning id`;
+    // amount_idr = order payable · admin_fee = OUR VA BCA fee · total = buyerPayable — all written by us.
+    await client`
+      insert into payments (order_id, store_id, method, amount_idr, admin_fee, total, status, provider, reff_id, trx_id, channel_code)
+      values (${order.id}, ${storeId}, 'va', 100000, 6500, 106500, 'menunggu', 'autolaris', ${`PAY-${runId}-${label}`}, ${trx}, 'VABCA')`;
+    return trx;
+  }
+
+  const paymentState = async (trx: string) => {
+    const [p] = await client<{ status: string; financial_status: string }[]>`
+      select p.status::text, o.financial_status::text
+        from payments p join orders o on o.id = p.order_id where p.trx_id = ${trx}`;
+    return p;
+  };
+
+  it("PAID at payments.total (fee included) settles the payment and the order", async () => {
+    const trx = await newPayment("t");
+    const res = await callback({ trx_id: trx, status: "PAID", amount: 106500 });
+    expect(res.status).toBe(200);
+    expect(await paymentState(trx)).toEqual({ status: "berhasil", financial_status: "dibayar" });
+  });
+
+  it("PAID at amount_idr (the pre-fee figure) still settles", async () => {
+    const trx = await newPayment("a");
+    await callback({ trx_id: trx, status: "PAID", amount: 100000 });
+    expect(await paymentState(trx)).toEqual({ status: "berhasil", financial_status: "dibayar" });
+  });
+
+  it("PAID at any other amount is ignored — the exact-amount gate holds", async () => {
+    const trx = await newPayment("x");
+    await callback({ trx_id: trx, status: "PAID", amount: 99000 });
+    expect(await paymentState(trx)).toEqual({ status: "menunggu", financial_status: "pending" });
+  });
+});

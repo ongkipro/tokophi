@@ -24,7 +24,7 @@ import type { Db } from "./ledger-credit";
 //                        pick on courier+type and writes the price WE computed, which is the rule.
 //   · `areaById`       — the district lookup (a local snapshot table the seed fills; this suite
 //                        seeds nothing platform-wide, so it answers the one district it needs).
-//   · `alCreatePayment` — the AutoLaris bill. The mock echoes the PSP's own shape (amount / admin /
+//   · `alCreateOrder` — the AutoLaris bill (`submit`). The mock echoes the PSP's own shape (amount / admin /
 //                        total) so the route's fee reconciliation runs the code path production runs.
 // A test that phones a vendor fails on their bad afternoon; `npm run test:db` must be deterministic.
 //
@@ -66,19 +66,25 @@ vi.mock("@/lib/data/areas", () => ({
   // so the honest stub is "nothing resolved" and the order stores NULL for both columns.
   resolveDestinationKelurahan: vi.fn(async () => null),
 }));
+// What the PSP was actually asked to collect — captured so the test can assert the bill's AMOUNT,
+// not only the row the route wrote afterwards (a route billing `total` but writing `total + fee`
+// would pass every DB assertion and still under-bill every shopper).
+const { billed } = vi.hoisted(() => ({ billed: [] as number[] }));
 vi.mock("@tokophi/lib/autolaris", async (importOriginal) => {
   const actual = await importOriginal<typeof Autolaris>();
   return {
     ...actual,
     autolarisConfigured: () => true, // so the route writes the pending payment row it would in prod
-    alCreatePayment: vi.fn(async (input: { amount: number }) => ({
-      ok: true as const,
+    // Task 8.25 (a): the order API submits `buyerPayable` (fee included) to the `submit` endpoint,
+    // whose `total` IS `grand_total` — the provider's own fee (`admin`) nets against settlement and is
+    // never added to what the buyer pays. The mock echoes exactly that contract.
+    alCreateOrder: vi.fn(async (input: { amount: number }) => ({
+      ok: (billed.push(input.amount), true as const),
       trxId: `TRX-${randomUUID().slice(0, 8)}`,
       virtualAccount: "8808123456789",
-      // The PSP's own arithmetic: VA BCA is a flat Rp6.500 on top of what the order is worth.
       amount: input.amount,
       admin: 6_500,
-      total: input.amount + 6_500,
+      total: input.amount,
       expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
     })),
   };
@@ -304,6 +310,9 @@ suite("the commerce lifecycle, end to end (real PostgreSQL)", () => {
     expect(pay.trx_id, "the gateway's trx_id was not written — the callback could never match").toBeTruthy();
     expect([Number(pay.amount_idr), Number(pay.admin_fee), Number(pay.total)]).toEqual([total, fee, total + fee]);
     expect([body.total, body.buyerPayable, body.feeMismatch]).toEqual([total, total + fee, false]);
+    // Task 8.25 (a): the PSP is billed for buyerPayable — the fee the shopper agreed to, not a number
+    // the provider adds afterwards.
+    expect(billed.at(-1), "the PSP was billed for something other than buyerPayable").toBe(total + fee);
 
     // ② STOCK moved exactly once, by exactly the quantity ordered.
     expect(await stock(), "stock drift on order creation").toBe(before - QTY);

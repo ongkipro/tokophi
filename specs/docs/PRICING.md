@@ -42,6 +42,10 @@ Label di storefront selalu generik/white-label (tanpa merek PSP — ADR 0004).
 - Tambah bank VA dengan harga sendiri = edit data `CHANNEL_FEE_OVERRIDES`, bukan logika baru.
 - Channel yang aktif diatur Super Admin (`platform_payment_channels`); fee tampil ke pembeli di
   `/checkout` per metode yang dipilih, dan tercetak di thanks page ("Biaya admin").
+- **Yang menagih fee ini adalah TokoΦ, bukan PSP** (Task 8.25 (a), 2026-09-17): tagihan ke PSP
+  dibuat sebesar total checkout (pesanan + fee kita) sebagai grand total; fee PSP sendiri dipotong
+  dari settlement kita. Pembeli membayar persis angka yang tampil di checkout. Margin platform per
+  transaksi = fee kita − fee PSP. Detail: `FINANCE.md` §3.
 
 ## 3. Pembagian uang satu pesanan (siapa menerima apa)
 
