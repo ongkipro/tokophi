@@ -276,12 +276,13 @@ const store = Astro.locals.store;
             : "") +
           "</div>";
       }
-      // ⚠️ THE GATEWAY'S ADMIN FEE IS ADDED AFTER THE SHOPPER AGREED TO THE TOTAL, and both numbers
-      // sit on this one screen: the summary above says `order.total`, this box says `pay.total`, which
-      // is `amount + admin`. A shopper who transfers the number they remember UNDERPAYS the virtual
-      // account, no callback ever fires, and the order sits unpaid with nobody able to explain why.
-      // Name the fee instead of letting two totals argue silently. (`orders`/`payments` keep the
-      // pre-fee amount, which is correct — the fee is the gateway's, not the merchant's revenue.)
+      // Task 8.25 (a): the fee the shopper agreed to at checkout IS the fee on the bill. The order API
+      // submits `buyerPayable` (order + our admin fee) as the PSP's grand total, so `pay.total` and the
+      // summary's "Total bayar" above are the same number and the provider adds nothing on top. The
+      // fee is still itemised here so the shopper sees where the difference from the goods subtotal
+      // comes from — and `pay.total` is still preferred over our figure, because if the provider ever
+      // echoed a different grand total (`feeMismatch`, logged server-side) the VA holds THEIR number
+      // and that is the one an exact-amount transfer must hit.
       var payTotal = pay.total || buyerPayable;
       var adminFee = Math.max(0, Number(pay.admin ?? gatewayFee));
       lines +=

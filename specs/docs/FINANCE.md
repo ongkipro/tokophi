@@ -58,6 +58,23 @@ output is frozen into `order_financials` at order creation.
 are **ENFORCED in checkout pricing** (server: `/api/public/order`; mirror: `checkout.astro`) — the
 old "display only" note is dead.
 
+**Who collects the fee (Task 8.25, decision (a), 2026-09-17): WE do.** `/api/public/order` computes
+the fee from this schedule, then bills the PSP via `alCreateOrder` (the `submit` endpoint) for
+**`buyerPayableIdr` = order payable + our fee**, which the PSP treats as the grand total. The
+provider's own fee (`admin` in its echo) **nets against our settlement** and is never added to what
+the shopper pays. Consequences:
+- The shopper pays **exactly the number shown at checkout**; the success page and the bill agree.
+- `payments.amount_idr` = order payable · `payments.admin_fee` = OUR fee · `payments.total` =
+  buyerPayable — all three written by us at insert, none by the provider.
+- The paid callback matches `amount` against `payments.total` (or `amount_idr`), both ours.
+- **Platform margin on a payment = our fee − the provider's fee.** QRIS is the tight one (ours
+  0,7% of omset vs theirs 0,7% of the grand total — see the audit, F2).
+- `providerFee` is echoed in the order response as evidence only; `feeMismatch` flags a provider
+  grand total that differs from ours (should be impossible on `submit`, logged when it happens).
+- Before this, `alCreatePayment` (`create_payment`) let the PROVIDER add its fee on top of our
+  order total, so the shopper paid our prediction of their fee — wrong by design whenever the two
+  schedules differ.
+
 | Method | Fee | Base |
 |---|---|---|
 | **COD** | **3%**, then **PPN 11% on the fee** | goods omset + shipping charged |

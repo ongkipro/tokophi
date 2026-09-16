@@ -14,7 +14,16 @@ export type ReconciliationMismatch = {
   ledgerNet: number;
 };
 
-/** Authorized, tenant-scoped orders whose immutable allocation, provider bill, or ledger disagrees. */
+/**
+ * Authorized, tenant-scoped orders whose immutable allocation, the bill we issued, or the ledger disagrees.
+ *
+ * Task 8.25 (a): the platform SETS the gateway fee (`order_financials.expected_gateway_fee_idr`) and
+ * submits `buyerPayable` (= order payable + that fee) to the PSP as the grand total, so
+ * `payments.admin_fee` / `payments.total` are our own figures written at checkout — never the
+ * provider's arithmetic. A mismatch here therefore means OUR write path disagreed with itself
+ * (a re-bill that dropped the fee, a hand-edited row), not that the provider priced the fee
+ * differently. The provider's own fee nets against settlement and is not in this query.
+ */
 export async function reconciliationMismatchRows(
   db: Tx,
   storeId: string,

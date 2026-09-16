@@ -161,6 +161,9 @@ export async function POST(req: Request) {
           id: schema.payments.id,
           orderId: schema.payments.orderId,
           amountIdr: schema.payments.amountIdr,
+          // Task 8.25 (a): the bill is submitted for `payments.total` (= buyerPayable, fee included),
+          // so a provider that echoes what it collected reports THAT. Both are our own figures.
+          total: schema.payments.total,
           // Read back so a SIGNED callback can be bound to the row it names — see `bound()`.
           reffId: schema.payments.reffId,
         })
@@ -176,11 +179,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "callback signature does not match this payment" }, { status: 403 });
       }
       const matched = mapped === "berhasil"
-        ? candidates.filter((payment) => payCallbackAmountMatches(body.amount, payment.amountIdr))
+        ? candidates.filter(
+            (payment) =>
+              payCallbackAmountMatches(body.amount, payment.total ?? payment.amountIdr) ||
+              payCallbackAmountMatches(body.amount, payment.amountIdr),
+          )
         : candidates;
 
       if (mapped === "berhasil" && matched.length !== candidates.length) {
-        console.error("[pay/callback] PAID amount does not match payments.amount_idr — callback ignored.");
+        console.error("[pay/callback] PAID amount does not match payments.total / amount_idr — callback ignored.");
       }
 
       const rows = matched.length === 0
