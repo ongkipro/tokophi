@@ -1,5 +1,6 @@
 "use server";
 import { db, schema } from "@tokophi/db";
+import { createSubscriptionInvoice } from "@tokophi/db/subscription-invoice";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { platformGate } from "./platform-auth";
@@ -8,10 +9,9 @@ import { GRANT_TTL_SECONDS, grantExpiresAt, grantTokenHash, mintGrantToken } fro
 import { tempPassword, hashPassword } from "@tokophi/lib/password";
 import { kaTestConnection, kaServices } from "@tokophi/lib/kiriminaja";
 import { isInstantService } from "@tokophi/lib/couriers";
-import { alTestConnection, alProbeChannels, compareChannelFees, alCreateOrder, type FeeComparisonRow } from "@tokophi/lib/autolaris";
-import { BILLING, addMonths, quote, subscriptionCharge, withPpn, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
+import { alTestConnection, alProbeChannels, compareChannelFees, type FeeComparisonRow } from "@tokophi/lib/autolaris";
+import { BILLING, addMonths, computeBilling, type BillingStatus } from "@tokophi/lib/billing";
 
-import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
@@ -768,43 +768,14 @@ export async function createManualInvoice(storeId: string, cycle: "monthly" | "a
   const gate = await platformGate();
   if (!gate.ok) return gate;
   // reuse an existing unpaid subscription invoice — never duplicate
-  const [pending] = await db
-    .select({ number: schema.invoices.number, virtualAccount: schema.invoices.virtualAccount })
-    .from(schema.invoices)
-    .where(and(eq(schema.invoices.storeId, storeId), eq(schema.invoices.kind, "subscription"), eq(schema.invoices.status, "menunggu")))
-    .limit(1);
-  if (pending) return { ok: true, number: pending.number, virtualAccount: pending.virtualAccount ?? undefined, reused: true };
-
-  const [store] = await db
-    .select({ accountId: schema.stores.accountId, slug: schema.stores.slug, firstInvoicePaid: schema.stores.firstInvoicePaid, name: schema.stores.name })
-    .from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
-  if (!store) return { ok: false, error: "Toko tidak ditemukan." };
-  const [owner] = await db
-    .select({ email: schema.users.email }).from(schema.storeUsers)
-    .innerJoin(schema.users, eq(schema.users.id, schema.storeUsers.userId))
-    .where(and(eq(schema.storeUsers.storeId, storeId), eq(schema.storeUsers.role, "owner"))).limit(1);
-
-  const q = quote(cycle, store.firstInvoicePaid);
-  // Platform PPN toggle (0101, owner ruling 2026-08-24) — same gate as the cron and the merchant's
-  // own pay flow, read from platform_finance so all three creators can never disagree.
-  const [finRow] = await db.select({ on: schema.platformFinance.subscriptionPpnEnabled }).from(schema.platformFinance).where(eq(schema.platformFinance.id, 1)).limit(1);
-  const charge = subscriptionCharge(q.amount, finRow?.on ?? false);
-  const amount = charge.total;
-  const reffId = `SUB-${store.slug}-${Date.now().toString().slice(-8)}`;
-  const callbackUrl = payCallbackUrl(reffId);
-  // AL-ORDER: digital order (courir_id=1) — same contract as the merchant pay flow; see alCreateOrder.
-  const r = await alCreateOrder({ reffId, channelCode: "VABCA", amount, customerName: store.name, customerPhone: "081200000000", customerEmail: owner?.email ?? "merchant@tokophi.id", callbackUrl, items: [{ name: "Langganan TokoPhi (manual)", qty: 1, unitPrice: amount }] });
-  if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
-
-  const number = "SUB-" + Date.now().toString().slice(-9);
-  await db.insert(schema.invoices).values({
-    number, accountId: store.accountId, storeId, planKey: "bisnis", amountIdr: amount, taxIdr: charge.taxIdr, status: "menunggu",
-    kind: "subscription", cycle: q.cycle, periodMonths: q.months, reffId, trxId: r.trxId, channel: "VABCA",
-    virtualAccount: r.virtualAccount ?? null, qr: r.qr ?? null, paymentUrl: r.url ?? null,
-  });
-  await logStore(storeId, `Tagihan manual Rp${amount.toLocaleString("id-ID")} (${q.cycle === "annual" ? "tahunan" : "bulanan"}) dibuat oleh platform`);
+  // ONE creator for the cron, the merchant's own flow and this button (Task 8.24). It reuses a
+  // pending invoice, submits with a real channel code and the owner's e-mail, stores amount + tax.
+  const r = await createSubscriptionInvoice({ storeId, cycle, channelCode: "VABCA", actor: "platform" });
+  if (!r.ok) return { ok: false, error: r.error };
+  if (r.reused) return { ok: true, number: r.detail.number, virtualAccount: r.detail.virtualAccount ?? undefined, reused: true };
+  await logStore(storeId, `Tagihan manual Rp${r.detail.amountIdr.toLocaleString("id-ID")} (${r.detail.cycle === "annual" ? "tahunan" : "bulanan"}) dibuat oleh platform`);
   revalidatePath(`/toko/${storeId}`); revalidatePath("/paket");
-  return { ok: true, number, virtualAccount: r.virtualAccount ?? undefined };
+  return { ok: true, number: r.detail.number, virtualAccount: r.detail.virtualAccount ?? undefined };
 }
 
 export async function sendPaymentReminder(storeId: string): Promise<{ ok: boolean; error?: string }> {
