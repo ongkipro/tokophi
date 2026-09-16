@@ -9,6 +9,28 @@
 > `apps/admin/lib/ledger-credit.ts` (what the seller can withdraw).
 > Boundary: `/api/public/order` prices every order server-side; `checkout.astro` only mirrors it.
 
+## 0. The money map — one line per flow (state after Finance Overhaul II, 2026-09-17)
+
+Rewritten from the 2026-09-16 audit's §1 table (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md`)
+into the state the code is in after Tasks 8.24–8.31. Each row names the engine, where it is enforced,
+where the figure is stored and where it is shown — so a number on a screen can be traced to a row.
+
+| flow | engine (pure) | enforced at | stored in | shown on |
+|---|---|---|---|---|
+| Order total | `order-finance.ts` `calculateOrderFinance` | `/api/public/order` (server re-prices everything; `checkout.astro` mirrors) | `orders.{subtotal,shipping,tax,discount,total}_idr` + `order_financials` (frozen) | checkout summary, `/checkout/sukses`, order detail |
+| COD fee | same — `max(Rp2.500, 3% × (omset + ongkir))` + PPN 11% on the fee (8.29) | same | `order_financials.cod_fee_*` — **inside `orders.total_idr`** | checkout "Biaya COD" + "PPN biaya COD" |
+| Gateway fee (QRIS/VA/e-wallet/retail) | `payment-fees.ts` `paymentFee` (`base` is part of the fee) | **computed and BILLED by us** (8.25 a): `/api/public/order` and the seller re-bill `createOrderPayment` both submit `order payable + fee` via `alCreateOrder`; the provider's fee nets against settlement | `payments.{amount_idr, admin_fee, total}` — all ours; `order_financials.expected_gateway_fee_idr` | checkout "Biaya admin", `/checkout/sukses`, `/keuangan/rekonsiliasi` |
+| Goods PPN | `tax.ts` `computeTax` (store `tax_enabled`, inclusive/exclusive) | order API | `orders.tax_idr`, `order_financials.included_sales_tax_idr` | checkout, order detail |
+| Shipping | `shipping-quote.ts` (one price producer) → `createShipment` re-quotes; delta reconciled | booking | `shipment_bookings.{charged,actual,seller_debit,platform_margin}` + ledger `shipping-*-debit` | order detail "Cek Ongkir" refusal, `/saldo` |
+| Seller entitlement | view `order_seller_entitlements` (0102/0104) = goods + added PPN − shipping debit | — | derived | `/keuangan`, `/keuangan/penghasilan` — **collected money only** (`financial_status='dibayar'`, 8.28) |
+| Ledger | `ledger-credit.ts` (`sale` on `payments.berhasil`; COD at `selesai`; release at `platform_payout.release_on`; `retur`/`batal` claw back the sale entry) | `applyOrderStatusChange` → `settleOrderLedger` | `ledger_entries` (balance = Σ by status; 3 partial unique indexes) | `/saldo`, Super Admin float |
+| Refund to the buyer (8.31) | `refund-transition.ts` (CAS `menunggu → diproses → selesai/gagal`, never the ledger) | `applyOrderStatusChange` on `batal`/`retur` writes one open row per `berhasil` non-COD payment, same txn as the claw-back | `refunds` (0112, partial unique `refunds_one_open_per_payment`) | order detail "Pengembalian dana", Super Admin `/pencairan` refund queue, dashboard "Refund ke pembeli" tile |
+| Payout | `payout.ts` (min from `platform_payout` — Rp200.000 on production, advisory lock, negative `payout` entry at request) → Super Admin `processPayout` → `markPayoutPaidInTxn` (CAS `diproses→selesai`) → `rejectPayout` (exact reversal) | Super Admin | `payouts`, `ledger_entries` | `/saldo`, `/pencairan` |
+| Subscription | `billing.ts` (`quote`, `computeBilling`, `subscriptionCharge`) | **ONE creator** `createSubscriptionInvoice` (`@tokophi/db/subscription-invoice`, 8.24) called by the billing cron · merchant `/akun/langganan` · Super Admin manual | `invoices.{amount,tax}_idr`, `stores.{trial_ends_at,current_period_end,first_invoice_paid,comped}` | `/akun/langganan`, `/faktur/[number]`, Super Admin `/`, `/toko/[id]` |
+| Comp ("Gratiskan N bulan") | `comp-invoice.ts` — a Rp0 `dibayar` invoice with `kind='comp'` (0113, 8.26) | Super Admin `compStore` | `invoices` (partial unique `invoices_one_comp_per_grant`) | `/akun/langganan` as "Gratis"; **excluded from MRR / "Pelanggan berbayar"** (`subscription-kpi.ts`) |
+| Demo money | `stores.is_demo` (0113, 8.27; the seed flags its anchor store) | every Super Admin KPI read in `data.ts` filters it out | `stores.is_demo` | nowhere on the platform dashboard — it is flagged, not purged |
+| PPN on subscription | global toggle `platform_finance.subscription_ppn_enabled` (**OFF** on prod since 2026-08-24) | the one creator at creation time | stored `tax_idr` | faktur renders the stored figure only ✅ |
+
 ## 1. Subscription (platform ← seller)
 
 - One plan. **Prices are the DPP (ex-tax)**: trial 3 days → Rp50rb first month → **Rp275rb/mo**
@@ -94,6 +116,15 @@ the shopper pays. Consequences:
 | E-Wallet | **3,0%** (dinaikkan dari 2,4% — ruling owner 2026-09-09, menyamakan dengan yang ditagih provider: `list_payment` melaporkan OVO 3,0% `persen`, diukur 2026-09-09) | payable |
 | Minimarket/retail | Rp4.000 flat | — |
 
+⚠️ **OVO's state (Task 8.30, recorded 2026-09-17):** `platform_payment_channels.OVO` is `enabled = true,
+active = true` on production (measured 2026-09-16 by the finance audit, F7) even though it was switched
+OFF on 2026-08-31 after two real `rc=68 EXT TIMEOUT` attempts and Task 8.10 (the daytime re-probe)
+is still open — the re-enable was never recorded against 8.10. Both remedies are **owner-gated**
+(a probe creates a real bill; a disable is a production write), so neither was done by the
+2026-09-17 programme: **until 8.10 records a passing daytime probe, treat OVO as an unverified
+channel** — the only two real OVO payments on production are the only two `gagal` prepaid attempts.
+The next owner action is either run 8.10 or flip the channel off from Super Admin → Pengaturan.
+
 - **`base` is part of a fee's identity.** A pct fee without a declared base is how QRIS was 1% of
   the payable for months. Server passes BOTH candidate bases; the schedule entry decides which is
   read. The client mirror reads `data-fee-base` — neither side may hardcode a denominator.
@@ -145,7 +176,9 @@ base). On VA BCA: flat Rp6.500 whatever the amounts.
   credits the seller at `selesai` (the courier reported delivery), but the courier remits the cash to
   US on its own settlement cycle, days to weeks later. Between those two moments the seller can
   withdraw money the platform has not yet received. The exposure is bounded only by
-  `platform_payout.release_on` (a `selesai` release makes it immediate) and the minimum payout —
+  `platform_payout.release_on` (a `selesai` release makes it immediate) and the minimum payout
+  (`platform_payout.min_payout_idr` — default Rp50.000, **Rp200.000 on production** since the
+  operator raised it on 2026-08-24; `PRICING.md` §4 states both) —
   nothing in the schema records when the courier actually settled: **there is no `cod_settled_at`,
   no remittance fact, and no reconciliation against the courier's COD report.** Until one exists,
   treat every `available` rupiah that came from a COD sale as a platform advance, and size the

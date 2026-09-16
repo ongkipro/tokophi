@@ -60,7 +60,7 @@ Label di storefront selalu generik/white-label (tanpa merek PSP — ADR 0004).
 
 | Aturan | Nilai |
 |---|---|
-| Minimum penarikan | **Rp50.000** (`platform_payout.min_payout_idr`, bisa diubah Super Admin) |
+| Minimum penarikan | **default Rp50.000**, platform boleh menaikkannya — **saat ini Rp200.000 di produksi** (`platform_payout.min_payout_idr`, diubah operator 2026-08-24, teraudit; Task 8.30). Angka di `/saldo` merchant membaca setting-nya, bukan default |
 | Dana bisa ditarik saat | pesanan **Selesai** (default aman; `release_on`) |
 | Review | **manual oleh Super Admin** — Menunggu → Proses (transfer bank dimulai) → Tandai lunas |
 | Bukti | referensi transfer dicatat saat Tandai lunas; tampil di `/saldo` merchant (`Ref: …`) |
