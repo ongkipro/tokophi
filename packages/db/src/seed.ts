@@ -788,6 +788,10 @@ async function main() {
     // fresh DB must be born under the new slug; databases that already exist are brought over by
     // `rename-batik-slug.ts` in the deploy migrate chain (idempotent, runs before the demo seeds).
     slug: "batiknusantara",
+    // The demo store (Task 8.27, migration 0113): its seeded orders, ledger and invoices are not
+    // platform money and every super-admin KPI excludes it. The migration flags the store that
+    // already exists on production; this flags the one a fresh database is born with.
+    isDemo: true,
     city: STORE.city,
     // The shop's OWN CS channel and pitch (migration 0049). These used to be platform CONSTANTS in
     // apps/storefront/src/data/store.ts, so `wa.me/6281234567890` — the canonical Indonesian dummy
