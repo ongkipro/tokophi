@@ -552,6 +552,8 @@ Development starts from a fresh worktree based on the collaboration baseline. In
 | 4 | I | 8.3 | None |
 | 4 | J | 8.4 | Owner supplies R2 variables |
 | 4 | K | 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11 | Owner decisions / credentials; independent of code lanes |
+| 5 | M | 8.34 (umbrella): 8.33 → owner: KA production key + allow-list → 8.32 step 1 (F9) + 8.31 → real payment → env switch → real booking + sorting code → cancel → close 8.9 | Production go-live; every real-money step owner-authorised; 8.33 is code, the rest is evidence |
+| 5 | L | 8.32 (umbrella): 8.25§3/F9 → 8.31 → 8.24 → 8.25 → 8.26 → 8.27 → 8.28 → 8.29 → 8.30 | Finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md`); 8.25 and 8.27 wait on owner decisions; one PR per task, money suites + `commerce-lifecycle` green before each |
 
 ### Cross-Lane Contracts
 
@@ -734,6 +736,113 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
   5. Grouped the nine-item flat nav by kind of work — Operasional (Toko, Pencairan, Tiket) · Pantau (Analitik, Log Sistem, Update Log) · Konfigurasi (Paket & Billing, Pengaturan), Dashboard on top — following `ROUTE_RULES`' own reasons; labels in the eyebrow voice, no cards. `navFor` still derives from the same rules the gate reads.
 - **Done when:** a 360px phone can reach every page; theme is switchable; the login's primary action and inputs are ≥ 44px with one `h1`; no provider/decoration noise; guard red against the drawer becoming uncontrolled or the toggle being removed.
 - **Status:** `[x]` **DONE 2026-09-11 — proved in Chromium, 21/21 claims, 0 console errors.** Driven at 360×800 and 1280×900 on a local dev server against a throwaway operator row (created, used, deleted): login — no horizontal overflow, exactly one `h1` (37,6px at 1280), submit and email 44px, aside hidden on the phone and visible on desktop, keyboard order wordmark → email → password → submit, wrong password → `form [role=alert]` "Email atau kata sandi salah." (42px surface), real login → `/`; shell — sidebar with group labels at 1280, rank badge `Owner`, theme toggle flips `html.dark` (both themes screenshotted), no "control plane" ornament; at 360 — hamburger visible, drawer shows the grouped nav, tapping `Toko` navigates AND closes the drawer, `/toko` no overflow. ⚠️ **Two false negatives were the harness, not the product**, and both are recorded so the next drive does not repeat them: a click before React hydrates submits the form natively (no server action, no error — the dev log shows the POST without `ƒ signIn`), and `[role=alert]` alone matches Next's 1px route announcer; the drive now waits for React's own `__reactProps$` marker on the form and scopes to `form [role=alert]`. Visual critique of the five screenshots: accepted (the "N" badge is the Next dev overlay). Guard `platform-shell-contract.test.ts` (4) — controlled drawer with `md:hidden` trigger mirroring the `md:flex` sidebar, toggle present, rank rendered, ornament absent (markup claim via `textWithoutComments`), one `NavLinks` rendered twice, login one `h1` / `h-11` / `role=alert` / no `defaultValue` — **2 mutations → 2 reds**. NOT done: the dashboard page content itself was not redesigned (its KPI row and queue were accepted earlier and are outside this ask).
+
+### Task 8.24: 🔴 One Subscription-Invoice Creator for Cron, Merchant and Manual Paths (the cron's `"BCA"` channel)
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F1); `FINANCE.md` §1 lists three creators
+- **Target Files:** new `apps/admin/lib/subscription-invoice.ts` (+ test), `apps/admin/app/api/cron/billing/route.ts`, `apps/admin/lib/actions/billing.ts`, `apps/super-admin/lib/actions.ts` (`createManualInvoice`)
+- **Change:**
+  1. The billing cron sends `channelCode: "BCA"` — not a provider code (the provider and `platform_payment_channels` know `VABCA`) — so `create_payment` refuses, `r.ok` is false and NO invoice row is written, silently (`invoicesCreated: 0`). A lapsed store stays `suspended` with nothing to pay.
+  2. It is also the only creator on `alCreatePayment` (create_payment: the payer transfers `amount + admin`); the merchant flow and the manual invoice use `alCreateOrder` (submit: fee netted). Same merchant, two prices. And `pay/callback` matches the paid amount EXACTLY against `invoices.amount_idr`, so a `create_payment` renewal paid at Rp281.500 would be logged "ignored".
+  3. Extract ONE `createSubscriptionInvoice({ storeId, cycle, channelCode, actor })` — `alCreateOrder`, a real channel code, the owner's e-mail as payer, no `planKey: "bisnis"` — and make all three paths call it. Cron test: a `past_due` fixture + stubbed provider ⇒ exactly one invoice row with the right amount/tax.
+- **Done when:** the three creators are one function; the cron test proves an invoice is created for a `past_due` store; `FINANCE.md` §1 names the one function.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.** Never exercised live: no store has been `past_due` since the gateway was configured (prod cron `invoicesCreated` has only ever been 0).
+
+### Task 8.25: 🔴 The QRIS Fee the Shopper Sees Is Not the Fee the Shopper Pays — Owner Decision, Then Enforce It
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F2 + F9); owner ruling 2026-08-24 ("QRIS 0,7% dari nilai omset"); measured on production `PHI-768771328ISC` (predicted Rp1.323 = 0,7% × omset 189.000; billed Rp1.372 = 0,7% × payable 196.000)
+- **Target Files:** `apps/admin/app/api/public/order/route.ts` (bill creation + `total`), `packages/lib/src/payment-fees.ts`, `apps/storefront/src/pages/checkout.astro` (mirror), `checkout/sukses.astro`, `apps/admin/lib/data/reconciliation.ts`, `FINANCE.md`, `PRICING.md`
+- **Change:**
+  1. Today the schedule PREDICTS the fee (`expected_gateway_fee_idr`, shown at checkout) and the provider CHARGES its own (0,7% of the amount we submit, which includes ongkir + goods PPN). The shopper sees the lower number and is billed the higher one; `feeMismatch` is true and the seller's reconciliation screen flags every QRIS order forever.
+  2. **Owner chooses:** (a) collect the fee ourselves — `total = buyerPayable` and the `submit` endpoint (fee netted), so the shopper pays exactly the number shown and the 0,7% × (ongkir + PPN) is the platform's; or (b) change the QRIS base to the payable to match the provider. Record the choice in `FINANCE.md` §3 and `PRICING.md` §2.
+  3. **Before or with it (F9):** capture ONE real prepaid paid-callback body (shape and amounts only) to learn whether the provider reports `amount` or `amount + admin` — `payCallbackAmountMatches` is exact, so the wrong assumption means "paid but ignored" on every prepaid order.
+- **Done when:** the number on the checkout summary equals the number on the bill for QRIS, VA and e-wallet; `reconciliation.ts` no longer flags a correctly priced order; one captured callback is recorded in `BUILD-LOG.md`.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16. Blocked on the owner's (a)/(b) decision.**
+
+### Task 8.26: 🔴 MRR, ARR, ARPU and "Pelanggan berbayar" Count Comped Stores as Paying Customers
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F3); production: 12 "active" stores whose entire paid period is 26× Super Admin "Gratis 1 bulan"; real paying merchants **0**; dashboard reads MRR ≈ Rp600.000 / 12 pelanggan berbayar
+- **Target Files:** `apps/super-admin/lib/actions.ts` (`compStore`), `apps/super-admin/lib/data.ts` (`getSubscriptionStats`, `getFinanceStats`, `getPlatform`), `apps/super-admin/app/(platform)/page.tsx`, migration `0111` (comp fact), `packages/lib/src/billing.ts` (segment/ARPU if needed)
+- **Change:**
+  1. A comp is entitlement without revenue; `compStore` only moves `current_period_end`, so nothing downstream can tell a comped month from a paid one.
+  2. Make the comp a fact: `invoices` row `kind = 'comp'` (amount 0, `period_months`, actor) written by `compStore` — or `stores.comped_until`. Then MRR = stores whose current period is backed by a PAID invoice; "Pelanggan berbayar" and ARPU follow; a "Digratiskan" count sits beside them so the operator sees both.
+  3. Historic comps: backfill from `platform_activity` lines "Gratis N bulan diberikan" (26 rows) or accept a clean start and say so on the card.
+- **Done when:** with production data the dashboard reads MRR Rp0 / 0 pelanggan berbayar / 12 digratiskan, and a paid renewal moves it; pinned by a test over `getSubscriptionStats` with comped vs paid fixtures.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+
+### Task 8.27: 🟡 Demo Money Is Presented as Platform Money — Flag or Purge the Seeded Store in Every Platform KPI
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F8); production: `batiknusantara` owns 220/225 orders, all 207 ledger entries (Rp18,8 jt available, Rp22,5 jt pending), both payouts (Rp23,5 jt), the 5 "paid" seeded invoices, and the 2 view-vs-ledger mismatches (two `selesai` orders carrying a `retur` entry — a seed inconsistency; numbers in the audit doc)
+- **Target Files:** `apps/super-admin/lib/data.ts` (every platform sum), `packages/db/src/seed.ts` / `seed-guard.ts`, possibly `stores.is_demo` (migration) or an ops SQL
+- **Change:** decide purge vs flag. Purge: an ops SQL in the shape of `ops/tokophi-orphan-cleanup.sql` (transactional, ends in rollback until reviewed) that removes the demo store's money rows; the seed must then not recreate them on deploy (`seed-guard`). Flag: `stores.is_demo`, excluded from `getFinanceStats`, `getPlatformFloat`, `getPlatform` GMV, `getCourierCostAbsorbed`, "Diterima (total)" — and labelled on the store card.
+- **Done when:** the Super Admin dashboard's money tiles read the real platform (Rp0 collected today), and the demo storefront still works.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16. Owner decides purge vs flag.**
+
+### Task 8.28: 🟡 Seller "Omzet" and "Penjualan" Disagree, and Both Count Uncollected Orders
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F5); `apps/admin/lib/data/finance.ts` (`SALES` = `status ∉ (batal, retur)`), `apps/admin/lib/data/dashboard.ts` (`total_idr − tax_idr`)
+- **Target Files:** `apps/admin/lib/data/finance.ts`, `apps/admin/lib/data/dashboard.ts` / `analytics.ts`, the tile labels, `STATUS.md` (🟢/🟡 row)
+- **Change:** Keuangan "Omzet" should sum entitlement over COLLECTED orders (`financial_status = 'dibayar'`, i.e. paid prepaid + COD at `selesai`); unpaid prepaid orders (4 of `permata-store`'s 5 real orders today, Rp873.100) must not read as revenue. The dashboard tile either uses the same base or says what it sums ("termasuk ongkir, sebelum pembayaran"). One definition, or two clearly named ones — never two unnamed ones.
+- **Done when:** a store with one unpaid VA order shows Rp0 omzet in Keuangan; `daily-stats.test.ts`-style check pins the filter.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+
+### Task 8.29: 🟡 COD: Model KiriminAja's Rp2.500 Minimum Fee, and Name the Remittance Gap
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F4); KiriminAja T&C §5 (3% + PPN 11%, min Rp2.500; J&T Express 4%); `ledger-credit.ts` `collectCodOnDelivery` credits the seller at `selesai`
+- **Target Files:** `packages/lib/src/order-finance.ts` (+ test), `apps/storefront/src/pages/checkout.astro` (`codCharges` mirror), `FINANCE.md` §3/§4
+- **Change:**
+  1. `codFeeBeforeVatIdr = max(2_500, round(base × 0.03))` so a small COD order does not cost the platform more than it charges (base Rp50.000 today: shopper 1.500 + 165, courier 2.500 + 275 → −Rp1.110 per parcel). Mirror at checkout. If COD is ever widened to J&T, the rate must be per courier — say so in the code.
+  2. `FINANCE.md`: the platform credits the seller at `selesai` while the courier remits COD on its own cycle; state the exposure (bounded by `release_on` and the min payout) and that no remittance fact exists yet (`cod_settled_at`).
+- **Done when:** `order-finance.test.ts` pins the floor; the checkout shows the same number; `FINANCE.md` carries the exposure paragraph.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+
+### Task 8.30: 🟡 Price Card vs Setting, OVO vs Task 8.10, and the Stale Finance Lines in STATUS.md
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F6, F7, F10)
+- **Target Files:** `specs/docs/PRICING.md` §4, `specs/docs/FINANCE.md` §3/§4, `specs/docs/STATUS.md` §1 rows "Sale credited on collection" and "`payment-fees.ts` has ZERO importers", `AGENTS.md` (OVO), `platform_payment_channels.OVO` (Super Admin), Task 8.10
+- **Change:** (1) `PRICING.md` minimum payout: production is Rp200.000 (operator, 2026-08-24), the card says Rp50.000 — state the default AND the current setting, or the card is a promise the product breaks. (2) OVO is `enabled` on production while Task 8.10's daytime re-probe is open and the only two real OVO attempts failed — run the probe and record it, or disable the channel until then. (3) Correct the three stale lines; make `FINANCE.md` §3 say "predicted by us, charged by the provider" until Task 8.25 lands.
+- **Done when:** every number a merchant can read in `PRICING.md` equals the setting or names it; OVO's state has a recorded reason; `STATUS.md` money rows match `ledger-credit.ts` and `payment-fees.ts` as they are.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+
+### Task 8.31: 🔴 Refund Path for a Paid Prepaid Order That Is Cancelled — the Buyer's Money Must Have a Row
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` F12); `apps/admin/lib/order-status.ts` fails only `menunggu` payments on `batal`/`retur`
+- **Target Files:** `apps/admin/lib/order-status.ts`, `apps/admin/lib/ledger-credit.ts` (`settleOrderLedger`), migration `0112` (`refunds` or ledger kind `refund`), `apps/super-admin/app/(platform)/pencairan/**` (a refund queue beside payouts), order detail (buyer-facing status), `FINANCE.md` §4
+- **Change:** when an order with a `berhasil` non-COD payment moves to `batal`/`retur`, write a refund obligation (order, payment, amount = `payments.amount_idr`, status `menunggu`) in the same transaction the claw-back runs in; Super Admin settles it manually (transfer reference, CAS like `markPayoutPaidInTxn`); the order detail and the shopper's success page name the state. The platform float figure subtracts open refund obligations.
+- **Done when:** cancelling a paid prepaid order in the real-Postgres lifecycle test leaves exactly one open refund row; the Super Admin queue lists it; float excludes it. Exposure today is Rp0 (no gateway payment has ever completed), so this lands BEFORE F9 makes prepaid live.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.**
+
+### Task 8.32: 💰 Finance Overhaul II — the Programme (umbrella for 8.24–8.31, with gates)
+- **Tracing:** finance audit 2026-09-16 (`specs/docs/tasks/2026-09-16-finance-pricing-audit.md`, all findings); `FINANCE.md` (the map that must end up true again)
+- **Target Files:** the tasks below; `FINANCE.md`, `PRICING.md`, `STATUS.md`, Super Admin Update Log
+- **Change — the order, and why:**
+  1. **Make prepaid money observable before anything else.** 8.25 step 3 / F9: log the shape of a rejected PAID callback body, capture one real callback, decide the amount gate. Nothing downstream (refund, MRR, fees) can be trusted while the last step of the prepaid path has never been seen.
+  2. **Refund fact (8.31)** — lands before prepaid goes live, because the first real cancellation of a paid order would otherwise hold a shopper's money with no row.
+  3. **Renewal invoice (8.24)** — one creator; the only path that can bill a lapsed store today cannot create a bill.
+  4. **Fee truth (8.25)** — owner decision (a)/(b); then the schedule, the mirror and the reconciliation screen agree with the bill.
+  5. **KPIs that tell the truth (8.26 + 8.27)** — comps and demo money out of MRR/float/"Diterima"; owner decides purge vs flag for the demo store.
+  6. **Seller screens (8.28)** and **COD floor + exposure (8.29)**.
+  7. **Docs and settings (8.30)** — `PRICING.md`, `STATUS.md`, OVO, `FINANCE.md` rewritten to the state after 1–6.
+  - **Gates:** one PR per task; money suites (`order-finance`, `payment-fees`, `billing`, `tax`, `ledger-credit`, `payout-transition`, `invoice-flip-is-bookkeeping`, `commerce-lifecycle`) + the new task's guard green before merge; every production number claimed in a BUILD-LOG entry is measured, not derived; no task changes a price without the owner's ruling recorded in `FINANCE.md`.
+- **Done when:** all of 8.24–8.31 are `[x]`, `FINANCE.md` reads true against the code (the audit doc's §1 table rewritten into it), and the Super Admin dashboard reads Rp0 collected until a merchant actually pays.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16. Waiting on the owner's go, plus decisions for 8.25 (a/b) and 8.27 (purge/flag).**
+
+### Task 8.33: 🔴 Provider Credentials and Environment Managed from Super Admin (Sandbox/Production Keys, Encrypted, Audited)
+- **Tracing:** owner request 2026-09-16 ("menu input API production"); today `KIRIMINAJA_API_KEY`/`KIRIMINAJA_ENV`/`AUTOLARIS_API_KEY` are read ONLY from `process.env` (`packages/lib/src/kiriminaja.ts:9-11`, `autolaris.ts:7-8`) while `shipping_aggregator.api_key` and `platform_payment_gateways.credentials` exist in the schema and are read by nothing; N35 badge shows the env
+- **Target Files:** `packages/lib/src/{kiriminaja,autolaris}.ts` (a `getConfig()` seam instead of module constants), `apps/admin/lib/crypto.ts` (the existing `INTEGRATION_TOKEN_KEY` helper — reuse, no new primitive), migration `0113` (encrypted key columns per env: `shipping_aggregator.{sandbox_key_enc,production_key_enc,active_env}`, `platform_payment_gateways.credentials` (encrypted, versioned)), `apps/super-admin/lib/actions.ts` (`saveProviderCredentials`, `setProviderEnv` — **owner rank**), `apps/super-admin/app/(platform)/pengaturan/**` (card: masked key "…last 4", per-env "Test koneksi", switch with a confirm that names what changes), `apps/admin/app/api/health/env`, `specs/docs/SECURITY.md`, `DEPLOY.md`
+- **Change:**
+  1. Both keys per provider (sandbox + production) stored encrypted at rest with the existing helper; never returned to the browser — the screen shows a masked tail and the last-tested timestamp.
+  2. One `active_env` per provider, switched from the card, **owner rank**, audited to `platform_activity` with the operator's e-mail; the switch runs "Test koneksi" against the target env first and refuses on failure.
+  3. Clients read DB config first, env second (so a deploy without the row keeps working), and **cache per process with a short TTL** so a switch reaches every replica without a redeploy.
+  4. Every place that reads `KIRIMINAJA_ENV` today (N35 badge, `api/health/env`, the probe, the UAT sim's refusal guard) reads the same seam.
+- **Done when:** an owner can enter the production KiriminAja key on the card, test it, and switch to production **without touching Coolify**; a `support`/`admin` operator cannot; the key is unreadable in the DB dump; `env-census.test.ts` and a new `provider-config.test.ts` pin precedence (DB > env), masking, and the rank gate.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16.** Prerequisite for 8.34; replaces the "flip env in Coolify" step of 8.9.
+
+### Task 8.34: 🚀 Production Go-Live Programme — Shipping and Payments End to End (umbrella)
+- **Tracing:** owner request 2026-09-16 ("task untuk develop production"); Task 8.9 (KiriminAja cutover), 8.23 (sorting code, production-only), 8.32 (finance programme, step 1 = F9), N35
+- **Target Files:** the tasks below; `DEPLOY.md` (cutover runbook + date), `specs/docs/KIRIMINAJA.md` §0.1/§0.7, `FINANCE.md`, Super Admin Update Log
+- **Change — the order, and why:**
+  1. **8.33** — production keys and the env switch live in Super Admin; sandbox stays selected.
+  2. **KiriminAja production access** (owner): UAT revision 4 accepted → production key issued → re-request the IP allow-list **for the production endpoint** (it lapsed once on sandbox, 2026-09-07).
+  3. **Payments first, with money observable** (8.32 step 1 / F9): callback shape logging deployed; ONE real prepaid payment on production (smallest QRIS bill), the callback captured, `payments.berhasil` + ledger credit witnessed; refund fact (8.31) already in place.
+  4. **Switch KiriminAja to production** from the card; **one authorised real booking** (owner's parcel): `request_pickup` with the full v6.2 body, the courier collects, `processed_packages` arrives, `orders.awb` and **`orders.sorting_code`** fill, the label prints with the code, tracking advances to `selesai`, COD/ledger settle. Each step's evidence in `BUILD-LOG.md` with order numbers.
+  5. **Cancel path** once on production (by AWB, before collection) — the one scenario the sandbox could never exercise.
+  6. **Close 8.9**, record the cutover date in `DEPLOY.md`, update `KIRIMINAJA.md` §0.1 (production state) and the UAT sheet's action items with the vendor's answers.
+  - **Gates:** nothing switches to production while any 🔴 in the finance audit that touches the path (F1 renewal invoice excluded — subscription is independent of parcels) is open: F9 and F12 must be closed first; every real-money step is owner-authorised per step, never batched; the sandbox key stays saved so a rollback is one click.
+- **Done when:** production has completed one prepaid payment, one COD parcel end to end with a printed sorting code, and one cancellation; `KIRIMINAJA_ENV`-style env variables are no longer the source of truth; `DEPLOY.md` carries the cutover date.
+- **Status:** `[ ]` **OPEN — filed 2026-09-16. Owner-gated at steps 2, 3, 4, 5.**
 
 ### Task 8.23: Sorting Code on the Shipping Label (SPX, ID Express, J&T, J&T Cargo) — and the Tracking Body Nobody Read
 - **Tracing:** KiriminAja UAT review 3 (2026-09-14): *"Untuk kurir SPX, ID Express, J&T, J&T Cargo wajib melampirkan sorting code yang didapatkan pada webhook event pertama `processed_packages` … sorting_code baru bisa digunakan pada production, maka untuk sandbox env saat ini bisa disiapkan field-nya terlebih dahulu."*

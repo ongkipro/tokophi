@@ -209,7 +209,7 @@ for (const t of active) {
       continue;
     }
     const docs = [...t.namedDocs.map((d) => (d.startsWith("specs/") ? d : `specs/docs/tasks/${basename(d)}`)), ...auditDocs];
-    if (!docs.some((d) => docHas(d, id))) problems.push(`TASKS.md:${t.line}: Task ${t.id} traces ${id}, which is in neither REQUIREMENTS.md nor an audit document (${docs.map(basename).join(", ")})`);
+    if (!docs.some((d) => docHas(d, id))) problems.push(`TASKS.md:${t.line}: Task ${t.id} traces ${id}, which is in neither REQUIREMENTS.md nor an audit document (${docs.map((d) => basename(d)).join(", ")})`);
   }
 }
 

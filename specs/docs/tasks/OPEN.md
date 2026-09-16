@@ -57,6 +57,14 @@ token and a restore is exercised once** (2026-09-02) · generated page map + 35-
 2 🔴 still open (AD-3 `BN` initials, SF-1 feed origin) (2026-09-04) · Log Sistem + SA-1/SA-2/SA-4
 (2026-09-04).
 
+## 💰 Finance & pricing audit — 2026-09-16 (Tasks 8.24–8.32; 8.32 is the umbrella)
+
+`specs/docs/tasks/2026-09-16-finance-pricing-audit.md` — read-only audit, nothing applied. Re-validated the same day: F9 upgraded to 🔴 (the paid-callback amount gate has never met a real callback; the vendor's payload is unpublished; production has 0 completed gateway payments), new 🔴 F12 (no refund path for a paid-then-cancelled order; exposure Rp0 today). Order of work (Task 8.32): **F9 shape-logging + one captured callback** → **8.31** (refund fact) → **8.24** (cron renewal invoice cannot be created: `"BCA"` channel + create_payment + exact callback) → **8.25** (QRIS fee shown ≠ billed; **owner picks (a) collect ourselves / (b) base = payable**, and capture one real callback) → **8.26** (MRR counts comps; real paying merchants: 0) → **8.27** (demo money in platform KPIs; **owner picks purge vs flag**) → 8.28 → 8.29 → 8.30. Money suites are 91/91 green today; every finding is around the engines, not in them.
+
+## 🚀 Production go-live — 2026-09-16 (Tasks 8.33, 8.34)
+
+**8.33** provider keys (sandbox + production) and the env switch move into Super Admin (encrypted with the existing `INTEGRATION_TOKEN_KEY` helper, owner rank, audited, DB > env, short-TTL cache) — today the keys are `process.env` only and `shipping_aggregator.api_key` / `platform_payment_gateways.credentials` are dead columns. **8.34** sequences the go-live: 8.33 → KA production key + production allow-list (owner) → F9 callback capture + 8.31 refund fact → one real payment → switch → one real booking with sorting code → one cancel → close 8.9. Gates: F9 and F12 closed before any switch; each real-money step authorised individually.
+
 ## 🔴 Waiting on the owner (re-verified 2026-09-07)
 
 | | what is actually being asked |
