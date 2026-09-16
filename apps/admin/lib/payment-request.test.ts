@@ -119,6 +119,12 @@ suite("createOrderPayment durable request identity (real Postgres)", () => {
       values (${store.id}, ${customer.id}, ${otherOrderNumber}, 'baru', 'pending', 100000)
     `);
     h.storeId = store.id;
+    // The re-bill reads the channel's kind from the PLATFORM list (Task 8.25) and refuses a
+    // channel that is not active+enabled. `channel` carries no unique index, so "exactly one
+    // usable row" is delete-then-insert, the same way commerce-lifecycle.test.ts seeds it.
+    await db.execute(sql`delete from platform_payment_channels where channel in ('VABCA', 'QRIS')`);
+    await db.execute(sql`insert into platform_payment_channels (channel, label, kind, active, enabled)
+      values ('VABCA', 'VA BCA', 'va', true, true), ('QRIS', 'QRIS', 'qris', true, true)`);
 
     try {
       h.provider.mockReset();
@@ -159,9 +165,16 @@ suite("createOrderPayment durable request identity (real Postgres)", () => {
         expect.objectContaining({
           reffId: requestKey,
           channelCode: "VABCA",
-          amount: 100000,
+          // Task 8.25: order total + OUR fee (VABCA Rp6.500 flat), never the bare order total.
+          amount: 106500,
         }),
       );
+      // The stored bill carries OUR fee, not the provider's reply (admin 2500 / total 102500 above).
+      const [bill] = (await db.execute(sql`
+        select amount_idr::int as amount, admin_fee::int as fee, total::int as total
+          from payments where order_id = ${order.id}
+      `)) as unknown as { amount: number; fee: number; total: number }[];
+      expect(bill).toEqual({ amount: 100000, fee: 6500, total: 106500 });
       const rows = (await db.execute(sql`
         select id::text as id, status::text as status, request_state::text as state
           from payments

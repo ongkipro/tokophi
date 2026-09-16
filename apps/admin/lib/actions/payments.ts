@@ -5,6 +5,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { alCreateOrder, autolarisConfigured, type AlPayment } from "@tokophi/lib/autolaris";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { PAYMENT_FEES, paymentFee, type FeeKind } from "@tokophi/lib/payment-fees";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 
@@ -180,16 +181,26 @@ export async function createOrderPayment(
         id: schema.orders.id,
         number: schema.orders.number,
         total: schema.orders.totalIdr,
+        subtotal: schema.orders.subtotalIdr,
+        discount: schema.orders.discountIdr,
         status: schema.orders.status,
         financialStatus: schema.orders.financialStatus,
         name: schema.customers.name,
         phone: schema.customers.phone,
         email: schema.customers.email,
+        // Fee bases as the order API recorded them (Task 8.25). A legacy order with no row falls
+        // back to the order's own columns below.
+        goodsProceeds: schema.orderFinancials.goodsProceedsIdr,
+        orderPayable: schema.orderFinancials.orderPayableIdr,
       })
       .from(schema.orders)
       .leftJoin(
         schema.customers,
         eq(schema.customers.id, schema.orders.customerId),
+      )
+      .leftJoin(
+        schema.orderFinancials,
+        eq(schema.orderFinancials.orderId, schema.orders.id),
       )
       .where(
         and(
@@ -301,6 +312,42 @@ export async function createOrderPayment(
       };
     }
 
+    // THE PLATFORM BILLS THE FEE IT SHOWS (Task 8.25 a) — same contract as `/api/public/order`:
+    // the PSP is handed order payable + OUR fee as the grand total and nets its own fee against
+    // settlement. A re-issued bill that submitted `order.total` alone under-billed by the fee and
+    // `reconciliation.ts` flagged every one of them. The channel's kind is a platform fact
+    // (`platform_payment_channels`, no store_id — cross-tenant by design, readable under RLS).
+    const [channel] = await db
+      .select({ kind: schema.platformPaymentChannels.kind })
+      .from(schema.platformPaymentChannels)
+      .where(
+        and(
+          eq(schema.platformPaymentChannels.channel, channelCode),
+          eq(schema.platformPaymentChannels.enabled, true),
+          eq(schema.platformPaymentChannels.active, true),
+        ),
+      )
+      .limit(1);
+    if (!channel || !(channel.kind in PAYMENT_FEES)) {
+      return {
+        kind: "result" as const,
+        result: {
+          ok: false,
+          code: "invalid_request",
+          error: "Metode pembayaran ini tidak tersedia.",
+        } satisfies CreateOrderPaymentResult,
+      };
+    }
+    const gatewayFee = paymentFee(
+      channel.kind as FeeKind,
+      {
+        omsetIdr: order.goodsProceeds ?? Math.max(0, order.subtotal - order.discount),
+        payableIdr: order.orderPayable ?? order.total,
+      },
+      channelCode,
+    );
+    const buyerPayable = order.total + gatewayFee;
+
     const [inserted] = await db
       .insert(schema.payments)
       .values({
@@ -313,6 +360,8 @@ export async function createOrderPayment(
               ? "dana"
               : "va",
         amountIdr: order.total,
+        adminFee: gatewayFee,
+        total: buyerPayable,
         status: "menunggu",
         provider: "autolaris",
         // AutoLaris' reff_id is the same caller-stable identity, not the order number. Its callback
@@ -351,6 +400,8 @@ export async function createOrderPayment(
       kind: "owner" as const,
       paymentId: inserted.id,
       order,
+      gatewayFee,
+      buyerPayable,
     };
   });
 
@@ -383,7 +434,8 @@ export async function createOrderPayment(
     providerResult = await alCreateOrder({
       reffId: requestKey,
       channelCode,
-      amount: claim.order.total,
+      // Grand total = order payable + OUR fee; the PSP nets its own against settlement.
+      amount: claim.buyerPayable,
       customerName: claim.order.name ?? "Pelanggan",
       customerPhone: claim.order.phone ?? "081200000000",
       customerEmail: claim.order.email ?? "order@tokophi.id",
@@ -415,8 +467,11 @@ export async function createOrderPayment(
         requestError: null,
         requestUpdatedAt: new Date(),
         trxId: providerResult.trxId,
-        adminFee: providerResult.admin ?? 0,
-        total: providerResult.total ?? claim.order.total,
+        // OUR figures, written at insert and repeated here — never the provider's. The paid
+        // callback accepts `payments.total`; a provider figure that differs is a reconciliation
+        // finding, not a bill.
+        adminFee: claim.gatewayFee,
+        total: claim.buyerPayable,
         virtualAccount: providerResult.virtualAccount,
         qr: providerResult.qr,
         url: providerResult.url,

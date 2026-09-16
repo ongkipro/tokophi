@@ -59,3 +59,29 @@ describe("order API — the platform bills the fee it shows (Task 8.25 a)", () =
     expect(callbackMatchesTotal(oldCb)).toBe(false);
   });
 });
+
+// The seller's RE-BILL (`createOrderPayment`) is the second writer of a bill and used to submit
+// `order.total` alone — under-billed by the fee, flagged by reconciliation on every re-issued VA.
+const rebill = () => codeOnly(readFileSync(new URL("./actions/payments.ts", import.meta.url), "utf8"));
+const rebillSubmitsBuyerPayable = (code: string) => /amount\s*:\s*claim\s*\.\s*buyerPayable\b/.test(code);
+const rebillWritesOurFee = (code: string) =>
+  /adminFee\s*:\s*claim\s*\.\s*gatewayFee\b/.test(code) && /total\s*:\s*claim\s*\.\s*buyerPayable\b/.test(code);
+const rebillTrustsProviderFee = (code: string) => /providerResult\s*\.\s*(admin|total)\b/.test(code);
+
+describe("seller re-bill — same fee contract as the order API", () => {
+  it("submits order total + our fee as the grand total", () => {
+    expect(rebillSubmitsBuyerPayable(rebill())).toBe(true);
+    expect(rebillSubmitsBuyerPayable(codeOnly("amount: claim.order.total,"))).toBe(false);
+  });
+  it("writes payments.admin_fee/total from OUR fee, never from the provider's reply", () => {
+    const code = rebill();
+    expect(rebillWritesOurFee(code)).toBe(true);
+    expect(rebillTrustsProviderFee(code)).toBe(false);
+    expect(rebillTrustsProviderFee(codeOnly("adminFee: providerResult.admin ?? 0,"))).toBe(true);
+  });
+  it("derives the fee through paymentFee with both bases, from the channel's platform kind", () => {
+    const code = rebill();
+    expect(/paymentFee\s*\(\s*channel\s*\.\s*kind/.test(code)).toBe(true);
+    expect(/omsetIdr\s*:/.test(code) && /payableIdr\s*:/.test(code)).toBe(true);
+  });
+});
