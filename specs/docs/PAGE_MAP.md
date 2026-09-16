@@ -260,12 +260,12 @@
 | `collections.ts` | `getCollectionDetail` `getCollections` |
 | `crm.ts` | `getFollowups` `getLeads` `getWaTemplates` |
 | `customers.ts` | `getCustomer` `getCustomerOrders` `getCustomers` |
-| `dashboard.ts` | `LOW_STOCK` `RANGE_OPTIONS` `getActionQueue` `getActivities` `getChannels` `getConversionKpi` `getDeviceSplit` `getFunnel` `getMoneyTiles` `getRecentOrders` `getReturnSummary` `getSeries` `getStatusCounts` `getStuckMoney` `getSummary` `getTopProducts` `getVisitsKpi` `rangeDates` `rangeLabel` `shiftMonth` |
+| `dashboard.ts` | `LOW_STOCK` `RANGE_OPTIONS` `SALES_TILE_NOTE` `getActionQueue` `getActivities` `getChannels` `getConversionKpi` `getDeviceSplit` `getFunnel` `getMoneyTiles` `getRecentOrders` `getReturnSummary` `getSeries` `getStatusCounts` `getStuckMoney` `getSummary` `getTopProducts` `getVisitsKpi` `rangeDates` `rangeLabel` `shiftMonth` |
 | `day-bucket.ts` | `STORE_TZ` `dayKey` `dayOf` `hourOf` `midnightDaysAgo` `today` |
 | `discounts.ts` | `discountSavingsFor` `getDiscount` `getDiscountSavings` `getDiscounts` |
 | `domain.ts` | `BASE_DOMAIN` `CNAME_TARGET` `LOCKED_STATUSES` `PLATFORM_ZONES` `domainKind` `domainRecords` `getStoreDomains` `isLockedStatus` `systemDomainFor` |
 | `feed.ts` | `getFeedStatus` |
-| `finance.ts` | `getChannelMix` `getEarnings` `getFinanceSummary` |
+| `finance.ts` | `earningsRows` `financeSummaryRows` `getChannelMix` `getEarnings` `getFinanceSummary` |
 | `flash.ts` | `getFlashSale` `getFlashSales` `getStoreProductsForFlash` |
 | `funnel.ts` | `FUNNEL_STEPS` `getDeviceDaily` `getFunnelDaily` |
 | `inventory.ts` | `getInventoryReceiptFacts` `inventoryReceiptFactsForStore` |

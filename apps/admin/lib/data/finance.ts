@@ -1,6 +1,6 @@
 import "server-only";
 import { sql } from "drizzle-orm";
-import { withCurrentTenant } from "@/lib/tenant";
+import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { getBalance, type Balance } from "@/lib/data/ledger";
 import { getBilling } from "@/lib/data/billing";
 import type { ChannelSlice } from "@/lib/data/dashboard";
@@ -29,7 +29,7 @@ export type Period = 7 | 30 | 90;
 export type FinanceSummary = {
   balance: Balance;
   billing: BillingState | null;
-  /** Net Seller entitlement in the window, excluding platform-controlled money. */
+  /** Net Seller entitlement in the window over COLLECTED orders only (`financial_status = 'dibayar'`). */
   revenue: number;
   /** Shipping actually charged to the buyer after Seller-funded shipping discounts. */
   shippingIn: number;
@@ -52,6 +52,14 @@ export type EarningRow = {
  *  them would inflate every figure on this page, and a merchant checking their revenue against their
  *  own bank statement is exactly who would catch it. */
 const SALES = sql`o.status not in ('batal','retur')`;
+/** …and COLLECTED (Task 8.28): the money actually arrived. `financial_status` becomes `dibayar` when a
+ *  prepaid payment reaches `berhasil` (pay/callback) or when a COD parcel is delivered
+ *  (`collectCodOnDelivery` at `selesai`). Until then a `baru` order with an unpaid VA is a hope, not
+ *  revenue — and it used to be counted here as "Omzet" (measured on production 2026-09-16: 4 of a
+ *  store's 5 real orders, Rp873.100, all unpaid, all in "Omzet 30 hari"). `heldOrders` deliberately
+ *  keeps counting unpaid/unfinished orders: that tile answers "how many are still in flight", not
+ *  "how much did I earn". */
+const COLLECTED = sql`o.financial_status = 'dibayar'`;
 
 /** THE window definition — one place, because two pages in this menu label a number "Omzet 30 hari"
  *  and a merchant reconciles them against each other.
@@ -78,28 +86,31 @@ const PREV_WIN = (days: number) => sql`
 // Seller earnings come from the central order_seller_entitlements view. New orders use the immutable
 // allocation and accepted shipping debits; legacy rows retain their historical expression.
 export async function getFinanceSummary(days: Period = 30): Promise<FinanceSummary> {
-  const [balance, billing] = await Promise.all([getBalance(), getBilling()]);
-  const agg = await withCurrentTenant(async (db) => {
-    const [row] = (await db.execute(sql`
-      select
-        coalesce(sum(e.seller_entitlement_idr) filter (where ${WIN(days)}), 0)::bigint as "revenue",
-        coalesce(sum(e.shipping_charged_idr) filter (where ${WIN(days)}), 0)::bigint as "shippingIn",
-        count(*)                     filter (where ${WIN(days)})::int        as "orders",
-        count(*)                     filter (where o.status in ('baru','diproses','dikirim'))::int as "heldOrders",
-        coalesce(sum(e.seller_entitlement_idr) filter (where ${PREV_WIN(days)}), 0)::bigint as "prevRevenue"
-      from orders o
-      join order_seller_entitlements e on e.order_id = o.id
-      where ${SALES}
-    `)) as unknown as Record<string, string | number>[];
-    return {
-      revenue: Number(row?.revenue ?? 0),
-      shippingIn: Number(row?.shippingIn ?? 0),
-      orders: Number(row?.orders ?? 0),
-      heldOrders: Number(row?.heldOrders ?? 0),
-      prevRevenue: Number(row?.prevRevenue ?? 0),
-    };
-  });
+  const [balance, billing, agg] = await Promise.all([getBalance(), getBilling(), withCurrentTenant((db) => financeSummaryRows(db, days))]);
   return { balance, billing, ...agg };
+}
+
+/** The summary query on an already-scoped connection — the seam `finance-collected.test.ts` drives
+ *  against real Postgres under `tokophi_app`, exactly like `dailyStatsRows`. */
+export async function financeSummaryRows(db: Tx, days: Period): Promise<Omit<FinanceSummary, "balance" | "billing">> {
+  const [row] = (await db.execute(sql`
+    select
+      coalesce(sum(e.seller_entitlement_idr) filter (where ${WIN(days)} and ${COLLECTED}), 0)::bigint as "revenue",
+      coalesce(sum(e.shipping_charged_idr)   filter (where ${WIN(days)} and ${COLLECTED}), 0)::bigint as "shippingIn",
+      count(*)                               filter (where ${WIN(days)} and ${COLLECTED})::int       as "orders",
+      count(*)                               filter (where o.status in ('baru','diproses','dikirim'))::int as "heldOrders",
+      coalesce(sum(e.seller_entitlement_idr) filter (where ${PREV_WIN(days)} and ${COLLECTED}), 0)::bigint as "prevRevenue"
+    from orders o
+    join order_seller_entitlements e on e.order_id = o.id
+    where ${SALES}
+  `)) as unknown as Record<string, string | number>[];
+  return {
+    revenue: Number(row?.revenue ?? 0),
+    shippingIn: Number(row?.shippingIn ?? 0),
+    orders: Number(row?.orders ?? 0),
+    heldOrders: Number(row?.heldOrders ?? 0),
+    prevRevenue: Number(row?.prevRevenue ?? 0),
+  };
 }
 
 /** Daily earnings for the window. Grouped in Asia/Jakarta, not UTC: a seller's "today" ends at
@@ -111,7 +122,11 @@ export async function getFinanceSummary(days: Period = 30): Promise<FinanceSumma
  *  a shop that closed for three days would render as an unbroken trend. The zero days ARE the
  *  information. Hence the generate_series left join. */
 export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
-  return withCurrentTenant(async (db) => {
+  return withCurrentTenant((db) => earningsRows(db, days));
+}
+
+export async function earningsRows(db: Tx, days: Period): Promise<EarningRow[]> {
+  {
     const rows = (await db.execute(sql`
       with span as (
         select generate_series(
@@ -127,7 +142,7 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
       from span s
       left join orders o
         on (o.placed_at at time zone 'Asia/Jakarta')::date = s.day
-       and ${SALES}
+       and ${SALES} and ${COLLECTED}
       left join order_seller_entitlements e on e.order_id = o.id
       group by s.day
       order by s.day
@@ -138,7 +153,7 @@ export async function getEarnings(days: Period = 30): Promise<EarningRow[]> {
       shipping: Number(r.shipping ?? 0),
       orders: Number(r.orders ?? 0),
     }));
-  });
+  }
 }
 
 /** Where the money came from, by attribution channel — the one dimension of these orders that is
@@ -152,7 +167,7 @@ export async function getChannelMix(days: Period = 30): Promise<ChannelSlice[]> 
       select o.channel::text as channel, coalesce(sum(e.seller_entitlement_idr), 0)::bigint as value
       from orders o
       join order_seller_entitlements e on e.order_id = o.id
-      where ${SALES} and ${WIN(days)}
+      where ${SALES} and ${COLLECTED} and ${WIN(days)}
       group by 1 having sum(e.seller_entitlement_idr) > 0 order by 2 desc
     `)) as unknown as Record<string, string | number>[];
     return rows.map((r) => ({ channel: CHANNEL_LABEL[String(r.channel)] ?? String(r.channel), value: Number(r.value ?? 0) }));

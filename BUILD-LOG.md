@@ -8,6 +8,21 @@
 
 ## Log History & Execution Entries
 
+### [2026-09-16 18:06 UTC] — FINANCE · Tasks 8.28 + 8.29: Keuangan counts collected money; COD fee floor Rp2.500
+
+- **Executor:** Lane D (Claude, Fable 5.1 — parallel worker fork under the Finance Overhaul II goal). **Scope ID:** `8.28`, `8.29` (audit F4, F5). Branch `lane/8.28-8.29-seller-money`, base `ef6830a`.
+- **Files:** `packages/lib/src/order-finance.ts` · `packages/lib/src/order-finance.test.ts` · `apps/storefront/src/pages/checkout.astro` · **new** `apps/storefront/src/lib/checkout-cod-floor.test.ts` · `apps/admin/lib/data/finance.ts` · `apps/admin/lib/data/dashboard.ts` · `apps/admin/components/admin/dashboard/money-strip.tsx` · **new** `apps/admin/lib/data/finance-collected.test.ts` · `TASKS.md` · `specs/docs/{FINANCE.md,PRICING.md,STATUS.md}`.
+
+**8.29 — the fee we paid and did not collect.** KiriminAja bills us 3% + PPN with a Rp2.500 minimum (T&C §5); our engine charged a straight 3%, so every COD parcel with a base under Rp83.333 lost money (base Rp50.000: −Rp1.110). `COD_FEE_MIN_IDR` and `COD_FEE_RATE` are now exported from `order-finance.ts` and `codFeeBeforeVatIdr = max(floor, round(base × rate))`. The checkout mirror imports those two constants through `define:vars` — there is no literal rate or floor left in `checkout.astro`, and `checkout-cod-floor.test.ts` (`codeOnly`) fails if one appears or the old body comes back. Prepaid orders are untouched (pinned). The rate is per courier at the vendor (J&T 4%); COD is SPX-only, so one rate is honest — the code and `FINANCE.md` both say widening COD needs a per-courier rate first. `FINANCE.md` §4 now names the remittance gap: seller credited at `selesai`, courier settles later, no `cod_settled_at` exists.
+
+**8.28 — an unpaid VA is not omzet.** Keuangan summed entitlement over every non-cancelled order. `finance.ts` gains one `COLLECTED` predicate (`financial_status = 'dibayar'`) applied to revenue, shipping-in, order count, previous-period revenue, channel mix and daily earnings; "Tertahan" deliberately stays unfiltered (it asks about in-flight orders). The summary/earnings bodies were lifted into exported `financeSummaryRows(db, days)` / `earningsRows(db, days)` seams so the test drives the SAME query the page runs. The dashboard "Penjualan" tile keeps its live-orders base and its caption now says so (`SALES_TILE_NOTE`): two definitions, both named.
+
+**Verification.** `order-finance.test.ts` + `checkout-cod-floor.test.ts` 15/15 · `finance-collected.test.ts` + `kpi-delta` + `daily-stats` 24/24 (real Postgres, tenant role, rolled back) · `astro check` 0 errors · `tsc -p packages/lib` 0 · `npm run lint -w @tokophi/admin` 0 errors · **3 mutations → 3 reds** (floor removed → engine test red; literal `0.03` in the mirror → guard red; `COLLECTED` dropped from the revenue filter → unpaid-VA test red), files restored from backup and re-diffed.
+
+**NOT clean, and not mine.** `tsc -p apps/admin` reports one error in `apps/admin/app/api/cron/billing/route.test.ts`, and `npm run verify -w @tokophi/storefront` fails at build with `Rollup failed to resolve import "server-only" from packages/db/src/subscription-invoice.ts` — both are Lane C's uncommitted files (8.24) sitting in this same checkout; `packages/db/src/index.ts` re-exports the new module and the storefront bundles `@tokophi/db`. Neither file is staged here. Lane C needs to drop `server-only` from that module (or not re-export it from the db index) before the storefront builds.
+
+---
+
 ### [2026-09-10 13:15 UTC] — SHIPPING · Task 8.17: KiriminAja's REAL subdistrict ids, alongside the Kemendagri codes
 
 - **Executor:** Subagent (Claude, Opus 5). **Scope ID:** `8.17` (relates `8.14`, N30).

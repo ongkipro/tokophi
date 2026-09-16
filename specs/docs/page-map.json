@@ -1308,9 +1308,7 @@
           ],
           "file": "apps/admin/app/api/cron/billing/route.ts",
           "clients": [],
-          "data": [
-            "platform-finance"
-          ],
+          "data": [],
           "actions": [],
           "gate": [
             "cron"
@@ -2933,6 +2931,7 @@
         "exports": [
           "LOW_STOCK",
           "RANGE_OPTIONS",
+          "SALES_TILE_NOTE",
           "getActionQueue",
           "getActivities",
           "getChannels",
@@ -2996,6 +2995,8 @@
       {
         "module": "finance.ts",
         "exports": [
+          "earningsRows",
+          "financeSummaryRows",
           "getChannelMix",
           "getEarnings",
           "getFinanceSummary"

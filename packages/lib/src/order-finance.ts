@@ -1,3 +1,13 @@
+/**
+ * The COD fee's FLOOR, in rupiah (Task 8.29, KiriminAja T&C §5 read 2026-09-14): the courier charges
+ * 3 % + PPN 11 % **with a Rp2.500 minimum** per waybill. Without the floor a small COD order costs the
+ * platform more than it charges the shopper (base Rp50.000: shopper 1.500 + 165, courier 2.500 + 275).
+ * The rate stays ONE number because COD is SPX-only here (`platform_couriers.services[].codAllowed`);
+ * J&T Express is 4 % in the same table, so widening COD to J&T must make the rate per courier first.
+ */
+export const COD_FEE_MIN_IDR = 2_500;
+export const COD_FEE_RATE = 0.03;
+
 export type OrderFinanceInput = {
   subtotalIdr: number;
   goodsDiscountIdr?: number;
@@ -79,8 +89,9 @@ export function calculateOrderFinance(input: OrderFinanceInput): OrderFinance {
   // after discount plus the shipping actually charged — NOT the payable (which would tax the goods
   // PPN), and NOT grossed up (the fee is 3% of the base, full stop).
   const codBaseIdr = subtotalIdr - goodsDiscountIdr + shippingChargedIdr;
+  // Floored at the courier's own minimum (COD_FEE_MIN_IDR) — only on a COD order, never on prepaid.
   const codFeeBeforeVatIdr =
-    input.paymentKind === "cod" ? Math.round(codBaseIdr * 0.03) : 0;
+    input.paymentKind === "cod" ? Math.max(COD_FEE_MIN_IDR, Math.round(codBaseIdr * COD_FEE_RATE)) : 0;
   const codFeeVatIdr =
     input.paymentKind === "cod" ? Math.round(codFeeBeforeVatIdr * 0.11) : 0;
   const codFeeFinalIdr = codFeeBeforeVatIdr + codFeeVatIdr;

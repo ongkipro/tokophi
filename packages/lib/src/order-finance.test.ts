@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateOrderFinance } from "./order-finance";
+import { COD_FEE_MIN_IDR, calculateOrderFinance } from "./order-finance";
 
 describe("calculateOrderFinance", () => {
   it.each([
@@ -44,6 +44,27 @@ describe("calculateOrderFinance", () => {
     expect(money.codFeeVatIdr).toBe(396); // 3_600 × 11%
     expect(money.codFeeFinalIdr).toBe(3_996);
     expect(money.buyerPayableIdr).toBe(123_996);
+  });
+
+  // Task 8.29 — KiriminAja bills 3 % + PPN with a Rp2.500 MINIMUM per waybill (T&C §5). Below a base
+  // of Rp83.333 the straight 3 % undercharges the shopper against what the courier keeps.
+  it.each([
+    ["under the floor", 40_000, 10_000, 2_500, 275],
+    ["exactly at the crossover", 73_333, 10_000, 2_500, 275], // 83.333 × 3 % = 2.500
+    ["above the floor", 80_000, 20_000, 3_000, 330],
+  ])("floors the COD fee at Rp2.500 — %s", (_n, goods, ship, fee, vat) => {
+    const money = calculateOrderFinance({ subtotalIdr: goods, shippingListIdr: ship, paymentKind: "cod" });
+    expect(COD_FEE_MIN_IDR).toBe(2_500);
+    expect(money.codFeeBeforeVatIdr).toBe(fee);
+    expect(money.codFeeVatIdr).toBe(vat);
+    expect(money.codFeeFinalIdr).toBe(fee + vat);
+    expect(money.orderPayableIdr).toBe(goods + ship + fee + vat);
+  });
+
+  it("never applies the COD floor to a prepaid order", () => {
+    const money = calculateOrderFinance({ subtotalIdr: 40_000, shippingListIdr: 10_000, paymentKind: "prepaid" });
+    expect(money.codFeeBeforeVatIdr).toBe(0);
+    expect(money.codFeeFinalIdr).toBe(0);
   });
 
   // Owner ruling 2026-08-24: the seller receives GOODS OMSET + GOODS PPN (they remit the tax);

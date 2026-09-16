@@ -223,6 +223,8 @@ would collect addresses nothing reads.
 | **Public API rate limits** | ongkir 60/min · order 10/min · pay 20/min · callback 60/min · track 30/min (all per IP) |
 | **Self-serve signup** | `/daftar` → one-transaction `provision.ts` |
 | **SEO hygiene** | both panels `noindex, nofollow` in 3 layers; `/api/uploads/*` carved out so merchant product photos stay in Google Images; landing + storefronts indexable; `www` 301s to the apex |
+| **Keuangan counts COLLECTED money only** (Task 8.28, 2026-09-17) | `apps/admin/lib/data/finance.ts` filters `financial_status = 'dibayar'` on Omzet / ongkir masuk / order count / channel mix / daily earnings — an unpaid VA is Rp0 until the callback lands, COD counts at `selesai`. The dashboard "Penjualan" tile deliberately keeps `total − tax` over live orders and its caption says so ("termasuk ongkir & biaya COD, sebelum pembayaran"). Pinned by `finance-collected.test.ts` against real Postgres under `tokophi_app` |
+| **COD fee floor Rp2.500** (Task 8.29, 2026-09-17) | `order-finance.ts` `max(COD_FEE_MIN_IDR, round(base × COD_FEE_RATE))`; `checkout.astro` imports the same constants. ⚠️ Still no COD remittance fact (`cod_settled_at`) — the seller is credited at `selesai`, the courier settles later; see `FINANCE.md` §4 |
 
 ---
 

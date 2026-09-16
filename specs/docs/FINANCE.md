@@ -60,7 +60,7 @@ old "display only" note is dead.
 
 | Method | Fee | Base |
 |---|---|---|
-| **COD** | **3%**, then **PPN 11% on the fee** | goods omset + shipping charged |
+| **COD** | **3%, min Rp2.500**, then **PPN 11% on the fee** (`COD_FEE_RATE` / `COD_FEE_MIN_IDR`, Task 8.29) | goods omset + shipping charged |
 | **QRIS** | **0,7%** | goods **omset** (never the payable) |
 | **VA BCA** (`VABCA`) | **Rp6.500** flat | — |
 | **VA other banks** | **Rp3.000** flat (diturunkan dari Rp3.500 — ruling owner 2026-09-10; `list_payment` menagih akun kita **Rp3.000 `fix`** untuk VABNI/VAPERMATA/VAMANDIRI/VABRI, diukur 2026-09-10, jadi Rp3.500 adalah **kelebihan tagih ke pembeli**, bukan margin) | — |
@@ -74,6 +74,14 @@ old "display only" note is dead.
   with its own price is a data edit in `CHANNEL_FEE_OVERRIDES`, not new logic.
 - **COD is not in the gateway table**: it changes the ORDER total, so it lives inside
   `calculateOrderFinance` (straight 3% — the old gross-up `×0.03/0.97` is dead).
+- **The COD fee has a FLOOR of Rp2.500 before VAT** (Task 8.29, 2026-09-17). KiriminAja's T&C §5
+  charges US 3% + PPN 11% with a Rp2.500 minimum, so a straight 3% on a base under Rp83.333 was
+  a fee we paid and did not collect (base Rp50.000: shopper 1.500 + 165, courier 2.500 + 275 →
+  −Rp1.110 per parcel). `codFeeBeforeVatIdr = max(COD_FEE_MIN_IDR, round(base × COD_FEE_RATE))`;
+  `checkout.astro` mirrors it by importing the SAME two constants (no literal rate in the mirror —
+  `apps/storefront/src/lib/checkout-cod-floor.test.ts` fails on one). ⚠️ The rate is per COURIER
+  at the vendor (J&T Express is 4%); COD is SPX-only today, so ONE rate is honest. Widening COD to
+  another courier means a per-courier rate in `order-finance.ts` FIRST, not a `codAllowed` flip.
 - **NO TAX-ON-TAX**: the goods PPN line is **outside every fee base**. Fee-ing the PPN would charge
   admin over money that belongs to the state via the seller.
 - Fees are shown to the shopper at `/checkout` per selected method; labels stay white-label
@@ -106,6 +114,16 @@ base). On VA BCA: flat Rp6.500 whatever the amounts.
 - Claw-backs reverse the **sale entry's own amount** (`−l.amount_idr`), so they stay symmetric with
   whatever formula credited it.
 - Release/payout rules unchanged (`platform_payout.release_on`, CAS payout transitions).
+- ⚠️ **COD remittance gap — the platform fronts the seller's COD cash** (Task 8.29). `collectCodOnDelivery`
+  credits the seller at `selesai` (the courier reported delivery), but the courier remits the cash to
+  US on its own settlement cycle, days to weeks later. Between those two moments the seller can
+  withdraw money the platform has not yet received. The exposure is bounded only by
+  `platform_payout.release_on` (a `selesai` release makes it immediate) and the minimum payout —
+  nothing in the schema records when the courier actually settled: **there is no `cod_settled_at`,
+  no remittance fact, and no reconciliation against the courier's COD report.** Until one exists,
+  treat every `available` rupiah that came from a COD sale as a platform advance, and size the
+  minimum payout / release delay against the courier's real settlement lag, not against seller
+  convenience.
 - Payouts are settled **manually by the Super Admin** (Pencairan → Proses → Tandai lunas). The
   "Tandai lunas" dialog takes an optional **bank-transfer reference**, written in the same CAS
   statement as the status flip. `payouts.note` is keyed by terminal status: `gagal` ⇒ rejection

@@ -351,7 +351,9 @@ export function getStuckMoney(orders: Order[]): StuckMoney {
   return { orders: open.length, value: open.reduce((a, o) => a + o.total, 0) };
 }
 
-export type MoneyTile = { key: RangeKey; label: string; value: number; delta: number | null; compareLabel: string; spark: number[] };
+export type MoneyTile = { key: RangeKey; label: string; value: number; delta: number | null; compareLabel: string; spark: number[]; /** What the figure sums — it is `total − tax` over placed orders, not collected money (Task 8.28). */ note: string };
+/** ONE sentence, on every sales tile: this strip is not Keuangan's "Omzet" (goods, collected). */
+export const SALES_TILE_NOTE = "termasuk ongkir & biaya COD, sebelum pembayaran";
 
 /**
  * "Uang masuk" — penjualan hari ini / 7 hari / 30 hari, each vs the SAME-LENGTH previous period.
@@ -388,6 +390,7 @@ export function getMoneyTiles(all: DayPoint[]): MoneyTile[] {
       value: s.sales.value,
       delta: s.sales.delta,
       compareLabel: s.compareLabel,
+      note: SALES_TILE_NOTE,
       // "today" is a single day → give the sparkline the last 14 days for shape.
       spark: (days.length > 1 ? days : all.slice(-14)).map((d) => d.sales),
     };
