@@ -6,55 +6,99 @@
 import CheckoutLayout from "../../layouts/CheckoutLayout.astro";
 import { UPLOAD_WIDTHS } from "../../data/catalog";
 const store = Astro.locals.store;
+// The shop's own CS WhatsApp (migration 0049), or no button at all — never a platform number.
+const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
 ---
 
 <CheckoutLayout title="Pesanan Berhasil" description={`Terima kasih telah berbelanja di ${store.name}.`}>
-  <section class="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+  <section class="lg:py-0">
     {/* Both states of this page are rendered here and one is hidden on arrival. This page is
          reachable by simply typing the URL (and by a refresh long after the order), so it must NOT
          assert "pesanan diterima" unless there is actually an order in localStorage to show. */}
-    <div class="rounded-lg border border-[var(--co-line)] bg-white p-6 text-center sm:p-10">
-      <div id="ok-icon" class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--co-accent-weak)]">
-        <svg viewBox="0 0 24 24" class="h-9 w-9 fill-none stroke-[var(--co-accent)]" stroke-width="2.5" aria-hidden="true">
+    <div class="rounded-lg border border-[var(--co-line)] bg-white p-6 text-center sm:p-8">
+      {/* The icon and the words are set by the script for the real state of THIS order: an unpaid
+           VA/QRIS is not "diterima" yet — a green-check "Terima kasih, pesanan diterima" over a bill
+           nobody has paid is how a shopper closes the tab before paying. */}
+      <div id="ok-icon" class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--co-accent-weak)]">
+        <svg id="icon-check" viewBox="0 0 24 24" class="h-8 w-8 fill-none stroke-[var(--co-accent)]" stroke-width="2.5" aria-hidden="true">
           <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
+        <svg id="icon-clock" viewBox="0 0 24 24" class="hidden h-8 w-8 fill-none stroke-[var(--co-accent)]" stroke-width="2.2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <svg id="icon-info" viewBox="0 0 24 24" class="hidden h-8 w-8 fill-none stroke-[var(--co-accent)]" stroke-width="2.2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
       </div>
-      <h1 id="ok-title" class="mt-5 text-3xl font-semibold text-ink">Terima kasih! Pesanan kamu diterima</h1>
+      <h1 id="ok-title" class="mt-4 text-2xl font-semibold leading-tight text-ink sm:text-3xl">Terima kasih atas pesananmu</h1>
       {/* No email is sent (the platform has no mailer): the payment instruction is on THIS page,
            and the order number is what identifies the order to the merchant. Promising an email
            that never arrives is how a paid-for order turns into a support ticket. */}
-      <p id="ok-sub" class="mt-2 text-[var(--co-muted)]">
+      <p id="ok-sub" class="mx-auto mt-2 max-w-md text-[var(--co-muted)]">
         Simpan nomor pesanan di bawah — sebutkan saat menghubungi {store.name}.
       </p>
-      {/* The order number comes from the order API (`orders.number`, e.g. WEB-…). If it is not
-           there, the row is HIDDEN. It is never invented — a made-up "INV-2026-4112" is a number
-           that exists in no system, and the shopper would quote it to a merchant who cannot find it. */}
-      <p id="order-number-row" class="mt-4 hidden items-center gap-2 rounded-full bg-[var(--co-accent-weak)] px-4 py-1.5 text-sm font-medium text-[var(--co-accent-hover)]">
-        No. Pesanan: <span id="order-number" class="font-semibold tabular-nums"></span>
-      </p>
+      {/* The order number comes from the order API (`orders.number`). If it is not there, the row is
+           HIDDEN. It is never invented — a made-up number exists in no system, and the shopper would
+           quote it to a merchant who cannot find it. It is copyable: it is the one thing they must
+           quote to the seller. */}
+      <div id="order-number-row" class="mt-4 hidden flex-wrap items-center justify-center gap-2">
+        <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--co-accent-weak)] px-4 py-1.5 text-sm font-medium text-[var(--co-accent-hover)]">
+          No. Pesanan <span id="order-number" class="font-semibold tabular-nums"></span>
+        </span>
+        <button type="button" id="copy-order-number" data-copy="order" class="rounded-full border border-[var(--co-line)] px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-[var(--co-panel)]">Salin</button>
+      </div>
     </div>
 
     {/* Payment instruction (VA / QRIS / e-wallet) */}
     <div id="pay-instruction" class="mt-6 hidden"></div>
 
-    {/* Order summary */}
-    <div id="order-summary" class="mt-6"></div>
+    {/* What happens next — per payment path, filled by the script. */}
+    <div id="next-steps" class="mt-6 hidden"></div>
 
-    <div id="order-note" class="mt-6 hidden rounded-lg border border-[var(--co-line)] bg-white p-5 text-sm sm:p-6"></div>
+    {/* Order summary + delivery note. Below the payment on a phone (the bill is the job); in the
+         layout's recessed right column on desktop, which this page used to leave empty. Moved by the
+         script on a media query — the layout's summary slot sits FIRST on mobile, where it would push
+         the payment instruction below the fold. */}
+    <div id="summary-home">
+      <div id="summary-wrap">
+        <div id="order-summary" class="mt-6 lg:mt-0"></div>
+        <div id="order-note" class="mt-6 hidden rounded-lg border border-[var(--co-line)] bg-white p-5 text-sm sm:p-6"></div>
+      </div>
+    </div>
 
-    <div class="mt-8 text-center">
+    <div class="mt-8 flex flex-col-reverse items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+      {/* Primary only when there is nothing left to do. While a VA/QRIS is unpaid the script demotes
+           it to an outline, so it never out-shouts the bill on the same screen. */}
       <a
+        id="continue-shopping"
         href="/"
-        class="inline-block rounded-lg bg-[var(--co-accent)] px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]"
+        class="inline-flex items-center justify-center rounded-lg bg-[var(--co-accent)] px-8 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)]"
       >
         Lanjut Belanja
       </a>
+      {
+        storeWa && (
+          <a
+            id="contact-seller"
+            href={`https://wa.me/${storeWa}`}
+            data-wa={storeWa}
+            data-store={store.name}
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--co-line)] bg-white px-6 py-3.5 text-sm font-semibold text-ink transition-colors hover:bg-[var(--co-panel)]"
+          >
+            <svg viewBox="0 0 24 24" class="h-4 w-4 fill-current text-[#25D366]" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .6l-.3.5-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.8-.1 1.4Z"/></svg>
+            Hubungi {store.name}
+          </a>
+        )
+      }
     </div>
   </section>
+  <div slot="summary" id="summary-dock"></div>
 </CheckoutLayout>
 
 {/* The line thumbnail is `h-16 w-14` in a `shrink-0` cell: 56 px at every viewport (Task 6.12). */}
-<script is:inline define:vars={{ UPLOAD_WIDTHS, THUMB_SIZES: "56px" }}>
+<script is:inline define:vars={{ UPLOAD_WIDTHS, THUMB_SIZES: "56px", STORE_NAME: store.name }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -85,6 +129,76 @@ const store = Astro.locals.store;
       return s ? ' srcset="' + esc(s) + '" sizes="' + sizes + '"' : "";
     }
 
+    // ONE copy handler for every [data-copy] control (order number, VA, payment code, QRIS payload).
+    // Clipboard API first; refused (http, ancient WebView) → a hidden textarea + execCommand fallback,
+    // so the button never silently does nothing. The label flips to "Tersalin ✓" for 2s — feedback on
+    // the button itself, where the thumb already is — and the change is announced (aria-live).
+    function wireCopy(root) {
+      Array.prototype.forEach.call(root.querySelectorAll("[data-copy]"), function (btn) {
+        if (btn.getAttribute("data-copy-wired")) return;
+        btn.setAttribute("data-copy-wired", "1");
+        btn.setAttribute("aria-live", "polite");
+        var original = btn.textContent;
+        btn.addEventListener("click", function () {
+          var value = String(btn.getAttribute("data-copy-value") || "");
+          var done = function () {
+            btn.textContent = "Tersalin ✓";
+            setTimeout(function () { btn.textContent = original; }, 2000);
+          };
+          var fallback = function () {
+            var ta = document.createElement("textarea");
+            ta.value = value;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand("copy"); done(); } catch (e) {}
+            document.body.removeChild(ta);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(done).catch(fallback);
+          } else {
+            fallback();
+          }
+        });
+      });
+    }
+
+    // An expired bill must read as expired EVERYWHERE on the page at once — the badge alone, under a
+    // title still saying "Selesaikan pembayaran" and a VA number that still looks payable, is three
+    // parts of one screen disagreeing. Runs on arrival (already expired) and when the countdown hits 0
+    // while the page is open.
+    var payExpired = false;
+    function applyExpired() {
+      payExpired = true;
+      show("pay-expired-note", true);
+      var controls = document.getElementById("pay-controls");
+      if (controls) {
+        controls.classList.add("opacity-50");
+        controls.setAttribute("aria-disabled", "true");
+      }
+      var t = document.getElementById("ok-title");
+      var sub = document.getElementById("ok-sub");
+      if (t && document.getElementById("icon-clock") && !document.getElementById("icon-clock").classList.contains("hidden")) {
+        t.textContent = "Waktu pembayaran habis";
+        if (sub) sub.textContent = "Tagihan pesanan ini sudah kedaluwarsa. Hubungi " + STORE_NAME + " dan sebutkan nomor pesanan untuk dibuatkan tagihan baru.";
+        show("icon-clock", false);
+        show("icon-info", true);
+      }
+      var first = document.querySelector('#next-steps li[data-step="pay"]');
+      if (first) {
+        var ps = first.querySelectorAll("p");
+        if (ps[0]) ps[0].textContent = "Hubungi " + STORE_NAME;
+        if (ps[1]) ps[1].textContent = "Minta tagihan baru dengan menyebutkan nomor pesanan.";
+      }
+    }
+
+    function show(id, on) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle("hidden", !on);
+    }
+
     // Clear the cart on arrival at success.
     try {
       localStorage.removeItem("cart");
@@ -110,6 +224,8 @@ const store = Astro.locals.store;
       var title = document.getElementById("ok-title");
       var sub = document.getElementById("ok-sub");
       if (icon) icon.classList.add("hidden");
+      var contactEmpty = document.getElementById("contact-seller");
+      if (contactEmpty) contactEmpty.setAttribute("href", "https://wa.me/" + contactEmpty.getAttribute("data-wa"));
       if (title) title.textContent = "Tidak ada pesanan untuk ditampilkan";
       if (sub) {
         sub.textContent =
@@ -128,7 +244,10 @@ const store = Astro.locals.store;
     if (order.number && numEl && numRow) {
       numEl.textContent = order.number;
       numRow.classList.remove("hidden");
-      numRow.classList.add("inline-flex");
+      numRow.classList.add("flex");
+      var copyNum = document.getElementById("copy-order-number");
+      if (copyNum) copyNum.setAttribute("data-copy-value", order.number);
+      wireCopy(numRow);
     }
 
     var rows = order.items
@@ -278,32 +397,41 @@ const store = Astro.locals.store;
       }
       // Task 8.25 (a): the fee the shopper agreed to at checkout IS the fee on the bill. The order API
       // submits `buyerPayable` (order + our admin fee) as the PSP's grand total, so `pay.total` and the
-      // summary's "Total bayar" above are the same number and the provider adds nothing on top. The
-      // fee is still itemised here so the shopper sees where the difference from the goods subtotal
-      // comes from — and `pay.total` is still preferred over our figure, because if the provider ever
-      // echoed a different grand total (`feeMismatch`, logged server-side) the VA holds THEIR number
-      // and that is the one an exact-amount transfer must hit.
+      // summary's "Total dibayar" are the same number and the provider adds nothing on top. `pay.total`
+      // is still preferred over our figure: if the provider ever echoed a different grand total
+      // (`feeMismatch`, logged server-side) the VA holds THEIR number, and that is the one an
+      // exact-amount transfer must hit. The breakdown sits under the controls; the amount and the
+      // deadline sit ABOVE them — on a phone the QR is ~320 px tall, and a shopper should not have to
+      // scroll past it to learn how much and until when.
       var payTotal = pay.total || buyerPayable;
       var adminFee = Math.max(0, Number(pay.admin ?? gatewayFee));
-      lines +=
-        '<div class="mt-1 border-t border-[var(--co-line)] pt-3">' +
+      var expiry = pay.expiresAt ? new Date(pay.expiresAt) : null;
+      if (expiry && Number.isNaN(expiry.getTime())) expiry = null;
+      var head =
+        '<div class="rounded-lg bg-[var(--co-panel)] px-4 py-3">' +
+        '<p class="text-xs font-medium uppercase tracking-wide text-[var(--co-muted)]">Total bayar</p>' +
+        '<p class="mt-0.5 text-2xl font-bold text-ink tabular-nums sm:text-3xl">' + idr.format(payTotal) + "</p>" +
+        (expiry
+          ? '<div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--co-line)] pt-3">' +
+            '<p class="text-sm text-[var(--co-muted)]">Bayar sebelum <span class="font-medium text-ink">' +
+            esc(new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(expiry)) +
+            ' WIB</span></p><p id="pay-countdown" role="timer" aria-live="off" class="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-[var(--co-accent-hover)] tabular-nums"></p></div>'
+          : "") +
+        "</div>";
+      var breakdown =
+        '<div class="mt-2 border-t border-[var(--co-line)] pt-3">' +
         (adminFee > 0
           ? kv("Subtotal pesanan", '<span class="tabular-nums">' + idr.format(order.total || 0) + "</span>") +
             kv("Biaya admin", '<span class="tabular-nums">' + idr.format(adminFee) + "</span>")
           : "") +
-        kv("Total bayar", '<span class="text-xl font-bold">' + idr.format(payTotal) + "</span>") +
-        (adminFee > 0
-          ? '<p class="mt-2 text-xs text-[var(--co-muted)]">Transfer <span class="font-medium text-ink">persis</span> sejumlah Total bayar di atas — kurang atau lebih membuat pembayaran tidak terdeteksi otomatis.</p>'
-          : "") +
+        kv("Total bayar", '<span class="text-base font-bold">' + idr.format(payTotal) + "</span>") +
+        '<p class="mt-2 text-xs text-[var(--co-muted)]">Bayar <span class="font-medium text-ink">persis</span> sejumlah Total bayar — kurang atau lebih membuat pembayaran tidak terdeteksi otomatis.</p>' +
         "</div>";
-      if (pay.expiresAt) {
-        var expiry = new Date(pay.expiresAt);
-        if (!Number.isNaN(expiry.getTime())) {
-          lines += '<p class="mt-3 text-xs text-[var(--co-muted)]">Berlaku sampai ' +
-            esc(new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(expiry)) +
-            " WIB.</p>";
-        }
-      }
+      var expiredNote =
+        '<p id="pay-expired-note" class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">' +
+        "Tagihan ini sudah kedaluwarsa dan tidak bisa dibayar lagi. Hubungi " + esc(STORE_NAME) +
+        " dan sebutkan nomor pesanan untuk dibuatkan tagihan baru.</p>";
+      lines = head + expiredNote + '<div id="pay-controls" class="mt-2">' + lines + "</div>" + breakdown;
       if (pay.url) {
         lines +=
           '<a href="' + esc(pay.url) +
@@ -375,41 +503,126 @@ const store = Astro.locals.store;
 
       payBox.classList.remove("hidden");
       payBox.innerHTML = panel(
-        "Selesaikan Pembayaran" + (pay.channel ? " — " + esc(pay.channel.label) : ""),
-        "Bayar sebelum kedaluwarsa. Pesanan otomatis terkonfirmasi setelah pembayaran diterima.",
+        "Instruksi pembayaran" + (pay.channel ? " — " + esc(pay.channel.label) : ""),
+        "",
         lines,
         "accent",
       );
-      // ONE copy handler for every [data-copy] control (VA, payment code, QRIS payload). Clipboard
-      // API first; refused (http, ancient WebView) → a hidden textarea + execCommand fallback, so
-      // the button never silently does nothing. The label flips to "Tersalin ✓" for 2s — feedback
-      // on the button itself, where the thumb already is.
-      Array.prototype.forEach.call(payBox.querySelectorAll("[data-copy]"), function (btn) {
-        var original = btn.textContent;
-        btn.addEventListener("click", function () {
-          var value = String(btn.getAttribute("data-copy-value") || "");
-          var done = function () {
-            btn.textContent = "Tersalin ✓";
-            setTimeout(function () { btn.textContent = original; }, 2000);
-          };
-          var fallback = function () {
-            var ta = document.createElement("textarea");
-            ta.value = value;
-            ta.setAttribute("readonly", "");
-            ta.style.position = "fixed";
-            ta.style.opacity = "0";
-            document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand("copy"); done(); } catch (e) {}
-            document.body.removeChild(ta);
-          };
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(value).then(done).catch(fallback);
-          } else {
-            fallback();
+      wireCopy(payBox);
+
+      // A live countdown to the provider's own expiry. Client-only by nature (the page is rendered
+      // from localStorage), updated once a second but announced to nobody (`aria-live="off"`): the
+      // absolute deadline above it is the accessible fact. At zero the page says the bill is gone and
+      // what to do, instead of leaving a dead VA number looking payable.
+      var cd = document.getElementById("pay-countdown");
+      if (cd && expiry) {
+        var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+        var tick = function () {
+          var ms = expiry.getTime() - Date.now();
+          if (ms <= 0) {
+            cd.textContent = "Waktu pembayaran habis";
+            cd.className = "inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700";
+            applyExpired();
+            return false;
           }
-        });
-      });
+          var t = Math.floor(ms / 1000);
+          cd.textContent = "Sisa " + pad(Math.floor(t / 3600)) + ":" + pad(Math.floor((t % 3600) / 60)) + ":" + pad(t % 60);
+          return true;
+        };
+        if (tick()) {
+          var timer = setInterval(function () { if (!tick()) clearInterval(timer); }, 1000);
+        }
+      }
+    }
+
+    // Desktop: the summary lives in the layout's right column. Phone/tablet: under the payment.
+    var wrap = document.getElementById("summary-wrap");
+    var dockEl = document.getElementById("summary-dock");
+    var homeEl = document.getElementById("summary-home");
+    if (wrap && dockEl && homeEl && window.matchMedia) {
+      var mq = window.matchMedia("(min-width: 1024px)");
+      var place = function () { (mq.matches ? dockEl : homeEl).appendChild(wrap); };
+      place();
+      if (mq.addEventListener) mq.addEventListener("change", place);
+    }
+
+    // ── HEADER, NEXT STEPS AND THE EXITS — per the real state of this order ─────────────────────
+    // Three states, and only one of them is "diterima": COD (nothing owed now), an unpaid bill (the
+    // shopper still has a job to do on this page), or a prepaid order whose bill was never created
+    // (the order API recorded the order but the gateway refused — the only honest next step is the
+    // seller). The title is set per state on the page's single heading element (one h1, never a second).
+    var titleEl = document.getElementById("ok-title");
+    var subEl = document.getElementById("ok-sub");
+    var state = isCod ? "cod" : pay ? "pending" : "no-bill";
+    show("icon-check", state === "cod");
+    show("icon-clock", state === "pending");
+    show("icon-info", state === "no-bill");
+    if (titleEl && subEl) {
+      if (state === "cod") {
+        titleEl.textContent = "Terima kasih! Pesanan diterima";
+        subEl.textContent = STORE_NAME + " akan memproses pesananmu. Siapkan uang tunai saat paket tiba.";
+      } else if (state === "pending") {
+        titleEl.textContent = "Selesaikan pembayaran";
+        subEl.textContent = "Pesananmu sudah dibuat dan akan diproses " + STORE_NAME + " setelah pembayaran diterima.";
+      } else {
+        titleEl.textContent = "Pesanan tercatat";
+        subEl.textContent = "Tagihan pembayaran belum berhasil dibuat. Hubungi " + STORE_NAME + " dan sebutkan nomor pesanan di bawah.";
+      }
+    }
+
+    var steps = document.getElementById("next-steps");
+    if (steps) {
+      var list =
+        state === "cod"
+          ? [
+              [STORE_NAME + " memproses pesanan", "Pesanan dikemas dan diserahkan ke kurir.", true],
+              ["Paket dikirim", "Kurir mengantar ke " + ((order.shippingAddress && order.shippingAddress.kota) || "alamatmu") + ".", false],
+              ["Bayar saat paket tiba", "Serahkan " + idr.format(order.total || 0) + " tunai ke kurir.", false],
+            ]
+          : state === "pending"
+            ? [
+                ["Bayar sebelum batas waktu", "Gunakan instruksi pembayaran di atas.", true, "pay"],
+                ["Pembayaran terverifikasi otomatis", "Tidak perlu kirim bukti transfer.", false],
+                [STORE_NAME + " memproses dan mengirim", "Pesanan dikemas lalu diserahkan ke kurir.", false],
+              ]
+            : [
+                ["Hubungi " + STORE_NAME, "Sebutkan nomor pesanan agar dibuatkan tagihan pembayaran.", true],
+                ["Bayar tagihan dari penjual", "Pesanan diproses setelah pembayaran diterima.", false],
+              ];
+      steps.classList.remove("hidden");
+      steps.innerHTML =
+        '<div class="rounded-lg border border-[var(--co-line)] bg-white p-5 sm:p-6">' +
+        '<h2 class="text-base font-semibold text-ink">Apa selanjutnya?</h2>' +
+        '<ol class="mt-4 space-y-4">' +
+        list
+          .map(function (st, i) {
+            var current = st[2];
+            return (
+              '<li class="flex gap-3"' + (current ? ' aria-current="step"' : "") + (st[3] ? ' data-step="' + st[3] + '"' : "") + ">" +
+              '<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ' +
+              (current ? "bg-[var(--co-accent)] text-white" : "border border-[var(--co-line)] text-[var(--co-muted)]") +
+              '">' + (i + 1) + "</span>" +
+              '<div class="min-w-0 pt-0.5"><p class="text-sm font-medium ' + (current ? "text-ink" : "text-[var(--co-muted)]") + '">' + esc(st[0]) + "</p>" +
+              '<p class="text-xs text-[var(--co-muted)]">' + esc(st[1]) + "</p></div></li>"
+            );
+          })
+          .join("") +
+        "</ol></div>";
+    }
+
+    if (payExpired) applyExpired();
+
+    // While a bill is unpaid, "Lanjut Belanja" must not be the loudest control on the screen.
+    var cont = document.getElementById("continue-shopping");
+    if (cont && state !== "cod") {
+      cont.className =
+        "inline-flex items-center justify-center rounded-lg border border-[var(--co-line)] bg-white px-8 py-3.5 text-sm font-semibold text-ink transition-colors hover:bg-[var(--co-panel)]";
+    }
+    // The seller's WhatsApp, prefilled with the order number — the one fact they need to find it.
+    var contact = document.getElementById("contact-seller");
+    if (contact) {
+      var msg = "Halo " + STORE_NAME + ", saya mau tanya pesanan" + (order.number ? " " + order.number : "") + ".";
+      contact.setAttribute("href", "https://wa.me/" + contact.getAttribute("data-wa") + "?text=" + encodeURIComponent(msg));
     }
 
     var noteEl = document.getElementById("order-note");
