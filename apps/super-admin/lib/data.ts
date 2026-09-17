@@ -535,8 +535,10 @@ const KA_PROBE_TTL_MS = 5 * 60_000;
 const KA_PROBE_TIMEOUT_MS = 4_000;
 
 export async function getKiriminajaProbe(): Promise<KaProbe> {
-  return cached("ka:probe", KA_PROBE_TTL_MS, async () => {
-    const env = await kaEnvName();
+  // Keyed per environment: a probe cached under sandbox must not paint the badge for five minutes
+  // after the switch to production.
+  const env = await kaEnvName();
+  return cached(`ka:probe:${env}`, KA_PROBE_TTL_MS, async () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<KaTestResult>((resolve) => {
       timer = setTimeout(

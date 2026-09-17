@@ -115,6 +115,8 @@ Full narrative with the money side: `FLOWS.md` §5 (shipping) and §1 (the COD g
 |---|---|
 | resi not appearing | check the `cron-tracking` sidecar container first (`docker logs cron-tracking`); `awbFilled` sat at 0 for a week when it was down |
 | every rate 401 with the VPS IP in the text | the allow-list lapsed at the vendor portal — owner re-adds `45.77.33.112`; the key is fine |
+| checkout 0 rates, log `kurir <x> tidak terdaftar di sistem kami` | the ACCOUNT has no couriers activated (the production account on 2026-09-17: 0 services on every route, while sandbox quoted 22). Vendor-side; nothing to redeploy |
+| answer caches (`ka:price` 10 min, `ka:roster` 24 h, Super Admin `ka:probe` 5 min) | scoped by `kaCacheScope` = env + a 12-hex SHA-256 fingerprint of host+key, so an env switch or key rotation is never served the other account's answer; **empty answers are not cached**, so an account the vendor fixes is seen on the next request. Guard: `packages/lib/src/kiriminaja-cache-scope.test.ts` |
 | a UAT / contract experiment | `ops/kiriminaja-uat-sim.ts` — SANDBOX ONLY (refuses production), run from the allow-listed admin container (overlay under `/tmp/uat`, `server-only` stubbed; BUILD-LOG 2026-09-14 has the recipe); prints the scenario-1 body off the wire |
 | the UAT sheet | Markdown at `specs/docs/uat/` → `node ops/uat-sheet-render.mjs <sheet.md> <out.pdf>` (vector logos, images inlined, Chromium) |
 | cutover (Task 8.9) | owner submits the sheet → production key → `KIRIMINAJA_ENV=production` + key in Coolify → redeploy → the env badge reads `production` → one real booking a courier collects → `DEPLOY.md` records the date. Re-request the production allow-list first |

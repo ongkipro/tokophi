@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { cacheGet, cacheSet } from "./cache";
 import { isConfigured } from "./integration-status";
 import { parseKaTracking, type KaTracking } from "./kiriminaja-tracking";
@@ -7,6 +8,20 @@ import { getProviderConfig, providerConfigSync, type KiriminajaConfig } from "./
 // KiriminAja Mitra API client (platform-managed courier aggregator). Endpoints + version
 // prefixes verified against the sandbox Postman collection — versions vary PER endpoint.
 const PRICE_TTL = 10 * 60 * 1000; // 10 min — cuts repeated ongkir calls under ad-driven traffic
+
+/**
+ * The scope every cached KiriminAja ANSWER lives under: the environment plus a short fingerprint of
+ * the host and key that produced it. The caches used to be keyed on the route alone (`ka:price:…`,
+ * `ka:roster`), so the moment Super Admin switched sandbox → production (2026-09-17, 03:25) a process
+ * could keep serving the sandbox's 22 quotes for ten minutes and the courier roster for 24 hours —
+ * while the production account, measured the same morning, answered 0 services. The fingerprint and
+ * not the env alone, because rotating the key inside one env (a new account whose couriers are
+ * activated) changes the answer just as much. It is a one-way hash: the key never enters a cache key.
+ */
+export function kaCacheScope(cfg: Pick<KiriminajaConfig, "env" | "base" | "key">): string {
+  const fp = createHash("sha256").update(`${cfg.base}\n${cfg.key ?? ""}`).digest("hex").slice(0, 12);
+  return `${cfg.env}:${fp}`;
+}
 // Task 8.33: the environment, host and key are NOT module constants any more. They come from
 // `getProviderConfig()` on every call — the Super Admin's encrypted row first, `KIRIMINAJA_ENV` /
 // `KIRIMINAJA_API_KEY` as the fallback, cached in-process for 60 s. Reading them at import time is
@@ -211,11 +226,15 @@ export async function kaShippingPrice(p: {
   itemValue?: number;
   insurance?: 0 | 1;
   couriers?: string[];
-}): Promise<{ ok: boolean; results: KaRate[]; error?: string }> {
+},
+/** An explicit config; otherwise the active one. Resolved ONCE so the cache key and the request agree. */
+cfg?: KiriminajaConfig,
+): Promise<{ ok: boolean; results: KaRate[]; error?: string }> {
+  const c = cfg ?? (await getProviderConfig()).kiriminaja;
   // cache successful rates per route (origin+dest+weight+value+insurance+couriers) — 10 min
   // ⚠️ The dimensions are part of the CACHE KEY. They change the price, so two carts that differ
   // only in box size must not share a cached quote.
-  const key = `ka:price:${p.origin}:${p.destination}:${p.weight}:${p.lengthCm ?? 0}x${p.widthCm ?? 0}x${p.heightCm ?? 0}:${p.itemValue ?? 0}:${p.insurance ?? 0}:${(p.couriers ?? []).join(",")}`;
+  const key = `ka:price:${kaCacheScope(c)}:${p.origin}:${p.destination}:${p.weight}:${p.lengthCm ?? 0}x${p.widthCm ?? 0}x${p.heightCm ?? 0}:${p.itemValue ?? 0}:${p.insurance ?? 0}:${(p.couriers ?? []).join(",")}`;
   const hit = cacheGet<{ ok: boolean; results: KaRate[] }>(key);
   if (hit) return hit;
   const { body: r } = await ka<{ status: boolean; text?: string; results?: KaRate[] }>("/api/mitra/v6.1/shipping_price", {
@@ -228,10 +247,13 @@ export async function kaShippingPrice(p: {
     item_value: String(p.itemValue ?? 0),
     insurance: p.insurance ?? 0,
     ...(p.couriers?.length ? { courier: p.couriers } : {}),
-  });
+  }, "POST", c);
   if (!r.status) return { ok: false, results: [], error: r.text };
   const out = { ok: true, results: Array.isArray(r.results) ? r.results : [] };
-  cacheSet(key, out, PRICE_TTL);
+  // An empty answer is not cached: it is either a route no courier serves (rare, and the checkout
+  // cannot proceed anyway) or an account whose couriers are not activated yet — the production
+  // account on 2026-09-17 — and caching that keeps checkout dead for 10 min after the vendor fixes it.
+  if (out.results.length > 0) cacheSet(key, out, PRICE_TTL);
   return out;
 }
 
@@ -555,11 +577,12 @@ export type KaService = {
 };
 
 export async function kaServices(): Promise<{ ok: boolean; services: KaService[]; error?: string }> {
-  const key = "ka:roster";
+  const c = (await getProviderConfig()).kiriminaja;
+  const key = `ka:roster:${kaCacheScope(c)}`;
   const hit = cacheGet<{ ok: boolean; services: KaService[] }>(key);
   if (hit) return hit;
 
-  const r = await kaShippingPrice({ origin: REF_ORIGIN, destination: REF_DEST, weight: 1000, itemValue: 100_000 });
+  const r = await kaShippingPrice({ origin: REF_ORIGIN, destination: REF_DEST, weight: 1000, itemValue: 100_000 }, c);
   if (!r.ok) return { ok: false, services: [], error: r.error ?? "Gagal mengambil daftar layanan." };
 
   const services: KaService[] = r.results.map((x) => ({
@@ -570,7 +593,10 @@ export async function kaServices(): Promise<{ ok: boolean; services: KaService[]
     cod: !!x.cod,
   }));
   const out = { ok: true, services };
-  cacheSet(key, out, ROSTER_TTL);
+  // An EMPTY roster on the reference route is an account state (couriers not activated — measured on
+  // the production account 2026-09-17), not a fact worth a day. Caching it would keep the Super Admin
+  // courier list empty for 24 h after the vendor fixes the account.
+  if (services.length > 0) cacheSet(key, out, ROSTER_TTL);
   return out;
 }
 
