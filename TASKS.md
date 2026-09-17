@@ -679,7 +679,7 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
 - **Target Files:** none in code — a live probe from the admin container using the valid `alProbeChannels` payload shape with a WIB `expired` stamp (see PR #375); `platform_payment_channels` row; `BUILD-LOG.md`.
 - **Change:** Probe OVO during business hours WIB; if `create_payment` succeeds, re-enable the channel from Super Admin → Pengaturan (audit line lands via `savePaymentChannels`, SA-4); if it still times out, leave it off and record the result. ⚠️ A probe creates a real bill — use the minimum amount and cancel/let it expire; never run the AutoLaris "Tes koneksi" casually (Rp10.000 QRIS each).
 - **Done when:** `BUILD-LOG.md` records the daytime probe's `rc` and the resulting channel state; the storefront's payment picker matches `enabledPaymentChannels()`.
-- **Status:** `[ ]` **OPEN — needs production access for the probe** (added 2026-09-08; not re-probed from this session).
+- **Status:** `[x]` **CLOSED 2026-09-17 by owner ruling — no probe.** Owner: "OVO matikan aja, fokusnya VA + QRIS." `platform_payment_channels.OVO` set `enabled=false` on production (measured after the write: OVO `enabled=f, active=t`; the six VA banks + QRIS unchanged) with a `platform_activity` line in the same shape `savePaymentChannels` writes. Re-enabling later still requires the daytime probe described above.
 
 ### Task 8.11: Record the Zero-Downtime Structural Decision
 - **Requirement:** `NF-8` (deploy window is a documented, chosen number)

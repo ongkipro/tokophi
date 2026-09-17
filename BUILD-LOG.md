@@ -4151,3 +4151,9 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Witnessed (VPS, aggregates only):** `drizzle.__drizzle_migrations` **115 rows, newest stamp 1787545651751** (= `0114_invoices_plan_key_default`) · `shipping_aggregator.active_env` present (0111) · `refunds` table present, **0 rows** (0112) · `stores.is_demo` = 1 store (0113) · `invoices.plan_key` default `'bisnis'` (0114) · **21 comp invoices backfilled** from the "Gratis N bulan" audit lines (0113) · `migrate` and `seed` one-shots exit **0** · admin / super-admin / storefront / landing + all six cron sidecars **healthy** · admin + super-admin logs since deploy: **0** lines matching "error" · hosts: `app.` 307 · `rich.` 307 · `toko.` 200 · `tokophi.com` 200.
 - **Consequence for the operator:** Super Admin `/` MRR now reads paid, non-comp, non-demo rows only (expected Rp0 until a merchant pays); `/pencairan` carries the refund queue; `/pengaturan` carries the provider-key cards (owner rank to store/switch). The production KiriminAja/AutoLaris keys still come from env until an owner enters them on the card (8.34 step 2).
 - **Still owner-gated:** 8.10 (OVO), 8.34 steps 2–5.
+
+### [2026-09-17 19:20 UTC] — PAYMENTS · OVO disabled on production by owner ruling (Task 8.10 closed, F7)
+
+- **Executor:** Main Session, on the owner's instruction ("ovo matikan aja, fokusnya va qris").
+- **Write (production, one row):** `update platform_payment_channels set enabled=false where channel='OVO'` → `UPDATE 1`; `platform_activity` line inserted in the shape `savePaymentChannels` uses. Measured after: OVO `enabled=f, active=t`; VABCA/VABNI/VABRI/VAMANDIRI/VAPERMATA + QRIS `t/t`; every other e-wallet/retail row unchanged (`f/f`).
+- **Docs:** `TASKS.md` 8.10 `[x]` (closed by ruling, probe still required before any re-enable), `FINANCE.md` §3 OVO paragraph resolved.

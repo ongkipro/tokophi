@@ -123,7 +123,7 @@ is still open — the re-enable was never recorded against 8.10. Both remedies a
 (a probe creates a real bill; a disable is a production write), so neither was done by the
 2026-09-17 programme: **until 8.10 records a passing daytime probe, treat OVO as an unverified
 channel** — the only two real OVO payments on production are the only two `gagal` prepaid attempts.
-The next owner action is either run 8.10 or flip the channel off from Super Admin → Pengaturan.
+**Resolved 2026-09-17: the owner ruled "OVO matikan aja, fokusnya VA + QRIS" — OVO is `enabled = false` on production** (audit line in `platform_activity`; Task 8.10 closed without a probe). Live prepaid channels are VA (BCA, BNI, BRI, Mandiri, Permata) and QRIS.
 
 - **`base` is part of a fee's identity.** A pct fee without a declared base is how QRIS was 1% of
   the payable for months. Server passes BOTH candidate bases; the schedule entry decides which is
