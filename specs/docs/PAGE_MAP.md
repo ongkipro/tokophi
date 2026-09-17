@@ -351,6 +351,7 @@
 | `ka-probe.ts` | `classifyKaProbe` |
 | `list-page.ts` | `UPDATE_LOG_PAGE_SIZE` `filterChanged` `pageSlice` |
 | `nav.ts` | `NAV` `NAV_GROUPS` `navFor` |
+| `payment-channel-sync.ts` | `planChannelSync` |
 | `payout-transition.ts` | `markPayoutPaidInTxn` |
 | `platform-auth.ts` | `PLATFORM_COOKIE` `PLATFORM_MAX_AGE` `findAdmin` `getPlatformSession` `platformGate` `platformRouteGate` `rankRefusal` `requirePlatformAdmin` `signPlatformSession` `verifyPassword` |
 | `platform-rank.ts` | `RANK` `clearsRank` |

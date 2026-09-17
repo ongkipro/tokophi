@@ -3706,6 +3706,12 @@
         ]
       },
       {
+        "module": "payment-channel-sync.ts",
+        "exports": [
+          "planChannelSync"
+        ]
+      },
+      {
         "module": "payout-transition.ts",
         "exports": [
           "markPayoutPaidInTxn"

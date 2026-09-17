@@ -25,6 +25,7 @@ import {
   writeKiriminajaActiveEnv,
   writeKiriminajaKey,
 } from "@tokophi/db/provider-config";
+import { planChannelSync } from "./payment-channel-sync";
 import { saveCredentials, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
@@ -443,7 +444,8 @@ export async function setInvoiceStatus(number: string, status: "dibayar" | "menu
  *
  * ⚠️ ON FAILURE IT WRITES NOTHING. The authoritative set is "what the response listed", so a
  * network blip processed as an empty list would deactivate every channel — i.e. take checkout's
- * payment options offline — and the next Sync would silently re-enable them. Bail instead.
+ * payment options offline — and since Sync never switches a channel back ON (payment-channel-sync.ts),
+ * the operator would have to restore every one by hand. Bail instead.
  *
  * ⚠️ IT NEVER CHANGES A FEE. `@tokophi/lib/payment-fees` is an owner ruling (FINANCE.md) and drives
  * what SHOPPERS are charged; the provider's `admin`/`tipe_admin` is what AutoLaris nets from the
@@ -454,27 +456,27 @@ export async function syncPaymentChannels(): Promise<{ ok: boolean; error?: stri
   if (!gate.ok) return gate;
   const probe = await alProbeChannels();
   if (!probe.ok) return { ok: false, error: probe.error ?? "AutoLaris tidak menjawab." };
-  const existing = await db.select({ channel: schema.platformPaymentChannels.channel }).from(schema.platformPaymentChannels);
-  const have = new Set(existing.map((e) => e.channel));
-  for (const p of probe.channels) {
-    // A channel the provider lists that we have no `kind` for is REPORTED but not written: `kind`
-    // groups the settings UI and keys the fee schedule, and inventing one would file (e.g.) COD —
-    // which is platform-managed via `platform_cod`, on its own rules — as a gateway channel
-    // checkout could be told to offer. It shows up in the comparison table below either way.
-    if (!p.kind) continue;
-    if (have.has(p.code)) {
-      // reality → active; auto-enable active ones (platform can still toggle off after)
-      await db
-        .update(schema.platformPaymentChannels)
-        .set({ active: p.active, enabled: p.active })
-        .where(eq(schema.platformPaymentChannels.channel, p.code));
+  const existing = await db
+    .select({
+      channel: schema.platformPaymentChannels.channel,
+      label: schema.platformPaymentChannels.label,
+      enabled: schema.platformPaymentChannels.enabled,
+      active: schema.platformPaymentChannels.active,
+    })
+    .from(schema.platformPaymentChannels);
+  // `planChannelSync` decides; this only applies it. Sync records what the PROVIDER can take and never
+  // switches a channel ON at checkout — that is the operator's toggle (payment-channel-sync.ts).
+  const plan = planChannelSync(existing, probe.channels);
+  for (const w of plan.writes) {
+    if (w.op === "update") {
+      await db.update(schema.platformPaymentChannels).set(w.set).where(eq(schema.platformPaymentChannels.channel, w.channel));
     } else {
-      // a code the provider lists that has never been recorded here → insert it
       await db
         .insert(schema.platformPaymentChannels)
-        .values({ channel: p.code, label: p.label, kind: p.kind, active: p.active, enabled: p.active });
+        .values({ channel: w.channel, label: w.label, kind: w.kind, active: w.active, enabled: w.enabled });
     }
   }
+  if (plan.changes.length) await logPlatform(`Sinkron kanal pembayaran oleh ${gate.admin.email}: ${plan.changes.join(", ")}`);
   revalidatePath("/pengaturan");
   return { ok: true, comparison: compareChannelFees(probe.channels), probedAt: Date.now() };
 }
