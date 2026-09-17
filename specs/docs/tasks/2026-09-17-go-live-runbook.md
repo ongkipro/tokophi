@@ -21,7 +21,7 @@
 
 ## 1. Owner prerequisites — do these BEFORE any real booking
 
-1. **Confirm the production account prefix.** `KIRIMINAJA_ORDER_PREFIX` is `5758`, which the docs record
+1. ✅ **DONE 2026-09-17 — production prefix is `PHI`** (vendor dashboard), set in Coolify and redeployed (deploy 546); the dashboard also shows the IP `45.77.33.112`, domain `https://tokophi.com` and the webhook URL below already registered on the production account, which closes prerequisite 2 as well. Original note: **Confirm the production account prefix.** `KIRIMINAJA_ORDER_PREFIX` is `5758`, which the docs record
    as the **sandbox** account's prefix (`KIRIMINAJA.md` §0.1). It is an env var, not part of the Super
    Admin card. If the production dashboard shows a different prefix, change it in Coolify and redeploy
    before booking; a booking with the wrong prefix is either refused or filed under an id the tracking

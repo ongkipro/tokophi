@@ -34,7 +34,7 @@ and this row is a bug.
 |---|---|---|
 | Base URL | sandbox `https://tdev.kiriminaja.com` · production `https://client.kiriminaja.com` — **same API** (owner ruling 2026-08-03) | `packages/lib/src/kiriminaja.ts` (`KIRIMINAJA_ENV`, default **sandbox**) |
 | Credential | `KIRIMINAJA_API_KEY` (`Authorization: Bearer`) — **never in a body, a URL or a document** | Coolify env; the super-admin Pengaturan card shows the active env (N35) |
-| Account prefix | `KIRIMINAJA_ORDER_PREFIX` = `5758` (sandbox) — `order_id` ≤ 20 chars INCLUDING the prefix (Task 8.20) | `buildKaOrderRef` / `kaOrderId` throw rather than truncate |
+| Account prefix | `KIRIMINAJA_ORDER_PREFIX` — **production account `PHI`** (vendor dashboard "Ubah Informasi Production", set in Coolify 2026-09-17, deploy 546); the sandbox account was `5758`. `order_id` ≤ 20 chars INCLUDING the prefix (Task 8.20): `PHI-` leaves 16, e.g. `PHI-196227493HGZ0`. ⚠️ It is ONE env var, not per environment: switching the Super Admin card back to sandbox does not switch the prefix back | `buildKaOrderRef` / `kaOrderId` throw rather than truncate |
 | IP allow-list | the platform's egress IP `45.77.33.112` must be allow-listed per environment at the vendor portal; a lapse reads as `401` naming the IP, NOT as a bad key | §"The sandbox enforces an IP ALLOW-LIST"; re-request it for production at cutover (Task 8.9) |
 | Production state | **`KIRIMINAJA_ENV=sandbox`** until the UAT sheet is accepted and the production key issued | Task 8.9 (owner) |
 
