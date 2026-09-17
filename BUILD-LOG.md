@@ -4190,3 +4190,9 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Mutations — 5 applied, 5 red, file restored byte-identical (`cmp`):** ① price key without scope → 3 red · ② scope = env only → 2 red (incl. key rotation) · ③ empty roster cached → 1 red · ④ empty price cached → 2 red · ⑤ roster key without scope → 1 red.
 - **Gates:** tsc 0 — `packages/lib`, `packages/db`, `apps/admin`, `apps/super-admin` · super-admin lint 0 errors · `verify:guards` all ok · `npm run test:db` **189 files / 1655 tests, 0 failed, 0 skipped** (DB suites included) · existing `shipping-dimensions.test.ts` cache-key claim still green.
 - **Not verified live:** no deploy yet at the time of this entry.
+
+### [2026-09-17 04:52 UTC] — DEPLOY · PR #401 (KiriminAja cache scope) merged as `4b9e871`, Coolify deploy **544** witnessed
+
+- **Executor:** Main Session, on the owner's go ("lanjut merge dan deploy").
+- **Witnessed on production:** deployment 544 `finished` · `migrate` exit 0 (04:49:06, no new migration) · `seed` exit 0 (04:49:52) · admin, super-admin, storefront, landing, postgres, backup and all six cron sidecars healthy; `backup-offsite` starting (R2 unconfigured, Task 8.4) · the admin image carries `kaCacheScope` (3 references in `packages/lib/src/kiriminaja.ts`) and the super-admin server bundle carries `ka:probe:` · admin/super-admin/storefront logs since deploy: 0 error lines · `api/health/env` `ok`, `missing: []`, KiriminAja `production` from `db` · hosts `tokophi.com` 200, `app.`/`rich.` 307, `toko.` 200.
+- **Behaviour:** checkout `ongkir` `rates` (fast list) → the shopper-safe "tidak bisa dihitung" message, log `kurir spx tidak terdaftar`; `all:true` → `ok:true, rates: []` — the production account still has no couriers (vendor side, unchanged by this deploy). With empty answers no longer cached, the first request after KiriminAja activates couriers will quote.
