@@ -4157,3 +4157,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Executor:** Main Session, on the owner's instruction ("ovo matikan aja, fokusnya va qris").
 - **Write (production, one row):** `update platform_payment_channels set enabled=false where channel='OVO'` → `UPDATE 1`; `platform_activity` line inserted in the shape `savePaymentChannels` uses. Measured after: OVO `enabled=f, active=t`; VABCA/VABNI/VABRI/VAMANDIRI/VAPERMATA + QRIS `t/t`; every other e-wallet/retail row unchanged (`f/f`).
 - **Docs:** `TASKS.md` 8.10 `[x]` (closed by ruling, probe still required before any re-enable), `FINANCE.md` §3 OVO paragraph resolved.
+
+### [2026-09-17 09:30 UTC] — REPO HYGIENE · Task 8.5: 41 agent worktrees removed, 42G → 97M, nothing lost
+
+- **Executor:** Main Session, on the owner's go ("8.5 hapus 36 worktree agent … ini dulu").
+- **Evidence per worktree before removal:** tip ancestor of `origin/main` or GitHub PR `MERGED` (tip = PR head; subjects matched in `git log origin/main`); dirty files diffed against `origin/main`; `/proc/*/cwd` scan → no live process inside any worktree.
+- **Action:** `git worktree remove --force` ×41 (worktrees only — branch refs kept, spot-checked six) + `git worktree prune`. Uncommitted code in `w2a`, `w2b`, `w2c`, `agent-a2442ee7ff4764157` archived first to `~/Documents/work/notes/tokophi-worktree-salvage-2026-09-17/` (patch 254/323/254/317 added lines; untracked 3/3/2/2 files; archive entry counts verified).
+- **Kept:** `rm-admin` (`fix/admin-reduced-motion`, unpushed) and `sf388-widen` (`fix/storefront-388`, unpushed, issue #388 open).
+- **Measured:** `git worktree list` 44 → 3 entries; `du -sh .claude/worktrees` 42G → 97M; `/` 65G used of 233G after.
