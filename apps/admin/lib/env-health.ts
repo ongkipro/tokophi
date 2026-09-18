@@ -47,7 +47,7 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   // without it the stored keys cannot be read and the env fallback is all there is.
   KIRIMINAJA_API_KEY: { required: false, why: "Cadangan bila Super Admin belum menyimpan kunci. Tanpa kunci di mana pun: tidak ada tarif ongkir, tidak ada pesanan." },
   KIRIMINAJA_ENV: { required: false, why: "Cadangan bila Super Admin belum memilih lingkungan (default sandbox). Salah setel TIDAK terlihat: booking sandbox berbentuk identik, tapi tak ada kurir yang menjemput." },
-  KIRIMINAJA_ORDER_PREFIX: { required: false, why: "Prefiks nomor order ke kurir. Kosong = tanpa prefiks, sah." },
+  KIRIMINAJA_ORDER_PREFIX: { required: false, why: "CADANGAN (0115): prefix order_id per akun kini tersimpan di kartu Super Admin per env; env ini hanya dipakai bila slot env aktif kosong. Kosong = tanpa prefiks, sah." },
 
   AUTOLARIS_BASE: { required: true, why: "Basis URL PSP. Ada default di compose, tapi kosong berarti pembayaran menunjuk ke mana-mana." },
   AUTOLARIS_API_KEY: { required: false, why: "Cadangan bila Super Admin belum menyimpan kunci. Tanpa kunci di mana pun: tidak ada VA/QRIS — checkout prabayar mati." },

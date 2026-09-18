@@ -9,6 +9,7 @@ import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
 import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, buildKaOrderRef, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
+import { activeKaOrderPrefix } from "@tokophi/lib/provider-config";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
@@ -926,12 +927,14 @@ export async function createShipment(input: { orderNumber: string; service: stri
     }
 
     // Built here, not before the lock: the attempt counter is only exact while the row is held.
-    // A failure is a MISCONFIGURATION (a `KIRIMINAJA_ORDER_PREFIX` too long to leave a usable
+    // A failure is a MISCONFIGURATION (an order prefix too long to leave a usable
     // reference, or a 37th booking of one order), so it is logged loudly and refused — never
     // shortened silently into an id the vendor would store and we could never query.
     let providerReference: string;
     try {
-      providerReference = buildKaOrderRef(input.orderNumber, Number(locked.priorBookings ?? 0));
+      // The ACTIVE account's prefix, resolved here rather than read from a module constant, so the
+      // reference is built for the account the booking below will hit (0115).
+      providerReference = buildKaOrderRef(input.orderNumber, Number(locked.priorBookings ?? 0), await activeKaOrderPrefix());
     } catch (e) {
       console.error("[shipping] cannot build a KiriminAja order_id", e);
       return {

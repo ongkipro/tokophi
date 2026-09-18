@@ -342,7 +342,7 @@
 
 | module | exports |
 |---|---|
-| `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `saveCodAllowed` `saveCouriers` `saveGateways` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
+| `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `saveCodAllowed` `saveCouriers` `saveGateways` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `saveProviderOrderPrefix` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
 | `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
 | `comp-invoice.ts` | `buildCompInvoice` |
 | `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getKiriminajaProbe` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getProviderStatus` `getRefundSummary` `getRefunds` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
@@ -356,7 +356,7 @@
 | `platform-auth.ts` | `PLATFORM_COOKIE` `PLATFORM_MAX_AGE` `findAdmin` `getPlatformSession` `platformGate` `platformRouteGate` `rankRefusal` `requirePlatformAdmin` `signPlatformSession` `verifyPassword` |
 | `platform-rank.ts` | `RANK` `clearsRank` |
 | `platform-session.ts` | `resolvePlatformSession` |
-| `provider-credentials.ts` | `keyError` `kiriminajaConfigFor` `saveCredentials` `switchKiriminajaEnv` `testStoredKey` |
+| `provider-credentials.ts` | `keyError` `kiriminajaConfigFor` `saveCredentials` `saveOrderPrefix` `switchKiriminajaEnv` `testStoredKey` |
 | `refund-transition.ts` | `markRefundPaidInTxn` `processRefundInTxn` `rejectRefundInTxn` |
 | `refused.ts` | `refused` |
 | `route-roles.ts` | `ROUTE_RULES` `canOpenPath` `landingForRole` `minRoleForPath` `reasonForPath` |

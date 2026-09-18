@@ -11,7 +11,7 @@ import { Badge } from "@tokophi/ui/badge";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@tokophi/ui/dialog";
 import { cn } from "@tokophi/ui/lib/utils";
 import type { ProviderKeyStatus, ProviderStatus } from "@/lib/data";
-import { saveProviderCredentials, setProviderEnv, testProviderKey } from "@/lib/actions";
+import { saveProviderCredentials, saveProviderOrderPrefix, setProviderEnv, testProviderKey } from "@/lib/actions";
 
 // Task 8.33 — the platform's own provider keys, managed from the card instead of by redeploy.
 //
@@ -107,6 +107,7 @@ function KeySlot({
           {result.ok ? "✓ " : "✕ "}{result.message}
         </p>
       )}
+      {provider === "kiriminaja" && <PrefixSlot env={env} label={label} status={status} canEdit={canEdit} />}
       {canEdit && (
         <form
           className="mt-2 flex flex-wrap items-end gap-2"
@@ -133,6 +134,87 @@ function KeySlot({
           </Button>
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * The order_id prefix registered on this env's ACCOUNT (0115). It sits inside the key slot because
+ * it belongs to the same account as the key: switching env moves both. Read-only for `admin`, an
+ * inline form for `owner` — the same rank as the key, since the prefix decides which account a
+ * booking is filed under.
+ */
+function PrefixSlot({ env, label, status, canEdit }: { env: Env; label: string; status: ProviderKeyStatus; canEdit: boolean }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(status.orderPrefix ?? "");
+  const [saving, startSave] = useTransition();
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const id = `prefix-kiriminaja-${env}`;
+  const origin =
+    status.orderPrefixSource === "db"
+      ? "tersimpan di database"
+      : status.orderPrefixSource === "env"
+        ? "dari env KIRIMINAJA_ORDER_PREFIX (cadangan) — belum ada prefix tersimpan"
+        : "bawaan kode — belum diatur";
+  const save = () =>
+    startSave(async () => {
+      const r = await saveProviderOrderPrefix(env, value);
+      setResult(r);
+      if (r.ok) {
+        setEditing(false);
+        toast.success(r.message);
+        router.refresh();
+      }
+    });
+  return (
+    <div className="mt-2 rounded-md border border-dashed border-border/70 px-2.5 py-2" data-prefix-slot={env}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs">
+          <span className="text-muted-foreground">Prefix order_id: </span>
+          <span className="font-mono font-semibold" data-prefix-value>{status.orderPrefix ?? "—"}</span>
+          <span className="text-muted-foreground"> · {origin}</span>
+        </p>
+        {canEdit && !editing && (
+          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => { setResult(null); setValue(status.orderPrefix ?? ""); setEditing(true); }}>
+            Ubah
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <form
+          className="mt-2 flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <div className="min-w-0 flex-1 basis-40">
+            <Label htmlFor={id} className="sr-only">Prefix order_id {label}</Label>
+            <Input
+              id={id}
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={8}
+              placeholder="contoh: PHI"
+              value={value}
+              onChange={(e) => setValue(e.target.value.toUpperCase())}
+              disabled={saving}
+              className="font-mono uppercase"
+            />
+          </div>
+          <Button type="submit" size="sm" disabled={saving || value.trim().length < 3}>
+            {saving ? "Menyimpan…" : "Simpan prefix"}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>
+            Batal
+          </Button>
+          <p className="basis-full text-xs text-muted-foreground">
+            Harus sama persis dengan prefix yang terdaftar di dashboard KiriminAja {label.toLowerCase()} — tidak ada uji koneksi untuk prefix; booking pertama yang membuktikannya.
+          </p>
+        </form>
+      )}
+      {result && !result.ok && <p className="mt-1 text-xs text-red-600 dark:text-red-400">✕ {result.message}</p>}
     </div>
   );
 }

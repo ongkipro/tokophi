@@ -24,9 +24,10 @@ import {
   writeAutolarisKey,
   writeKiriminajaActiveEnv,
   writeKiriminajaKey,
+  writeKiriminajaOrderPrefix,
 } from "@tokophi/db/provider-config";
 import { planChannelSync } from "./payment-channel-sync";
-import { saveCredentials, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
+import { saveCredentials, saveOrderPrefix, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
   await db.insert(schema.platformActivity).values({ kind: "admin", text, storeId });
@@ -704,6 +705,7 @@ const credentialDeps: CredentialDeps = {
   env: () => ({
     KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
     KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+    KIRIMINAJA_ORDER_PREFIX: process.env.KIRIMINAJA_ORDER_PREFIX,
     AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
     AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
   }),
@@ -712,6 +714,7 @@ const credentialDeps: CredentialDeps = {
   writeKiriminajaKey,
   markKiriminajaTested,
   writeKiriminajaActiveEnv,
+  writeKiriminajaOrderPrefix,
   writeAutolarisKey,
   markAutolarisTested,
   log: logPlatform,
@@ -741,6 +744,16 @@ export async function setProviderEnv(provider: string, env: string): Promise<{ o
 }
 
 /** `admin` rank, like the two test buttons above: re-tests the key a slot resolves to and re-stamps `tested_at`. */
+/** 0115 — owner only, like the key: the prefix decides which account a booking is filed under. */
+export async function saveProviderOrderPrefix(env: string, prefix: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isProviderEnv(env)) return { ok: false, message: "Lingkungan tidak dikenal." };
+  const r = await saveOrderPrefix(credentialDeps, gate.admin.email, env, prefix);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
 export async function testProviderKey(provider: string, env: string): Promise<{ ok: boolean; message: string }> {
   const gate = await platformGate();
   if (!gate.ok) return { ok: false, message: gate.error };

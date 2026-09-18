@@ -154,3 +154,21 @@ describe("the reference is built in one place", () => {
     expect(lib).not.toMatch(/order_id\s*:\s*`\$\{\s*KA_ORDER_PREFIX/);
   });
 });
+
+// 0115 — the prefix is no longer a module constant read from the env at import time: the id
+// builders default to the ACTIVE account's prefix from the provider-config seam, and the booking
+// call resolves the config ONCE for both the `order_id` prefix and the request's credential.
+describe("the prefix comes from the provider-config seam, per env (0115)", () => {
+  it("kaCreateOrder builds order_id with the resolved config's prefix and sends the request with that same config", () => {
+    const src = codeOfFile("packages/lib/src/kiriminaja.ts");
+    const i = src.search(/export async function kaCreateOrder/);
+    const fn = src.slice(i, src.indexOf("export async function", i + 10));
+    expect(fn).toMatch(/const c = \( await getProviderConfig \( \) \) \. kiriminaja/);
+    expect(fn).toMatch(/order_id : kaOrderId \( pkg \. orderRef , c \. orderPrefix \)/);
+    expect(fn).toMatch(/, "POST" , c \)/);
+  });
+  it("no module-level KA_ORDER_PREFIX constant read from process.env remains", () => {
+    const src = codeOfFile("packages/lib/src/kiriminaja.ts");
+    expect(src).not.toMatch(/KA_ORDER_PREFIX\s*=\s*process/);
+  });
+});

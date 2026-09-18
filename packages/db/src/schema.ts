@@ -1871,6 +1871,9 @@ export const shippingAggregator = pgTable("shipping_aggregator", {
   sandboxKeyEnc: text(),
   productionKeyEnc: text(),
   activeEnv: text().notNull().default("sandbox"),
+  // 0115: the order_id prefix is per ACCOUNT (= per env). Row > KIRIMINAJA_ORDER_PREFIX env > code default.
+  sandboxOrderPrefix: text(),
+  productionOrderPrefix: text(),
   sandboxTestedAt: ts(),
   productionTestedAt: ts(),
 });

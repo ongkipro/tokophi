@@ -158,3 +158,19 @@ describe("getProviderConfig — injectable loader with a 60 s in-process cache",
     expect(providerConfigSync().kiriminaja).toMatchObject({ env: "production", keySource: "db" });
   });
 });
+
+// 0115 — the order_id prefix follows the SAME precedence as the key, per env.
+describe("resolveKiriminaja — order prefix per env: row > env var > default", () => {
+  const env = { KIRIMINAJA_ENV: "sandbox", KIRIMINAJA_API_KEY: "env-key-0000", KIRIMINAJA_ORDER_PREFIX: "ENVPFX" };
+  const row = { activeEnv: "production", sandboxKey: "s", productionKey: "p", sandboxOrderPrefix: "5758", productionOrderPrefix: "PHI" };
+
+  it("takes the active env's own prefix from the row — production PHI, sandbox 5758", () => {
+    expect(resolveKiriminaja({ row, env })).toMatchObject({ env: "production", orderPrefix: "PHI", orderPrefixSource: "db" });
+    expect(resolveKiriminaja({ row: { ...row, activeEnv: "sandbox" }, env })).toMatchObject({ env: "sandbox", orderPrefix: "5758", orderPrefixSource: "db" });
+  });
+
+  it("falls back to KIRIMINAJA_ORDER_PREFIX when the active env's slot is empty, then to the code default", () => {
+    expect(resolveKiriminaja({ row: { ...row, productionOrderPrefix: " " }, env })).toMatchObject({ orderPrefix: "ENVPFX", orderPrefixSource: "env" });
+    expect(resolveKiriminaja({ row: null, env: { KIRIMINAJA_ENV: "sandbox" } })).toMatchObject({ orderPrefix: "TOKOPHI", orderPrefixSource: "default" });
+  });
+});
