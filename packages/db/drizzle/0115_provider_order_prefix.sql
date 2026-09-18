@@ -9,12 +9,15 @@
 --
 -- Backfill = the two measured account prefixes, only where nothing is stored yet, so an existing
 -- deployment keeps booking exactly as it does today after the env var is removed.
--- Idempotent (AGENTS.md): drizzle applies the pending batch in ONE transaction.
+-- Idempotent (AGENTS.md): drizzle applies the pending batch in ONE transaction. ⚠️ Which is why the
+-- backfill compares `provider::text`, not the enum literal: on a FRESH database `0014` adds the enum
+-- value 'kiriminaja' in the SAME transaction, and Postgres refuses "unsafe use of new value" of an
+-- enum inside the transaction that added it (CI's tokophi_test failed exactly so on 2026-09-18).
 alter table "shipping_aggregator" add column if not exists "sandbox_order_prefix" text;--> statement-breakpoint
 alter table "shipping_aggregator" add column if not exists "production_order_prefix" text;--> statement-breakpoint
 comment on column "shipping_aggregator"."sandbox_order_prefix" is
   'KiriminAja order_id prefix registered on the SANDBOX account (e.g. 5758). Row > KIRIMINAJA_ORDER_PREFIX env > TOKOPHI. Part of the 20-char order_id budget (Task 8.20).';--> statement-breakpoint
 comment on column "shipping_aggregator"."production_order_prefix" is
   'KiriminAja order_id prefix registered on the PRODUCTION account (e.g. PHI). Row > KIRIMINAJA_ORDER_PREFIX env > TOKOPHI.';--> statement-breakpoint
-update "shipping_aggregator" set "sandbox_order_prefix" = '5758' where "provider" = 'kiriminaja' and "sandbox_order_prefix" is null;--> statement-breakpoint
-update "shipping_aggregator" set "production_order_prefix" = 'PHI' where "provider" = 'kiriminaja' and "production_order_prefix" is null;
+update "shipping_aggregator" set "sandbox_order_prefix" = '5758' where "provider"::text = 'kiriminaja' and "sandbox_order_prefix" is null;--> statement-breakpoint
+update "shipping_aggregator" set "production_order_prefix" = 'PHI' where "provider"::text = 'kiriminaja' and "production_order_prefix" is null;
