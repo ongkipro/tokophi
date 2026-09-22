@@ -51,7 +51,8 @@ and this row is a bug.
 | cancel | `POST /api/mitra/v3/cancel_shipment` — **by AWB, never the order id** | `cancelShipment` | refused before the call when no AWB exists; `status:true` = queued for cancellation (≤ 48 h), not cancelled |
 | webhook | `POST https://app.tokophi.com/api/public/kiriminaja/webhook` (registered via `set_callback`) | `api/public/kiriminaja/webhook/route.ts` | hint-only: fails closed on a missing/wrong Bearer, logs the SHAPE of a rejection, never advances state without a tracking pull |
 | province / health | `POST /api/mitra/province` (`{}` body, answers in `datas`) | super-admin "Test koneksi" | 37 provinces = healthy; `Unauthorized` = key, `401 + IP` = allow-list |
-| not called | `v6.2/credit/balance`, `pin/validate` (account is Term-of-Payment — "Unable to find your endpoint target"), `v6.1/awb/print` (we render the label ourselves), `v4/instant/*` (removed) | — | §"Endpoints the spec documents that we do not use" |
+| **`GET v6.2/credit/balance`** (Task 8.16) | the platform's prepaid float at the vendor — Super Admin → Pengaturan → Kurir badge, and the sentence a refused booking adds when the float is short. **Production answers it** (`{balance: 500000}`, 2026-09-23); the SANDBOX account is Term-of-Payment and answers "Unable to find your endpoint target", which is reported as *unsupported*, never as Rp0 | `kaCreditBalance()` — per-account cache 60 s |
+| not called | `pin/validate` (🔴 three wrong attempts LOCK the platform account; our bookings are `va`/COD and spend no KA Credit), `v6.1/awb/print` (we render the label ourselves), `v4/instant/*` (removed) | — | §"Endpoints the spec documents that we do not use" |
 
 ### 0.3 Data — what we store, and where it comes from
 
