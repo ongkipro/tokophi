@@ -27,7 +27,13 @@ export function kaCacheScope(cfg: Pick<KiriminajaConfig, "env" | "base" | "key">
 // `KIRIMINAJA_API_KEY` as the fallback, cached in-process for 60 s. Reading them at import time is
 // what made a key rotation a redeploy and a wrong env invisible (N35).
 // order_id prefix must be REGISTERED in the KiriminAja dashboard, else request_pickup 400s.
-export const KA_ORDER_PREFIX = process.env.KIRIMINAJA_ORDER_PREFIX ?? "TOKOPHI";
+/**
+ * The order_id prefix of the ACTIVE account (0115: per env, from the Super Admin row; env var
+ * `KIRIMINAJA_ORDER_PREFIX` as the fallback; `TOKOPHI` when neither is set). Read through the same
+ * seam as the key, so a switch moves both together. The sync read answers from the cached row —
+ * `kaCreateOrder` and the booking action resolve the config async and pass the prefix explicitly.
+ */
+export const kaOrderPrefix = (): string => providerConfigSync().kiriminaja.orderPrefix;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // `order_id` — 20 CHARACTERS, INCLUDING THE PREFIX AND ITS HYPHEN (Task 8.20)
@@ -52,7 +58,7 @@ export const KA_ORDER_ID_MAX = 20;
 const KA_REF_MIN_BODY = 8;
 
 /** Characters left for the reference once `${prefix}-` is paid for. */
-export function kaOrderRefBudget(prefix: string = KA_ORDER_PREFIX): number {
+export function kaOrderRefBudget(prefix: string = kaOrderPrefix()): number {
   return KA_ORDER_ID_MAX - prefix.length - 1;
 }
 
@@ -76,7 +82,7 @@ export function kaOrderRefBudget(prefix: string = KA_ORDER_PREFIX): number {
 export function buildKaOrderRef(
   orderNumber: string,
   attempt: number,
-  prefix: string = KA_ORDER_PREFIX,
+  prefix: string = kaOrderPrefix(),
 ): string {
   if (!Number.isInteger(attempt) || attempt < 0 || attempt > 35) {
     throw new Error(`KiriminAja order_id: booking attempt ${attempt} is outside 0..35 for ${orderNumber}`);
@@ -95,7 +101,7 @@ export function buildKaOrderRef(
 }
 
 /** The whole `order_id`. Throws — never trims — when the vendor's tracking limit would be breached. */
-export function kaOrderId(orderRef: string, prefix: string = KA_ORDER_PREFIX): string {
+export function kaOrderId(orderRef: string, prefix: string = kaOrderPrefix()): string {
   const id = `${prefix}-${orderRef}`;
   if (id.length > KA_ORDER_ID_MAX) {
     throw new Error(
@@ -388,7 +394,7 @@ export type KaItem = {
   metadata?: { sku?: string | null; variant_label?: string | null } | null;
 };
 export type KaPackage = {
-  orderRef: string; // becomes `${KA_ORDER_PREFIX}-${orderRef}`, ≤ 20 chars total — see buildKaOrderRef
+  orderRef: string; // becomes `${prefix}-${orderRef}` for the active account, ≤ 20 chars total — see buildKaOrderRef
   destName: string; destPhone: string; destAddress: string;
   destKecamatanId: number; destKelurahanId?: number | null; destZipcode?: string;
   weight: number; itemValue: number; itemName: string;
@@ -419,6 +425,9 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
   // order reads "dibooking". For a COD parcel the vendor ignores `payment_method` entirely and
   // settles from the buyer. These were parsed away for both, which made the first case invisible.
   // `apps/admin/lib/shipment-payment.ts` is the ONE place that separates the two.
+  // Resolved ONCE: the prefix in `order_id` and the key/host of the request must belong to the same
+  // account, so the booking never pairs one env's prefix with the other env's credential.
+  const c = (await getProviderConfig()).kiriminaja;
   const { body: r } = await ka<{
     status: boolean; text?: string; pickup_number?: string;
     payment_status?: string; qr_url?: string | null;
@@ -459,7 +468,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
     platform_name: "mitra",
     schedule,
     packages: [{
-      order_id: kaOrderId(pkg.orderRef),
+      order_id: kaOrderId(pkg.orderRef, c.orderPrefix),
       destination_name: pkg.destName, destination_phone: pkg.destPhone, destination_address: pkg.destAddress,
       destination_kecamatan_id: pkg.destKecamatanId,
       ...kelurahanField("destination_kelurahan_id", pkg.destKelurahanId),
@@ -499,7 +508,7 @@ export async function kaCreateOrder(sender: KaSender, pkg: KaPackage, schedule: 
           }
         : {}),
     }],
-  });
+  }, "POST", c);
   const d = r.details?.[0];
   return {
     ok: !!r.status,

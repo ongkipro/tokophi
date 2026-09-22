@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { codeOnly } from "../../../test/source-code";
-import { keyError, saveCredentials, switchKiriminajaEnv, testStoredKey, type CredentialDeps } from "./provider-credentials";
+import { keyError, saveCredentials, saveOrderPrefix, switchKiriminajaEnv, testStoredKey, type CredentialDeps } from "./provider-credentials";
 
 // Task 8.33 — provider credentials managed from Super Admin. Two halves, same shape as
 // `add-store-user.test.ts` + `payout-transition.test.ts`:
@@ -26,6 +26,7 @@ function deps(overrides: Partial<CredentialDeps> = {}) {
     writeKiriminajaKey: vi.fn(async () => {}),
     markKiriminajaTested: vi.fn(async () => {}),
     writeKiriminajaActiveEnv: vi.fn(async () => {}),
+    writeKiriminajaOrderPrefix: vi.fn(async () => {}),
     writeAutolarisKey: vi.fn(async () => {}),
     markAutolarisTested: vi.fn(async () => {}),
     log,
@@ -198,5 +199,42 @@ describe("actions.ts — both credential mutations are OWNER-rank and go through
     for (const name of ["saveProviderCredentials", "setProviderEnv", "testProviderKey"]) {
       expect(actionSource(ACTIONS, name)).not.toMatch(/console\s*\.\s*(log|info|warn|error)/);
     }
+  });
+});
+
+// 0115 — the order_id prefix is per ACCOUNT (= per env). Sandbox `5758`, production `PHI`; one env
+// var used to cover both, so switching env kept the other account's prefix.
+describe("saveOrderPrefix — validated, uppercased, audited; no live test exists for it", () => {
+  it("stores the prefix for the named env and logs old → new by e-mail", async () => {
+    const d = deps({
+      rows: async () => ({ kiriminaja: { activeEnv: "sandbox", sandboxKey: SBX, productionKey: KEY, sandboxOrderPrefix: "5758" }, autolaris: null }),
+    });
+    const r = await saveOrderPrefix(d, "owner@tokophi.id", "production", " phi ");
+    expect(r.ok).toBe(true);
+    expect(d.writeKiriminajaOrderPrefix).toHaveBeenCalledWith("production", "PHI");
+    expect(logged(d).join("\n")).toMatch(/Prefix order KiriminAja \(production\) diubah oleh owner@tokophi\.id: TOKOPHI → PHI/);
+  });
+
+  it("refuses a prefix outside the vendor's rule before writing anything", async () => {
+    const d = deps();
+    for (const bad of ["", "PH", "PH-I", "TOOLONGPREFIX", "ph i"]) {
+      const r = await saveOrderPrefix(d, "owner@tokophi.id", "sandbox", bad);
+      expect(r.ok, bad).toBe(false);
+    }
+    expect(d.writeKiriminajaOrderPrefix).not.toHaveBeenCalled();
+    expect(logged(d)).toEqual([]);
+  });
+
+  it("the env switch reports the TARGET account's prefix, never the old one", async () => {
+    const d = deps({
+      rows: async () => ({
+        kiriminaja: { activeEnv: "sandbox", sandboxKey: SBX, productionKey: KEY, sandboxOrderPrefix: "5758", productionOrderPrefix: "PHI" },
+        autolaris: null,
+      }),
+    });
+    const r = await switchKiriminajaEnv(d, "owner@tokophi.id", "production");
+    expect(r.ok).toBe(true);
+    expect(r.message).toMatch(/prefix PHI/);
+    expect(r.message).not.toMatch(/5758/);
   });
 });

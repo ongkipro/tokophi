@@ -470,6 +470,9 @@ export type ProviderKeyStatus = {
   source: "db" | "env" | "none";
   /** `…1234` — the last four characters — or `—`. */
   masked: string;
+  /** 0115: the order_id prefix this slot's account books under, and where it came from. */
+  orderPrefix?: string;
+  orderPrefixSource?: "db" | "env" | "default";
   /** ISO timestamp of the last successful live test of the STORED key; null = never / not stored. */
   testedAt: string | null;
 };
@@ -489,6 +492,7 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
   const env = {
     KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
     KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+    KIRIMINAJA_ORDER_PREFIX: process.env.KIRIMINAJA_ORDER_PREFIX,
     AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
     AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
   };
@@ -499,7 +503,14 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
   const slot = (e: ProviderEnv): ProviderKeyStatus => {
     const r = resolveKiriminaja({ row: { ...rows.kiriminaja, activeEnv: e }, env });
     const testedAt = e === "production" ? ka?.productionTestedAt : ka?.sandboxTestedAt;
-    return { present: !!r.key, source: r.keySource, masked: maskKey(r.key), testedAt: r.keySource === "db" ? (testedAt?.toISOString() ?? null) : null };
+    return {
+      present: !!r.key,
+      source: r.keySource,
+      masked: maskKey(r.key),
+      orderPrefix: r.orderPrefix,
+      orderPrefixSource: r.orderPrefixSource,
+      testedAt: r.keySource === "db" ? (testedAt?.toISOString() ?? null) : null,
+    };
   };
   const alCfg = resolveAutolaris({ row: rows.autolaris, env });
   return {

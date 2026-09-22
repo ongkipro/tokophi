@@ -46,6 +46,9 @@ export type KiriminajaRow = {
   activeEnv?: string | null;
   sandboxKey?: string | null;
   productionKey?: string | null;
+  /** 0115: the order_id prefix registered on each ACCOUNT (sandbox `5758`, production `PHI`). */
+  sandboxOrderPrefix?: string | null;
+  productionOrderPrefix?: string | null;
 };
 
 export type AutolarisRow = { key?: string | null };
@@ -54,6 +57,7 @@ export type AutolarisRow = { key?: string | null };
 export type ProviderEnvVars = {
   KIRIMINAJA_ENV?: string;
   KIRIMINAJA_API_KEY?: string;
+  KIRIMINAJA_ORDER_PREFIX?: string;
   AUTOLARIS_API_KEY?: string;
   AUTOLARIS_BASE?: string;
 };
@@ -68,7 +72,19 @@ export type KiriminajaConfig = {
   base: string;
   key: string | null;
   keySource: ConfigSource;
+  /**
+   * The `order_id` prefix for THIS env's account — row > env var > `KA_ORDER_PREFIX_DEFAULT`. It
+   * travels with the key on purpose: a switch that moved the key but kept the other account's
+   * prefix booked ids the vendor refuses ("Prefix … tidak sesuai dengan yang anda daftarkan").
+   */
+  orderPrefix: string;
+  orderPrefixSource: "db" | "env" | "default";
 };
+
+/** What a deployment with no row and no env var books under — the vendor refuses it, loudly. */
+export const KA_ORDER_PREFIX_DEFAULT = "TOKOPHI";
+/** The vendor's rule ("minimal 3-4 huruf ataupun angka"): letters/digits only, 3–8 characters. */
+export const KA_ORDER_PREFIX_RE = /^[A-Za-z0-9]{3,8}$/;
 
 export type AutolarisConfig = {
   base: string;
@@ -97,12 +113,16 @@ export function resolveKiriminaja(input: { row: KiriminajaRow | null | undefined
   const rowKey = nonEmpty(envName === "production" ? row?.productionKey : row?.sandboxKey);
   const envKey = nonEmpty(env.KIRIMINAJA_API_KEY);
   const key = rowKey ?? envKey;
+  const rowPrefix = nonEmpty(envName === "production" ? row?.productionOrderPrefix : row?.sandboxOrderPrefix);
+  const envPrefix = nonEmpty(env.KIRIMINAJA_ORDER_PREFIX);
   return {
     env: envName,
     envSource,
     base: KA_BASE[envName],
     key,
     keySource: rowKey ? "db" : envKey ? "env" : "none",
+    orderPrefix: rowPrefix ?? envPrefix ?? KA_ORDER_PREFIX_DEFAULT,
+    orderPrefixSource: rowPrefix ? "db" : envPrefix ? "env" : "default",
   };
 }
 
@@ -167,6 +187,7 @@ export function invalidateProviderConfig(): void {
 const envVars = (): ProviderEnvVars => ({
   KIRIMINAJA_ENV: process.env.KIRIMINAJA_ENV,
   KIRIMINAJA_API_KEY: process.env.KIRIMINAJA_API_KEY,
+  KIRIMINAJA_ORDER_PREFIX: process.env.KIRIMINAJA_ORDER_PREFIX,
   AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
   AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
 });
@@ -225,6 +246,8 @@ export const activeKaEnv = async (): Promise<ProviderEnv> => (await getProviderC
 
 /** The key KiriminAja calls currently carry (the webhook's bearer must equal it). `null` = none anywhere. */
 export const activeKaKey = async (): Promise<string | null> => (await getProviderConfig()).kiriminaja.key;
+/** The ACTIVE account's order_id prefix (0115) — brand-free name for the admin app (ADR 0004 guard). */
+export const activeKaOrderPrefix = async (): Promise<string> => (await getProviderConfig()).kiriminaja.orderPrefix;
 
 /** For `api/health/env`: which SIDE each key resolves from and which env is live — never a value, never a tail. */
 export async function providerHealthSummary(): Promise<{

@@ -45,6 +45,8 @@ export async function loadProviderRows(): Promise<ProviderRows> {
           activeEnv: ka.activeEnv,
           sandboxKey: decryptSecret(ka.sandboxKeyEnc, providerSecretScope("kiriminaja", "sandbox")),
           productionKey: decryptSecret(ka.productionKeyEnc, providerSecretScope("kiriminaja", "production")),
+          sandboxOrderPrefix: ka.sandboxOrderPrefix,
+          productionOrderPrefix: ka.productionOrderPrefix,
         }
       : null,
     autolaris: al ? { key: decryptSecret(al.credentialsEnc, AUTOLARIS_SECRET_SCOPE) } : null,
@@ -84,6 +86,15 @@ export async function writeKiriminajaActiveEnv(env: ProviderEnv): Promise<void> 
   const existing = await kiriminajaRow();
   if (existing) await db.update(shippingAggregator).set({ activeEnv: env }).where(eq(shippingAggregator.id, existing.id));
   else await db.insert(shippingAggregator).values({ provider: "kiriminaja", enabled: true, activeEnv: env });
+  invalidateProviderConfig();
+}
+
+/** 0115: the order_id prefix for one env's account. The action validates the shape; this only stores it. */
+export async function writeKiriminajaOrderPrefix(env: ProviderEnv, prefix: string): Promise<void> {
+  const existing = await kiriminajaRow();
+  const col = env === "production" ? { productionOrderPrefix: prefix } : { sandboxOrderPrefix: prefix };
+  if (existing) await db.update(shippingAggregator).set(col).where(eq(shippingAggregator.id, existing.id));
+  else await db.insert(shippingAggregator).values({ provider: "kiriminaja", enabled: true, ...col });
   invalidateProviderConfig();
 }
 

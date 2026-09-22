@@ -12,7 +12,7 @@
 > `docker ps` showed all 18 containers healthy, the four hosts answered, `coolify-sentinel` restarted
 > itself, and the checkout **kecamatan search was verified in Chromium against production**. Runbook:
 > `DEPLOY.md` → "Origin unreachable / every host 522"; the DR record is `SLA-DRP.md` §2/§6.
-> **(b) STILL OPEN — no order can be placed on production.** The KiriminAja **sandbox** answers
+> **(b) ✅ CLOSED 2026-09-17 — and superseded: production is now on the KiriminAja PRODUCTION account** (key + env from the Super Admin card, prefix `PHI`; checkout quotes 2 fast / 14 full rates on the demo route; BUILD-LOG 05:10 UTC). Historical record of the 2026-09-07 outage follows. ~~STILL OPEN — no order can be placed on production.~~ The KiriminAja **sandbox** answered
 > `401 "Your IP address 45.77.33.112 were not allowed to access this API"`, so `/api/public/ongkir`
 > `op:"rates"` returns `SHIPPING_QUOTE_UNAVAILABLE` → **no ongkir → no COD → no order** (a parcel we
 > cannot price is a parcel we cannot ship, by design). Verified from inside the admin container: the
@@ -57,7 +57,7 @@
 >
 > **Release blockers — recounted 2026-08-24 against evidence, not against stale flags.** **Stage 4 is COMPLETE**: all 13 P0 tasks carry documented completion evidence (BUILD-LOG entries and/or `[x]` flags — reconciled 2026-08-24 after the flags were found under-reporting by 16 tasks). The active queue is now **14 P1 open** (5.1, 5.4–5.9, 5.12–5.15, 5.18–5.20 — of which 5.8/5.19/5.20 are owner-gated decisions/credentials and 5.12 is blocked on GitHub Actions billing) **and 7 P2 open** (6.1, 6.3, 6.4, 6.6–6.9 — 6.1 is blocked on 5.12–5.15). No production release sign-off until the Stage 7 executable gate passes; that gate has not been run.
 >
-> **Data/security status:** the 115-entry migration journal is healthy through `0114_invoices_plan_key_default`, and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
+> **Data/security status:** the 116-entry migration journal is healthy through `0115_provider_order_prefix`, and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >
@@ -132,7 +132,7 @@ applied on prod). **Kept for the reasoning, not the status** — the ⚠️ abou
 
 ### 🟡 KNOWN AND DELIBERATE — not defects, do not "fix" them
 
-- **`KIRIMINAJA_ENV=sandbox` on live → every rate on `tokophi.com` is FICTION.** Sandbox courier
+- ~~**`KIRIMINAJA_ENV=sandbox` on live → every rate on `tokophi.com` is FICTION.**~~ **No longer true since 2026-09-17: the live env is `production` (Super Admin row), rates and bookings are real.** The sandbox note stays as history: sandbox courier
   coverage is arbitrary: the same key returns `jne:REG23` for a Yogyakarta origin and **no JNE at all**
   for Surabaya. This is why "JNE is enabled in the dashboard but never shows" was reported — the
   platform ∩ store filter is correct (live offers exactly 10 enabled ∩ what the route returns = 8).
@@ -263,7 +263,7 @@ Honest arithmetic over demo rows. These are **not** lies — but do not quote th
 | 7 | **`orders.awb` is NULL on 700/700** | correct behaviour now (only a real waybill lands there), but no demo data exercises the AWB path |
 | 8 | 🔴 **The SPX free-return claim is UNVERIFIED** | it is a *Shopee Seller Center* benefit; we reach SPX through *KiriminAja*, a different contract, whose API has **no return field at all**. **The entire SPX-only COD policy rests on it** |
 | 9 | **The courier roster comes from ONE reference route** | KiriminAja has no list-couriers endpoint, so `kaServices()` prices origin `2099` → dest `356` and harvests the services out of the response. **The roster is only as complete as that one lane** |
-| 10 | **`KIRIMINAJA_ENV` defaults to `sandbox`** | an unset env **in production** silently talks to the sandbox and books no real parcels. The sandbox also never issues a courier AWB — tracking answers `MOCK-<ref>`, which `realWaybill` refuses (2026-09-14) — so `awbPending` is the normal outcome in dev |
+| 10 | **The env is a Super Admin decision now (0111); the code default is still `sandbox`** | with no row and no env var a deploy silently talks to the sandbox and books no real parcels — production has the row (`production`, since 2026-09-17). The sandbox also never issues a courier AWB — tracking answers `MOCK-<ref>`, which `realWaybill` refuses (2026-09-14) — so `awbPending` is the normal outcome in dev |
 | 11 | ✅ **`platform_couriers.services` legacy plain strings — FIXED** | the seed wrote `["Reguler","Same Day"]` where `getCodPolicy` expects `{type,name,group,cod,codAllowed}` objects; it skips non-objects, so a fresh DB had **zero** COD-allowed services and COD could not be exercised at all. The seed now writes objects with `codAllowed = cod && courier === "spx"` → 2 COD-allowed services. `540af0a` added the rest: `store_settings.cod_enabled = true` + **11** `store_shipping_methods` rows, so a fresh clone can exercise COD end-to-end with no API key and no clicking. Verified on a forced re-seed. |
 | 12 | **Parcel weight is hardcoded** | `qty × 500 g` |
 | 13 | **The label "Cetak" button is a toast stub** | there is no PDF |

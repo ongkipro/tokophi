@@ -1,6 +1,8 @@
 import {
   KA_BASE,
   maskKey,
+  KA_ORDER_PREFIX_DEFAULT,
+  KA_ORDER_PREFIX_RE,
   resolveKiriminaja,
   type AutolarisConfig,
   type KiriminajaConfig,
@@ -38,6 +40,8 @@ export type CredentialDeps = {
   writeKiriminajaKey: (env: ProviderEnv, key: string) => Promise<void>;
   markKiriminajaTested: (env: ProviderEnv) => Promise<void>;
   writeKiriminajaActiveEnv: (env: ProviderEnv) => Promise<void>;
+  /** 0115: the order_id prefix for one env's account. */
+  writeKiriminajaOrderPrefix: (env: ProviderEnv, prefix: string) => Promise<void>;
   writeAutolarisKey: (key: string) => Promise<void>;
   markAutolarisTested: () => Promise<void>;
   /** `logPlatform` — one `platform_activity` row, platform-wide. */
@@ -64,7 +68,27 @@ export const kiriminajaConfigFor = (env: ProviderEnv, key: string): KiriminajaCo
   base: KA_BASE[env],
   key,
   keySource: "db",
+  orderPrefix: KA_ORDER_PREFIX_DEFAULT,
+  orderPrefixSource: "default",
 });
+
+/**
+ * Store the order_id prefix registered on one env's KiriminAja ACCOUNT (0115). Validated to the
+ * vendor's rule and to our 20-character `order_id` budget, uppercased (the vendor compares the
+ * registered value; ours are `5758` / `PHI`), audited. No live test: the vendor exposes no endpoint
+ * that reveals the registered prefix — the first booking is the test, and it fails loudly there.
+ */
+export async function saveOrderPrefix(deps: CredentialDeps, operatorEmail: string, env: ProviderEnv, raw: string): Promise<CredentialResult> {
+  const prefix = String(raw ?? "").trim().toUpperCase();
+  if (!KA_ORDER_PREFIX_RE.test(prefix)) {
+    return { ok: false, message: "Prefix harus 3–8 huruf/angka tanpa spasi atau tanda baca (contoh: PHI, 5758)." };
+  }
+  const rows = await deps.rows();
+  const before = resolveKiriminaja({ row: { ...rows.kiriminaja, activeEnv: env }, env: deps.env() }).orderPrefix;
+  await deps.writeKiriminajaOrderPrefix(env, prefix);
+  await deps.log(`Prefix order KiriminAja (${ENV_LABEL[env]}) diubah oleh ${operatorEmail}: ${before} → ${prefix}`);
+  return { ok: true, message: `Prefix ${ENV_LABEL[env]} disimpan: ${prefix}. Booking ${ENV_LABEL[env]} berikutnya memakai order_id ${prefix}-…` };
+}
 
 /**
  * Store a provider key: validate → LIVE TEST against the target environment → encrypt + write →
@@ -150,12 +174,12 @@ export async function switchKiriminajaEnv(deps: CredentialDeps, operatorEmail: s
   }
   await deps.writeKiriminajaActiveEnv(target);
   if (cfg.keySource === "db") await deps.markKiriminajaTested(target);
-  await deps.log(`Lingkungan KiriminAja dialihkan ${ENV_LABEL[current.env]} → ${ENV_LABEL[target]} oleh ${operatorEmail} (kunci ${tail}, uji OK)`);
+  await deps.log(`Lingkungan KiriminAja dialihkan ${ENV_LABEL[current.env]} → ${ENV_LABEL[target]} oleh ${operatorEmail} (kunci ${tail}, prefix ${cfg.orderPrefix}, uji OK)`);
   return {
     ok: true,
     message:
       target === "production"
-        ? `KiriminAja kini PRODUCTION (kunci ${tail}). Setiap booking mulai sekarang adalah pemesanan nyata yang ditagihkan.`
-        : `KiriminAja kini SANDBOX (kunci ${tail}). Booking tidak lagi menjemput paket nyata.`,
+        ? `KiriminAja kini PRODUCTION (kunci ${tail}, prefix ${cfg.orderPrefix}). Setiap booking mulai sekarang adalah pemesanan nyata yang ditagihkan.`
+        : `KiriminAja kini SANDBOX (kunci ${tail}, prefix ${cfg.orderPrefix}). Booking tidak lagi menjemput paket nyata.`,
   };
 }
