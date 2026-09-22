@@ -25,6 +25,30 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.8.2-checkout-success-page",
+    version: "v1.8.2",
+    date: "2026-09-17",
+    title: "The Checkout Success Page Now Says What Is Actually True: Pay This, Or Thank You, Or This Bill Has Expired",
+    category: "feature",
+    surfaces: ["Storefront", "Payments"],
+    summary: "The page a shopper lands on after checkout used to greet every order with a green check and 'pesanan diterima' — including a QRIS or virtual-account order nobody had paid yet. It now follows the order: an unpaid bill is headed 'Selesaikan pembayaran' with the amount, the deadline and a live countdown above the QR or VA number; cash on delivery is thanked; a bill the gateway never issued says so; an expired bill says so at once and dims the controls. Next steps are listed per path, the order number can be copied, the seller is one WhatsApp tap away with the order number prefilled, and on desktop the order summary sits in the right column that used to be empty.",
+    problem: "A success message over an unpaid bill is how a shopper closes the tab before paying. On a phone the amount and the deadline sat below a QR code taller than the screen. When the bill's time ran out nothing on the page changed, so a dead virtual-account number kept looking payable. There was no way to reach the seller and no way to copy the one number the seller needs.",
+    solution: "One page file. The header, icon and first step are chosen from the order's real state; the payment panel leads with total, deadline and a timer; an expiry — on arrival or while the page is open — rewrites the title and note and dims the controls; the seller's own WhatsApp number (never a platform number) is prefilled with the order number; 'Lanjut Belanja' is demoted while a bill is unpaid. The money arithmetic and the rule that the page never congratulates without an order on this device are unchanged.",
+    verification: "Six states at phone and desktop widths, each with exactly one heading and no horizontal overflow; a bill made to expire seconds after load flipped every element together; the copy button verified through the fallback path; zero page errors. All eight storefront checks, the full test suite and the repository guards green; deployed as release 547.",
+  },
+  {
+    id: "v1.8.1-kiriminaja-production-cutover",
+    version: "v1.8.1",
+    date: "2026-09-17",
+    title: "Shipping Goes Production: Keys, Environment And Order Prefix Managed From Super Admin, Caches That Know Which Account They Serve, And A Sync That No Longer Switches Channels On",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Payments", "Super Admin", "Database & RLS"],
+    summary: "The courier integration was switched from the sandbox to the production account, entirely from Super Admin: the production key was entered on the card, tested live, stored encrypted, and the environment flipped with an audit line naming the operator. Two vendor-side blocks were diagnosed and cleared on the way (the production IP allow-list, then a production account with no couriers activated), and the checkout quotes real rates again. Four hardening fixes shipped in the same day: quote and courier-roster caches are now scoped to the environment and credential that produced them and never cache an empty answer; the payment-channel Sync records what the provider can take but never switches a channel on at checkout; OVO is off by ruling; and the order prefix each account registers (sandbox 5758, production PHI) lives beside its key and switches with it.",
+    problem: "Switching accounts moved the key and the host but not the cached answers, so a process could keep quoting the sandbox's rates for ten minutes and its courier list for a day, and an empty answer from a not-yet-activated account would have stayed cached after the vendor fixed it. Pressing Sync re-enabled OVO against the owner's decision with no audit line. The order prefix was one environment variable, so switching back to the sandbox would have booked ids the vendor refuses.",
+    solution: "Every cache key carries the environment plus a fingerprint of host and key, and empty results are not stored. The Sync decision is a pure function: it writes availability, switches a channel off when the provider drops it, records a new channel as not offered, and logs every change. The prefix is stored per environment on the aggregator row, resolved the same way as the key (row, then env var, then default), validated and audited when the owner edits it, and the booking call resolves prefix and credential together so they always belong to the same account.",
+    verification: "Measured on production: production key accepted, environment production from the database, twelve couriers quoting, checkout returning two fast and fourteen full rates; containers healthy and logs clean after each deploy (544, 545, 546). Every fix carries its own tests, each proved red against deliberate mutations; the prefix migration was proven against a fresh database after CI caught an enum-in-transaction rule. Owner-run steps remain: one real prepaid payment, one real booking, one real cancel — the runbook lists the checks.",
+  },
+  {
     id: "v1.8.0-finance-overhaul-ii",
     version: "v1.8.0",
     date: "2026-09-17",
