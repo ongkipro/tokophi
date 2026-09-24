@@ -57,7 +57,7 @@ const STEPS = [
 <LandingLayout title="Terima kasih — pesanan diterima" robots="noindex,nofollow">
   {/* White sheet on a grey page so its edges read as a distinct card, not merged into the background. */}
   <div class="min-h-screen bg-stone-100">
-    <div class="mx-auto min-h-screen max-w-lg border-x border-line bg-white sm:my-8 sm:min-h-0 sm:overflow-hidden sm:rounded-2xl sm:border sm:shadow-sm">
+    <div class="mx-auto min-h-screen max-w-lg border-x border-line bg-white sm:my-8 sm:min-h-0 sm:overflow-hidden sm:rounded-2xl sm:border sm:shadow-sm lg:max-w-4xl">
       {/* Top bar — store identity only. It used to carry a green "ADMIN ONLINE" pill, static markup
           on every render: nothing on this platform knows whether a merchant is at their desk, and a
           shopper who messages at 02:00 on the strength of that dot is owed an answer we cannot make
@@ -67,7 +67,8 @@ const STEPS = [
       <span class="text-lg font-extrabold uppercase tracking-tight text-ink">{store.name}</span>
     </header>
 
-    <main class="space-y-8 px-5 pb-12">
+    <main class="px-5 pb-28 lg:grid lg:grid-cols-[1fr_20rem] lg:items-start lg:gap-8 lg:pb-12">
+      <div class="space-y-8">
       {/* Success */}
       <div class="flex flex-col items-center pt-8 text-center">
         <div class="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
@@ -156,15 +157,33 @@ const STEPS = [
         </div>
       </section>
 
+      </div>
+
+      {/* RIGHT COLUMN on desktop, and simply the rest of the page on a phone: what happens next, the
+          COD rules, and the one action. Sticky from `lg` so the confirmation button stays reachable
+          while the summary on the left is read. */}
+      <div class="mt-8 space-y-8 lg:sticky lg:top-8 lg:mt-0">
+
       {/* Data pengiriman — the three personal rows start hidden and are filled from sessionStorage. */}
       {order && (
         <section>
           <h2 class="mb-3 font-bold text-ink">Data pengiriman</h2>
           <dl class="divide-y divide-line rounded-2xl border border-line text-sm">
-            <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-stone-500">No. Pesanan</dt><dd class="text-right font-medium text-ink">#{order}</dd></div>
+            <div class="px-4 py-3">
+              <dt class="text-stone-500">No. Pesanan</dt>
+              <dd class="mt-0.5 flex flex-wrap items-center gap-2">
+                <span class="font-mono font-semibold tracking-tight text-ink">#{order}</span>
+                <button
+                  type="button"
+                  data-copy-order={order}
+                  class="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-stone-600 transition hover:bg-stone-50"
+                  aria-live="polite"
+                >Salin</button>
+              </dd>
+            </div>
             <div class="flex justify-between gap-4 px-4 py-3" data-row="name" hidden><dt class="text-stone-500">Nama</dt><dd class="text-right font-medium text-ink" data-val="name"></dd></div>
             <div class="flex justify-between gap-4 px-4 py-3" data-row="phone" hidden><dt class="text-stone-500">WhatsApp</dt><dd class="text-right font-medium text-ink" data-val="phone"></dd></div>
-            <div class="flex justify-between gap-4 px-4 py-3" data-row="address" hidden><dt class="shrink-0 text-stone-500">Alamat</dt><dd class="text-right font-medium text-ink" data-val="address"></dd></div>
+            <div class="px-4 py-3" data-row="address" hidden><dt class="text-stone-500">Alamat</dt><dd class="mt-0.5 font-medium leading-relaxed text-ink" data-val="address"></dd></div>
           </dl>
         </section>
       )}
@@ -225,9 +244,43 @@ const STEPS = [
           </a>
         )}
       </section>
+      </div>
     </main>
     </div>
   </div>
+
+  {waHref && (
+    <div data-sticky-cta class="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 transition-opacity duration-200 px-4 py-3 backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+      <a
+        href={waHref}
+        class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3.5 font-bold text-white transition hover:bg-emerald-700"
+      >
+        <MessageCircle class="h-5 w-5" /> Konfirmasi via WhatsApp
+      </a>
+    </div>
+  )}
+
+  {/* The floating bar exists because the real button sits ~1.900 px down a ~2.100 px page — two
+      screens below the fold, for the only action this page asks for. It hides itself the moment that
+      button is actually on screen: two identical green buttons stacked at the end of the page is a
+      shopper wondering which one is the real one. No observer (an old browser) = the bar simply
+      stays, which is the safe failure. */}
+  <script is:inline>
+    (function () {
+      var bar = document.querySelector("[data-sticky-cta]");
+      if (!bar || !("IntersectionObserver" in window)) return;
+      var real = Array.prototype.filter.call(document.querySelectorAll('a[href*="wa.me"]'), function (a) {
+        return !a.closest("[data-sticky-cta]");
+      })[0];
+      if (!real) return;
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          bar.classList.toggle("pointer-events-none", e.isIntersecting);
+          bar.classList.toggle("opacity-0", e.isIntersecting);
+        });
+      }, { rootMargin: "0px 0px -24px 0px" }).observe(real);
+    })();
+  </script>
 
   {/* Fill the personal rows from sessionStorage — the funnel wrote them there instead of into the URL.
       Keyed by order number, so a stale entry from an earlier order never shows under a new one, and
@@ -249,6 +302,40 @@ const STEPS = [
         // URL-param version survived a refresh and the first sessionStorage version did not, which was a
         // regression nobody would have noticed until a shopper pulled to refresh. sessionStorage dies
         // with the tab, so this is not retention — it is the same lifetime the page has.
+        fillRows(d);
+      } catch (e) {}
+
+      // The order number is what an admin is asked for on WhatsApp; typing 16 characters off a phone
+      // screen is where a character dies. Clipboard API first, hidden-textarea fallback for a
+      // non-secure context, and the label says what happened — on the button, where the thumb is.
+      try {
+        var btn = document.querySelector("[data-copy-order]");
+        if (btn) {
+          var original = btn.textContent;
+          btn.addEventListener("click", function () {
+            var value = btn.getAttribute("data-copy-order") || "";
+            var done = function () {
+              btn.textContent = "Tersalin ✓";
+              setTimeout(function () { btn.textContent = original; }, 2000);
+            };
+            var fallback = function () {
+              var ta = document.createElement("textarea");
+              ta.value = value;
+              ta.setAttribute("readonly", "");
+              ta.style.position = "fixed";
+              ta.style.opacity = "0";
+              document.body.appendChild(ta);
+              ta.select();
+              try { document.execCommand("copy"); done(); } catch (e) {}
+              document.body.removeChild(ta);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(done).catch(fallback);
+            else fallback();
+          });
+        }
+      } catch (e) {}
+
+      function fillRows(d) {
         ["name", "phone", "address"].forEach(function (k) {
           var v = (d[k] || "").toString().slice(0, 200);
           if (!v) return;
@@ -256,7 +343,7 @@ const STEPS = [
           var row = document.querySelector('[data-row="' + k + '"]');
           if (row) row.hidden = false;
         });
-      } catch (e) {}
+      }
     })();
   </script>
 </LandingLayout>
