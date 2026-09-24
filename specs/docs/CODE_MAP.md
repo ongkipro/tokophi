@@ -107,6 +107,8 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 
 ## 6. Code mapping — storefront (Astro)
 
+**⚠️ TWO thank-you pages, and both are correct — they end two different funnels.** `/checkout/sukses` ends the CART tunnel (`/keranjang` → `/checkout`), carries the payment instruction for VA/QRIS/e-wallet and the COD amount, and uses `CheckoutLayout`. `/thanks` ends the LANDING funnel (`/lp/[slug]`, `OrderFunnel.astro` redirects to it), is **COD-only by construction** — that surface offers no other method — and uses `LandingLayout`. Both are conversion pages: `MarketingPixels` fires Purchase on either, once per order. Do not merge them and do not port a payment panel into `/thanks`.
+
 `/` · `/produk` · `/produk/[handle]` · `/kategori` · `/kategori/[handle]` · `/cari` · `/promo` · `/promo/[handle]` · `/lp/[slug]` · `/keranjang` · `/checkout`(+`/sukses`) · `/thanks` · `/blog` · `/blog/[handle]` · `/halaman/[handle]` · `/kontak` (there is **no `/akun`** — buying never requires an account; full list in `PAGE_MAP.md`). **SSR** (`@astrojs/node` standalone, `output: 'server'`): reads the DB via `@tokophi/db` at **server boot** (module-level in `src/data/catalog.ts`), so the container starts fast (no build-at-start). Dynamic routes resolve per-request from `Astro.params` (404 on unknown handle) — no `getStaticPaths`. Ongkir + order + pay proxied to the admin's public APIs (`PUBLIC_ONGKIR_API`/`PUBLIC_ORDER_API`). Store Builder sections render from `page_templates.sections`.
 
 **Its own two API routes — the storefront's only writes**, both tenant-resolved from the `Host` header (`Astro.locals.store`), never from the body, and both **fail quiet** (204 + an `x-…` reason header) because a broken beacon must never break a working page:
