@@ -4256,7 +4256,6 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Super Admin:** the deployed image carries 21 Update Log entries, newest **v1.8.2**, and the provider card's prefix slot is in the server bundle.
 - **Follow-up for the owner:** `KIRIMINAJA_ORDER_PREFIX` in Coolify is now only a fallback and can be deleted at the next convenient redeploy.
 
-<<<<<<< Updated upstream
 ### [2026-09-23 18:10 UTC] — SHIPPING · Task 8.16: the platform's KiriminAja float is visible, and a booking refused for an empty float says so (the PIN half deliberately not built)
 
 - **Executor:** Main Session, continuing the go-live queue. Branch `feat/ka-credit-balance`.
@@ -4267,11 +4266,9 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Gates:** tsc 0 ×4 · lint 0 errors (admin + super-admin) · page map regenerated · `verify:guards` ok · `npm run test:db` **191 files / 1677 tests**.
 - **Docs completed (2026-09-23 18:40 UTC, same branch, owner's check "tokophi log md dan doc sudah terupdate"):** they were not, for Task 8.16 — audited by grep: `kaCreditBalance`/`Saldo kurir` had 0 mentions in `WORKLOG.md`, `CODE_MAP.md` and the Super Admin Update Log (BUILD-LOG, TASKS, `KIRIMINAJA.md`, `SYSTEM_MAP.md` and the page map already carried it). Added: `CODE_MAP.md` names `kaCreditBalance()` beside the client (with the Term-of-Payment and no-PIN rules), `WORKLOG.md` current state **v1.8.3** (production shipping live, the float visible, the owner's three real-money steps as next), and `apps/super-admin/lib/data/dev-logs.ts` entry **v1.8.3**. Guards: super-admin suite, doc-counts and page-map fresh — 198 tests green, `verify:guards` ok.
 - **Docs perfected, provider state stated exactly (2026-09-23 19:05 UTC, same branch):** the three docs now carry the LIVE provider facts, re-measured read-only before writing them — `api/health/env` → `{kiriminaja: {env: production, envSource: db, key: db}, autolaris: {key: env}}`; `shipping_aggregator` → `active_env=production`, prefix `PHI` (sandbox slot `5758`, no sandbox key stored); enabled channels QRIS + VABCA/VABNI/VABRI/VAMANDIRI/VAPERMATA with `OVO enabled=false`; `platform_payment_gateways.autolaris` holds NO encrypted credential (row > env, so the key legitimately comes from `AUTOLARIS_API_KEY`). `CODE_MAP.md` payments row and `WORKLOG.md` current state say so explicitly — including that entering the AutoLaris key on the card is optional and changes nothing until done — and the Update Log v1.8.3 entry ends with the same operational sentence in operator language. ⚠️ **Nothing in this branch touches provider configuration:** `git diff origin/main...HEAD` over `*provider-config*`, `*provider-credentials*`, `*autolaris*`, `packages/db/drizzle/*`, `.env*` and `docker-compose.coolify.yml` is EMPTY; the only runtime changes remain the balance reader, the refusal sentence and the Super Admin badge. Full suite 191 files / 1677 tests.
-||||||| Stash base
-=======
+
 ### [2026-09-25 10:05 UTC] — DEPLOY · PR #405 (KiriminAja float, Task 8.16) merged as `861f04b`, Coolify deploy **549** witnessed
 
 - **Executor:** Main Session, on the owner's go. Sequenced deliberately: #405 first, its deploy witnessed, then #406 — the two share `BUILD-LOG.md`, `TASKS.md` and `CODE_MAP.md`, and merges here are serialised.
 - **Witnessed:** deployment 549 `finished` · `migrate` exit 0 (no new migration) · `seed` exit 0 · all app and cron containers healthy (`backup-offsite` starting — R2 unset) · admin/super-admin/storefront **0** error lines · the super-admin image carries Update Log **v1.8.3** and the "Saldo kurir" badge · hosts 200/307/307/200.
 - **The shipped reader, run against production:** `kaCreditBalance()` → `{ok: true, balance: 500000}` — the badge shows a real figure, not a placeholder.
->>>>>>> Stashed changes
