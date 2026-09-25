@@ -631,6 +631,64 @@ export type KaTestResult = {
   message: string;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// KA CREDIT BALANCE (Task 8.16) — the platform's prepaid float AT the vendor.
+//
+// `GET /api/mitra/v6.2/credit/balance`. Measured on the PRODUCTION account 2026-09-23: `{status:
+// true, results: {balance: 500000}}`. The SANDBOX account is Term-of-Payment and answers "Unable to
+// find your endpoint target" — so ABSENCE IS NOT AN ERROR here, it is a different account type, and
+// nothing may treat a missing balance as "insufficient".
+//
+// ⚠️ `POST /api/mitra/v6.2/pin/validate` is deliberately NOT called, and no `pin`/`payment_method`
+// is sent with a booking. The vendor locks the account after THREE wrong PIN attempts
+// (`attempt`/`max_attempt`/`lock_until` in its reply), which would stop every merchant's bookings at
+// once; and our bookings are `va` (we owe the courier) or COD (the buyer pays), neither of which
+// spends KA Credit. If KA Credit is ever adopted, the PIN belongs to that change, with a single
+// attempt and a hard stop on `lock_until`.
+const BALANCE_TTL = 60 * 1000; // a float moves per booking; one read a minute per replica is plenty
+
+export type KaBalance =
+  /** The account holds KA Credit and this is what is left. */
+  | { ok: true; balance: number }
+  /** The endpoint answered, but this account has no credit wallet (Term-of-Payment). NOT an error. */
+  | { ok: false; unsupported: true; error: string }
+  /** A real failure — network, 401, 5xx. The caller must not read it as "no money". */
+  | { ok: false; unsupported: false; error: string };
+
+export async function kaCreditBalance(cfg?: KiriminajaConfig): Promise<KaBalance> {
+  const c = cfg ?? (await getProviderConfig()).kiriminaja;
+  if (!isConfigured(c.key)) return { ok: false, unsupported: false, error: "Kunci KiriminAja belum diset." };
+  const key = `ka:balance:${kaCacheScope(c)}`;
+  const hit = cacheGet<KaBalance>(key);
+  if (hit) return hit;
+  let out: KaBalance;
+  try {
+    const { body: r } = await ka<{ status: boolean; text?: string; results?: { balance?: unknown } }>(
+      "/api/mitra/v6.2/credit/balance",
+      undefined,
+      "GET",
+      c,
+    );
+    const raw = r?.results?.balance;
+    // ⚠️ `Number("")` and `Number(null)` are both 0. A blank balance is NOT a balance of zero — the
+    // same rule `kaCodFee` follows — so only a non-empty string is parsed.
+    const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+    if (r?.status && Number.isFinite(n)) out = { ok: true, balance: Math.max(0, Math.round(n)) };
+    else {
+      const text = String(r?.text ?? "").trim();
+      // The vendor's own sentence for "this account has no such endpoint" — a Term-of-Payment account.
+      const unsupported = /unable to find your endpoint target/i.test(text);
+      out = { ok: false, unsupported, error: text || "Saldo tidak terbaca." };
+    }
+  } catch (e) {
+    return { ok: false, unsupported: false, error: e instanceof Error ? e.message : "Gagal menghubungi KiriminAja." };
+  }
+  // A transport failure is never cached (it would freeze a recovered account out for a minute); an
+  // "unsupported" answer is, because an account type does not change between two bookings.
+  cacheSet(key, out, BALANCE_TTL);
+  return out;
+}
+
 /**
  * With no argument: tests the ACTIVE config (what bookings use). With `cfg`: tests exactly that
  * key against exactly that environment — how Super Admin proves a stored production key BEFORE

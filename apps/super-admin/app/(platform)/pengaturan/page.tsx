@@ -1,6 +1,6 @@
 import { platformRouteGate } from "@/lib/platform-auth";
 import { RouteDenied } from "@/components/route-denied";
-import { getPaymentGateways, getCouriers, getAggregator, getPlatformAdmins, getPaymentChannels, getPlatformFinance, getKiriminajaProbe, getProviderStatus } from "@/lib/data";
+import { getPaymentGateways, getCouriers, getAggregator, getPlatformAdmins, getPaymentChannels, getPlatformFinance, getKiriminajaProbe, getKiriminajaBalance, getProviderStatus } from "@/lib/data";
 import { PengaturanClient } from "./pengaturan-client";
 
 export const dynamic = "force-dynamic";
@@ -11,14 +11,15 @@ export default async function PengaturanPage() {
   const gate = await platformRouteGate("/pengaturan");
   if (!gate.ok) return <RouteDenied need={gate.need} role={gate.role} reason={gate.reason} landing={gate.landing} />;
 
-  const [gateways, couriers, channels, aggregator, team, finance, kaProbe, providers] = await Promise.all([
+  const [gateways, couriers, channels, aggregator, team, finance, kaProbe, kaBalance, providers] = await Promise.all([
     getPaymentGateways(),
     getCouriers(),
     getPaymentChannels(),
     getAggregator(),
     getPlatformAdmins(),
     getPlatformFinance(),
-    getKiriminajaProbe(), // Task 8.3 — cached 5 min, 4 s ceiling; see `data.ts`
+    getKiriminajaProbe(),
+    getKiriminajaBalance(), // Task 8.3 — cached 5 min, 4 s ceiling; see `data.ts`
     getProviderStatus(), // Task 8.33 — masked tails + test stamps + live env; never a key value
   ]);
   // Who is looking — ONLY to decide whether the owner-only affordance is drawn. The boundary is
@@ -35,6 +36,7 @@ export default async function PengaturanPage() {
       team={team}
       finance={finance}
       kaProbe={kaProbe}
+      kaBalance={kaBalance}
       providers={providers}
       me={{ adminId: me?.adminId ?? "", role: me?.role ?? "" }}
     />

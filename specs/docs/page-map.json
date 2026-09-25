@@ -3631,6 +3631,7 @@
           "getFinanceStats",
           "getGmvByCity",
           "getInvoices",
+          "getKiriminajaBalance",
           "getKiriminajaProbe",
           "getOpenTicketCount",
           "getPaymentChannels",

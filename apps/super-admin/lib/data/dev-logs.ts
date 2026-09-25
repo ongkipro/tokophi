@@ -25,6 +25,18 @@ export type DevLogEntry = {
 
 export const DEV_LOGS: DevLogEntry[] = [
   {
+    id: "v1.8.3-courier-float-visible",
+    version: "v1.8.3",
+    date: "2026-09-23",
+    title: "The Money The Platform Holds At The Courier Is Finally On A Screen — And A Booking Refused Because It Ran Out Now Says So",
+    category: "logistics_payment",
+    surfaces: ["Logistics", "Super Admin", "Seller Admin"],
+    summary: "Every booking spends the platform's prepaid balance at the courier aggregator, and that balance was visible nowhere. When it ran out, the seller was told the booking failed and to try again — advice they cannot act on, for a problem only the platform can fix. The settings page now shows the balance beside the live connection check, turns amber below Rp250.000, and a refused booking names an exhausted float instead of offering a pointless retry. Measured the day it shipped: Rp500.000 on the production account.",
+    problem: "The endpoint that reports this balance could never be called while the platform ran on the trial account, which is billed on terms and has no wallet at all. On the production account it answers. Without it, an empty float was indistinguishable from a wrong address, a courier past its cut-off, or any other rejection.",
+    solution: "The balance is read live, cached briefly per account, and shown with the reason whenever it cannot be read — an account without a wallet shows a dash, never zero, because printing zero would say the platform is broke. On the failing path only, and only after the courier's own explanation has been considered, the booking compares the float against the shipping cost and adds one sentence when it is short. The six-digit PIN half of the same feature was deliberately left unbuilt: three wrong attempts lock the platform account and would stop every merchant's bookings at once, and our bookings never spend that credit.",
+    verification: "Eight tests covering the read, the caching, an account without a wallet, a network failure, and the refusal wording; five deliberate mutations each turned a test red. Type checks, linting, the repository guards and the full suite of 1.677 tests green. Measured on the live account the day this shipped: the balance reads Rp500.000, the courier environment is production with its own key and order prefix, and the payment gateway still takes its key from the server environment rather than from this card — entering it here is optional and changes nothing until it is done.",
+  },
+  {
     id: "v1.8.2-checkout-success-page",
     version: "v1.8.2",
     date: "2026-09-17",

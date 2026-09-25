@@ -8,7 +8,7 @@ import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant, type Tx } from "@/lib/tenant";
 import { getCodPolicy } from "@/lib/cod";
 import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
-import { kaShippingPrice, kaCreateOrder, kaTrack, kaCancelShipment, kaCodFee, buildKaOrderRef, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
+import { kaShippingPrice, kaCreateOrder, kaCreditBalance, kaTrack, kaCancelShipment, kaCodFee, buildKaOrderRef, kiriminajaConfigured, type KaCodFee } from "@tokophi/lib/kiriminaja";
 import { activeKaOrderPrefix } from "@tokophi/lib/provider-config";
 import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
@@ -1170,7 +1170,26 @@ export async function createShipment(input: { orderNumber: string; service: stri
     });
     const e = (r.error ?? "").toLowerCase();
     // KiriminAja's rejections are actionable — surface WHAT to fix, not just that it failed.
-    const hint = e.includes("prefix") ? " (konfigurasi pengiriman platform belum lengkap — hubungi dukungan TokoΦ)" : e.includes("batas pemrosesan") || e.includes("penjadwalan") ? " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)" : "";
+    // Task 8.16: an empty PLATFORM float at the aggregator used to be indistinguishable from any
+    // other refusal, on a screen telling the merchant to try again — which they cannot fix and which
+    // would never start working. The balance is read AFTER the refusal, never before: it costs one
+    // request only on the failing path, and it is the only way to tell "our float ran out" from a
+    // rejection the merchant can act on. A Term-of-Payment account (no credit wallet) reports no
+    // balance at all, and that must never be read as "no money" — hence the explicit `ok` check.
+    let hint = "";
+    if (e.includes("prefix")) hint = " (konfigurasi pengiriman platform belum lengkap — hubungi dukungan TokoΦ)";
+    else if (e.includes("batas pemrosesan") || e.includes("penjadwalan")) hint = " (kurir ini sudah melewati jam cut-off — coba layanan lain atau jadwalkan besok)";
+    else if (e.includes("saldo") || e.includes("balance") || e.includes("insufficient")) {
+      hint = " (saldo pengiriman platform tidak mencukupi — hubungi dukungan TokoΦ, jangan ulangi booking)";
+    } else {
+      const bal = await kaCreditBalance();
+      if (bal.ok && bal.balance < serverCost) {
+        console.error(
+          `[shipping] platform courier float too low: balance ${bal.balance} < cost ${serverCost} (order ${input.orderNumber})`,
+        );
+        hint = " (saldo pengiriman platform tidak mencukupi — hubungi dukungan TokoΦ, jangan ulangi booking)";
+      }
+    }
     return {
       ok: false,
       error: (r.error ?? "Gagal membuat pengiriman.") + hint,
