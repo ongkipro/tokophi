@@ -1,7 +1,7 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
+import { kaCreditBalance, kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
 import { cached } from "@tokophi/lib/cache";
 import { classifyKaProbe, type KaProbe } from "./ka-probe";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
@@ -563,6 +563,26 @@ export async function getKiriminajaProbe(): Promise<KaProbe> {
 }
 
 // Platform system + integration status.
+/**
+ * The platform's prepaid float AT KiriminAja (Task 8.16). `null` = this account has no credit wallet
+ * (Term-of-Payment) or the read failed — never rendered as "Rp0", which would read as "we are broke".
+ */
+export type KaBalanceView = { idr: number | null; note: string; readAt: number };
+
+export async function getKiriminajaBalance(): Promise<KaBalanceView> {
+  return cached("ka:balance-view", KA_PROBE_TTL_MS, async () => {
+    const r = await kaCreditBalance();
+    if (r.ok) return { idr: r.balance, note: "Saldo KA Credit di akun KiriminAja platform.", readAt: Date.now() };
+    return {
+      idr: null,
+      note: r.unsupported
+        ? "Akun ini tanpa dompet KA Credit (Term-of-Payment) — ongkir ditagihkan, bukan dipotong saldo."
+        : `Saldo tidak terbaca: ${r.error}`,
+      readAt: Date.now(),
+    };
+  });
+}
+
 export type SystemStatus = { kiriminaja: boolean; kiriminajaProbe: KaProbe; autolaris: boolean; kaEnv: string; stores: number; dbOk: boolean; region: string; crons: CronRunRow[] };
 export async function getSystemStatus(): Promise<SystemStatus> {
   // Kicked off first so the vendor round-trip overlaps the DB reads below.

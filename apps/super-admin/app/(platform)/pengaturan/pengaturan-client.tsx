@@ -2,10 +2,12 @@
 
 import { useState, useTransition, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound, Receipt, CircleCheck, CircleX, WifiOff, CircleDashed } from "lucide-react";
+import { CreditCard, Truck, Users, UserPlus, Save, ChevronDown, Plug, QrCode, Landmark, Smartphone, Store, RefreshCw, Info, KeyRound, Receipt, CircleCheck, CircleX, WifiOff, CircleDashed, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import type { CourierRow, ProviderStatus } from "@/lib/data";
 import type { KaProbe, KaProbeState } from "@/lib/ka-probe";
+import type { KaBalanceView } from "@/lib/data";
+import { IDR } from "@tokophi/lib/format";
 import { AutolarisKey, KiriminajaKeys } from "./provider-keys";
 
 import {
@@ -86,6 +88,7 @@ export function PengaturanClient({
   team,
   finance,
   kaProbe,
+  kaBalance,
   providers,
   me,
 }: {
@@ -96,6 +99,7 @@ export function PengaturanClient({
   team: TeamMember[];
   finance: { subscriptionPpnEnabled: boolean };
   kaProbe: KaProbe;
+  kaBalance: KaBalanceView;
   /** Task 8.33 — masked provider keys, their test stamps, and the live env. Never a key value. */
   providers: ProviderStatus;
   me: { adminId: string; role: string };
@@ -441,6 +445,12 @@ export function PengaturanClient({
                       {/* Task 8.3 — the LIVE state, not the key's presence. Glyph + word, never colour
                           alone; the time is when the cached probe last ran (≤5 min old), not now. */}
                       <KaProbeBadge probe={kaProbe} />
+                      {/* Task 8.16 — the platform's prepaid float AT KiriminAja, read live (cached
+                          5 min). It is the money a booking spends, and it used to be visible nowhere:
+                          a refusal for an empty float read like any other rejection. `null` renders
+                          as "—" with the reason, never Rp0 — a Term-of-Payment account HAS no wallet,
+                          and printing zero there would say the platform is broke. */}
+                      <KaBalanceBadge balance={kaBalance} />
                       <Button variant="outline" size="sm" className="gap-1.5" disabled={pinging} onClick={testConn}>
                         <Plug className="size-3.5" /> {pinging ? "Menguji…" : "Test koneksi"}
                       </Button>
@@ -789,6 +799,31 @@ const KA_PROBE_STYLE: Record<KaProbeState, { icon: typeof CircleCheck; className
   unconfigured: { icon: CircleDashed, className: "bg-muted text-muted-foreground" },
 };
 const WIB = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" });
+
+/** The vendor-side float. Low is a WARNING, not an error — bookings still work until it runs out. */
+const KA_BALANCE_LOW_IDR = 250_000;
+
+function KaBalanceBadge({ balance }: { balance: KaBalanceView }) {
+  const at = `${WIB.format(new Date(balance.readAt))} WIB`;
+  const unknown = balance.idr === null;
+  const low = !unknown && (balance.idr as number) < KA_BALANCE_LOW_IDR;
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        "gap-1 border-transparent",
+        unknown ? "bg-muted text-muted-foreground" : low ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400",
+      )}
+      title={`${balance.note} · dicek ${at}`}
+      data-ka-balance={unknown ? "unknown" : low ? "low" : "ok"}
+    >
+      <Wallet className="size-3" aria-hidden="true" />
+      Saldo kurir {unknown ? "—" : IDR(balance.idr as number)}
+      {low && <span className="font-normal">· menipis</span>}
+      <span className="font-normal opacity-80">· {at}</span>
+    </Badge>
+  );
+}
 
 function KaProbeBadge({ probe }: { probe: KaProbe }) {
   const { icon: Icon, className } = KA_PROBE_STYLE[probe.state];
