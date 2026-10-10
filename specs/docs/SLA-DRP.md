@@ -108,23 +108,31 @@ old code left, spanning `11:08` → `16:56` on 2026-08-05 — the two oldest wer
 ran before the fix landed. The window **grows to 14 days over the next fortnight**; it is not 14 days
 today. Do not read §4's "logical corruption" row as covered until it has.
 
-🟡 **Gap — the backups are on the machine they protect: the MECHANISM now exists, the CREDENTIAL does
-not.** `tokophi-backups` is a Docker volume on `45.77.33.112`, beside `tokophi-pgdata`; a lost VPS
-still loses the database *and* every backup of it **until the R2 variables are set**.
+🟢 **Closed 2026-10-10 — the backups no longer live only on the machine they protect.** `tokophi-backups`
+is a Docker volume on `45.77.33.112`, beside `tokophi-pgdata`; since 2026-10-10 every dump is also in
+Cloudflare R2 (`volumdev-backups/postgres/`, uploaded hourly) and a restore FROM R2 has been run (below).
+*History, kept because the reasoning still holds:*
 Shipped 2026-09-02: the `backup-offsite` sidecar (`docker-compose.coolify.yml`) mirrors the existing
 dumps to Cloudflare R2 hourly and prunes only the REMOTE copies (`R2_RETENTION_DAYS`, default 30).
 It mounts `tokophi-backups` **read-only** — it can never delete a local dump — and uses `rclone copy`,
 never `sync`, so a local prune cannot propagate. Proven against a live S3 endpoint before shipping:
 upload, remote-only retention (a 60-day dump deleted remotely while both local files survived), plus
 both failure paths.
-🔴 **It is INERT and UNHEALTHY until the owner supplies four Coolify variables** — `R2_ACCOUNT_ID`,
+Until 2026-10-10 **it was INERT and UNHEALTHY because the owner had not supplied four Coolify variables** — `R2_ACCOUNT_ID`,
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. Unconfigured it logs
 `offsite-UNCONFIGURED` and reports unhealthy on purpose: a backup you believe in and do not have is
 worse than an obviously absent one. Neither Cloudflare token on this estate can create it — both are
 ZONE-scoped (verified 2026-09-02: `/accounts` returns empty for each), and R2 is an account-level
 product, so the token must be minted with **R2 Storage: Edit**.
-⚠️ **Still untested end to end: the RESTORE.** Uploading is not a backup until a dump has been pulled
-from R2 and restored into a throwaway database. That exercise is §7's, and it has not been run.
+✅ **The RESTORE was exercised 2026-10-10.** The newest dump in R2 (`tokophi-20261010-081642.dump`,
+byte-identical to the on-box copy) was pulled through the sidecar's own credential and restored into a
+network-less throwaway `postgres:16-alpine` (not into production's server): download 2 s, restore 12 s,
+0 `pg_restore` errors, 84/84 public tables, and `orders` 226 · `order_line_items` 480 · `payments` 225 ·
+`ledger_entries` 207 · `customers` 37 · `products` 80 · `stores` 17 · `users` 16 — **identical to
+production** at the time of the probe. Measured RPO for a full-box loss: ≤ 6 h (dump cadence) + ≤ 1 h
+(upload cadence) = **≤ 7 h**. ⚠️ The key is an R2 token scoped to that ONE bucket, so rclone needs
+`--s3-no-check-bucket` (it is in the compose command); without it the upload dies on `CreateBucket 403`.
+`tokophi-uploads` is backed up to the same bucket by **Coolify's own volume backup** (not the compose file): daily 03:30 WIB, `stop_during_backup=false`, 3 archives on-box / 30 in R2 under `data/coolify/backups/volumes/…`; first run 2026-10-10 = 38 MB, 575/575 files.
 
 **Proposal — RPO objectives, once the two gaps above are closed:** 24 h for a full-box loss (offsite
 daily), 1 h for a logical/corruption event (retained hourly for 48 h, daily for 14 d).
@@ -141,7 +149,7 @@ daily), 1 h for a logical/corruption event (retained hourly for 48 h, daily for 
 | logical corruption / bad migration | `pg_restore` the newest dump | **Derived** minutes — the dump is 1,2 MB / 621 objects. ⚠️ **Untested.** |
 | **routine deploy (every merge to `main`)** | Coolify tears the compose stack down and brings the new one up; no rolling update for compose apps | **7,0–8,3 s per surface, measured deploy 524 (2026-08-28)** — was 15 min (≤ 2026-08-19), then 81 s. Structural record: ADR 0017. This is part of the availability budget: ~40 merges/month × 8 s ≈ 5,3 min/month ≈ 99,99 % on its own. The two levers that would take it to ~0 are outside the repo and undecided (ADR 0017 §5) |
 | **hosting billing lapse (instance suspended)** | top up → instance auto-resumes → containers self-start | **Observed 2026-09-07:** minutes after payment — but the *outage* was **70 h 20 min** because nothing detected it (§2). RTO here = time-to-notice, not time-to-fix |
-| **total VPS loss** | provision + Coolify install + deploy + restore | **Gap — unknown and untested.** Coolify install alone is ~10 min; realistically 1–3 h, and **there is no offsite dump to restore from** (§3) | ⚠️ `backup-offsite` exists since 2026-09-02 but is **INERT** until the R2 credentials are set (below, §6) |
+| **total VPS loss** | provision + Coolify install + deploy + restore | **Untested as a whole.** Coolify install alone is ~10 min; realistically 1–3 h. The DATA half is proven: an R2 dump restores in ~15 s (§3, 2026-10-10) | 🟢 DB dumps and product images (`tokophi-uploads`) both in R2 since 2026-10-10 |
 
 **Proposal — SLO, not a promise:** 99,5 % monthly on the storefront SLI, *excluding* announced deploy
 windows. That is ~3,6 h/month of unplanned unavailability. It is deliberately modest: a single box, a
@@ -168,8 +176,8 @@ continuously, any SLO here is an intention, not a measurement.
 | one VPS | everything down | ❌ |
 | **hosting BILLING on that VPS** (Vultr suspends on a negative balance) | everything down, **silently**, until a human notices — **realised 2026-09-04 → 09-07, 70 h 20 min** | ❌ no low-balance alert, no auto-top-up (owner action in the Vultr console: Billing → alerts / auto-payment) |
 | **no external uptime monitor** | an origin outage of any cause is detected by a merchant, days later | ❌ `ops/tokophi-probe.sh` is built (`DEPLOY.md` §L2) and **installed nowhere**; needs one off-box cron + an alert channel |
-| offsite backup credential | the `backup-offsite` sidecar (2026-09-02, #377/#378) mirrors dumps to R2 **only once `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` are set in Coolify** — until then it logs `offsite-UNCONFIGURED` and reports UNHEALTHY by design (`docker-compose.coolify.yml` → `backup-offsite`, BUILD-LOG 2026-09-02 "inert until credentialed") | ❌ **still uncredentialed as of 2026-09-07** (deploy 528 verified it running `offsite-UNCONFIGURED`; BUILD-LOG lists "kredensial R2" under "Menunggu keputusan owner"). Every backup is still on the same box that just spent 70 h powered off |
-| one Postgres container, one volume | total data loss if the volume dies | ❌ backups are on the same box (§3) |
+| offsite backup credential | the `backup-offsite` sidecar (2026-09-02, #377/#378) mirrors dumps to R2 **only once `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` are set in Coolify** — until then it logs `offsite-UNCONFIGURED` and reports UNHEALTHY by design (`docker-compose.coolify.yml` → `backup-offsite`, BUILD-LOG 2026-09-02 "inert until credentialed") | ✅ **credentialed 2026-10-10** (`offsite-ok` within 20 s of the deploy; restore from R2 proven, §3) |
+| one Postgres container, one volume | total data loss if the volume dies | 🟢 DB dumps and `tokophi-uploads` also in R2 since 2026-10-10 (§3) |
 | one region (SGP) | regional outage = full outage | ❌ accepted for now |
 | `AUTH_SECRET` | lost ⇒ every session invalid (recoverable: users log in again) | 🟡 fail-closed by design |
 | Cloudflare zone | wildcard TLS is a CF **Origin CA** cert browsers do not trust directly — an unproxied record serves an untrusted cert | 🟡 standing rule: every record stays proxied |

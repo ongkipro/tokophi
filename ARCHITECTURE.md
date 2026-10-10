@@ -62,7 +62,7 @@ spaces — Kemendagri `kelurahan.id` for postcodes, courier `kelurahan.ka_kelura
 `cron-tracking-events`, `cron-order-expiry`, `cron-domains`, `cron-payment-advice` (observe-only
 reconciliation, PR #392) — each self-reports to `cron_runs` and is listed on Super Admin → Analitik →
 Sistem, census in `apps/admin/lib/cron-auth.test.ts`; `backup` (6-hourly `pg_dump`, keep 14 d),
-`backup-offsite` (rclone → R2, inert + unhealthy until credentialed). Runbook + every gotcha:
+`backup-offsite` (rclone → R2 bucket `volumdev-backups/postgres`, hourly, 30 d remote retention; credentialed 2026-10-10). Runbook + every gotcha:
 **`specs/docs/DEPLOY.md`**; availability/DR: `specs/docs/SLA-DRP.md`.
 
 ## Boundaries
@@ -80,8 +80,9 @@ Sistem, census in `apps/admin/lib/cron-auth.test.ts`; `backup` (6-hourly `pg_dum
 
 Authoritative store: Postgres on the `tokophi-pgdata` volume. Migrations are the only schema
 channel (`npm run migrate -w @tokophi/db`; write them idempotent; `npm run verify-migrations`).
-Backups: on-box dumps in `tokophi-backups` (`tokophi-YYYYMMDD-HHMMSS.dump`), offsite copy not yet
-credentialed as of the last log entry (BUILD-LOG 2026-09-03). The seed is not a migration — it never
+Backups: on-box dumps in `tokophi-backups` (`tokophi-YYYYMMDD-HHMMSS.dump`), mirrored hourly to
+Cloudflare R2 by `backup-offsite` (since 2026-10-10; a restore from R2 reproduced production row
+counts exactly — BUILD-LOG 2026-10-10). The seed is not a migration — it never
 changes an existing store.
 
 ## Decisions

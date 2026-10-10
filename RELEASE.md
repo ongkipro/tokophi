@@ -72,9 +72,9 @@ appending, never by rewriting.
   **No migration** — `packages/db/drizzle` is untouched between Base and this commit — so
   `Backup-Proof` is `NOT_REQUIRED` by the contract above. The nearest on-box dump anyway:
   `tokophi-20260904-115047.dump` (2026-09-04 11:50 UTC, the last one before the VPS was suspended
-  that evening — BUILD-LOG 2026-09-07). Offsite copy: the `backup-offsite` sidecar is shipped but
-  was `offsite-UNCONFIGURED` (no R2 credential) at the last log entry, 2026-09-03; not re-verified
-  since (no SSH from this session by rule).
+  that evening — BUILD-LOG 2026-09-07). Offsite copy: the `backup-offsite` sidecar was
+  `offsite-UNCONFIGURED` (no R2 credential) at the last log entry, 2026-09-03. (Later: credentialed
+  and restore-proven 2026-10-10, Task 8.4.)
 - **Review:** merged through a GitHub PR by the owner; no `delivery-ledger` run and no independent
   reviewer recorded for it (`.delivery/runs/` holds only the 2026-08-26 bootstrap run), hence
   `Independent-Review: PENDING` in `STATUS.md`. R2 does not require one under the state machine.

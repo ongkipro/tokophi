@@ -58,11 +58,11 @@ where slug like 'fk-probe-%'` → 0 — but any "what touches production" audit 
 layer above except L2 runs *on* the VPS, so it went down with it; L2 (`tokophi-probe.sh`) exists,
 is designed for exactly this, and **nothing shows it installed off-box** — no cron on this workstation
 (`crontab -l`, 2026-09-08), no BUILD-LOG entry installing it anywhere, and a 70-hour silence that a
-5-minute probe with a pager could not have produced. `backup-offsite` is
-shipped but was still `offsite-UNCONFIGURED` at the last log entry (2026-09-03), so the only copies of
-the database sat on the suspended machine. Closing this = install `ops/tokophi-probe.sh` on a
-machine that is not `volumdev`, with a pager behind it, and hand it the R2 credentials. Neither is
-code; both are owner actions.
+5-minute probe with a pager could not have produced. `backup-offsite` was
+still `offsite-UNCONFIGURED` then, so the only copies of the database sat on the suspended machine —
+that half is closed since 2026-10-10 (R2 credentialed, `offsite-ok` hourly, restore from R2 proven;
+Task 8.4). Still open = install `ops/tokophi-probe.sh` on a machine that is not `volumdev`, with a
+pager behind it. Not code; an owner action.
 
 ## Recommended production probes
 

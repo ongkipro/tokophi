@@ -59,15 +59,16 @@ the substance of issue #5, and it is not a probe failure: the sandbox answers co
 "This release"; Coolify deploy 537 carries it. Open: **#391** (ADR 0004 — no provider brand in any
 merchant/shopper string, guarded), CI re-running after the BUILD-LOG merge. Queue: root `TASKS.md` Stage 8; navigation handoff
 `specs/docs/tasks/OPEN.md`. The remaining open items are owner-gated (8.9 first production booking,
-8.4 offsite backup credentials, 8.1 alert channel, 8.5 branch pruning, 5.8 buyer accounts).
+8.1 alert channel, 8.5 branch pruning, 5.8 buyer accounts).
 
 ## Blockers
 
 - **None that code can move.** The 2026-09-07 allow-list blocker is **RESOLVED** (owner re-added the
   IP 2026-09-09; rates verified live the same day and again today).
 - **Owner-gated, not blocking the state machine:** production still on the courier sandbox (Task 8.9);
-  no external uptime monitor / pager and no offsite backup credential (Tasks 8.1, 8.4 — the 70-hour
-  outage of 2026-09-04→07 is why they matter; `OBSERVABILITY.md` "The gap").
+  no external uptime monitor / pager (Task 8.1 — the 70-hour outage of 2026-09-04→07 is why it
+  matters; `OBSERVABILITY.md` "The gap"). The offsite backup half is CLOSED: Task 8.4 done 2026-10-10
+  (`offsite-ok` to R2, restore from R2 proven — BUILD-LOG).
 
 ## Verification evidence
 
