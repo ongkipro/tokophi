@@ -60,16 +60,6 @@ import {
   DialogClose,
 } from "@tokophi/ui/dialog";
 
-const CATEGORIES = [
-  "Dress",
-  "Atasan",
-  "Bawahan",
-  "Busana Muslim",
-  "Outerwear",
-  "Loungewear",
-  "Aksesoris",
-];
-
 // Google/Meta feed attribute options (ADR 0011 Phase 2). Values are the Google enum; labels are ID.
 const GENDER_OPTS: { value: string; label: string }[] = [
   { value: "female", label: "Wanita" },
@@ -127,7 +117,7 @@ function purchaseVariantLabel(variant: SavedVariant): string {
 }
 
 
-export function ProductEditor({ product }: { product?: Product }) {
+export function ProductEditor({ product, categoryOptions = [] }: { product?: Product; categoryOptions?: string[] }) {
   const isEdit = Boolean(product);
 
   // RBAC (UI): mirror the server guard so we don't offer actions the role can't do.
@@ -198,7 +188,12 @@ export function ProductEditor({ product }: { product?: Product }) {
     product?.status ?? "draft"
   );
 
-  const [category, setCategory] = React.useState(product?.category ?? "Fashion");
+  // The merchant's own free-text label, suggested from THIS store's vocabulary (`categoryOptions`).
+  // ⚠️ It used to default to "Fashion" and offer only a hardcoded 7-item fashion list, so every product
+  // of every non-fashion shop (a fertiliser store included) was saved as "Fashion" — which then became
+  // the storefront breadcrumb, the PDP "Kategori" row, a 404 `/kategori/fashion` link and the feed's
+  // `product_type`. Blank is honest: the storefront falls back to the product's real collection.
+  const [category, setCategory] = React.useState(product?.category ?? "");
   // Standard Google taxonomy (ADR 0011) — separate from the merchant's own `category` above.
   const [gcatId, setGcatId] = React.useState<number | null>(product?.googleCategoryId ?? null);
   const [gcatPath, setGcatPath] = React.useState(product?.googleCategoryPath ?? "");
@@ -1264,27 +1259,18 @@ export function ProductEditor({ product }: { product?: Product }) {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label>Kategori</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                      />
-                    }
-                  >
-                    {category}
-                    <ChevronDown className="text-muted-foreground" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--anchor-width]">
-                    {CATEGORIES.map((c) => (
-                      <DropdownMenuItem key={c} onClick={() => setCategory(c)}>
-                        {c}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Label htmlFor="product-category">Kategori toko</Label>
+                <Input
+                  id="product-category"
+                  list="product-category-options"
+                  value={category}
+                  maxLength={100}
+                  placeholder="mis. Pupuk Organik"
+                  onChange={(e) => setCategory(e.target.value)}
+                />
+                <datalist id="product-category-options">
+                  {categoryOptions.map((c) => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <GoogleCategoryField
                 value={gcatId}
@@ -1397,18 +1383,15 @@ export function ProductEditor({ product }: { product?: Product }) {
             <DialogDescription>Pilih kategori untuk produk ini.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            <Label>Kategori</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between font-normal" />}>
-                {category}
-                <ChevronDown className="text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-(--anchor-width)">
-                {CATEGORIES.map((c) => (
-                  <DropdownMenuItem key={c} onClick={() => setCategory(c)}>{c}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Label htmlFor="product-category-dialog">Kategori</Label>
+            <Input
+              id="product-category-dialog"
+              list="product-category-options"
+              value={category}
+              maxLength={100}
+              placeholder="mis. Pupuk Organik"
+              onChange={(e) => setCategory(e.target.value)}
+            />
           </div>
           <DialogFooter>
             <DialogClose render={<Button variant="outline">Batal</Button>} />

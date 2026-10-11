@@ -164,6 +164,14 @@ export type Catalog = {
   bestsellers: (list?: Product[]) => Product[];
   byCollection: (handle: string) => Product[];
   /**
+   * The published collection a product "lives in" — the PDP breadcrumb, its related row and the
+   * product-scoped Grid Produk. The merchant's category label wins when it names a published
+   * collection the product belongs to; otherwise the first (by title) published collection that
+   * contains it; otherwise undefined. Never a link built from slugified label text, which 404'd for
+   * every label that is not also a collection handle ("Fashion" on a fertiliser shop).
+   */
+  homeCollection: (p: Product) => Collection | undefined;
+  /**
    * Free-text product search over the in-memory catalog — NO extra DB round-trip (the products are
    * already loaded per request). Accent-insensitive, case-insensitive. Ranked: name-starts-with >
    * name-contains > category-contains, so "dress" returns dresses before a top merely tagged "dress".
@@ -546,8 +554,12 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       flashEndsAt: onSale ? flash!.endsAt.toISOString() : undefined,
       // NOT gated on `onSale`: a sale that does not beat the DEFAULT variant can still cap a dearer one.
       flashPrice: flash?.price,
-      category: r.category ?? "",
-      categoryHandle: slugify(r.category ?? ""),
+      // A product with no merchant label shows the published collection it lives in (first by title),
+      // so cards, the palette, filters and the feed's product_type never read blank — or "Fashion",
+      // the editor's old unchosen default that every non-fashion shop inherited.
+      ...((cat) => ({ category: cat, categoryHandle: slugify(cat) }))(
+        r.category?.trim() || collections.find((c) => membersByHandle.get(c.handle)?.has(r.handle))?.name || "",
+      ),
       // "" = this product has no photo. It used to GUESS a filename from the handle
       // (`/products/${r.handle}.webp`), which is a convention only the SEED follows: `r.image` comes
       // from the product_media join, so a merchant who creates a product and does not upload a photo
@@ -708,6 +720,11 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
         if (rank >= 0) scored.push({ p, rank });
       }
       return scored.sort((a, b) => a.rank - b.rank).map((s) => s.p);
+    },
+    homeCollection: (p) => {
+      const isIn = (c: Collection) => membersByHandle.get(c.handle)?.has(p.handle) ?? false;
+      const own = collections.find((c) => c.handle === p.categoryHandle);
+      return own && isIn(own) ? own : collections.find(isIn);
     },
     findProduct: (handle) => products.find((p) => p.handle === handle),
     findCollection: (handle) => collections.find((c) => c.handle === handle),
