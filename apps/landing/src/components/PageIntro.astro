@@ -1,4 +1,6 @@
 ---
+import PhiOrnament from "./PhiOrnament.astro";
+
 // Opening of every inner sales page: the page's own H1 and the one sentence that says what the page
 // answers, then the same two actions as the homepage. Left-aligned on the shell column like the
 // homepage hero, without a screenshot: each inner page shows its screens in the sections below.
@@ -11,10 +13,11 @@ interface Props {
 const { title, lede, primary, secondary } = Astro.props;
 ---
 
-<section class="intro" aria-labelledby="intro-title" data-hero>
-  <h1 id="intro-title" class="intro-title" data-hero-item>{title}</h1>
-  <p class="intro-lede" data-hero-item>{lede}</p>
-  <div class="intro-actions" data-hero-item>
+<section class="intro" aria-labelledby="intro-title">
+  <PhiOrnament class="intro-phi" />
+  <h1 id="intro-title" class="intro-title">{title}</h1>
+  <p class="intro-lede">{lede}</p>
+  <div class="intro-actions">
     <a href={primary.href} class="btn btn-primary btn-lg">{primary.label}</a>
     {secondary && <a href={secondary.href} class="btn btn-ghost btn-lg">{secondary.label}</a>}
   </div>
@@ -22,11 +25,22 @@ const { title, lede, primary, secondary } = Astro.props;
 </section>
 
 <style>
-  .intro { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 3vw, 2rem); }
+  .intro { position: relative; isolation: isolate; padding-block: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 3vw, 2rem); }
+  /* Fills the right half the left-aligned intro leaves empty on wide screens; gone below 1024px. */
+  .intro :global(.intro-phi) {
+    position: absolute;
+    z-index: -1;
+    top: clamp(2rem, 5vw, 4rem);
+    right: 0;
+    width: min(32rem, 40%);
+    color: var(--color-primary);
+    opacity: 0.18;
+  }
+  @media (max-width: 1023px) { .intro :global(.intro-phi) { display: none; } }
   .intro-title {
-    max-width: 46rem;
+    max-width: 40rem;
     font-family: var(--font-serif);
-    font-size: clamp(2.2rem, 1.6rem + 2.2vw, 3.35rem);
+    font-size: var(--fs-display);
     font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1.05;
@@ -36,7 +50,7 @@ const { title, lede, primary, secondary } = Astro.props;
     margin-top: 1.25rem;
     max-width: 40rem;
     color: var(--color-muted);
-    font-size: clamp(1.02rem, 0.96rem + 0.3vw, 1.15rem);
+    font-size: var(--fs-lede);
     line-height: 1.65;
     text-wrap: pretty;
   }

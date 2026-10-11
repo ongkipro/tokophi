@@ -41,6 +41,15 @@
   --glow: rgba(79, 70, 229, 0.14);
   --grid: rgba(20, 21, 42, 0.028);
   --plate-fill: rgba(79, 70, 229, 0.05);
+
+  /* Type scale (DESIGN.md "Type"): roughly 1.33 between display, section and item headings, fluid
+     between 390px and 1440px. Components use these instead of their own clamp() values. */
+  --fs-display: clamp(2.4rem, 1.7rem + 2.4vw, 3.5rem);
+  --fs-h2: clamp(1.85rem, 1.4rem + 1.6vw, 2.625rem);
+  --fs-h3: clamp(1.25rem, 1.12rem + 0.45vw, 1.5rem);
+  --fs-lede: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+  --fs-item: 1.0625rem;
+  --fs-small: 0.875rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -366,9 +375,10 @@ body::before {
   color: var(--color-ink);
 }
 .btn-ghost:hover {
-  border-color: var(--color-hairline);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-line));
   background-color: var(--color-primary-soft);
 }
+.btn-primary:active { box-shadow: 0 4px 12px -8px rgba(79, 70, 229, 0.75); }
 
 @media (hover: hover) {
   .btn:hover {
@@ -393,10 +403,23 @@ body::before {
   padding-inline: max(clamp(1.25rem, 5vw, 4.5rem), calc((100vw - 82rem) / 2 + clamp(1.25rem, 5vw, 4.5rem)));
 }
 .band-white { background: var(--color-surface); }
+/* Ink band (pricing): the one dark section of a page. The golden spiral sits low on the left, under
+   the price panel's edge, in white at very low contrast. */
+.band-ink { position: relative; isolation: isolate; overflow: hidden; background: #14152a; color: #fff; }
+.band-ink > .band-phi {
+  position: absolute;
+  z-index: -1;
+  left: max(-6rem, -8vw);
+  bottom: -14rem;
+  width: min(54rem, 90vw);
+  rotate: -90deg;
+  color: #a9b0ff;
+  opacity: 0.12;
+}
 .section { padding-block: clamp(4rem, 9vw, 7.5rem); scroll-margin-top: 4.5rem; }
 .h2 {
   font-family: var(--font-serif);
-  font-size: clamp(1.9rem, 1.35rem + 2.1vw, 3.1rem);
+  font-size: var(--fs-h2);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.08;
@@ -408,7 +431,7 @@ p, li, td { text-wrap: pretty; }
   margin-top: 1rem;
   max-width: 40rem;
   color: var(--color-muted);
-  font-size: clamp(1rem, 0.96rem + 0.2vw, 1.0938rem);
+  font-size: var(--fs-lede);
   line-height: 1.7;
   text-wrap: pretty;
 }
@@ -422,9 +445,35 @@ p, li, td { text-wrap: pretty; }
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 0.25em;
 }
-.text-link:hover { text-decoration-color: currentColor; }
+.text-link { transition: color 0.18s ease, text-decoration-color 0.18s ease; }
+.text-link:hover { color: var(--color-ink); text-decoration-color: currentColor; }
 .btn-lg { height: 3.125rem; padding-inline: 1.5rem; font-size: 1rem; }
 
 /* A page that opens on a full-bleed band (/harga) starts it flush under the sticky header instead of
    leaving the shell's row gap as a pale strip between the two. */
 .marketing-main > .band:first-child { margin-top: calc(-1 * clamp(0.75rem, 2.2vh, 2rem)); }
+
+/* Pressed state last, so it outranks the hover lift: the button settles under the finger or click. */
+.btn:active { transform: translateY(0) scale(0.98); }
+
+/* ── Motion (DESIGN.md "Motion concept", revised 2026-10-12) ─────────────────────────────────────
+   No animation library: GSAP + ScrollTrigger cost 115 KB (45 KB gzip) for two effects. Product
+   screenshots below the fold settle in with a CSS scroll-driven animation, which runs off the main
+   thread and needs no JavaScript. Browsers without `animation-timeline` and visitors who ask for
+   reduced motion simply see the screenshots in place. Nothing above the fold animates, so the
+   largest paint is never held back. In-page anchors scroll smoothly; native scrolling is untouched. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  @supports (animation-timeline: view()) {
+    [data-settle] {
+      animation: settle linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+}
+@keyframes settle {
+  from { opacity: 0; transform: translateY(3rem) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+

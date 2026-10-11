@@ -59,7 +59,7 @@ const tries = [
   .try-media > :last-child { margin-top: clamp(2rem, 6vw, 4.5rem); }
   .try-list { margin-top: clamp(1.5rem, 3vw, 2rem); counter-reset: try; }
   .try-list li { padding-block: 1rem; border-top: 1px solid var(--color-line); counter-increment: try; }
-  .try-list h3 { font-size: 1rem; font-weight: 650; }
+  .try-list h3 { font-size: var(--fs-item); font-weight: 650; }
   .try-list h3::before { content: counter(try) ". "; color: var(--color-primary-ink); }
   .try-list p { margin-top: 0.3rem; color: var(--color-muted); font-size: 0.9375rem; line-height: 1.6; text-wrap: pretty; }
   .try-note { margin-top: 1rem; color: var(--color-muted); font-size: 0.875rem; }

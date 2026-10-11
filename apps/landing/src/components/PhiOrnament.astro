@@ -1,0 +1,42 @@
+---
+// The brand's own ornament: Φ is the golden ratio, so the background device is a golden rectangle
+// subdivided into its squares with the spiral drawn through them — thin strokes, low contrast,
+// decorative only (aria-hidden). Geometry is computed, not traced, so it stays exact at any size.
+// Used sparingly (hero, inner-page intros, pricing band, footer); never behind running text.
+interface Props {
+  class?: string;
+  /** How many squares to subdivide (each step is 1/φ the size of the last). */
+  steps?: number;
+}
+const { class: className, steps = 9 } = Astro.props;
+
+const PHI = (1 + Math.sqrt(5)) / 2;
+const W = 1000;
+const H = W / PHI;
+let [x, y, w, h] = [0, 0, W, H];
+const squares: string[] = [];
+let path = `M ${x} ${y + h}`;
+const r = (n: number) => Math.round(n * 100) / 100;
+// Squares come off the left, top, right, bottom in turn; each quarter arc runs clockwise between
+// the two corners of its square that touch the previous and next arc.
+for (let i = 0; i < steps; i++) {
+  const side = i % 2 === 0 ? h : w;
+  switch (i % 4) {
+    case 0: squares.push(`M${r(x)} ${r(y)}h${r(side)}v${r(side)}h${-r(side)}z`); path += ` A ${r(side)} ${r(side)} 0 0 1 ${r(x + side)} ${r(y)}`; x += side; w -= side; break;
+    case 1: squares.push(`M${r(x)} ${r(y)}h${r(side)}v${r(side)}h${-r(side)}z`); path += ` A ${r(side)} ${r(side)} 0 0 1 ${r(x + side)} ${r(y + side)}`; y += side; h -= side; break;
+    case 2: squares.push(`M${r(x + w - side)} ${r(y)}h${r(side)}v${r(side)}h${-r(side)}z`); path += ` A ${r(side)} ${r(side)} 0 0 1 ${r(x + w - side)} ${r(y + side)}`; w -= side; break;
+    case 3: squares.push(`M${r(x)} ${r(y + h - side)}h${r(side)}v${r(side)}h${-r(side)}z`); path += ` A ${r(side)} ${r(side)} 0 0 1 ${r(x)} ${r(y + h - side)}`; h -= side; break;
+  }
+}
+---
+
+<svg class:list={["phi-ornament", className]} viewBox={`-2 -2 ${W + 4} ${r(H) + 4}`} aria-hidden="true" focusable="false">
+  <path class="phi-grid" d={squares.join("")} />
+  <path class="phi-spiral" d={path} />
+</svg>
+
+<style>
+  .phi-ornament { display: block; pointer-events: none; overflow: visible; }
+  .phi-grid { fill: none; stroke: currentColor; stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.55; }
+  .phi-spiral { fill: none; stroke: currentColor; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+</style>
