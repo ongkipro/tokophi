@@ -1,0 +1,32 @@
+# Traefik dynamic router — www.tokophi.com → 308 → tokophi.com, path + query preserved.
+#
+# THE BUG THIS FIXES (found 2026-10-11): the landing service's docker-compose labels carried the
+# replacement as `https://tokophi.com/$${1}`. `$$` is docker-compose's escape for a literal `$`, but
+# Coolify hands the label to Traefik WITHOUT compose interpolation, so Traefik received `$${1}`, which
+# Go's regexp expansion reads as a literal `$` followed by `{1}`. Every www URL answered
+# `308 → https://tokophi.com/${1}` and then 404'd: www.tokophi.com/fitur/ never reached /fitur/.
+# A dynamic file has no interpolation layer, so `${1}` here is exactly what Traefik expands.
+#
+# PRIORITY 1000 — above the label router `www-apex` (priority 100) until the next landing deploy
+# removes those labels, and above every Coolify-generated router. Only this one host is matched.
+#
+# DEPLOYED TO: /data/coolify/proxy/dynamic/tokophi-www-apex-redirect.yaml (proxy watches the dir →
+# hot reload). Reinstall: scp ops/tokophi-www-apex-redirect.yaml root@<box>:/data/coolify/proxy/dynamic/
+http:
+  routers:
+    tokophi-www-apex:
+      rule: 'Host(`www.tokophi.com`)'
+      entryPoints:
+        - https
+      priority: 1000
+      middlewares:
+        - tokophi-www-apex
+      # Never reached (the middleware always redirects), but a router must name a service.
+      service: landing-svc@docker
+      tls: {}
+  middlewares:
+    tokophi-www-apex:
+      redirectRegex:
+        regex: '^https?://www\.tokophi\.com/(.*)'
+        replacement: 'https://tokophi.com/${1}'
+        permanent: true

@@ -1,130 +1,178 @@
 ---
-import { MobileNav } from "./MobileNav";
+import Icon from "./Icon.astro";
 import { MARKETING_ROUTES, isCurrentRoute } from "../lib/navigation";
 
 interface Props {
-  class?: string;
   currentPath?: string;
   loginUrl?: string;
   signupUrl?: string;
 }
 
-const {
-  class: className = "",
-  currentPath = Astro.url.pathname,
-  loginUrl: loginUrlProp,
-  signupUrl: signupUrlProp,
-} = Astro.props;
+const { currentPath = Astro.url.pathname, loginUrl: loginUrlProp, signupUrl: signupUrlProp } = Astro.props;
 const loginUrl = loginUrlProp || "https://app.tokophi.com/login";
 const signupUrl = signupUrlProp || "https://app.tokophi.com/daftar";
 ---
 
-<header class:list={["shell-head", "site-header", className]}>
-  <a href="/" class="wordmark" aria-label="TokoΦ, halaman utama">
-    <span class="wordmark-text">Toko<span class="wordmark-phi">Φ</span></span>
-  </a>
+{/* Sticky header. The mobile menu is a native <dialog> (focus trap, Escape and the top layer come
+    from the browser), replacing a hydrated React Sheet that cost ~90 KB of JS on every visit. */}
+<header class="site-header">
+  <div class="site-header-inner">
+    <a href="/" class="wordmark" aria-label="TokoΦ, halaman utama">
+      <span class="wordmark-text">Toko<span class="wordmark-phi">Φ</span></span>
+    </a>
 
-  <nav class="desktop-nav" aria-label="Navigasi utama">
-    <ul>
-      {MARKETING_ROUTES.map((route) => {
-        const current = isCurrentRoute(currentPath, route.href);
-        return (
+    <nav class="desktop-nav" aria-label="Navigasi utama">
+      <ul>
+        {MARKETING_ROUTES.map((route) => (
           <li>
-            <a href={route.href} aria-current={current ? "page" : undefined}>
+            <a href={route.href} aria-current={isCurrentRoute(currentPath, route.href) ? "page" : undefined}>
               <span class="full-label">{route.label}</span>
               <span class="short-label">{route.shortLabel ?? route.label}</span>
             </a>
           </li>
-        );
-      })}
-    </ul>
-  </nav>
+        ))}
+      </ul>
+    </nav>
 
-  <div class="desktop-actions">
-    <a href={loginUrl} class="login-link">Masuk</a>
-    <a href={signupUrl} class="header-cta">Buat toko</a>
+    <div class="header-actions">
+      <a href={loginUrl} class="login-link">Masuk</a>
+      <a href={signupUrl} class="header-cta">Coba gratis</a>
+      <button type="button" class="menu-button" data-menu-open aria-haspopup="dialog" aria-controls="site-menu">
+        <Icon name="menu" size={22} />
+        <span class="sr-only">Buka menu</span>
+      </button>
+    </div>
   </div>
 
-  <MobileNav
-    client:load
-    routes={MARKETING_ROUTES}
-    {currentPath}
-    {loginUrl}
-    {signupUrl}
-  />
+  <dialog id="site-menu" class="site-menu" aria-label="Menu">
+    <div class="site-menu-head">
+      <span class="wordmark-text">Toko<span class="wordmark-phi">Φ</span></span>
+      <button type="button" class="menu-button" data-menu-close>
+        <Icon name="x" size={22} />
+        <span class="sr-only">Tutup menu</span>
+      </button>
+    </div>
+    <nav aria-label="Navigasi utama (seluler)">
+      <ul>
+        {MARKETING_ROUTES.map((route) => (
+          <li>
+            <a href={route.href} aria-current={isCurrentRoute(currentPath, route.href) ? "page" : undefined}>{route.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+    <div class="site-menu-actions">
+      <a href={signupUrl} class="btn btn-primary btn-lg">Coba gratis 3 hari</a>
+      <a href={loginUrl} class="btn btn-ghost btn-lg">Masuk ke Dashboard Seller</a>
+    </div>
+  </dialog>
 </header>
+
+<script>
+  const menu = document.getElementById("site-menu") as HTMLDialogElement | null;
+  document.querySelector("[data-menu-open]")?.addEventListener("click", () => menu?.showModal());
+  document.querySelector("[data-menu-close]")?.addEventListener("click", () => menu?.close());
+  // A tap on the backdrop (the dialog element itself, outside its content box) closes it.
+  menu?.addEventListener("click", (e) => { if (e.target === menu) menu.close(); });
+  // Following an in-page anchor must not leave the modal over the section it jumped to.
+  menu?.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => menu.close()));
+</script>
 
 <style>
   .site-header {
-    position: relative;
-    z-index: 30;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    margin-inline: calc(50% - 50vw);
+    padding-inline: max(clamp(1.25rem, 5vw, 4.5rem), calc((100vw - 82rem) / 2 + clamp(1.25rem, 5vw, 4.5rem)));
+    background: color-mix(in srgb, var(--color-canvas) 95%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+  }
+  .site-header-inner {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    min-height: 3rem;
     gap: clamp(1rem, 2.4vw, 2.5rem);
+    min-height: 3.75rem;
   }
-
   .desktop-nav { justify-self: center; }
-  .desktop-nav ul,
-  .desktop-actions { display: flex; align-items: center; }
-  .desktop-nav ul { gap: clamp(0.8rem, 1.45vw, 1.35rem); }
-
-  .desktop-nav a,
-  .login-link {
+  .desktop-nav ul { display: flex; align-items: center; gap: clamp(0.9rem, 1.6vw, 1.6rem); }
+  .desktop-nav a, .login-link {
     color: var(--color-muted);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     font-weight: 550;
     white-space: nowrap;
     transition: color 0.18s ease;
   }
-
-  .desktop-nav a:hover,
-  .desktop-nav a[aria-current="page"],
-  .login-link:hover { color: var(--color-ink); }
-
+  .desktop-nav a:hover, .desktop-nav a[aria-current="page"], .login-link:hover { color: var(--color-ink); }
   .desktop-nav a[aria-current="page"] { font-weight: 700; }
   .short-label { display: none; }
-
-  .desktop-actions { justify-self: end; gap: 0.85rem; }
-
+  .header-actions { display: flex; align-items: center; gap: 0.9rem; justify-self: end; }
   .header-cta {
     display: inline-flex;
-    min-height: 2.625rem;
+    min-height: 2.5rem;
     align-items: center;
-    justify-content: center;
-    padding-inline: 1.05rem;
-    border-radius: 0.7rem;
+    padding-inline: 1rem;
+    border-radius: 0.5rem;
     background: var(--color-primary);
     color: var(--color-on-primary);
     font-size: 0.875rem;
     font-weight: 650;
-    box-shadow: 0 10px 24px -14px rgba(79, 70, 229, 0.72);
-    transition: background-color 0.18s ease, transform 0.18s ease;
+    white-space: nowrap;
+    transition: background-color 0.18s ease;
   }
-
   .header-cta:hover { background: var(--color-primary-hover); }
-  :global(.mobile-nav-island) { display: none; justify-self: end; }
+  .menu-button {
+    display: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    color: var(--color-ink);
+  }
+  .menu-button:hover { background: var(--color-primary-soft); }
+
+  .site-menu {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 1rem clamp(1.25rem, 5vw, 2rem) 2rem;
+    border: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+  }
+  .site-menu::backdrop { background: rgba(8, 9, 19, 0.4); }
+  .site-menu-head { display: flex; align-items: center; justify-content: space-between; min-height: 2.75rem; }
+  .site-menu-head .menu-button { display: inline-flex; }
+  .site-menu nav ul { margin-top: 1.5rem; display: grid; }
+  .site-menu nav a {
+    display: block;
+    padding-block: 0.95rem;
+    border-bottom: 1px solid var(--color-line);
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  .site-menu nav a[aria-current="page"] { color: var(--color-primary-ink); }
+  .site-menu-actions { display: grid; gap: 0.75rem; margin-top: 2rem; }
 
   @media (max-width: 1180px) {
     .full-label { display: none; }
     .short-label { display: inline; }
   }
-
   @media (max-width: 1023px) {
-    .site-header { grid-template-columns: 1fr auto; }
-    .desktop-nav,
-    .desktop-actions { display: none; }
-    :global(.mobile-nav-island) { display: block; }
+    .site-header-inner { grid-template-columns: 1fr auto; }
+    .desktop-nav, .login-link { display: none; }
+    .menu-button { display: inline-flex; }
   }
-
-  @media (hover: hover) {
-    .header-cta:hover { transform: translateY(-1px); }
+  @media (max-width: 359px) {
+    .header-cta { display: none; }
   }
-
   @media (prefers-reduced-motion: reduce) {
-    .desktop-nav a,
-    .login-link,
-    .header-cta { transition: none; }
+    .desktop-nav a, .login-link, .header-cta { transition: none; }
   }
 </style>

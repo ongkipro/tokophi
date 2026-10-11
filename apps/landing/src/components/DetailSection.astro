@@ -1,0 +1,85 @@
+---
+import Screen from "./Screen.astro";
+import type { ScreenName } from "../lib/screens";
+
+// One topic of an inner page (/fitur, /pembayaran-pengiriman): heading, the real screen that does
+// the job, then the details as a plain two-column list a reader scans for the one item they need.
+interface Props {
+  id: string;
+  title: string;
+  lede: string;
+  items: readonly { title: string; body: string }[];
+  screen?: { name: ScreenName; narrow?: ScreenName; alt: string; kind?: "desktop" | "phone"; frames?: readonly ScreenName[]; beside?: boolean };
+  white?: boolean;
+}
+const { id, title, lede, items, screen, white = false } = Astro.props;
+const phone = screen?.kind === "phone";
+// Phone screens and narrow single-card settings screens sit beside the list instead of above it.
+const side = phone || Boolean(screen?.beside);
+---
+
+<section class:list={["band", white && "band-white"]} id={id} aria-labelledby={`${id}-title`}>
+  <div class:list={["section detail", side && "is-phone", side && !phone && "is-card"]}>
+    <div class="detail-head">
+      <h2 id={`${id}-title`} class="h2">{title}</h2>
+      <p class="lede">{lede}</p>
+    </div>
+    {screen && (
+      <div class="detail-media" data-settle>
+        <Screen
+          name={screen.name}
+          narrow={screen.narrow}
+          alt={screen.alt}
+          kind={screen.kind}
+          frames={screen.frames ? [...screen.frames] : undefined}
+          sizes={phone ? "(min-width: 1024px) 280px, 96vw" : side ? "(min-width: 1024px) 620px, 96vw" : "(min-width: 1280px) 1170px, 96vw"}
+        />
+      </div>
+    )}
+    <ul class="detail-list">
+      {items.map((it) => (
+        <li>
+          <h3>{it.title}</h3>
+          <p>{it.body}</p>
+        </li>
+      ))}
+    </ul>
+    <slot />
+  </div>
+</section>
+
+<style>
+  .detail-head { max-width: 46rem; }
+  .detail-media { margin-top: clamp(2.25rem, 4vw, 3rem); }
+  .detail-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 clamp(2rem, 5vw, 4.5rem);
+    margin-top: clamp(2rem, 4vw, 2.75rem);
+  }
+  .detail-list li { padding-block: 1.1rem; border-top: 1px solid var(--color-line); }
+  .detail-list h3 { font-size: 1rem; font-weight: 650; line-height: 1.4; }
+  .detail-list p { margin-top: 0.3rem; max-width: 34rem; color: var(--color-muted); font-size: 0.9375rem; line-height: 1.6; text-wrap: pretty; }
+
+  /* Phone screen: heading spans the top, phone on the left, list on the right. */
+  .is-phone {
+    display: grid;
+    grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+    grid-template-areas: "head head" "media list";
+    column-gap: clamp(2rem, 6vw, 5.5rem);
+    align-items: start;
+  }
+  .is-phone .detail-head { grid-area: head; }
+  .is-phone .detail-media { grid-area: media; display: flex; justify-content: center; }
+  .is-phone .detail-media :global(.screen-phone) { width: min(17rem, 64vw); }
+  .is-phone .detail-list { grid-area: list; grid-template-columns: 1fr; }
+  /* A single settings card: shown near its captured width (~606px) so its labels stay readable. */
+  .is-card { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
+
+  @media (max-width: 1023px) {
+    .is-phone { display: block; }
+    /* Near 1:1 with the 390px capture so the phone's own text stays readable. */
+    .is-phone .detail-media :global(.screen-phone) { width: min(24rem, 100%); }
+  }
+  @media (max-width: 719px) { .detail-list { grid-template-columns: 1fr; } }
+</style>

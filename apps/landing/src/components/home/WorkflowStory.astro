@@ -1,0 +1,103 @@
+---
+import Screen from "../Screen.astro";
+import { COURIER_COUNT, MIN_PAYOUT } from "../../lib/offer";
+
+// Five real steps of running a store, each paired with the screen that does it: text and screenshot
+// side by side on wide screens, stacked on narrow ones. MotionLayer adds a scroll-linked settle to
+// each screenshot; without JS or under reduced motion the screenshots simply sit in place.
+// (A pinned crossfade frame was tried first and dropped: it left a tall empty column beside steps
+// 2–5 and showed the wrong screen whenever the scroll position was restored. See DESIGN.md.)
+const steps = [
+  {
+    title: "Susun katalog",
+    body: "Isi judul, deskripsi, variasi ukuran dan warna, serta stok per lokasi. Foto otomatis diubah ke WebP agar toko tetap ringan, dan kategori Google sekalian dipakai untuk feed iklan. Simpan sebagai draf sampai siap tampil.",
+    screen: "seller-produk-editor",
+    narrow: "seller-produk-editor-narrow",
+    alt: "Editor produk di Dashboard Seller dengan judul, deskripsi, foto, status, dan kategori Google",
+  },
+  {
+    title: "Rancang tampilan toko",
+    body: "Store Builder menyusun beranda, halaman kategori, dan halaman produk dari 14 jenis bagian, lengkap dengan warna, logo, dan pasangan huruf toko Anda. Toko tampil di alamat Anda sendiri.",
+    screen: "seller-store-builder",
+    narrow: "seller-store-builder-narrow",
+    alt: "Store Builder TokoΦ menampilkan beranda toko demo dengan daftar bagian yang bisa ditambahkan",
+  },
+  {
+    title: "Pembeli checkout tanpa akun",
+    body: "Pembeli tidak perlu membuat akun. Begitu kecamatan tujuan dipilih, ongkir langsung dihitung dan pembeli memilih QRIS, Virtual Account, atau COD. Harga selalu dihitung ulang di server.",
+    screen: "storefront-checkout-qris",
+    frames: ["storefront-checkout-kecamatan", "storefront-checkout-qris", "storefront-checkout-va", "storefront-checkout-cod"],
+    kind: "phone",
+    alt: "Checkout toko demo di ponsel, berganti otomatis: kecamatan dipilih, lalu bayar dengan QRIS, Virtual Account (Permata, BCA, BNI, BRI, Mandiri), atau COD",
+  },
+  {
+    title: "Kirim banyak pesanan sekaligus",
+    body: `Booking kurir untuk puluhan pesanan dalam sekali klik, dari ${COURIER_COUNT} kurir. Resi terisi otomatis begitu kurir menerima, dan label thermal siap dicetak.`,
+    screen: "seller-pengiriman-massal",
+    narrow: "seller-pengiriman-massal-narrow",
+    alt: "Halaman Pengiriman Massal dengan filter layanan, jasa kirim, dan status cetak label (nama pembeli disamarkan)",
+  },
+  {
+    title: "Pantau saldo, tarik ke rekening",
+    body: `Setiap pesanan selesai menambah saldo, dan mutasinya tercatat per pesanan. Daftarkan rekening sekali, lalu tarik saldo mulai ${MIN_PAYOUT} tanpa biaya.`,
+    screen: "seller-saldo",
+    narrow: "seller-saldo-narrow",
+    alt: "Halaman Saldo di Dashboard Seller dengan saldo tersedia, dana dalam proses, dan riwayat mutasi",
+  },
+] as const;
+---
+
+<section class="section story" id="cara-kerja" aria-labelledby="story-title">
+  <div class="story-head">
+    <h2 id="story-title" class="h2">Dari produk pertama sampai uang masuk rekening.</h2>
+    <p class="lede">Lima pekerjaan rutin toko online, dikerjakan di tempat yang sama. Semua gambar di bawah ini diambil dari Dashboard Seller dan toko demo yang sedang berjalan.</p>
+  </div>
+
+  <ol class="story-steps">
+    {steps.map((s, i) => (
+      <li class:list={["story-step", "kind" in s && "is-phone"]}>
+        <div class="story-copy">
+          <p class="story-num">Langkah {i + 1}</p>
+          <h3>{s.title}</h3>
+          <p class="story-text">{s.body}</p>
+        </div>
+        <div class="story-media" data-settle>
+          <Screen name={s.screen} narrow={"narrow" in s ? s.narrow : undefined} frames={"frames" in s ? [...s.frames] : undefined} alt={s.alt} kind={"kind" in s ? s.kind : "desktop"} sizes={"kind" in s ? "(min-width: 1024px) 280px, 64vw" : "(min-width: 1024px) 720px, 92vw"} />
+        </div>
+      </li>
+    ))}
+  </ol>
+</section>
+
+<style>
+  .story-head { max-width: 46rem; }
+  .story-steps { display: grid; gap: clamp(3.5rem, 8vw, 6.5rem); margin-top: clamp(2.5rem, 5vw, 4rem); }
+  .story-step {
+    display: grid;
+    grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+    gap: clamp(1.5rem, 5vw, 5rem);
+    align-items: start;
+  }
+  /* Tall screens: the copy rides along at the top while its screen scrolls past (review 2026-10-12). */
+  .story-copy { position: sticky; top: 6rem; }
+  .story-num { color: var(--color-primary-ink); font-size: 0.875rem; font-weight: 650; }
+  .story-copy h3 {
+    margin-top: 0.4rem;
+    font-family: var(--font-serif);
+    font-size: clamp(1.45rem, 1.2rem + 0.9vw, 2rem);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+  }
+  .story-text { margin-top: 0.75rem; max-width: 34rem; color: var(--color-muted); line-height: 1.7; text-wrap: pretty; }
+  /* The phone step: a narrow device centred in the media column, so it does not read as a gap. */
+  .is-phone .story-media { display: flex; justify-content: center; }
+  .is-phone .story-media :global(.screen-phone) { width: min(17rem, 64vw); }
+
+  @media (max-width: 1023px) {
+    .story-step { grid-template-columns: 1fr; gap: 1.25rem; }
+    .story-copy { position: static; }
+    /* On a phone the captured phone screen is shown near 1:1 so its text stays readable. */
+    .is-phone .story-media :global(.screen-phone) { width: min(24rem, 100%); }
+  }
+</style>
