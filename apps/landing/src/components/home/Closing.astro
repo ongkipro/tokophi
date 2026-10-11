@@ -1,0 +1,21 @@
+---
+import { PRICE } from "../../lib/offer";
+interface Props { signupUrl: string; secondary?: { href: string; label: string }; tight?: boolean }
+const { signupUrl, secondary = { href: "/harga/", label: "Lihat rincian harga" }, tight = false } = Astro.props;
+---
+
+<section class:list={["section closing", tight && "closing-tight"]} aria-labelledby="closing-title">
+  <h2 id="closing-title" class="h2">Daftar sekarang, mulai jualan setelah disetujui.</h2>
+  <p class="lede">Tim TokoΦ meninjau toko baru lebih dulu. Setelah itu susun produk, atur pengiriman, dan bagikan alamat toko ke pembeli. Uji coba {PRICE.trialDays} hari tanpa kartu kredit.</p>
+  <div class="closing-actions">
+    <a href={signupUrl} class="btn btn-primary btn-lg">Coba gratis {PRICE.trialDays} hari</a>
+    <a href={secondary.href} class="btn btn-ghost btn-lg">{secondary.label}</a>
+  </div>
+</section>
+
+<style>
+  .closing .h2 { max-width: 34rem; }
+  .closing-tight { padding-top: clamp(1rem, 3vw, 2.5rem); }
+  .closing-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
+  @media (max-width: 479px) { .closing-actions :global(.btn) { flex: 1 1 100%; } }
+</style>

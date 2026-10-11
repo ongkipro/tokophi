@@ -2672,13 +2672,15 @@
             "MarketingLayout"
           ],
           "data": [],
-          "lib": [],
+          "lib": [
+            "offer"
+          ],
           "locals": false,
           "db": false,
           "gate": [],
           "setHtml": false,
           "tests": [],
-          "whatItIs": "How it works."
+          "whatItIs": "Signup → review → setup → first order, the daily workflow, and the subscription billing timeline."
         },
         {
           "url": "/demo",
@@ -2689,30 +2691,15 @@
             "MarketingLayout"
           ],
           "data": [],
-          "lib": [],
-          "locals": false,
-          "db": false,
-          "gate": [],
-          "setHtml": false,
-          "tests": [],
-          "whatItIs": "Link/frame to the demo store."
-        },
-        {
-          "url": "/faq",
-          "kind": "page",
-          "methods": [],
-          "file": "apps/landing/src/pages/faq.astro",
-          "layout": [
-            "MarketingLayout"
+          "lib": [
+            "offer"
           ],
-          "data": [],
-          "lib": [],
           "locals": false,
           "db": false,
           "gate": [],
           "setHtml": false,
           "tests": [],
-          "whatItIs": "FAQ."
+          "whatItIs": "What to try on the demo storefront (batiknusantara.tokophi.id), with its real screens."
         },
         {
           "url": "/fitur",
@@ -2723,13 +2710,32 @@
             "MarketingLayout"
           ],
           "data": [],
+          "lib": [
+            "offer"
+          ],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Every feature in the one plan, grouped (store, sales, shipping, marketing, operations) with real screenshots."
+        },
+        {
+          "url": "/harga",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/landing/src/pages/harga.astro",
+          "layout": [
+            "MarketingLayout"
+          ],
+          "data": [],
           "lib": [],
           "locals": false,
           "db": false,
           "gate": [],
           "setHtml": false,
           "tests": [],
-          "whatItIs": "Feature overview."
+          "whatItIs": "Subscription pricing (one plan, monthly/annual switch) and the who-pays-which-fee table."
         },
         {
           "url": "/",
@@ -2776,13 +2782,15 @@
             "MarketingLayout"
           ],
           "data": [],
-          "lib": [],
+          "lib": [
+            "offer"
+          ],
           "locals": false,
           "db": false,
           "gate": [],
           "setHtml": false,
           "tests": [],
-          "whatItIs": "Payment channels + shipping/COD explained for prospects."
+          "whatItIs": "Payment channels, COD rules, couriers, payout, and the who-pays-which-fee table, all from code constants."
         },
         {
           "url": "/privasi",

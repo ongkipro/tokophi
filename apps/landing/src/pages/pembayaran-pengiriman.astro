@@ -1,39 +1,101 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
-import PageHero from "../components/PageHero.astro";
-import FinalCta from "../components/FinalCta.astro";
+import PageIntro from "../components/PageIntro.astro";
+import DetailSection from "../components/DetailSection.astro";
+import FeeTable from "../components/FeeTable.astro";
+import Closing from "../components/home/Closing.astro";
+import { COD, COURIER_COUNT, COURIER_NAMES, FEES, MIN_PAYOUT, PRICE, VA_BANKS } from "../lib/offer";
 
+// The money and parcel path end to end, every figure imported from the module that charges it
+// (lib/offer.ts). Fees were withheld from this page until the policy shipped; they are published
+// since 2026-10-11 (specs/docs/LANDING_PRD.md).
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
-const title = "Pembayaran dan pengiriman toko online | TokoΦ";
-const description = "Pahami dukungan QRIS, transfer bank, COD, dan alur pengiriman dalam negeri yang tersedia melalui Tokophi.";
+const title = "Pembayaran QRIS, Virtual Account, COD dan 10 Kurir - TokoΦ";
+const description = "Cara TokoΦ menerima QRIS, Virtual Account 5 bank, dan COD, mengirim lewat 10 kurir, dan mencairkan saldo. Lengkap dengan biaya dan siapa yang membayarnya.";
+
+const payment = [
+  { title: "QRIS", body: `Dibayar dari aplikasi bank atau dompet digital apa pun yang mendukung QRIS. Biayanya ${FEES.qris}.` },
+  { title: "Virtual Account", body: `${VA_BANKS.join(", ")}. Biayanya ${FEES.va}.` },
+  { title: "Status lunas otomatis", body: "Pesanan berubah menjadi lunas begitu pembayaran diterima. Anda tidak perlu mencocokkan bukti transfer." },
+  { title: "Biaya dibayar pembeli", body: "Biaya pembayaran ditambahkan di checkout dan terlihat sebelum pembeli membayar. Tidak ada potongan dari harga barang Anda." },
+] as const;
+
+const cod = [
+  { title: `Lewat ${COD.courier}`, body: `COD saat ini tersedia lewat ${COD.courier}.` },
+  { title: `${COD.provinces.length} provinsi`, body: `${COD.provinces.join(", ")}.` },
+  { title: `Maksimal ${COD.cap}`, body: "Dihitung dari nilai barang ditambah ongkir. Di atas batas ini, pilihan COD tidak muncul di checkout." },
+  { title: "Biaya COD", body: `${FEES.cod}, dibayar pembeli.` },
+  { title: "Bisa dimatikan", body: "COD adalah pilihan toko. Aktifkan bila Anda siap menerima pesanan bayar di tempat." },
+] as const;
+
+const shipping = [
+  { title: `${COURIER_COUNT} kurir`, body: `${COURIER_NAMES.join(", ")}.` },
+  { title: "Ongkir dari alamat toko", body: "Tarif dihitung dari alamat penjemputan toko ke kecamatan pembeli, dan pembeli memilih layanannya di checkout." },
+  { title: "Pilih layanan sendiri", body: "Nyalakan atau matikan setiap layanan kurir, dikelompokkan dari yang tercepat sampai kargo. Hanya yang menyala yang muncul di checkout." },
+  { title: "Booking massal", body: "Pesan penjemputan kurir untuk banyak pesanan sekaligus dari Dashboard Seller." },
+  { title: "Resi dan label", body: "Nomor resi terisi otomatis, statusnya diperbarui berkala, dan label thermal siap dicetak." },
+] as const;
+
+const payout = [
+  { title: "Saldo per pesanan", body: "Setiap pesanan selesai menambah saldo toko, dan mutasinya tercatat per pesanan." },
+  { title: `Tarik mulai ${MIN_PAYOUT}`, body: "Tanpa biaya penarikan, ditransfer ke rekening yang Anda daftarkan." },
+  { title: "Diperiksa sebelum dikirim", body: "Setiap penarikan diperiksa tim TokoΦ sebelum ditransfer." },
+] as const;
 ---
 
 <MarketingLayout {title} {description} path="/pembayaran-pengiriman/">
-  <PageHero eyebrow="Pembayaran dan pengiriman" title="Transaksi dan pemenuhan dalam konteks pesanan." description="Seller tidak perlu menyiapkan akun payment gateway atau akun kurir terpisah untuk menggunakan layanan yang disediakan melalui Tokophi." primaryHref={signupUrl} primaryLabel="Buat toko" secondaryHref="/faq/" secondaryLabel="Baca FAQ" />
-  <section class="section-block" aria-labelledby="payment-title">
-    <div class="section-heading-wide" data-motion-reveal><h2 id="payment-title">Pilihan pembayaran untuk pembeli.</h2><p>Kanal yang tersedia dikelola melalui Tokophi. Pilihan pada checkout mengikuti layanan dan pengaturan yang berlaku.</p></div>
-    <div class="content-grid" data-motion-stagger>
-      <article class="content-card" data-motion-item><p class="label">Digital</p><h3>QRIS</h3><p>Pembeli dapat menyelesaikan pembayaran melalui QRIS ketika kanal tersebut tersedia pada checkout.</p></article>
-      <article class="content-card" data-motion-item><p class="label">Perbankan</p><h3>Transfer bank</h3><p>Detail pembayaran ditampilkan dalam alur checkout sesuai metode yang dipilih pembeli.</p></article>
-      <article class="content-card" data-motion-item><p class="label">Bayar di tujuan</p><h3>COD</h3><p>Pembeli melakukan pembayaran saat paket diterima untuk pesanan yang menggunakan COD.</p></article>
-      <article class="content-card" data-motion-item><p class="label">Transparansi</p><h3>Rincian sebelum konfirmasi</h3><p>Pembeli perlu melihat komponen pembayaran pada checkout sebelum menyelesaikan pesanan.</p></article>
+  <PageIntro
+    title="Pembayaran dan pengiriman, sudah tersambung."
+    lede={`Pembeli membayar dengan QRIS, Virtual Account, atau COD, lalu paket dikirim lewat ${COURIER_COUNT} kurir. Anda tidak perlu mendaftar payment gateway atau akun kurir sendiri.`}
+    primary={{ href: signupUrl, label: `Coba gratis ${PRICE.trialDays} hari` }}
+    secondary={{ href: "#biaya", label: "Lihat biayanya" }}
+  />
+
+  <DetailSection
+    id="pembayaran"
+    title="Pembeli membayar di toko Anda."
+    lede="Pilihan pembayaran tampil di checkout toko Anda sendiri, bukan di halaman pihak lain."
+    items={payment}
+    screen={{ name: "storefront-checkout-qris", kind: "phone", frames: ["storefront-checkout-kecamatan", "storefront-checkout-qris", "storefront-checkout-va", "storefront-checkout-cod"], alt: "Checkout toko demo di ponsel, berganti otomatis: kecamatan dipilih, lalu bayar dengan QRIS, Virtual Account (Permata, BCA, BNI, BRI, Mandiri), atau COD" }}
+    white
+  />
+
+  <DetailSection
+    id="cod"
+    title="COD untuk pembeli di Pulau Jawa."
+    lede="Bayar di tempat membantu pembeli yang belum percaya pada toko baru. Aturannya jelas sejak awal."
+    items={cod}
+    screen={{ name: "seller-cod", beside: true, alt: "Pengaturan COD di Dashboard Seller: tombol Aktifkan COD, tersedia lewat Shopee Express (SPX)" }}
+  />
+
+  <DetailSection
+    id="pengiriman"
+    title={`${COURIER_COUNT} kurir tanpa akun terpisah.`}
+    lede="Ongkir, booking kurir, resi, dan label pengiriman diurus dari Dashboard Seller."
+    items={shipping}
+    screen={{ name: "seller-jasa-kirim", beside: true, alt: "Pengaturan Jasa Kirim, grup Reguler: delapan layanan kurir dengan tombol nyala, SPX Standard berlabel COD" }}
+    white
+  />
+
+  <DetailSection
+    id="saldo"
+    title="Hasil penjualan masuk ke saldo toko."
+    lede="Yang Anda terima adalah nilai barang setelah diskon, ditambah PPN barang bila toko Anda memungutnya."
+    items={payout}
+    screen={{ name: "seller-saldo", narrow: "seller-saldo-narrow", alt: "Halaman Saldo di Dashboard Seller dengan saldo tersedia, dana dalam proses, dan riwayat mutasi" }}
+  />
+
+  <section class="band band-white" id="biaya" aria-labelledby="biaya-title">
+    <div class="section">
+      <h2 id="biaya-title" class="h2">Siapa membayar apa.</h2>
+      <p class="lede">Biaya pembayaran dan ongkir ditanggung pembeli dan tampil jelas di checkout. Langganan adalah satu-satunya biaya Anda.</p>
+      <div class="fees-wrap"><FeeTable /></div>
     </div>
   </section>
-  <section class="section-block" aria-labelledby="shipping-title">
-    <div class="section-heading-wide" data-motion-reveal><h2 id="shipping-title">Pengiriman mengikuti detail pesanan.</h2><p>Seller memeriksa alamat, layanan yang dipilih, dan status pesanan sebelum melanjutkan pemenuhan.</p></div>
-    <ol class="numbered-flow" data-motion-stagger>
-      <li data-motion-item><h3>Periksa pesanan</h3><p>Pastikan barang, penerima, dan pilihan pengiriman sesuai dengan detail pesanan.</p></li>
-      <li data-motion-item><h3>Siapkan paket</h3><p>Seller menyiapkan barang sebelum melanjutkan tahapan pengiriman.</p></li>
-      <li data-motion-item><h3>Lanjutkan pengiriman</h3><p>Gunakan alur yang tersedia pada pesanan untuk memproses pengiriman dalam negeri.</p></li>
-    </ol>
-  </section>
-  <aside class="policy-note"><strong>Catatan publikasi biaya</strong><p>Rincian biaya, settlement, dan potongan tidak dipublikasikan di halaman ini sampai kebijakan final telah disetujui dan diterapkan.</p></aside>
-  <FinalCta {signupUrl} />
+
+  <Closing {signupUrl} />
 </MarketingLayout>
 
 <style>
-  .policy-note { display: grid; grid-template-columns: minmax(10rem, .4fr) minmax(0, 1fr); gap: 1rem 2rem; margin-bottom: clamp(3rem, 7vw, 6rem); padding: 1.25rem; border: 1px solid var(--color-hairline); border-left: 3px solid var(--color-primary); border-radius: .75rem; background: var(--color-primary-soft); }
-  .policy-note strong { font-size: .875rem; }
-  .policy-note p { color: var(--color-muted); font-size: .875rem; line-height: 1.65; }
-  @media (max-width: 560px) { .policy-note { grid-template-columns: 1fr; } }
+  .fees-wrap { margin-top: clamp(2rem, 4vw, 2.75rem); }
 </style>

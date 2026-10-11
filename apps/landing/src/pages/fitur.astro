@@ -1,32 +1,126 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
-import PageHero from "../components/PageHero.astro";
-import { FeatureIconGrid } from "../components/FeatureIconGrid";
-import FinalCta from "../components/FinalCta.astro";
+import PageIntro from "../components/PageIntro.astro";
+import DetailSection from "../components/DetailSection.astro";
+import Closing from "../components/home/Closing.astro";
+import { COD, COURIER_COUNT, COURIER_NAMES, FEES, MIN_PAYOUT, PRICE, VA_BANKS } from "../lib/offer";
 
+// Every item below is backed by a row of DESIGN.md "Claim sources"; anything on its "Never claim"
+// list stays off this page even where code for it exists behind a switch.
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
-const title = "Fitur toko online untuk operasional seller | TokoΦ";
-const description = "Kelola katalog, stok, pesanan, pembayaran, pelanggan, promosi, dan aktivitas toko melalui Dashboard Seller Tokophi.";
+const title = "Fitur Toko Online: Store Builder, QRIS, COD, 10 Kurir - TokoΦ";
+const description = "Rincian fitur TokoΦ: Store Builder, checkout tanpa akun, QRIS dan Virtual Account, COD lewat SPX, 10 kurir, pixel iklan, dan tim. Semua dalam satu paket.";
+
+const groups = [
+  {
+    id: "toko",
+    nav: "Toko",
+    title: "Toko dengan alamat dan tampilan sendiri.",
+    lede: "Toko Anda tampil di alamat sendiri dan disusun dari Store Builder, tanpa menulis kode.",
+    screen: { name: "seller-store-builder", narrow: "seller-store-builder-narrow", alt: "Store Builder TokoΦ menampilkan beranda toko demo dengan daftar bagian yang bisa ditambahkan" },
+    items: [
+      { title: "Alamat toko sendiri", body: "Setiap toko langsung punya alamat namatoko.tokophi.id. Domain milik Anda juga bisa disambungkan." },
+      { title: "Store Builder", body: "Susun beranda, halaman kategori, dan halaman produk dari 14 jenis bagian." },
+      { title: "Identitas brand", body: "Logo, warna brand, dan 5 pasangan huruf yang dipakai di seluruh halaman toko." },
+      { title: "Halaman, blog, dan menu", body: "Tambahkan halaman informasi toko, tulis artikel blog, dan atur menu navigasi." },
+      { title: "SEO bawaan", body: "Sitemap, data terstruktur produk untuk Google, dan gambar dalam beberapa ukuran agar toko cepat dibuka di ponsel." },
+      { title: "Chat di toko", body: "Pembeli bertanya langsung dari halaman toko, dan Anda membalasnya dari Dashboard Seller." },
+    ],
+  },
+  {
+    id: "penjualan",
+    nav: "Penjualan",
+    title: "Checkout dan pembayaran yang sudah tersambung.",
+    lede: "Tidak perlu mendaftar payment gateway sendiri. Pembeli membayar di checkout toko Anda, lalu hasilnya masuk ke saldo toko.",
+    screen: { name: "storefront-checkout-qris", kind: "phone" as const, frames: ["storefront-checkout-kecamatan", "storefront-checkout-qris", "storefront-checkout-va", "storefront-checkout-cod"] as const, alt: "Checkout toko demo di ponsel, berganti otomatis: kecamatan dipilih, lalu bayar dengan QRIS, Virtual Account (Permata, BCA, BNI, BRI, Mandiri), atau COD" },
+    items: [
+      { title: "Checkout tanpa akun", body: "Pembeli tidak perlu membuat akun. Begitu kecamatan tujuan dipilih, ongkir langsung tampil, dan harga selalu dihitung ulang di server." },
+      { title: "QRIS dan Virtual Account", body: `QRIS dan Virtual Account ${VA_BANKS.join(", ")}. Biaya QRIS ${FEES.qris}, Virtual Account ${FEES.va}, dibayar pembeli.` },
+      { title: `COD lewat ${COD.courier}`, body: `Bayar di tempat untuk alamat di ${COD.provinces.length} provinsi di Pulau Jawa, sampai ${COD.cap} per pesanan. Biayanya ${FEES.cod}, dibayar pembeli. Aktifkan atau matikan sesuai kebutuhan toko.` },
+      { title: "PPN toko", body: "Bila toko Anda memungut PPN, pilih apakah harga produk sudah termasuk pajak atau belum." },
+      { title: "Saldo dan penarikan", body: `Setiap pesanan selesai menambah saldo, dengan mutasi per pesanan. Tarik ke rekening mulai ${MIN_PAYOUT}, tanpa biaya.` },
+    ],
+  },
+  {
+    id: "pengiriman",
+    nav: "Pengiriman",
+    title: `${COURIER_COUNT} kurir, dipesan dari satu layar.`,
+    lede: "Ongkir dihitung dari alamat penjemputan toko Anda, dan pesanan dikirim tanpa akun kurir terpisah.",
+    screen: { name: "seller-pengiriman-massal", narrow: "seller-pengiriman-massal-narrow", alt: "Halaman Pengiriman Massal dengan filter layanan, jasa kirim, dan status cetak label (nama pembeli disamarkan)" },
+    items: [
+      { title: `${COURIER_COUNT} kurir`, body: `${COURIER_NAMES.join(", ")}.` },
+      { title: "Pilih layanan yang ditawarkan", body: "Tentukan sendiri kurir dan layanan mana yang muncul di checkout toko Anda." },
+      { title: "Booking massal", body: "Pesan penjemputan kurir untuk banyak pesanan sekaligus, langsung dari daftar pesanan." },
+      { title: "Resi otomatis", body: "Nomor resi terisi sendiri begitu kurir menerima paket, dan status pengirimannya diperbarui berkala." },
+      { title: "Label thermal", body: "Label pengiriman siap dicetak di printer thermal." },
+      { title: "Pembatalan dan pengembalian", body: "Pesanan yang batal atau dikembalikan kurir tercatat di riwayat pesanan." },
+    ],
+  },
+  {
+    id: "pemasaran",
+    nav: "Pemasaran",
+    title: "Iklan yang terukur sampai pesanan.",
+    lede: "Pesanan dan pendapatan per saluran iklan dihitung dari pesanan toko Anda sendiri, bukan perkiraan.",
+    screen: { name: "seller-pemasaran", narrow: "seller-pemasaran-narrow", alt: "Dashboard Seller, halaman Pemasaran: pesanan dan pendapatan yang tercatat dari Meta, Google, dan TikTok Ads" },
+    items: [
+      { title: "Pixel Meta, TikTok, dan Google Ads", body: "Dipasang dari satu layar, lengkap dengan event dari server (Conversions API, Events API, GA4) agar pembelian tetap tercatat walau pixel diblokir browser." },
+      { title: "Feed katalog", body: "URL feed untuk Google Merchant Center, Meta Commerce, dan TikTok, diperbarui sendiri setiap produk berubah." },
+      { title: "Landing page dengan form COD", body: "Halaman jualan satu produk dengan form pesanan singkat, pilihan paket, dan hitung mundur." },
+      { title: "Voucher, gratis ongkir, Flash Sale", body: "Potongan persen atau nominal, dengan kuota dan minimum belanja. Flash Sale berjalan sesuai jadwal." },
+      { title: "Keranjang yang ditinggal", body: "Lihat siapa yang berhenti di checkout dan kirim tautan pemulihan lewat WhatsApp." },
+      { title: "CRM dan template WhatsApp", body: "Kelompokkan pelanggan ke dalam segmen dan tindak lanjuti dengan template pesan WhatsApp." },
+    ],
+  },
+  {
+    id: "operasional",
+    nav: "Operasional",
+    title: "Katalog, stok, dan tim di satu panel.",
+    lede: "Pekerjaan harian toko dikerjakan dari Dashboard Seller yang sama, oleh Anda dan tim Anda.",
+    screen: { name: "seller-produk", narrow: "seller-produk-narrow", alt: "Dashboard Seller TokoΦ: daftar produk toko demo Batik Nusantara dengan harga, stok, dan status" },
+    items: [
+      { title: "Produk dan variasi", body: "Variasi ukuran dan warna, foto yang otomatis diubah ke WebP, kategori Google, dan simpan sebagai draf. Tanpa batas jumlah produk." },
+      { title: "Stok per lokasi", body: "Catat stok di beberapa gudang atau toko fisik, beserta pembelian stok dari pemasok." },
+      { title: "Pesanan dan pelanggan", body: "Semua pesanan, data pelanggan, segmen, dan ulasan di satu tempat." },
+      { title: "Analitik", body: "Penjualan, pengunjung toko, dan sumber pesanan." },
+      { title: "6 peran tim", body: "Pemilik, Admin, Staf, Gudang, Advertiser, dan CS. Masing-masing dengan hak akses yang berbeda." },
+      { title: "Verifikasi dua langkah", body: "Lapisan keamanan tambahan saat login ke Dashboard Seller." },
+    ],
+  },
+] as const;
 ---
 
 <MarketingLayout {title} {description} path="/fitur/">
-  <PageHero eyebrow="Fitur" title="Pekerjaan toko, tersusun dalam satu ruang kerja." description="Dari katalog sampai pesanan, Tokophi membantu seller melihat pekerjaan penting tanpa berpindah-pindah sistem." primaryHref={signupUrl} primaryLabel="Buat toko" secondaryHref="/demo/" secondaryLabel="Lihat demo" />
-  <section class="section-block" aria-labelledby="feature-grid-title">
-    <div class="section-heading-wide" data-motion-reveal>
-      <h2 id="feature-grid-title">Satu sumber untuk pekerjaan harian.</h2>
-      <p>Setiap bagian disusun untuk membantu seller memahami apa yang tersedia, apa yang perlu diperiksa, dan langkah berikutnya.</p>
-    </div>
-    <FeatureIconGrid />
-  </section>
-  <section class="section-block" aria-labelledby="storefront-title">
-    <div class="section-heading-wide" data-motion-reveal>
-      <h2 id="storefront-title">Dashboard Seller dan storefront saling terhubung.</h2>
-      <p>Informasi produk yang dikelola seller menjadi bagian dari pengalaman toko yang dilihat pembeli. Perubahan penting tetap berada dalam alur kerja seller.</p>
-    </div>
-    <div class="content-grid" data-motion-stagger>
-      <article class="content-card" data-motion-item><p class="label">Untuk seller</p><h3>Kelola dari Dashboard Seller</h3><p>Atur katalog, tinjau pesanan, serta lanjutkan pekerjaan operasional dari satu tempat.</p></article>
-      <article class="content-card" data-motion-item><p class="label">Untuk pembeli</p><h3>Belanja melalui storefront</h3><p>Pembeli melihat produk, keranjang, dan checkout melalui toko publik milik seller.</p></article>
-    </div>
-  </section>
-  <FinalCta {signupUrl} />
+  <PageIntro
+    title="Semua fitur TokoΦ, dalam satu paket."
+    lede={`Rincian setiap fitur yang termasuk dalam langganan ${PRICE.monthly}/bulan. Tidak ada tambahan berbayar per fitur dan tidak ada komisi dari penjualan.`}
+    primary={{ href: signupUrl, label: `Coba gratis ${PRICE.trialDays} hari` }}
+    secondary={{ href: "/harga/", label: "Lihat harga" }}
+  >
+    <nav class="jump" aria-label="Kelompok fitur">
+      <ul>{groups.map((g) => <li><a href={`#${g.id}`}>{g.nav}</a></li>)}</ul>
+    </nav>
+  </PageIntro>
+
+  {groups.map((g, i) => (
+    <DetailSection id={g.id} title={g.title} lede={g.lede} items={g.items} screen={g.screen} white={i % 2 === 0} />
+  ))}
+
+  <Closing {signupUrl} />
 </MarketingLayout>
+
+<style>
+  .jump { margin-top: clamp(2rem, 4vw, 2.75rem); }
+  .jump ul { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .jump a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding-inline: 1rem;
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    background: var(--color-surface);
+    font-size: 0.9375rem;
+    font-weight: 550;
+  }
+  .jump a:hover { border-color: var(--color-ink); }
+</style>

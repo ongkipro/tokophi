@@ -1,0 +1,35 @@
+---
+import Icon from "../Icon.astro";
+import Screen from "../Screen.astro";
+
+interface Props { demoUrl: string }
+const { demoUrl } = Astro.props;
+const host = new URL(demoUrl).host;
+---
+
+<section class="section demo" id="demo" aria-labelledby="demo-title">
+  <div class="demo-copy">
+    <h2 id="demo-title" class="h2">Coba sendiri sebagai pembeli.</h2>
+    <p class="lede">Batik Nusantara adalah toko demo yang berjalan di TokoΦ. Jelajahi katalog, buka halaman produk, masukkan ke keranjang, dan lihat checkout-nya dari ponsel Anda.</p>
+    <p class="demo-actions">
+      <a href={demoUrl} class="btn btn-ghost btn-lg" rel="noopener">
+        Buka {host}
+        <Icon name="arrow-up-right" size={18} />
+      </a>
+    </p>
+    <p class="demo-note">Toko demo untuk dilihat-lihat. Mohon tidak menyelesaikan pembayaran.</p>
+  </div>
+  <div class="demo-media">
+    <Screen name="storefront-produk-mobile" kind="phone" alt="Halaman produk Celana Kulot Wide Leg di toko demo: foto, harga, stok, pilihan warna dan ukuran" sizes="(min-width: 1024px) 300px, 70vw" />
+  </div>
+</section>
+
+<style>
+  .demo { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: clamp(2rem, 5vw, 5rem); align-items: center; }
+  .demo-actions { margin-top: 1.75rem; }
+  .demo-actions :global(.btn) { gap: 0.5rem; }
+  .demo-note { margin-top: 0.85rem; color: var(--color-muted); font-size: 0.875rem; }
+  .demo-media { display: flex; justify-content: center; }
+  .demo-media :global(.screen-phone) { width: min(19rem, 75vw); }
+  @media (max-width: 899px) { .demo { grid-template-columns: 1fr; } }
+</style>

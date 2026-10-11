@@ -1,0 +1,62 @@
+---
+import Icon from "../Icon.astro";
+import Screen from "../Screen.astro";
+
+const items = [
+  { icon: "megaphone", title: "Pixel Meta, TikTok, dan Google Ads", body: "Dipasang dari satu layar, lengkap dengan pengiriman event dari server (Conversions API, Events API, GA4) agar pembelian tetap tercatat walau pixel diblokir browser." },
+  { icon: "rss", title: "Feed katalog otomatis", body: "URL feed untuk Google Merchant Center, Meta Commerce, dan TikTok, diperbarui sendiri setiap produk berubah." },
+  { icon: "layout-template", title: "Landing page dengan form COD", body: "Halaman jualan satu produk dengan form pesanan singkat, pilihan paket, dan hitung mundur." },
+  { icon: "tag", title: "Voucher dan Flash Sale", body: "Potongan persen, nominal, atau gratis ongkir, dengan kuota dan minimum belanja. Flash Sale berjalan sesuai jadwal." },
+  { icon: "shopping-cart", title: "Keranjang yang ditinggal", body: "Lihat siapa yang berhenti di checkout dan kirim tautan pemulihan lewat WhatsApp." },
+  { icon: "message-circle", title: "Chat di toko dan CRM", body: "Pembeli bertanya langsung dari toko, Anda balas dari Dashboard Seller, lalu tindak lanjuti lewat template WhatsApp." },
+] as const;
+---
+
+<section class="band band-white" aria-labelledby="ads-title">
+  <div class="section ads">
+    <div class="ads-head">
+      <h2 id="ads-title" class="h2">Dibuat untuk toko yang beriklan.</h2>
+      <p class="lede">Iklan baru berguna kalau pesanan tercatat dengan benar. Pesanan dan pendapatan per saluran iklan dihitung dari pesanan toko Anda sendiri, bukan perkiraan.</p>
+    </div>
+    <div class="ads-grid">
+      <Screen
+        name="seller-pemasaran"
+        narrow="seller-pemasaran-narrow"
+        alt="Dashboard Seller, halaman Pemasaran: pesanan dan pendapatan yang tercatat dari Meta, Google, dan TikTok Ads"
+        class="ads-screen"
+        sizes="(min-width: 1280px) 1170px, 92vw"
+      />
+      <ul class="ads-list">
+        {items.map((it) => (
+          <li>
+            <Icon name={it.icon} size={20} />
+            <div>
+              <h3>{it.title}</h3>
+              <p>{it.body}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .ads-head { max-width: 46rem; }
+  /* Full-width screenshot (its numbers read at ~1:1), then the six capabilities in three columns. */
+  .ads-grid { margin-top: clamp(2.5rem, 5vw, 3.5rem); }
+  /* Close to the card's captured width (876px) so its figures match the other screens' scale. */
+  .ads-grid :global(.ads-screen) { max-width: 56rem; }
+  .ads-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem clamp(1.5rem, 3vw, 3rem);
+    margin-top: clamp(2.25rem, 4vw, 3rem);
+  }
+  .ads-list li { display: flex; gap: 0.9rem; }
+  .ads-list :global(svg) { flex: none; margin-top: 0.15rem; color: var(--color-primary-ink); }
+  .ads-list h3 { font-size: 1rem; font-weight: 650; line-height: 1.35; }
+  .ads-list p { margin-top: 0.3rem; color: var(--color-muted); font-size: 0.9375rem; line-height: 1.6; text-wrap: pretty; }
+  @media (max-width: 1023px) { .ads-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 639px) { .ads-list { grid-template-columns: 1fr; } }
+</style>

@@ -1,0 +1,82 @@
+---
+import Icon from "../Icon.astro";
+import Screen from "../Screen.astro";
+import { COURIER_COUNT, PRICE } from "../../lib/offer";
+
+interface Props { signupUrl: string }
+const { signupUrl } = Astro.props;
+---
+
+<section class="hero" aria-labelledby="hero-title" data-hero>
+  <div class="hero-copy">
+    <h1 id="hero-title" class="hero-title" data-hero-item>
+      Toko online lengkap, dari pembayaran sampai pengiriman.
+    </h1>
+    <p class="hero-lede" data-hero-item>
+      Buka toko dengan alamat sendiri, terima QRIS, Virtual Account, dan COD, lalu kirim lewat
+      {COURIER_COUNT} kurir. Semuanya diatur dari satu Dashboard Seller, tanpa perlu mendaftar
+      payment gateway atau akun kurir sendiri.
+    </p>
+    <div class="hero-actions" data-hero-item>
+      <a href={signupUrl} class="btn btn-primary btn-lg">Coba gratis {PRICE.trialDays} hari</a>
+      <a href="#demo" class="btn btn-ghost btn-lg">Lihat toko demo</a>
+    </div>
+    <ul class="hero-terms" data-hero-item>
+      <li><Icon name="check" size={16} />Setelah uji coba {PRICE.firstMonth} bulan pertama, lalu {PRICE.monthly}/bulan</li>
+      <li><Icon name="check" size={16} />Tanpa kartu kredit, tanpa komisi dari penjualan</li>
+    </ul>
+  </div>
+
+  <div class="hero-media" data-hero-media>
+    <Screen
+      name="seller-produk"
+      alt="Dashboard Seller TokoΦ: daftar produk toko demo Batik Nusantara dengan harga, stok, dan status"
+      loading="eager"
+      class="hero-desktop"
+      narrow="seller-produk-narrow"
+      sizes="(min-width: 1024px) 58vw, 100vw"
+    />
+  </div>
+</section>
+
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 11fr) minmax(0, 13fr);
+    align-items: center;
+    gap: clamp(2rem, 4vw, 4rem);
+    padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 7vw, 6rem);
+  }
+  .hero-title {
+    font-family: var(--font-serif);
+    font-size: clamp(2.3rem, 1.6rem + 2.3vw, 3.35rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.03;
+    text-wrap: balance;
+  }
+  .hero-lede {
+    margin-top: 1.25rem;
+    max-width: 34rem;
+    color: var(--color-muted);
+    font-size: clamp(1.02rem, 0.96rem + 0.3vw, 1.15rem);
+    line-height: 1.65;
+    text-wrap: pretty;
+  }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
+  .hero-terms { display: grid; gap: 0.45rem; margin-top: 1.4rem; color: var(--color-muted); font-size: 0.9rem; }
+  .hero-terms li { display: flex; align-items: flex-start; gap: 0.5rem; }
+  .hero-terms :global(svg) { flex: none; margin-top: 0.2rem; color: var(--color-primary-ink); }
+
+  .hero-media { position: relative; }
+  .hero-media :global(.hero-desktop) { margin-right: calc(-1 * clamp(1.25rem, 5vw, 4.5rem)); }
+
+  @media (max-width: 1023px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero-media { margin-top: 0.5rem; }
+    .hero-media :global(.hero-desktop) { margin-right: 0; }
+  }
+  @media (max-width: 479px) {
+    .hero-actions :global(.btn) { flex: 1 1 100%; }
+  }
+</style>

@@ -1,63 +1,32 @@
 <script>
+  // Motion with a job (DESIGN.md "Motion concept"): a short entrance on each page's opening, and the
+  // product screenshots settling in as they scroll into view. Native scroll only (no smooth-scroll
+  // library). Reduced motion and a JS failure get the static layout the markup renders by default;
+  // nothing is hidden waiting for a script.
   import gsap from "gsap";
   import { ScrollTrigger } from "gsap/ScrollTrigger";
 
   gsap.registerPlugin(ScrollTrigger);
+  const mm = gsap.matchMedia();
 
-  const motion = gsap.matchMedia();
-
-  motion.add("(prefers-reduced-motion: no-preference)", () => {
-    document.querySelectorAll<HTMLElement>("[data-motion-hero]").forEach((hero) => {
-      const items = hero.querySelectorAll<HTMLElement>("[data-motion-hero-item]");
-      if (items.length) {
-        gsap.from(items, {
-          autoAlpha: 0,
-          y: 22,
-          duration: 0.72,
-          stagger: 0.09,
-          ease: "power3.out",
-          clearProps: "all",
-        });
-      }
-    });
-
-    gsap.utils.toArray<HTMLElement>("[data-motion-reveal]").forEach((element) => {
-      gsap.from(element, {
-        autoAlpha: 0,
-        y: 28,
-        duration: 0.7,
-        ease: "power3.out",
-        clearProps: "all",
-        scrollTrigger: { trigger: element, start: "top 88%", once: true },
-      });
-    });
-
-    document.querySelectorAll<HTMLElement>("[data-motion-stagger]").forEach((group) => {
-      const items = group.querySelectorAll<HTMLElement>("[data-motion-item]");
-      if (!items.length) return;
-      gsap.from(items, {
-        autoAlpha: 0,
-        y: 24,
-        duration: 0.62,
-        stagger: 0.08,
-        ease: "power2.out",
-        clearProps: "all",
-        scrollTrigger: { trigger: group, start: "top 86%", once: true },
-      });
-    });
+  mm.add("(prefers-reduced-motion: no-preference)", () => {
+    const hero = document.querySelector<HTMLElement>("[data-hero]");
+    if (hero) {
+      gsap.from(hero.querySelectorAll("[data-hero-item]"), { autoAlpha: 0, y: 16, duration: 0.6, stagger: 0.07, ease: "power3.out", clearProps: "all" });
+      // Inner pages open on PageIntro, which has no screenshot; GSAP warns on a null target.
+      const media = hero.querySelector("[data-hero-media]");
+      if (media) gsap.from(media, { autoAlpha: 0, y: 28, scale: 0.98, duration: 0.8, delay: 0.15, ease: "power3.out", clearProps: "all" });
+    }
   });
 
-  motion.add("(min-width: 1024px) and (prefers-reduced-motion: no-preference)", () => {
-    gsap.utils.toArray<HTMLElement>("[data-motion-depth]").forEach((element) => {
-      gsap.fromTo(
-        element,
-        { yPercent: -2 },
-        {
-          yPercent: 2,
-          ease: "none",
-          scrollTrigger: { trigger: element, start: "top bottom", end: "bottom top", scrub: 0.6 },
-        },
-      );
+  // Each workflow screenshot settles into place once, as it first scrolls into view. Played once,
+  // not scrubbed, so a screenshot never sits half-faded under a reader who stopped scrolling.
+  mm.add("(prefers-reduced-motion: no-preference)", () => {
+    document.querySelectorAll<HTMLElement>("[data-settle]").forEach((el) => {
+      gsap.fromTo(el, { y: 48, scale: 0.97, autoAlpha: 0 }, {
+        y: 0, scale: 1, autoAlpha: 1, duration: 0.8, ease: "power3.out", clearProps: "all",
+        scrollTrigger: { trigger: el, start: "top 88%", once: true },
+      });
     });
   });
 </script>
