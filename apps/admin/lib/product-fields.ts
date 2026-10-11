@@ -1,7 +1,7 @@
 // PURE product-row mapper for createProduct/updateProduct — its own module because
 // actions/products.ts is "use server" (only async exports allowed) and this must stay
 // import-testable (products-autocategory.test.ts). Same split as platform-rank.ts.
-import { suggestGoogleCategory } from "@tokophi/lib/taxonomy-suggest";
+import { feedAgeGroup, feedGender, suggestGoogleCategory } from "@tokophi/lib/taxonomy-suggest";
 import type { ProductInput } from "@/lib/actions/products";
 
 export const productFields = (i: ProductInput) => {
@@ -26,15 +26,15 @@ export const productFields = (i: ProductInput) => {
   description: i.description || null,
   shortDescription: i.shortDescription || null,
   status: i.status,
-  category: i.category || null,
+  category: i.category?.trim().slice(0, 100) || null,
   productType: i.productType || null,
   vendor: i.vendor || null,
   seoTitle: i.seoTitle || null,
   seoDesc: i.seoDesc || null,
   googleCategoryId: i.googleCategoryId ?? auto?.id ?? null,
   googleCategoryPath: i.googleCategoryPath || auto?.path || null,
-  gender: i.gender || null,
-  ageGroup: i.ageGroup || null,
+  gender: feedGender(i.gender),
+  ageGroup: feedAgeGroup(i.ageGroup),
   material: i.material || null,
   lengthCm: i.lengthCm ?? null,
   widthCm: i.widthCm ?? null,

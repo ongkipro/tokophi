@@ -183,6 +183,19 @@ export async function resolveProductIdByNumber(number: number): Promise<string |
   });
 }
 
+/** The store's OWN category vocabulary for the editor's suggestions: every label its products already
+ *  carry plus every collection title. Never a platform constant — a fertiliser shop must not be offered
+ *  "Dress" (and used to be saved as "Fashion" without choosing anything). */
+export async function getCategoryOptions(): Promise<string[]> {
+  return withCurrentTenant(async (db, storeId) => {
+    // Sequential, not Promise.all: both run on the one tenant transaction connection.
+    const cats = await db.selectDistinct({ v: schema.products.category }).from(schema.products).where(eq(schema.products.storeId, storeId));
+    const cols = await db.select({ v: schema.collections.title }).from(schema.collections).where(eq(schema.collections.storeId, storeId));
+    const labels = [...cats, ...cols].map((r) => r.v?.trim() ?? "").filter(Boolean);
+    return [...new Set(labels)].sort((a, b) => a.localeCompare(b, "id-ID"));
+  });
+}
+
 /** The UUID → number direction, for redirecting an old bookmark to the canonical URL. */
 export async function productNumberById(id: string): Promise<number | null> {
   return withCurrentTenant(async (db, storeId) => {

@@ -104,7 +104,7 @@
 | `/pesanan/massal` | 'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'. | page | `apps/admin/app/(admin)/pesanan/massal/page.tsx` | `massal-client.tsx` | `bulk-shipping` | `bulk-shipping` | — | — | ✓ | — |
 | `/pesanan` | 'Pesanan' — orders list with status tabs; URL params validated before any enum cast. | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
 | `/produk/[id]` | Product editor — variants grid, media (upload/drag), dimensions (they price ongkir), taxonomy. | page | `apps/admin/app/(admin)/produk/[id]/page.tsx` | `product-editor.tsx` `taxonomy-field.tsx` | `products` | `media` `products` `purchases` `taxonomy` | — | — | ✓ | `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/uuid-guard.test.ts` |
-| `/produk/baru` | New product. | page | `apps/admin/app/(admin)/produk/baru/page.tsx` | — | — | — | — | — |  | — |
+| `/produk/baru` | New product. | page | `apps/admin/app/(admin)/produk/baru/page.tsx` | — | `products` | — | — | — | ✓ | — |
 | `/produk/inventori` | 'Inventori' — stock per variant/location, bulk save. | page | `apps/admin/app/(admin)/produk/inventori/page.tsx` | `inventori-client.tsx` | `inventory` `products` | `inventory` | — | — | ✓ | `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/seller-entity-links.test.ts` |
 | `/produk/kategori/[id]` | Collection editor (manual/conditions). | page | `apps/admin/app/(admin)/produk/kategori/[id]/page.tsx` | `collection-editor.tsx` | `collections` `products` | `collections` `media` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/kategori/baru` | New collection. | page | `apps/admin/app/(admin)/produk/kategori/baru/page.tsx` | — | `products` | — | — | — | ✓ | — |
@@ -278,7 +278,7 @@
 | `orders.ts` | `getOrder` `getOrderList` `getOrders` `getPerluDikirimCount` |
 | `pages.ts` | `getPage` `getPages` |
 | `platform-finance.ts` | `getSubscriptionPpnEnabled` |
-| `products.ts` | `getProduct` `getProducts` `productNumberById` `resolveProductIdByNumber` `serverNowTs` |
+| `products.ts` | `getCategoryOptions` `getProduct` `getProducts` `productNumberById` `resolveProductIdByNumber` `serverNowTs` |
 | `promo.ts` | `getPromoEditor` `listPromoPages` |
 | `purchases.ts` | `getPurchaseOrders` `getPurchaseProducts` |
 | `reconciliation.ts` | `getReconciliationMismatches` `reconciliationMismatchRows` |
