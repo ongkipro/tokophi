@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getProduct, productNumberById, resolveProductIdByNumber } from "@/lib/data/products";
+import { getCategoryOptions, getProduct, productNumberById, resolveProductIdByNumber } from "@/lib/data/products";
 import { ProductEditor } from "./product-editor";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +48,7 @@ export default async function ProductEditPage({
   const id = await resolveProductIdByNumber(n);
   if (!id) notFound();
 
-  const product = await getProduct(id);
+  const [product, categoryOptions] = await Promise.all([getProduct(id), getCategoryOptions()]);
   if (!product) notFound();
-  return <ProductEditor product={product} />;
+  return <ProductEditor product={product} categoryOptions={categoryOptions} />;
 }

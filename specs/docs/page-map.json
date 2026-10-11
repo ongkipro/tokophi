@@ -905,11 +905,13 @@
           "methods": [],
           "file": "apps/admin/app/(admin)/produk/baru/page.tsx",
           "clients": [],
-          "data": [],
+          "data": [
+            "products"
+          ],
           "actions": [],
           "gate": [],
           "clientGates": [],
-          "dynamic": false,
+          "dynamic": true,
           "ownerDb": false,
           "tests": [],
           "whatItIs": "New product."
@@ -3107,6 +3109,7 @@
       {
         "module": "products.ts",
         "exports": [
+          "getCategoryOptions",
           "getProduct",
           "getProducts",
           "productNumberById",

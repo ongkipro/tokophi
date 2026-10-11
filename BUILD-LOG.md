@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-12 02:25 UTC] — CATALOG · merchant category no longer defaults to "Fashion"; Google-category suggester fixed; all-tenant data repair
+Executor: Main Session (Claude Code). Branch `fix/merchant-category-google-catalog` (worktree `tokophi-catalog-fix`).
+- Owner report: every seller storefront shows "Fashion" on the product page (taniniaga.com sells fertiliser). Owner: "sekalian scan keseluruhan tenant", then "ya lanjut dan sempurnakan".
+- **Root cause:** `product-editor.tsx` initialised `category` to `"Fashion"` and offered only a hardcoded 7-item fashion list, so every merchant-created product saved "Fashion". The PDP built its breadcrumb as `/kategori/<slug(category)>` (404 on taniniaga), its "Kategori" row and the feed `product_type` from that text. The suggester matched substrings with description weighted like the title ("Serum Tanaman" → Skin Care, "Kefir Collagen Soap" → Vitamins) and had no agriculture/packaging vertical.
+- **All-tenant scan (prod, read-only, identical to the local copy):** 47 products "Fashion" across 5 stores; 23 Permata rows `gender = women` (not a Google enum); 3 with path but no id; petanihandal 1 Skin Care + 3 unclassified; Difa pack's empty containers classified as Skin Care / Bath & Body; Valoish unclassified.
+- **Code:** editor category = free text with a datalist of the store's own labels + collection titles (`getCategoryOptions`), blank default, trimmed/capped server-side; storefront `homeCollection()` drives breadcrumb, related row and product-scoped Grid Produk, and a blank label falls back to the product's collection in `catalog.ts`; suggester = whole-word, title → category → description in order, new agriculture/garden, feminine-care and empty-packaging rules; `feedGender`/`feedAgeGroup` enum guards on write and on feed read; admin list filter ignores blank labels.
+- **Data:** `ops/tokophi-catalog-category-repair.sql` (idempotent, guarded on the bad values).
+- **Verified:** `npm run verify -w @tokophi/storefront` (batiknusantara.test, branch DB): image-widths, feed-origin, h1-floor PASS; the 4 srcset checks FAIL identically on `origin/main` (prod-copy media, not this change). vitest 163 files passed (new `taxonomy-suggest.test.ts`, feed enum test); admin `tsc` 0; `astro check` 0 errors; suggester re-screened over all 80 products — every changed verdict is an improvement; storefronts (petanihandal, permata) against a branch DB with the repair applied: breadcrumb Beranda / Hortikultura / …, Kategori row Hortikultura, no "Fashion" anywhere, feed Fertilizers / Disease Control, product_type = collection names, gender female only; Playwright screenshots 390 + 1366.
+- **NOT verified:** the admin editor in a browser — local admin login needs `apps/admin/.env.local`, access to which was denied; covered by `tsc` + eslint only. Owner to eyeball `/produk/baru` after deploy.
+
 ### [2026-10-12 01:25 UTC] — LANDING · inner pages rebuilt, FAQ retired, React removed; OPS · www.tokophi.com redirect fixed
 Executor: Main Session (Claude Code). Branch `feat/landing-sales` (worktree `tokophi-landing`), uncommitted.
 - Owner (2026-10-12): "sisanya kau sempurnakan, jalankan sesuai rekomendasimu"; legal entity still being registered; brand spelling TokoΦ; fix the www redirect; generate media where it helps.

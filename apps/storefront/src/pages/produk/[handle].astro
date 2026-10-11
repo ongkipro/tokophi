@@ -26,7 +26,8 @@ if (!product) return new Response(null, { status: 404, statusText: "Not Found" }
 //
 // `inStock` now comes from `data/catalog.ts`. It used to be re-declared here AND again at the buy box
 // below — two identical copies, and the product CARD was about to add a third.
-const related = catalog.byCollection(product.categoryHandle)
+const home = catalog.homeCollection(product);
+const related = (home ? catalog.byCollection(home.handle) : [])
   .filter((p) => p.handle !== product.handle)
   .sort((a, b) => Number(inStock(b)) - Number(inStock(a)) || b.unitsSold - a.unitsSold)
   .slice(0, 4);
@@ -73,14 +74,14 @@ const GALLERY_ASPECT_CLASS: Record<string, string> = {
 const galleryAspectClass = GALLERY_ASPECT_CLASS[resolveGalleryAspect(store.theme)] ?? "aspect-square";
 
 // Specifications — built ONLY from attributes the merchant actually filled in, so the table never
-// shows a blank row. Kategori is always known; the rest are optional. `sizes` is deliberately NOT
+// shows a blank row. Kategori = the merchant's label (catalog.ts falls back to the collection), else omitted. `sizes` is deliberately NOT
 // shown here either: it is the legacy display-only column that used to be the Ukuran picker in the buy
 // box, and it names sizes this shop cannot actually pick or ship separately (see the picker note
 // below). Gender is mapped to a shopper-facing word, not the feed code ("female").
 const genderLabel =
   product.gender === "female" ? "Wanita" : product.gender === "male" ? "Pria" : product.gender === "unisex" ? "Unisex" : undefined;
 const specs = [
-  { label: "Kategori", value: product.category },
+  product.category ? { label: "Kategori", value: product.category } : null,
   product.material ? { label: "Bahan", value: product.material } : null,
   genderLabel ? { label: "Untuk", value: genderLabel } : null,
 ].filter((s): s is { label: string; value: string } => s !== null);
@@ -260,7 +261,9 @@ const offers =
 // store), matching the voice /kategori/[handle] uses for a blank blurb ("Koleksi <name> di <store>.").
 // The VISIBLE <p> below stays empty-guarded — this fallback is for the crawler, not the shopper.
 const metaDescription =
-  product.seoDesc?.trim() || product.description.trim() || `${product.name} — ${product.category} di ${store.name}.`;
+  product.seoDesc?.trim() ||
+  product.description.trim() ||
+  `${product.name}${product.category ? ` — ${product.category}` : ""} di ${store.name}.`;
 // SEO title override (merchant-set, ≤70 chars); falls back to the product name.
 const seoTitle = product.seoTitle?.trim() || product.name;
 
@@ -287,9 +290,11 @@ if (rating && rating.count > 0) {
 
 // ONE array drives the visible trail AND the schema — they used to be typed out separately, and the
 // schema claimed a third crumb (the product name) that the trail on screen never showed.
+// The middle crumb is the product's real collection (`homeCollection`), or absent — never the label
+// text slugified into a `/kategori/…` URL that may not exist.
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
-  { name: product.category, href: `/kategori/${product.categoryHandle}` },
+  ...(home ? [{ name: home.name, href: `/kategori/${home.handle}` }] : []),
   { name: product.name },
 ];
 

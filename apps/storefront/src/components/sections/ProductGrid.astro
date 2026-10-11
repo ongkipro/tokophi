@@ -16,11 +16,11 @@ const catalog = Astro.locals.catalog;
 // supplies the scope (ADR 0009 — this is what makes one Grid Produk section work as "produk di
 // kategori ini" on a category template and "produk serupa" on a product template):
 //   • category page → that collection
-//   • product page  → the product's category, minus the product you're already looking at
+//   • product page  → the product's home collection, minus the product you're already looking at
 //   • homepage      → the whole catalog (unchanged)
 const scopedHandle =
   collectionHandle ||
-  (ctx.kind === "category" ? ctx.collectionHandle : ctx.kind === "product" ? ctx.product.categoryHandle : "");
+  (ctx.kind === "category" ? ctx.collectionHandle : ctx.kind === "product" ? (catalog.homeCollection(ctx.product)?.handle ?? "") : "");
 
 let pool: Product[] = scopedHandle ? catalog.byCollection(scopedHandle) : catalog.products;
 if (ctx.kind === "product") pool = pool.filter((p) => p.handle !== ctx.product.handle);

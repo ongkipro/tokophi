@@ -181,7 +181,7 @@ function StatCard({ icon, label, value, accent, active, onClick }: {
 }
 
 export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: number }) {
-  const CATEGORIES = Array.from(new Set(products.map((p) => p.category)));
+  const CATEGORIES = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
   const router = useRouter();
   const canWrite = useCan("products:write");
   const canDelete = useCan("products:delete");
@@ -308,7 +308,7 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
         <StatCard icon={<Package className="size-4" />} label="Total Produk" value={num(counts.all)} active={tab === "all"} onClick={() => setTab("all")} />
         <StatCard icon={<CheckCircle2 className="size-4" />} label="Produk Aktif" value={num(counts.active)} accent="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" active={tab === "active"} onClick={() => setTab("active")} />
         <StatCard icon={<AlertTriangle className="size-4" />} label="Stok Menipis" value={num(counts.low)} accent="bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" active={tab === "low"} onClick={() => setTab("low")} />
-        <StatCard icon={<Tags className="size-4" />} label="Kategori" value={num(new Set(products.map((p) => p.category)).size)} />
+        <StatCard icon={<Tags className="size-4" />} label="Kategori" value={num(new Set(products.map((p) => p.category).filter(Boolean)).size)} />
       </div>
 
       {/* Status tabs */}
