@@ -17,7 +17,6 @@ Executor: Main Session (Claude Code). Branch `feat/landing-polish` (worktree `to
 - **Motion:** GSAP + ScrollTrigger removed (115 KB JS, 45 KB gzip) with the hero entrance (it delayed LCP). Screenshots below the fold settle in with CSS `animation-timeline: view()` (0 KB JS; static where unsupported or under reduced motion); anchors use native smooth scroll. Lenis rejected (replaces native scroll, adds JS). `gsap` dependency and typings removed; `MotionLayer.astro` deleted; `LANDING_PRD.md` PR-LP-11/12 superseded with the reason.
 - **Verified:** `astro check` 0/0; build OK, 0 client JS bundle files; Playwright on 6 pages × 390/1440: 0 console errors, 0 overflow (an ornament placement that pushed the home page 32–85px sideways was found and moved), one h1; scroll-driven settle measured in Chrome (opacity 0 → 0.91 → 1). Lighthouse 12.8.2 mobile, local: home 98/100/100/100 (was 92 Performance), LCP 2.4 s, TBT 0, CLS 0; /fitur 99/100/100/100. `vitest` 1446 passed; `verify-doc-authority` ok.
 - **Not verified:** the independent visual review timed out twice at its 900 s limit (197 image slices) and returned no verdict; `design-gate.py` therefore cannot pass for this change set.
-||||||| d4d3f5bd
 
 ### [2026-10-12 02:25 UTC] — CATALOG · merchant category no longer defaults to "Fashion"; Google-category suggester fixed; all-tenant data repair
 Executor: Main Session (Claude Code). Branch `fix/merchant-category-google-catalog` (worktree `tokophi-catalog-fix`).
