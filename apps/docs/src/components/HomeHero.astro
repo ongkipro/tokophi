@@ -1,0 +1,98 @@
+---
+// Hero override (spec §6.4 C2): Shopify-Help-style question + one large search field, then a few
+// popular searches as plain links. The page's only Search instance on the home page (no sidebar there).
+import Search from "virtual:starlight/components/Search";
+import SearchExtras from "./SearchExtras.astro";
+
+// Starlight's PAGE_TITLE_ID is "_top"; the constant is not exported from the package.
+const PAGE_TITLE_ID = "_top";
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline } = data.hero || {};
+const popular = [
+  { label: "Resi belum terbit", href: "/faq/#saya-sudah-klik-generate-resi-tapi-resinya-belum-ada" },
+  { label: "Syarat COD", href: "/mulai/pengiriman-dan-cod/#bayar-di-tempat-cod-opsional" },
+  { label: "Tarik saldo", href: "/mulai/pesanan-pertama/#kapan-uangnya-masuk" },
+  { label: "Biaya langganan", href: "/referensi/biaya/" },
+];
+---
+
+<div class="tp-hero">
+  {/* Ornament: the Φ itself (a circle crossed by a vertical stroke) as faint hairlines, plus a soft
+      accent glow. Decoration only — aria-hidden, no motion, never above the text. */}
+  <div class="tp-hero-bg" aria-hidden="true">
+    <svg class="tp-hero-phi" viewBox="0 0 800 800" fill="none" stroke="currentColor" stroke-width="1">
+      <circle cx="400" cy="400" r="210" />
+      <circle cx="400" cy="400" r="300" stroke-dasharray="2 10" />
+      <ellipse cx="400" cy="400" rx="210" ry="120" opacity="0.6" />
+      <line x1="400" y1="40" x2="400" y2="760" />
+      <line x1="160" y1="400" x2="640" y2="400" opacity="0.35" />
+    </svg>
+  </div>
+  <h1 id={PAGE_TITLE_ID} data-page-title set:html={title} />
+  {tagline && <p class="tp-tagline" set:html={tagline} />}
+  <Search class="tp-hero-search" />
+  <SearchExtras />
+  <p class="tp-popular">
+    <span>Sering dicari:</span>
+    {popular.map((p) => <a href={p.href}>{p.label}</a>)}
+  </p>
+</div>
+
+<style>
+  .tp-hero {
+    position: relative;
+    isolation: isolate;
+    max-width: 44rem;
+    margin: -1.5rem auto 0;
+    padding-block: 4.5rem 3rem;
+    text-align: center;
+  }
+  /* Full-bleed band behind the hero: a background shift (owner default: no rules between sections). */
+  .tp-hero-bg {
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc(50% - 50vw);
+    overflow: hidden;
+    pointer-events: none;
+    background:
+      radial-gradient(60rem 26rem at 50% 0%, color-mix(in srgb, var(--sl-color-accent) 14%, transparent), transparent 70%),
+      linear-gradient(to bottom, var(--sl-color-gray-7, var(--sl-color-gray-6)), var(--sl-color-bg));
+  }
+  .tp-hero-phi {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(46rem, 130vw);
+    translate: -50% -50%;
+    color: var(--sl-color-accent);
+    opacity: 0.2;
+    /* A hole where the text sits: the Φ frames the heading and search instead of crossing them,
+       and fades out before the band's edge so nothing is cut off. */
+    mask-image: radial-gradient(closest-side, transparent 48%, #000 62%, #000 78%, transparent 96%);
+  }
+  :global([data-theme="dark"]) .tp-hero-phi { opacity: 0.28; }
+  .tp-hero h1 {
+    font-size: clamp(2rem, 1.4rem + 2.6vw, 3rem);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+    text-wrap: balance;
+  }
+  .tp-tagline {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-lg);
+    color: var(--sl-color-gray-2);
+    text-wrap: pretty;
+  }
+  .tp-popular {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem 1rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  .tp-popular a { color: var(--sl-color-gray-2); }
+  .tp-popular a:hover { color: var(--sl-color-accent); }
+</style>

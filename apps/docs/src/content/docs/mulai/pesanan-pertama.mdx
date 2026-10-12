@@ -1,0 +1,86 @@
+---
+title: "Proses pesanan pertama"
+seoTitle: "Proses Pesanan Pertama: Kirim Paket dan Tarik Saldo"
+description: "Dari pesanan masuk sampai paket dijemput kurir: cek pembayaran, pesan pengiriman, tunggu resi, cetak label, dan lihat kapan uangnya masuk saldo."
+routes: ["/pesanan", "/pesanan/massal", "/saldo"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import massal from "../../../assets/screens/seller-pengiriman-massal-1600.webp";
+import saldo from "../../../assets/screens/seller-saldo-1600.webp";
+
+
+Di akhir langkah ini pesanan pertama Anda sudah dipesankan kurir, labelnya tercetak, dan Anda tahu kapan hasil penjualannya bisa ditarik.
+
+:::caution[Penting (per 12 Oktober 2026)]
+Layanan pengiriman TokoΦ Kirim masih berjalan dalam mode uji. Pemesanan kurir dan nomor resi terlihat seperti aslinya, tetapi **belum ada kurir yang datang menjemput**. Tombol bertanda *"mode demo"* atau *"resi contoh"* juga berasal dari mode ini. Sebelum mengirim pesanan sungguhan, hubungi tim TokoΦ lewat menu [**Bantuan**](https://app.tokophi.com/bantuan). Langkah di bawah tetap berguna untuk mengenal alurnya.
+:::
+
+## Yang Anda perlukan
+
+- Alamat jemput dan jasa kirim yang sudah disimpan ([langkah 3](/mulai/profil-dan-alamat/) dan [langkah 4](/mulai/pengiriman-dan-cod/)).
+- Printer thermal untuk label ukuran 100 × 150 mm (disarankan).
+
+## Pesanan masuk
+
+TokoΦ belum mengirim notifikasi lewat email atau WhatsApp. Pesanan baru terlihat dari ikon lonceng di bilah atas Dashboard Seller dan dari angka di menu **Pesanan**.
+
+Buka **Pesanan**. Tab yang paling penting:
+
+- **Belum Bayar**: pembeli memilih QRIS atau Virtual Account dan belum membayar. **Jangan diproses dulu.** Pesanan ini otomatis pindah ke tab berikutnya setelah dibayar. Kalau tidak dibayar dalam 24 jam, pesanan batal sendiri dan stok kembali.
+- **Perlu Dikirim**: pesanan yang sudah dibayar, atau pesanan COD. Pesanan di tab inilah yang Anda kirim.
+
+## Langkah
+
+Cara tercepat adalah lewat **Pengiriman Massal**. Kurir yang dipesan sama dengan layanan yang dipilih dan dibayar pembeli, jadi tidak ada selisih ongkir.
+
+<Steps>
+
+1. Buka **Pesanan → Pengiriman Massal**.
+2. Centang pesanan yang ingin dikirim, lalu klik **Generate resi**. Maksimal 50 pesanan sekali jalan. Kalau lebih, sisanya tetap tercentang dan Anda cukup klik lagi.
+3. Tunggu nomor resi terbit. Resi muncul setelah kurir menerima pesanan, biasanya dalam beberapa menit, dan TokoΦ mengambilnya otomatis setiap 15 menit. Kalau tidak ingin menunggu, klik **Ambil resi**.
+4. Setelah kolom resi berisi nomor, centang pesanannya lalu klik **Cetak resi**. Label 100 × 150 mm terbuka siap cetak, dan pesanan ditandai **Sudah** dicetak.
+5. Tempel label di paket. Kurir dijadwalkan menjemput **besok pukul 10.00 WIB** di alamat jemput Anda.
+
+</Steps>
+
+<Shot src={massal} alt="Halaman Pengiriman Massal dengan tombol Generate resi, Ambil resi, dan Cetak resi di atas daftar pesanan." caption="Pengiriman Massal. Nama pembeli diburamkan pada gambar ini." />
+
+:::note[Catatan]
+Kolom resi bertuliskan **Menunggu resi** tepat setelah pemesanan. Itu normal, bukan gagal. Label memang baru bisa dicetak setelah nomor resi asli terbit.
+:::
+
+### Satu pesanan dengan kurir lain
+
+Di halaman detail pesanan, tombol **Cek Ongkir** menampilkan semua layanan beserta tarifnya, dan Anda boleh memilih layanan yang berbeda dari pilihan pembeli. Sebelum memesan, jendela **Konfirmasi biaya pengiriman** menunjukkan selisihnya. Kalau layanan pilihan Anda lebih mahal, selisihnya dipotong dari hasil pesanan atau dari saldo Anda. Klik **Konfirmasi & booking** untuk memesan.
+
+## Setelah paket jalan
+
+- Status pesanan diperbarui otomatis dari kurir: **Dikirim**, lalu **Selesai** setelah paket diterima. Anda juga bisa menekan **Tandai selesai** sendiri.
+- Kalau paket ditolak atau kembali, buka pesanannya dan klik **Tandai retur**. Stok kembali, dan hasil penjualannya ditarik dari saldo.
+
+## Kapan uangnya masuk
+
+<Shot src={saldo} alt="Halaman Saldo dengan empat kartu: Saldo tersedia, Dana dalam proses, Sudah ditarik, dan Ditarik kembali (retur)." caption="Halaman Saldo toko demo." />
+
+<Steps>
+
+1. Pesanan QRIS atau VA tercatat di **Saldo → Dana dalam proses** begitu pembayaran berhasil. Pesanan COD tercatat setelah pesanannya selesai.
+2. Dana menjadi **Saldo tersedia** saat pesanan berstatus **Selesai**.
+3. Di **Saldo**, klik **Tarik** di kartu **Tarik saldo**. Penarikan diperiksa tim TokoΦ dan diproses dalam 1–2 hari kerja, tanpa biaya. Rekening harus sudah diisi ([langkah 3](/mulai/profil-dan-alamat/)).
+
+</Steps>
+
+Ongkir dan biaya transaksi dibayar pembeli dan tidak masuk ke saldo Anda. Yang masuk adalah harga barang.
+
+## Kalau ada masalah
+
+- *"Pesanan prepaid hanya dapat dikirim setelah pembayaran berhasil."* Tunggu sampai pesanan pindah ke tab **Perlu Dikirim**.
+- *"Layanan … tidak tersedia lagi untuk tujuan ini."* Layanan yang dipilih pembeli sudah tidak melayani rute itu. Pesan dari halaman detail lewat **Cek Ongkir**.
+- *"Saldo Seller tidak cukup untuk selisih ongkir …"* Pilih layanan yang tarifnya sama atau lebih murah dari yang dibayar pembeli.
+- *"Lengkapi rekening bank dulu sebelum menarik saldo."* Isi **Pengaturan → Rekening**.
+
+
+Toko Anda siap berjualan. Masih bingung? Buka tiket di menu [**Bantuan**](https://app.tokophi.com/bantuan) di Dashboard Seller.

@@ -1,0 +1,61 @@
+---
+title: "Atur varian produk"
+seoTitle: "Atur Varian Produk: Warna, Ukuran, Harga, Stok"
+description: "Buat varian warna atau ukuran untuk satu produk, lalu isi harga, stok, dan SKU tiap varian di editor produk Dashboard Seller TokoΦ."
+routes: ["/produk/[id]", "/produk/baru"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Varian dipakai kalau satu produk dijual dalam beberapa pilihan, misalnya warna dan ukuran. Setelah langkah ini setiap kombinasi (misalnya `Merah / M`) punya harga, stok, dan SKU sendiri, dan pembeli memilihnya di halaman produk.
+
+## Yang Anda perlukan
+
+- Produk yang sudah dibuat, atau sedang dibuat lewat **Tambah Produk**. Cara dasarnya ada di [Tambah produk pertama](/mulai/tambah-produk/).
+- Daftar pilihan yang dijual. Maksimal 2 jenis varian per produk, misalnya `Warna` dan `Ukuran`.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Produk**, lalu klik produknya (atau **Tambah Produk** untuk produk baru).
+2. Di kartu **Varian**, nyalakan **Produk ini memiliki varian**. Untuk produk baru, kolom pertama sudah terisi contoh `Ukuran` dengan nilai `S`, `M`, `L`. Ubah atau hapus kalau tidak sesuai.
+3. Di **Jenis varian 1**, ketik nama jenisnya, misalnya `Warna`.
+4. Di **Nilai**, ketik satu nilai lalu tekan Enter atau koma. Ulangi untuk setiap nilai. Tekan Backspace di kolom kosong untuk menghapus nilai terakhir, atau klik tanda silang pada nilai.
+5. Kalau perlu jenis kedua, klik **Tambah jenis varian**, lalu isi **Jenis varian 2** dan nilainya. Tombol ini hilang setelah ada 2 jenis.
+6. Tabel di bawahnya otomatis berisi semua kombinasi, misalnya 2 warna × 3 ukuran = 6 baris. Di setiap baris isi **SKU**, **Harga**, dan **Stok**.
+7. Untuk mengisi semua baris sekaligus, isi **Harga semua** dan/atau **Stok semua**, lalu klik **Terapkan ke semua**. Kolom yang dikosongkan tidak mengubah isi baris.
+8. Klik **Simpan**.
+
+</Steps>
+
+:::note[Catatan]
+Begitu produk punya varian, kolom **SKU**, **Barcode**, dan **Kuantitas** di kartu **Inventaris** terkunci, dengan keterangan *"Produk ini punya varian, jadi SKU, barcode & stok diatur per varian di kartu Varian."* Itu normal: stok dan SKU sekarang diisi per baris varian.
+:::
+
+### Yang berlaku untuk semua varian
+
+Beberapa isian tetap satu untuk seluruh produk, bukan per varian:
+
+- **Harga coret** dan **Biaya per item** dari kartu **Harga**.
+- **Berat (gram)** dan **Dimensi paket (cm)** dari kartu **Pengiriman**.
+- Foto di kartu **Media**.
+
+Baris varian yang harganya belum Anda ubah memakai angka di kolom **Harga** produk.
+
+### Mengubah varian yang sudah tersimpan
+
+TokoΦ mengenali varian dari nilainya. Mengganti nilai, misalnya `L` menjadi `Large`, dihitung sebagai menghapus varian lama dan membuat varian baru. Varian baru dimulai dengan stok 0 dan harga produk, jadi isi lagi stok dan harganya sebelum menekan **Simpan**.
+
+:::caution[Penting]
+Setelah mengganti nama nilai atau menambah nilai baru, periksa kolom **Stok** di tabel varian sebelum menyimpan. Varian yang stoknya 0 tampil sebagai stok habis di toko dan tidak bisa dibeli.
+:::
+
+## Kalau ada masalah
+
+- Tabel varian tidak muncul dan tertulis *"Isi nama & nilai opsi untuk menghasilkan varian."*: setiap jenis varian butuh nama dan minimal satu nilai.
+- *"Nama produk wajib diisi"*: isi **Judul** dulu, lalu simpan lagi.
+- *"Gagal menyimpan produk"*: periksa koneksi, lalu klik **Simpan** sekali lagi. Perubahan di layar belum hilang selama halaman tidak ditutup.
+- Stok varian lebih mudah diubah massal dari [Inventori](/produk/inventori/).
+- Istilah: [Varian](/referensi/kamus/#varian), [SKU](/referensi/kamus/#sku).

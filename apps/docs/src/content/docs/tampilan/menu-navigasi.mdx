@@ -1,0 +1,69 @@
+---
+title: "Atur menu header dan footer"
+seoTitle: "Atur Menu Header dan Footer Toko lewat Navigasi"
+description: "Buat menu header dan footer di Navigasi, tambah item dan sub-menu, lalu pahami kenapa sebuah item bisa tidak tampil di toko Anda."
+routes: ["/navigasi"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Menu di bagian atas (header) dan bawah (footer) toko diatur di **Navigasi**. Setelah mengikuti artikel ini, header toko menampilkan menu buatan Anda dan footer menampilkan tautan informasi yang Anda pilih.
+
+## Yang Anda perlukan
+
+- Peran **Pemilik**, **Admin**, **Staf**, atau **Advertiser** ([Peran tim](/referensi/peran-tim/)).
+- Alamat tujuan tiap item. Contoh: `/kategori/nama-kategori` untuk kategori, `/halaman/nama-halaman` untuk [halaman statis](/tampilan/halaman-statis/).
+
+## Menu mana tampil di mana
+
+Toko memilih menu berdasarkan **handle**, yaitu kode yang tampil di bawah judul tiap menu di Navigasi. Handle dibuat otomatis dari judul saat menu dibuat dan tidak bisa diubah setelahnya.
+
+| Bagian toko | Menu yang dipakai |
+|---|---|
+| Header | Menu dengan handle `main-menu` (atau `main`). Di Navigasi, menu `main-menu` diberi tanda **Utama**. |
+| Footer, kolom **Menu** | Item tingkat atas dari menu header. |
+| Footer, kolom **Informasi** | Menu dengan handle `footer`. |
+
+Kalau belum ada menu header, atau menunya masih kosong, header memakai menu bawaan: Beranda, Semua Produk, Kategori (berisi kategori Anda), Promo, Blog, dan Kontak. Kalau belum ada menu `footer`, kolom **Informasi** menampilkan semua halaman yang sudah terbit, urut abjad.
+
+## Langkah
+
+### Buat menu header atau footer (kalau belum ada)
+
+<Steps>
+
+1. Buka **Navigasi** di grup menu **Toko Online**, lalu klik **Buat menu**.
+2. Di **Judul menu**, ketik `main-menu` untuk menu header, atau `footer` untuk menu footer. Pastikan baris **Handle:** di bawahnya menunjukkan teks yang sama, lalu klik **Buat menu**.
+3. Ganti **Judul menu** dengan nama yang mudah Anda kenali, misalnya "Menu Utama", lalu klik **Simpan menu**. Judul hanya tampil di Dashboard Seller, dan handle tidak ikut berubah.
+
+</Steps>
+
+### Tambah dan susun item
+
+<Steps>
+
+1. Pilih menu di daftar kiri, lalu klik **Tambah item menu**.
+2. Isi **Nama** (teks yang dilihat pembeli) dan pilih **Tautan ke**: **Beranda**, **Koleksi**, **Produk**, **Halaman**, **Blog**, atau **Tautan web**. Lalu ketik alamatnya di **Tujuan / URL** mengikuti contoh di dalam kolom, dan klik **Tambah item**.
+3. Ubah urutan dengan tombol ↑ ↓, atau seret item ke posisi lain pada tingkat yang sama.
+4. Untuk sub-menu, klik ⋯ pada item induk lalu **Tambah sub-menu**, atau pilih **Jadikan sub-menu** pada item di bawahnya. **Naikkan jadi menu induk** membatalkannya. Menu hanya bisa dua tingkat.
+5. Klik **Simpan menu**. Muncul pesan *"Menu disimpan"*.
+
+</Steps>
+
+:::caution[Penting]
+Perubahan baru tersimpan setelah **Simpan menu**, dan tombol itu hanya menyimpan menu yang sedang terbuka. Simpan sebelum pindah ke menu lain. **Batal** mengembalikan semua menu ke kondisi terakhir yang tersimpan.
+:::
+
+:::note[Catatan]
+Pilihan **Tautan ke** tidak mengisi alamat untuk Anda. Ketik alamatnya sendiri di **Tujuan / URL**. Item induk yang punya sub-menu menjadi pembuka daftar di header, bukan tautan.
+:::
+
+## Kalau ada masalah
+
+- Menu buatan Anda tidak muncul di header: periksa handle-nya. Hanya `main-menu` atau `main` yang pasti dipakai untuk header. Buat menu baru dengan judul `main-menu` seperti di atas, lalu pindahkan item ke sana.
+- Sebuah item tidak tampil di toko: item header yang mengarah ke kategori yang tidak ada atau tidak diterbitkan disembunyikan. Item footer yang mengarah ke halaman berstatus Draft juga disembunyikan.
+- *"Satu menu maksimal berisi 100 item."*: kurangi jumlah item, atau pindahkan sebagian ke menu lain.
+- *"Menu tidak ditemukan. Muat ulang halaman ini."*: muat ulang halaman Navigasi, lalu ulangi perubahan.
+- *"Akses ditolak — peran Anda tidak bisa mengubah menu"*: minta Pemilik, Admin, Staf, atau Advertiser yang mengubah.
+- Ingin menghapus menu: Navigasi belum punya tombol untuk menghapus menu. Kosongkan saja menu yang tidak dipakai.

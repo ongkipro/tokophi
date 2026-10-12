@@ -1,0 +1,147 @@
+/* Panduan TokoΦ — own identity (spec §6). The accent is the Dashboard Seller's indigo on purpose:
+   the reader moves between this site and the panel, and the same colour on buttons/toggles in the
+   screenshots and on links here ties the two together. Type: system UI stack (fast, legible Bahasa
+   Indonesia at small sizes), no web-font download. */
+:root {
+  --sl-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sl-content-width: 46rem;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #e0e7ff;
+  --sl-color-accent: #4338ca;
+  --sl-color-accent-high: #312e81;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f8fafc;
+}
+:root,
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #1e1b4b;
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #c7d2fe;
+}
+
+/* Screenshots: a quiet frame so a white panel screenshot does not melt into a white page. */
+.sl-markdown-content img {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.18);
+  background: #fff;
+}
+.sl-markdown-content figure { margin-block: 1.5rem; }
+.sl-markdown-content figcaption {
+  margin-top: 0.5rem;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+/* Phone captures stay phone-sized instead of filling the column. */
+.sl-markdown-content .shot-phone img { max-width: 20rem; margin-inline: auto; display: block; }
+.sl-markdown-content .shot-phone figcaption { text-align: center; }
+
+/* Glossary: term on its own line, definition under it. */
+.sl-markdown-content dl dt { font-weight: 700; margin-top: 1.25rem; color: var(--sl-color-white); }
+.sl-markdown-content dl dd { margin: 0.25rem 0 0; }
+.sl-markdown-content dl dt[id] { scroll-margin-top: 5rem; }
+
+/* Tables of facts read as reference, not as decoration. */
+.sl-markdown-content table { font-size: var(--sl-text-sm); }
+
+/* ── Sidebar: minimal. No filled block for the current page — accent text + a 2px rule. ── */
+.sidebar-content .large {
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  color: var(--sl-color-gray-1);
+}
+.sidebar-content a {
+  border-radius: 0;
+  border-inline-start: 2px solid transparent;
+  color: var(--sl-color-gray-2);
+  font-size: var(--sl-text-sm);
+}
+.sidebar-content a:hover,
+.sidebar-content a:focus-visible {
+  color: var(--sl-color-white);
+  background: transparent;
+}
+.sidebar-content [aria-current="page"],
+.sidebar-content [aria-current="page"]:hover,
+.sidebar-content [aria-current="page"]:focus {
+  font-weight: 500;
+  color: var(--sl-color-accent);
+  background: transparent;
+  border-inline-start-color: var(--sl-color-accent);
+}
+:root[data-theme="dark"] .sidebar-content [aria-current="page"] { color: var(--sl-color-accent-high); }
+
+/* "Di halaman ini" (TOC): same language — colour only, no weight jump. */
+starlight-toc a[aria-current="true"] { color: var(--sl-color-accent); font-weight: 400; }
+
+/* ── Search trigger: a real-looking input, not a pill button. ── */
+site-search button[data-open-modal] {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  background: var(--sl-color-bg);
+  color: var(--sl-color-gray-3);
+  box-shadow: none;
+}
+site-search button[data-open-modal]:hover { border-color: var(--sl-color-gray-3); color: var(--sl-color-gray-2); }
+site-search button[data-open-modal] kbd { margin-inline-start: auto; }
+.tp-sidebar-search site-search button[data-open-modal] { min-height: 2.5rem; padding-inline: 0.75rem; }
+.tp-sidebar-search site-search button[data-open-modal] > span { display: block; }
+
+/* Home hero: one large field, label always visible (also on phones). */
+.tp-hero-search { display: block; margin-top: 2rem; }
+.tp-hero-search button[data-open-modal] {
+  min-height: 3.5rem;
+  padding-inline: 1.25rem;
+  font-size: var(--sl-text-base);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 6px 20px -10px rgb(15 23 42 / 0.25);
+}
+.tp-hero-search button[data-open-modal] > span { display: block; }
+.tp-hero-search button[data-open-modal] svg { width: 1.25rem; height: 1.25rem; }
+
+/* Splash page: centre the content column under the hero. */
+[data-has-hero] .sl-markdown-content { max-width: 60rem; margin-inline: auto; }
+
+/* ── Audit fixes (render critique 2026-10-12) ── */
+/* Search fields fill their container; Starlight caps the trigger at 22rem from 50rem up. */
+site-search button[data-open-modal] { max-width: none !important; }
+/* Asides: quiet. A thin tint and a 3px rule carry the type; the colour block was too loud. */
+.starlight-aside {
+  border-inline-start-width: 3px;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.starlight-aside--note { background-color: color-mix(in srgb, var(--sl-color-blue-low) 35%, transparent); }
+.starlight-aside--tip { background-color: color-mix(in srgb, var(--sl-color-purple-low) 35%, transparent); }
+.starlight-aside--caution { background-color: color-mix(in srgb, var(--sl-color-orange-low) 35%, transparent); }
+.starlight-aside--danger { background-color: color-mix(in srgb, var(--sl-color-red-low) 35%, transparent); }
+/* The search dialog lives inside the centred hero on the home page; results read left-aligned. */
+.tp-hero site-search dialog { text-align: start; }
+
+/* Glossary terms are h3 (so search names the term) but read as dictionary entries, not sections. */
+.sl-markdown-content h3.tp-term { font-size: var(--sl-text-base); margin-top: 1.25rem; }
+.sl-markdown-content h3.tp-term + p { margin-top: 0.25rem; }
+/* The hero band is full-bleed; keep it from creating horizontal scroll. */
+/* Full-bleed bands (hero, footer) must neither scroll sideways nor extend the page: clip both axes. */
+body { overflow-x: clip; }
+/* The site footer is the last thing on every page: drop the 24px + 27px Starlight leaves under the
+   last content panel and <main> (measured), so the footer band reaches the bottom of the page. */
+main:has(.tp-footer) { padding-bottom: 0; }
+.content-panel:has(.tp-footer) { padding-bottom: 0; }
+
+/* Prev/next: quiet links, not heavy cards (owner: "biar gak card bold"). */
+.pagination-links a {
+  box-shadow: none;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.625rem;
+}
+.pagination-links a:hover { border-color: var(--sl-color-accent); }
+.pagination-links .link-title { font-size: var(--sl-text-base); font-weight: 600; line-height: 1.35; }
+
+/* Screenshots open full size (wide panel captures are small on a phone). */
+.sl-markdown-content figure a { display: block; }
+.sl-markdown-content figure a:focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 3px; border-radius: 0.75rem; }
+.sl-markdown-content figcaption .tp-zoom { color: var(--sl-color-gray-4); }

@@ -371,6 +371,34 @@ services:
       # See the admin service's start_interval note — same 503-window fix.
       start_interval: 2s
 
+  # Panduan TokoΦ — the Seller help center (apps/docs, Task 8.37) on panduan.tokophi.com. Static nginx,
+  # NO database and NO depends_on: help must stay readable when the product is down.
+  # The Host router below outranks the store wildcard (`tokophi-stores`, priority=1), which would
+  # otherwise 301 panduan.tokophi.com to panduan.tokophi.id; "panduan" is in RESERVED_SLUGS.
+  # DNS = the existing proxied wildcard; TLS = the Cloudflare Origin CA default cert (no certresolver).
+  docs:
+    build:
+      context: .
+      dockerfile: apps/docs/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "4339"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tokophi-docs.rule=Host(`panduan.tokophi.com`)
+      - traefik.http.routers.tokophi-docs.entryPoints=https
+      - traefik.http.routers.tokophi-docs.tls=true
+      - traefik.http.routers.tokophi-docs.priority=100
+      - traefik.http.routers.tokophi-docs.service=tokophi-docs
+      - traefik.http.services.tokophi-docs.loadbalancer.server.port=4339
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4339/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+      start_interval: 2s
+
   # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).
   #
   # Response body to STDOUT (the SAME lesson `cron-tracking` and `cron-tracking-events` already record

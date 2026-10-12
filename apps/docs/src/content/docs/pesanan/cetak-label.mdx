@@ -1,0 +1,65 @@
+---
+title: "Cetak label pengiriman"
+seoTitle: "Cetak Label Kirim 100 × 150 mm, Satu atau Massal"
+description: "Cara mencetak label pengiriman 100 × 150 mm untuk satu pesanan atau banyak pesanan sekaligus, isi labelnya, dan arti tanda Sudah dicetak."
+routes: ["/pesanan/massal", "/pesanan/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Label pengiriman adalah lembar 100 × 150 mm yang ditempel di paket. Setelah membaca ini Anda bisa mencetaknya untuk banyak pesanan sekaligus atau untuk satu pesanan, dan tahu kenapa label kadang belum bisa dicetak.
+
+:::caution[Penting (per 12 Oktober 2026)]
+Layanan pengiriman TokoΦ Kirim masih berjalan dalam mode uji. Pemesanan kurir dan nomor resi terlihat seperti aslinya, tetapi **belum ada kurir yang datang menjemput**. Tombol bertanda *"mode demo"* atau *"resi contoh"* juga berasal dari mode ini. Sebelum mengirim pesanan sungguhan, hubungi tim TokoΦ lewat menu [**Bantuan**](https://app.tokophi.com/bantuan). Langkah di bawah tetap berguna untuk mengenal alurnya.
+:::
+
+## Yang Anda perlukan
+
+- Pesanan yang kurirnya sudah dipesan dan nomor resinya sudah terbit. Lihat [Pesan kurir](/pesanan/booking-pengiriman/).
+- Printer thermal untuk label 100 × 150 mm (disarankan).
+- Browser yang mengizinkan popup dari Dashboard Seller, karena label dibuka di jendela baru.
+
+## Langkah: banyak label sekaligus
+
+<Steps>
+
+1. Buka **Pesanan → Pengiriman Massal**. Klik filter **Belum dicetak** di baris **Status cetak** supaya yang tampil hanya pesanan yang labelnya belum dicetak.
+2. Centang pesanan yang kolom **Resi**-nya sudah berisi nomor. Pesanan yang masih **Menunggu resi** tidak bisa dicetak.
+3. Klik **Cetak resi**. Angka di tombol menunjukkan berapa pesanan terpilih yang sudah punya resi. Semua label terbuka di satu jendela, masing-masing satu halaman 100 × 150 mm, dan jendela cetak browser langsung muncul.
+4. Pilih printer thermal, lalu cetak. Kolom **Cetak** pesanan itu berubah menjadi **Sudah**, dan muncul pesan *"… label ditandai dicetak."*
+
+</Steps>
+
+:::note[Catatan]
+TokoΦ tidak bisa melihat printer Anda. Tanda **Sudah** berarti jendela cetak sudah dibuka, bukan bukti kertasnya keluar. Kalau printer macet, cetak ulang dengan memilih filter **Sudah dicetak**.
+:::
+
+Cetak paling banyak 50 label sekali klik. Kalau Anda memilih lebih dari 50 pesanan yang sudah punya resi, hanya 50 label yang dibuat, tetapi pesanan selebihnya bisa ikut ditandai **Sudah** tanpa labelnya tercetak.
+
+## Langkah: satu label dari detail pesanan
+
+<Steps>
+
+1. Buka detail pesanan.
+2. Klik **Cetak resi** di bagian atas halaman. Label terbuka di jendela baru dan jendela cetak browser muncul.
+
+</Steps>
+
+Cara ini berguna untuk mencetak ulang label pesanan yang sudah **Dikirim**, karena pesanan itu tidak lagi tampil di Pengiriman Massal setelah resinya terbit dan statusnya berubah. Mencetak dari detail pesanan tidak mengubah tanda **Sudah**/**Belum** di Pengiriman Massal.
+
+Selama mode uji, tombol **Cetak resi** di detail pesanan bisa mengisi resi contoh yang diawali `DEMO` lalu mencetak labelnya. Label seperti itu tidak bisa dipindai kurir, jadi jangan ditempel di paket sungguhan.
+
+## Isi label
+
+Dari atas ke bawah: nama kurir dan layanan, nama toko dan nomor pesanan, kotak **COD** berisi total yang ditagih atau tulisan **NON-COD**, kode sortir bila ada, barcode dan nomor resi, lalu **Penerima**, **Pengirim**, dan **Isi** paket beserta beratnya.
+
+Untuk SPX, ID Express, J&T, dan J&T Cargo, label selalu punya kotak **Sorting code**. Kalau kodenya belum terbit dari kurir, kotak itu bertuliskan *"Belum tersedia — terbit dari kurir saat resi diproses"*.
+
+## Kalau ada masalah
+
+- *"Popup diblokir browser — izinkan popup untuk mencetak."* atau *"Popup diblokir — izinkan popup untuk mencetak resi."* Izinkan popup untuk `app.tokophi.com` di pengaturan browser, lalu klik lagi.
+- *"Tidak ada label yang bisa dicetak dari … pesanan terpilih."* Resi belum terbit. Klik **Ambil resi** dulu.
+- *"… pesanan dilewati — resi belum terbit"*. Pesanan itu tidak dicetak dan tidak ditandai. Klik **Ambil resi**, lalu cetak ulang pesanan tersebut.
+- *"… label belum memuat sorting code"*. Cetak ulang setelah kurir memproses resinya.
+- *"Belum ada nomor resi — label tidak bisa dicetak."* (detail pesanan) Pesan kurir dulu lewat **Cek Ongkir**, atau tunggu resi terbit lalu klik **Lacak**.

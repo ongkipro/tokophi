@@ -1,0 +1,41 @@
+---
+// Content for the search dialog's empty state and footer hint. Starlight's Search component has no
+// slot, so this renders a <template> and moves it into every search dialog on the page once.
+import Lucide from "./Lucide.astro";
+
+const popular = [
+  ["Resi belum terbit", "/faq/#saya-sudah-klik-generate-resi-tapi-resinya-belum-ada"],
+  ["Syarat COD", "/mulai/pengiriman-dan-cod/#bayar-di-tempat-cod-opsional"],
+  ["Kapan saldo bisa ditarik", "/uang/saldo-dan-penarikan/#kapan-uang-masuk"],
+  ["Produk tidak muncul di toko", "/faq/#produk-saya-tidak-muncul-di-toko"],
+];
+const start = [
+  ["Mulai di sini: 7 langkah toko siap jualan", "/mulai/"],
+  ["Kamus istilah A–Z", "/referensi/kamus/"],
+  ["Biaya dan harga", "/referensi/biaya/"],
+];
+---
+
+<template id="tp-search-extras">
+  <div class="tp-search-empty">
+    <h2>Sering dicari</h2>
+    <ul>{popular.map(([l, h]) => <li><a href={h}><Lucide name="search" size={16} />{l}</a></li>)}</ul>
+    <h2>Mulai dari</h2>
+    <ul>{start.map(([l, h]) => <li><a href={h}><Lucide name="file-text" size={16} />{l}</a></li>)}</ul>
+  </div>
+  <div class="tp-search-foot"><kbd>Esc</kbd> untuk menutup</div>
+</template>
+
+<script>
+  const tmpl = document.getElementById("tp-search-extras") as HTMLTemplateElement | null;
+  if (tmpl) {
+    document.querySelectorAll("site-search .dialog-frame").forEach((frame) => {
+      if (frame.querySelector(".tp-search-empty")) return;
+      frame.append(tmpl.content.cloneNode(true));
+      // Following a suggestion that points into the current page must also close the dialog.
+      frame.querySelectorAll(".tp-search-empty a").forEach((a) =>
+        a.addEventListener("click", () => frame.closest("dialog")?.close()),
+      );
+    });
+  }
+</script>
