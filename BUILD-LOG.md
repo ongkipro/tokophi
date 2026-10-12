@@ -27,6 +27,13 @@ Executor: Main Session (Claude Code). Branch `feat/landing-polish` (worktree `to
 - **Verified:** `astro check` 0/0; build OK, 0 client JS bundle files; Playwright on 6 pages × 390/1440: 0 console errors, 0 overflow (an ornament placement that pushed the home page 32–85px sideways was found and moved), one h1; scroll-driven settle measured in Chrome (opacity 0 → 0.91 → 1). Lighthouse 12.8.2 mobile, local: home 98/100/100/100 (was 92 Performance), LCP 2.4 s, TBT 0, CLS 0; /fitur 99/100/100/100. `vitest` 1446 passed; `verify-doc-authority` ok.
 - **Not verified:** the independent visual review timed out twice at its 900 s limit (197 image slices) and returned no verdict; `design-gate.py` therefore cannot pass for this change set.
 
+### [2026-10-12 05:53 UTC] — ADMIN · empty Usia reads "Pilih", not "Dewasa" (PR #413)
+Executor: Main Session (Claude Code). Branch `fix/feed-age-placeholder`, merged as `fb77fb74`.
+- **Found** while browser-checking #408 on production with the demo login: the product editor's feed-attribute Usia showed a muted "Dewasa" when unset, and the comment above it said the feed defaults age to adult. `product-feed.ts` emits `age_group` only when set, so merchants (e.g. a fertiliser shop) read an age that was never saved or sent.
+- **Code:** `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` — placeholder "Pilih" (same as Gender); comment states what the feed does.
+- **Verified:** admin `tsc` 0, eslint clean, CI 4/4. Production after deploy (~872 s), Playwright as the demo owner on `app.tokophi.com/store/batiknusantara`: `/produk/baru` Usia "Pilih", Kategori toko blank with the store's 8 own labels as suggestions, no "Fashion"; `/produk/1024` keeps "Outerwear"; console 0 errors. Nothing saved.
+- This also closes #408's "NOT verified: admin editor in a browser".
+
 ### [2026-10-12 02:25 UTC] — CATALOG · merchant category no longer defaults to "Fashion"; Google-category suggester fixed; all-tenant data repair
 Executor: Main Session (Claude Code). Branch `fix/merchant-category-google-catalog` (worktree `tokophi-catalog-fix`).
 - Owner report: every seller storefront shows "Fashion" on the product page (taniniaga.com sells fertiliser). Owner: "sekalian scan keseluruhan tenant", then "ya lanjut dan sempurnakan".
