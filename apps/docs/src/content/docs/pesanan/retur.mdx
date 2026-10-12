@@ -1,0 +1,62 @@
+---
+title: "Retur: paket kembali"
+seoTitle: "Retur: Tandai Paket Kembali, Stok dan Saldo"
+description: "Cara mencatat paket yang kembali ke Anda dengan Tandai retur, apa yang terjadi pada stok dan saldo, dan di mana melihat tingkat retur per kurir."
+routes: ["/pesanan", "/pesanan/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Retur berarti paket sudah dikirim lalu kembali ke Anda, misalnya karena pembeli menolaknya. Setelah membaca ini Anda bisa mencatat retur, tahu dampaknya pada stok dan saldo, dan bisa memantau tingkat retur per kurir.
+
+Retur berbeda dengan **Batal**. Pesanan Batal tidak pernah dikirim, sedangkan pesanan Retur sudah dikirim dan kembali. Cara membatalkan pesanan ada di [Tab dan status pesanan](/pesanan/tab-dan-status/#membatalkan-pesanan).
+
+## Dua cara pesanan menjadi Retur
+
+- **Otomatis dari data kurir.** Kalau kurir melaporkan paket dikembalikan, termasuk paket COD yang ditolak pembeli, status pesanan berubah sendiri menjadi **Retur**. Ini juga berlaku untuk pesanan yang sudah **Selesai**.
+- **Manual lewat Tandai retur.** Untuk pesanan berstatus **Dikirim** yang paketnya sudah kembali di tangan Anda, tetapi statusnya belum berubah.
+
+## Yang Anda perlukan
+
+- Peran Pemilik, Admin, Staf, atau Customer Service ([Peran tim](/referensi/peran-tim/)).
+- Paket yang benar-benar sudah kembali. Periksa isinya sebelum mencatat retur.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Pesanan**, cari pesanannya, lalu buka detailnya.
+2. Klik **Tandai retur** di bagian atas halaman. Tombol ini hanya ada pada pesanan berstatus **Dikirim**.
+3. Di jendela **Tandai retur**, isi **Alasan retur**. Isian bawaannya *"Pembeli menolak paket"*.
+4. Klik **Tandai retur** di jendela itu. Muncul pesan *"Pesanan ditandai retur — stok dikembalikan."*
+
+</Steps>
+
+:::caution[Penting]
+Retur adalah status akhir. Setelah dicatat, statusnya tidak bisa diubah lagi dan tidak bisa diurungkan dari Dashboard Seller. Pastikan paketnya memang sudah kembali sebelum menekan tombol.
+:::
+
+## Yang terjadi setelah retur
+
+- **Stok** semua barang di pesanan itu ditambahkan kembali.
+- **Saldo**: hasil penjualan pesanan ditarik kembali dari saldo. Di halaman **Saldo**, jumlahnya tercatat di **Ditarik kembali (retur)**.
+- **Tagihan** yang masih menunggu pembayaran, termasuk tagihan COD yang belum ditagih, ditandai gagal.
+- **Selisih ongkir** yang sudah dipotong karena Anda memilih layanan yang lebih mahal tidak dikembalikan. Kurirnya tetap sudah dipesan.
+- **Linimasa** di detail pesanan menampilkan **Paket kembali (retur)** beserta alasan dan waktunya.
+
+:::note[Catatan]
+Dashboard Seller tidak punya tombol refund. Kalau pembeli sudah membayar lewat QRIS atau VA, baris **Pengembalian dana** muncul di kartu **Pembayaran** dengan status **Refund menunggu**, **Refund diproses**, **Refund selesai**, atau **Refund ditolak**. Pengembalian dana ke pembeli diurus TokoΦ. Pakai baris ini untuk menjawab pertanyaan pembeli. Pesanan COD tidak punya pengembalian dana karena uangnya belum pernah ditagih.
+:::
+
+## Pantau tingkat retur
+
+Buka **Pesanan → Pengembalian/Pembatalan**. Tab ini berisi pesanan Batal dan Retur. Di bawah daftarnya ada kartu **Retur** dengan **Tingkat retur (semua)**, **Tingkat retur COD**, dan angka retur per kurir. Angkanya hanya menghitung paket yang kurirnya dipesan lewat TokoΦ Kirim.
+
+Kurir yang sering diretur di daerah tertentu bisa jadi alasan untuk mematikan layanannya di **Pengaturan → Pengiriman** ([langkah 4](/mulai/pengiriman-dan-cod/)).
+
+## Kalau ada masalah
+
+- Tombol **Tandai retur** tidak muncul. Status pesanan bukan **Dikirim**, atau peran Anda tidak punya akses pesanan. Pesanan yang sudah **Selesai** hanya bisa menjadi Retur lewat data kurir. Kalau paketnya kembali tetapi status tetap Selesai, buka tiket di [**Bantuan**](https://app.tokophi.com/bantuan).
+- *"Pesanan ini sudah dibatalkan atau diretur, jadi statusnya tidak bisa diubah lagi. …"* Data kurir sudah mencatatnya lebih dulu. Muat ulang halaman.
+- *"Perubahan status itu tidak diizinkan dari status pesanan saat ini. …"* Status pesanan sudah berubah sejak halaman dibuka. Muat ulang halaman.

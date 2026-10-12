@@ -1,0 +1,48 @@
+---
+title: "Buat halaman Tentang Kami, Kebijakan, dan lainnya"
+seoTitle: "Buat Halaman Tentang Kami dan Kebijakan Toko"
+description: "Buat halaman statis seperti Tentang Kami atau Kebijakan Pengembalian, terbitkan di toko, dan tautkan dari footer atau menu header Anda."
+routes: ["/halaman", "/halaman/baru", "/halaman/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Halaman statis berisi informasi yang jarang berubah, misalnya Tentang Kami, Cara Pemesanan, atau Kebijakan Pengembalian. Setelah mengikuti artikel ini, halaman Anda tampil di toko pada alamat `nama-toko.tokophi.id/halaman/<handle>` dan bisa dibuka dari footer.
+
+## Yang Anda perlukan
+
+- Peran **Pemilik**, **Admin**, **Staf**, atau **Advertiser** ([Peran tim](/referensi/peran-tim/)).
+- Isi halaman yang sudah siap.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Halaman** di grup menu **Toko Online**, lalu klik **Tambah halaman**.
+2. Isi **Judul** (wajib, maksimal 100 karakter), lalu tulis isinya di **Konten**.
+3. Periksa **URL & handle**. Handle terisi otomatis dari judul: huruf kecil, spasi menjadi tanda hubung, dan tanda baca dibuang. Anda boleh mengubahnya.
+4. Di kartu **Visibilitas**, pilih **Terbit** supaya halaman tampil di toko, atau **Draft** untuk menyimpannya tanpa menampilkan.
+5. Klik **Simpan**. Muncul pesan *"Halaman dibuat"* (atau *"Halaman disimpan"* saat mengedit), lalu Anda kembali ke daftar halaman.
+6. Tautkan halaman itu. Kalau toko Anda belum punya menu `footer`, semua halaman yang terbit otomatis tampil di kolom **Informasi** di footer. Kalau sudah punya, tambahkan item di [Navigasi](/tampilan/menu-navigasi/) dengan **Tautan ke** **Halaman** dan tujuan `/halaman/<handle>`.
+
+</Steps>
+
+:::caution[Penting]
+Kolom handle di editor diawali `/pages/`, tetapi alamat sebenarnya di toko adalah `/halaman/<handle>`. Pakai `/halaman/` saat menautkan atau membagikan halaman. Kalau handle diubah setelah halaman ditautkan, alamat lama tidak bisa dibuka lagi.
+:::
+
+:::note[Catatan]
+Kartu **Pratinjau mesin pencari** (**Judul halaman (SEO)** dan **Deskripsi meta**) dan pilihan **Template tema** saat ini tidak tersimpan dan tidak memengaruhi toko. Judul di tab browser dan hasil pencarian memakai **Judul** halaman.
+:::
+
+Menghapus halaman lewat ⋯ → **Hapus** bersifat permanen dan tidak bisa dikembalikan. Kalau hanya ingin menyembunyikannya, ubah ke **Draft**.
+
+## Kalau ada masalah
+
+- *"Judul halaman wajib diisi"*: isi **Judul** sebelum menyimpan.
+- *"Gagal menyimpan halaman"*: biasanya handle sudah dipakai halaman lain di toko Anda. Ubah **URL & handle**, lalu simpan lagi.
+- *"Halaman tidak ditemukan — mungkin sudah dihapus."*: halaman itu sudah dihapus. Kembali ke daftar **Halaman**.
+- Halaman tidak bisa dibuka di toko: pastikan statusnya **Terbit** dan alamatnya memakai `/halaman/`, bukan `/pages/`. Halaman Draft tidak bisa dibuka pembeli.
+- Halaman terbuka tetapi bertuliskan *"Halaman ini belum memiliki isi."*: **Konten** masih kosong.
+- Kolom **Dilihat** di daftar halaman selalu 0: jumlah kunjungan halaman belum dihitung.

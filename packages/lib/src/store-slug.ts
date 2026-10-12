@@ -69,6 +69,11 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // forever serves somebody else's shop. The demonstrated consequence this list requires; reserved
   // for as long as that redirect exists (apps/storefront/src/middleware.ts, OLD_LABEL).
   "batik-nusantara",
+  // The Seller help center (`apps/docs`, Task 8.37) is served on `panduan.tokophi.com` by an explicit
+  // Traefik Host router that outranks the store wildcard. A store allocated this slug would lose its
+  // `.tokophi.com` alias to the docs site, and `panduan.tokophi.id` would read as TokoΦ's official
+  // guide while serving a merchant's shop.
+  "panduan",
 ]);
 
 export const isReservedSlug = (slug: string): boolean => RESERVED_SLUGS.has(slug);

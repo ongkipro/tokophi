@@ -1,0 +1,37 @@
+---
+// PageTitle override: a breadcrumb above the H1 (Shopify Help transfer; review 2026-10-12: chapter
+// context was lost on phones where the sidebar is hidden). The chapter comes from Starlight's own
+// sidebar data, so it can never disagree with the navigation.
+import Default from "@astrojs/starlight/components/PageTitle.astro";
+
+type Item = { type: "link"; isCurrent: boolean } | { type: "group"; label: string; entries: Item[] };
+const contains = (items: Item[]): boolean =>
+  items.some((i) => (i.type === "link" ? i.isCurrent : contains(i.entries)));
+const sidebar = Astro.locals.starlightRoute.sidebar as Item[];
+const group = sidebar.find((g): g is Extract<Item, { type: "group" }> => g.type === "group" && contains(g.entries));
+---
+
+<nav class="tp-crumb" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="/">Panduan</a></li>
+    {group && <li aria-hidden="true">›</li>}
+    {group && <li>{group.label}</li>}
+  </ol>
+</nav>
+<Default />
+
+<style>
+  .tp-crumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  .tp-crumb a { color: var(--sl-color-gray-2); text-decoration: none; }
+  .tp-crumb a:hover { color: var(--sl-color-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .tp-crumb + :global(h1) { margin-top: 0.5rem; }
+</style>

@@ -1,0 +1,86 @@
+---
+// Footer override (spec §6.4 C7): Starlight's own footer (prev/next pagination) and then a site
+// footer. Separation from the content is a background shift, not a rule (owner default).
+import Default from "@astrojs/starlight/components/Footer.astro";
+
+const APP = "https://app.tokophi.com";
+const SITE = "https://tokophi.com";
+const cols = [
+  { title: "Panduan", links: [["Mulai di sini", "/mulai/"], ["Pesanan", "/pesanan/"], ["Uang", "/uang/"], ["Kamus istilah", "/referensi/kamus/"], ["FAQ", "/faq/"]] },
+  { title: "Seller", links: [["Masuk", `${APP}/login`], ["Daftar gratis", `${APP}/daftar`], ["Buat tiket Bantuan", `${APP}/bantuan`]] },
+  { title: "TokoΦ", links: [["tokophi.com", `${SITE}/`], ["Kontak", `${SITE}/kontak/`], ["Kebijakan Privasi", `${SITE}/privasi/`]] },
+];
+---
+
+<Default />
+<footer class="tp-footer">
+  <div class="tp-footer-inner">
+    <div class="tp-footer-brand">
+      <a href="/" class="tp-footer-word">Toko<span>Φ</span> <small>Panduan</small></a>
+      <p>Panduan Dashboard Seller dari tim TokoΦ. Belum menemukan jawabannya? Buat tiket dari menu <strong>Bantuan</strong> di Dashboard Seller.</p>
+    </div>
+    {cols.map((c) => (
+      <nav aria-label={c.title}>
+        <h2>{c.title}</h2>
+        <ul>{c.links.map(([l, h]) => <li><a href={h}>{l}</a></li>)}</ul>
+      </nav>
+    ))}
+  </div>
+  <p class="tp-footer-legal">© {new Date().getFullYear()} TokoΦ</p>
+</footer>
+
+<style>
+  .tp-footer {
+    position: relative;
+    isolation: isolate;
+    margin-top: 4rem;
+    padding-block: 2.5rem 1.5rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  /* Full-bleed tinted band behind the footer (background shift instead of a border). */
+  .tp-footer::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc(50% - 50vw) 0;
+    background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+  }
+  /* With a sidebar the band stays inside the content panel; a viewport-wide band overflowed (measured). */
+  :global([data-has-sidebar]) .tp-footer::before { inset-inline: calc(-1 * var(--sl-content-pad-x, 1rem)); }
+  .tp-footer-inner {
+    display: grid;
+    gap: 2rem 1.5rem;
+    grid-template-columns: 1fr 1fr;
+  }
+  .tp-footer-brand { grid-column: 1 / -1; }
+  @media (min-width: 40rem) {
+    .tp-footer-inner { grid-template-columns: 1.6fr repeat(3, 1fr); }
+    .tp-footer-brand { grid-column: auto; }
+  }
+  .tp-footer-word {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.1rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--sl-color-white);
+    text-decoration: none;
+  }
+  .tp-footer-word span { color: var(--sl-color-accent); font-family: Georgia, "Times New Roman", serif; font-weight: 400; }
+  :global([data-theme="dark"]) .tp-footer-word span { color: var(--sl-color-accent-high); }
+  .tp-footer-word small { margin-inline-start: 0.4rem; font-weight: 400; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+  .tp-footer-brand p { margin-top: 0.6rem; max-width: 22rem; line-height: 1.6; }
+  .tp-footer h2 {
+    margin: 0 0 0.6rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .tp-footer ul { list-style: none; margin: 0; padding: 0; }
+  .tp-footer li + li { margin-top: 0.4rem; }
+  .tp-footer a { color: var(--sl-color-gray-2); text-decoration: none; }
+  .tp-footer nav a:hover { color: var(--sl-color-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .tp-footer a:focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 2px; }
+  .tp-footer-legal { margin-top: 2rem; font-size: var(--sl-text-xs); }
+</style>

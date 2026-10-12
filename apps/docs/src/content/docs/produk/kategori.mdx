@@ -1,0 +1,59 @@
+---
+title: "Buat kategori dan isi produknya"
+seoTitle: "Buat Kategori Produk dan Tampilkan di Toko"
+description: "Buat kategori Manual, pilih produk yang masuk, lalu terbitkan supaya halaman kategorinya tampil di toko. Termasuk kenapa jenis Otomatis belum dipakai."
+routes: ["/produk/kategori", "/produk/kategori/baru", "/produk/kategori/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Kategori (di layar juga disebut koleksi) adalah kelompok produk yang punya halaman sendiri di toko, misalnya "Dress" atau "Promo Gajian". Setelah langkah ini kategori Anda tampil di toko dan berisi produk yang Anda pilih.
+
+## Yang Anda perlukan
+
+- Produk berstatus **Aktif**. Produk **Draft** tidak tampil di halaman kategori walaupun sudah dimasukkan. Lihat [Tambah produk pertama](/mulai/tambah-produk/).
+
+## Langkah
+
+<Steps>
+
+1. Buka **Produk → Kategori**, lalu klik **Buat kategori**. Untuk mengubah kategori yang sudah ada, klik namanya.
+2. Isi **Judul**. Hanya kolom ini yang wajib. **Deskripsi** boleh diisi untuk teks di halaman kategori.
+3. Di **Jenis koleksi**, pilih **Manual**.
+4. Di kartu **Produk**, ketik nama produk di kolom **Cari produk untuk ditambahkan**, lalu klik produknya. Ulangi untuk setiap produk. Untuk mengeluarkan produk, klik tanda silang di barisnya.
+5. Di kartu **Publikasikan**, nyalakan **Terbitkan koleksi**. Kategori baru dimulai dalam keadaan mati.
+6. Opsional: di **Gambar koleksi**, unggah gambar sampul (PNG, JPG, WebP, atau SVG, maksimal 2 MB).
+7. Opsional: di **Pratinjau mesin pencari**, atur **Judul SEO**, **Deskripsi meta**, dan **Handle URL**.
+8. Klik **Simpan**. Anda kembali ke daftar **Kategori**, dan kolom **Status** menunjukkan **Terbit**.
+
+</Steps>
+
+Halaman kategorinya ada di `https://<slug-toko>.tokophi.id/kategori/<handle>`. Handle diambil dari judul kalau tidak Anda ubah.
+
+:::caution[Penting]
+Jangan pilih **Otomatis**. Kondisi yang Anda atur di sana tersimpan, tetapi saat ini belum dijalankan, jadi halaman kategori itu kosong di toko. Mengubah kategori **Manual** menjadi **Otomatis** lalu menyimpannya juga menghapus semua produk yang sudah Anda pilih untuk kategori itu.
+:::
+
+### Pilihan "Kategori" di editor produk
+
+Di editor produk, kartu **Organisasi** punya pilihan **Kategori** (misalnya Dress, Atasan, Aksesoris). Pilihan itu tampil sebagai label kecil di kartu produk, tetapi produk **tidak** masuk ke halaman kategori lewat pilihan itu. Satu-satunya cara adalah menambahkannya di kategori **Manual** seperti langkah di atas.
+
+Satu produk boleh masuk ke beberapa kategori sekaligus.
+
+:::note[Catatan]
+Beberapa bagian editor kategori belum berfungsi: tombol format di atas **Deskripsi** (tebal, miring, daftar, tautan, gambar) tidak melakukan apa-apa, dan pilihan **Template tema** tidak dipakai toko. Tampilan halaman kategori diatur dari menu [Tema](/tampilan/).
+:::
+
+### Menghapus kategori
+
+Di daftar **Kategori**, klik ikon tiga titik di baris kategori, pilih **Hapus**, lalu konfirmasi. Kategori dihapus permanen. Produknya tetap ada, tetapi halaman kategori di toko menjadi tidak ditemukan (404). Kalau hanya ingin menyembunyikan sementara, matikan **Terbitkan koleksi** saja.
+
+## Kalau ada masalah
+
+- *"Nama koleksi wajib diisi"*: isi **Judul**.
+- *"Gagal menyimpan koleksi"*: coba **Simpan** sekali lagi. Perubahan di layar belum hilang selama halaman tidak ditutup.
+- Halaman kategori kosong: pastikan jenisnya **Manual**, produknya sudah ditambahkan, dan produknya berstatus **Aktif**.
+- Kategori tidak muncul di toko: pastikan statusnya **Terbit**. Handle `semua` dipakai toko untuk halaman semua produk, jadi pakai handle lain.
+- *"Akses ditolak — peran Anda tidak bisa mengubah koleksi"*: minta pemilik toko mengubahnya. Lihat [Tim](/tim/) untuk izin tiap peran.
+- Istilah: [Kategori](/referensi/kamus/#kategori), [Draft](/referensi/kamus/#draft).

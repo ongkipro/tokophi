@@ -1,0 +1,70 @@
+---
+title: "Ringkasan keuangan dan penghasilan"
+seoTitle: "Laporan Keuangan dan Penghasilan Toko Anda"
+description: "Baca menu Keuangan: ringkasan 30 hari, penghasilan per hari, uang yang sudah dan belum dilepas, sumber penjualan, dan cara mengunduh mutasi ke CSV."
+routes: ["/keuangan", "/keuangan/penghasilan", "/saldo"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Menu **Keuangan** menjawab tiga pertanyaan berbeda: apakah uang toko sehat (**Ringkasan**), berapa yang Anda hasilkan dan kenapa belum semuanya bisa ditarik (**Penghasilan**), dan berapa yang bisa ditarik sekarang (**Saldo Saya**, dibahas di [Saldo dan penarikan](/uang/saldo-dan-penarikan/)). Artikel ini membahas dua yang pertama, plus cara mengunduh data untuk pembukuan.
+
+## Ringkasan
+
+Buka **Keuangan → Ringkasan**. Semua angka di halaman ini mencakup **30 hari terakhir**.
+
+- **Saldo tersedia** dan **Dana dalam proses**: angka yang sama dengan halaman Saldo. Tombol **Tarik saldo** membuka halaman Saldo, dan **Lihat penghasilan** membuka halaman Penghasilan.
+- **Omzet 30 hari**: Hak Seller dari pesanan yang sudah dibayar (lihat definisinya di bawah), dibandingkan dengan 30 hari sebelumnya. Kalau belum ada periode pembanding, tertulis *"Belum ada periode pembanding."*
+- **Ongkir dibayar pembeli**: total ongkir yang ditagihkan ke pembeli. Angka ini bukan milik Anda dan tidak masuk saldo.
+- **Sudah ditarik** dan **Ditarik kembali (retur)**: sama dengan kartu di halaman Saldo.
+- **Langganan TokoΦ**: tagihan langganan berikutnya dan sisa hari sampai jatuh tempo. Klik **Lihat tagihan** untuk membuka halaman Langganan.
+
+## Penghasilan
+
+<Steps>
+
+1. Buka **Keuangan → Penghasilan**.
+2. Pilih periode **7 hari**, **30 hari**, atau **90 hari**. Periode dihitung per hari kalender WIB, termasuk hari ini.
+3. Baca dua kartu teratas:
+   - **Sudah dilepas**: hasil pesanan yang sudah selesai, yang sudah menjadi saldo. Klik **Ke Saldo Saya** untuk menariknya.
+   - **Belum dilepas**: uang yang ditahan sampai pesanannya berstatus selesai. Ini bukan biaya, hanya belum bisa ditarik.
+4. Baca tiga angka periode: **Hak Seller**, **Ongkir dibayar pembeli**, dan jumlah **Pesanan**.
+5. Lihat grafik **Penghasilan harian** untuk naik-turunnya per hari, dan **Sumber penjualan** untuk asal pesanan: **Organik**, **Google Ads**, **Meta Ads**, **TikTok Ads**, atau **Lainnya**.
+
+</Steps>
+
+### Apa itu Hak Seller
+
+Hak Seller adalah bagian pesanan yang menjadi milik Anda:
+
+> harga barang − diskon barang + PPN barang (kalau Anda mengaktifkannya) − selisih ongkir
+
+Selisih ongkir hanya ada kalau Anda memesan kurir yang lebih mahal dari ongkir yang dibayar pembeli. Ongkir dan biaya transaksi pembeli tidak termasuk. Lihat [Biaya yang dibayar pembeli](/uang/biaya-pembeli/).
+
+:::note[Catatan]
+Laporan ini hanya menghitung pesanan yang **sudah dibayar**. Pesanan QRIS atau Virtual Account yang belum dibayar, dan pesanan COD yang belum selesai, belum masuk hitungan. Pesanan **Batal** dan **Retur** tidak pernah dihitung. Pesanan masuk ke hari saat pesanan itu dibuat, bukan hari saat dibayar. Karena itu angka penghasilan bisa berbeda dengan jumlah pesanan di menu **Pesanan**.
+:::
+
+Hari tanpa penjualan tetap tampil di grafik dengan nilai nol. Di bawah grafik tertulis berapa hari dari periode itu yang ada penjualannya.
+
+## Mengunduh data untuk pembukuan
+
+Data per transaksi diunduh dari halaman Saldo, bukan dari Penghasilan.
+
+<Steps>
+
+1. Buka **Keuangan → Saldo Saya**, lalu pilih tab **Mutasi**, **Dana dalam proses**, atau **Penarikan**.
+2. Batasi tanggal lewat **Periode** (misalnya **Bulan lalu**) atau isi tanggal awal dan akhir. Di tab **Mutasi** Anda juga bisa memilih **Status**.
+3. Klik **Ekspor CSV**. Yang diunduh adalah semua baris yang cocok dengan filter, bukan hanya halaman yang tampil di layar.
+
+</Steps>
+
+Alamat halaman ikut menyimpan filter, jadi tampilan yang sudah difilter bisa Anda simpan sebagai bookmark atau kirim ke pembukuan.
+
+## Kalau ada masalah
+
+- *"Belum ada penjualan pada periode ini."* Belum ada pesanan dibayar pada periode yang dipilih. Coba periode yang lebih panjang.
+- *"… pesanan perlu direkonsiliasi"* muncul di atas kartu. Angka pada pesanan yang disebut tidak cocok satu sama lain. Buka tiket di menu [**Bantuan**](https://app.tokophi.com/bantuan) dan sertakan nomor pesanannya.
+- *"Tidak ada baris untuk diekspor."* Filter yang dipilih tidak menyisakan baris. Klik **Reset**, lalu pilih periode lagi.
+- Angka **Belum dilepas** tidak turun. Uang dilepas saat pesanan berstatus **Selesai**. Status itu berubah otomatis dari kurir, atau dengan **Tandai selesai** di detail pesanan.

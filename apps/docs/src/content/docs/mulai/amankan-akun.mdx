@@ -1,0 +1,65 @@
+---
+title: "Masuk dan amankan akun"
+seoTitle: "Masuk Dashboard Seller dan Aktifkan 2FA Akun Toko"
+description: "Masuk ke Dashboard Seller, aktifkan autentikasi 2 langkah dengan aplikasi authenticator, dan beri anggota tim akses dengan peran yang tepat."
+routes: ["/login", "/akun/keamanan", "/akun/profil", "/pengaturan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+
+
+Akun Dashboard Seller memegang pesanan, data pembeli, dan saldo toko Anda. Langkah ini mengunci akun dengan kode dari ponsel dan memberi tim Anda akun masing-masing, bukan satu kata sandi yang dipakai bersama.
+
+## Yang Anda perlukan
+
+- Toko yang sudah didaftarkan ([langkah 1](/mulai/daftar-toko/)).
+- Aplikasi authenticator di ponsel, misalnya Google Authenticator atau Authy.
+
+## Langkah
+
+<Steps>
+
+1. Buka **app.tokophi.com/login**, isi **Email** dan **Kata sandi**, lalu klik **Masuk**.
+2. Klik avatar di kanan atas, lalu pilih **Keamanan**.
+3. Di kartu **Autentikasi 2 Langkah** klik **Aktifkan 2FA**.
+4. Scan kode QR yang muncul dengan aplikasi authenticator. Kalau tidak bisa scan, masukkan kunci manual yang tertera di bawahnya.
+5. Ketik 6 digit kode dari aplikasi, lalu klik **Verifikasi & Aktifkan**. Status berubah menjadi **Aktif**.
+
+</Steps>
+
+Mulai sekarang, setelah memasukkan kata sandi, Anda akan diminta **Kode autentikasi (2FA)**. Ketik kode dari aplikasi, lalu klik **Verifikasi**.
+
+:::caution[Penting]
+TokoΦ belum menyediakan kode cadangan 2FA atau tombol "lupa kata sandi". Kalau ponsel hilang atau kata sandi terlupa, hubungi tim TokoΦ lewat halaman [Kontak](https://tokophi.com/kontak/) supaya akses Anda dipulihkan. Jangan hapus akun authenticator sebelum 2FA dinonaktifkan.
+:::
+
+## Beri akses ke tim
+
+Hanya pemilik toko yang bisa menambah anggota tim.
+
+<Steps>
+
+1. Buka **Pengaturan → Pengguna**, lalu klik **Undang pengguna**.
+2. Isi **Nama**, **Email**, dan **Peran**. Pilih peran yang paling sempit tapi cukup untuk pekerjaannya:
+   - **Admin**: hampir semua, kecuali pengaturan toko, integrasi, dan HTML landing page.
+   - **Staf**: produk, diskon, konten, pesanan, pelanggan, CRM, media, dan obrolan.
+   - **Staf Gudang**: stok dan pesanan pembelian saja.
+   - **Advertiser**: diskon, konten, media, dan pixel iklan.
+   - **Customer Service**: pesanan, pelanggan, CRM, dan obrolan.
+3. TokoΦ membuat akun anggota dan menampilkan **kata sandi sementara sekali saja**. Salin dan kirim lewat WhatsApp. Tidak ada email undangan.
+4. Minta anggota mengganti kata sandinya di **Akun → Keamanan** setelah masuk pertama kali. Sampai mereka masuk, namanya berlabel **Belum pernah masuk**.
+
+</Steps>
+
+:::tip[Tips]
+Ganti kata sandi Anda sendiri di **Akun → Keamanan → Ubah Kata Sandi**. Semua sesi lain akan keluar otomatis, jadi ini cara cepat mengeluarkan perangkat yang tidak Anda kenal.
+:::
+
+## Kalau ada masalah
+
+- *"Email atau kata sandi salah."* Periksa ejaan email. Kata sandi membedakan huruf besar dan kecil.
+- *"Terlalu banyak percobaan gagal. Coba lagi dalam 15 menit."* Tunggu 15 menit sebelum mencoba lagi.
+- *"Kode 2FA salah."* Pastikan jam di ponsel diatur otomatis. Kode authenticator bergantung pada waktu yang tepat.
+- *"Akun ini tidak punya akses ke toko mana pun."* Pemilik toko perlu mengundang Anda lagi.

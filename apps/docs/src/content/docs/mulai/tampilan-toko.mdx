@@ -1,0 +1,63 @@
+---
+title: "Rapikan tampilan toko"
+seoTitle: "Rapikan Tampilan Toko dengan Store Builder dan Menu"
+description: "Susun beranda toko dengan Store Builder, pilih font dan nuansa warna, atur menu header dan footer, lalu lihat hasilnya langsung di toko Anda."
+routes: ["/tema", "/navigasi"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import builder from "../../../assets/screens/seller-store-builder-1600.webp";
+
+
+Toko baru sudah punya tampilan bawaan, jadi langkah ini tidak wajib untuk mulai berjualan. Di sini Anda mengganti isi beranda dengan foto dan kata-kata toko Anda sendiri, lalu merapikan menunya.
+
+## Yang Anda perlukan
+
+- Minimal satu produk aktif ([langkah 5](/mulai/tambah-produk/)), supaya bagian produk di beranda tidak kosong.
+- Foto banner untuk bagian atas beranda (maksimal 2 MB).
+
+## Langkah
+
+### Beranda
+
+<Steps>
+
+1. Buka **Tema** di grup menu **Toko Online**. Ada tiga tab: **Beranda**, **Kategori**, dan **Produk**. Template berlabel **Default** adalah yang tampil di toko.
+2. Di tab **Beranda**, klik **Buka Builder** pada template Default. Toko baru belum punya template: klik **Template Beranda**, isi **Nama Template**, lalu klik **Buat & Buka Builder**. Template pertama otomatis menjadi default.
+3. Klik sebuah bagian di kanvas untuk mengubah teks, gambar, dan tautannya. Tambahkan bagian baru dengan menyeretnya dari daftar bagian ke kanvas. Tersedia antara lain Hero, Grid Produk, Banner Promo, Testimoni, FAQ, dan Gambar + Teks.
+4. Klik **Tampilan** untuk memilih **Font judul** (Bawaan, Elegan, Modern, Klasik, Tegas) dan **Nuansa warna dasar** (Hangat, Netral, Sejuk). Klik **Warna Brand** untuk warna utama toko.
+5. Klik **Publish**. Muncul pesan *"Template tersimpan"* dan perubahan langsung tampil di toko.
+
+</Steps>
+
+<Shot src={builder} alt="Store Builder TokoΦ: daftar bagian seperti Hero dan Grid Produk di kiri, pratinjau beranda toko di kanan." caption="Store Builder. Seret bagian dari kiri ke kanvas, lalu klik untuk mengubah isinya." />
+
+:::caution[Penting]
+**Publish** adalah satu-satunya tombol simpan di builder. Tidak ada draft dan tidak ada simpan otomatis, dan perubahan langsung tampil untuk pembeli. Kalau Anda menutup halaman sebelum Publish, perubahan hilang. Peringatan *"Ada perubahan yang belum diterbitkan"* muncul sebelum itu terjadi.
+:::
+
+:::tip[Tips]
+Template **Kategori** harus punya bagian **Daftar Produk**. Tanpa itu, halaman kategori hanya menampilkan judul dan sampulnya, tanpa produk.
+:::
+
+### Menu header dan footer
+
+<Steps>
+
+1. Buka **Navigasi**. Menu dengan handle `main-menu` tampil di header toko, menu dengan handle `footer` di bagian bawah. Toko baru belum punya menu: buat dulu lewat **Buat menu**, ikuti [Menu header dan footer](/tampilan/menu-navigasi/).
+2. Klik **Tambah item menu**, isi **Nama**, pilih **Tautan ke** (Beranda, Koleksi, Produk, Halaman, Blog, atau Tautan web), lalu isi **Tujuan / URL** dan klik **Tambah item**.
+3. Ubah urutan dengan tombol ↑↓ atau dengan menyeret item. Buat sub-menu dengan **Jadikan sub-menu**.
+4. Klik **Simpan menu**.
+
+</Steps>
+
+### Lihat hasilnya
+
+Klik nama toko di bilah atas Dashboard Seller, lalu pilih **Kunjungi storefront**. Toko Anda terbuka di tab baru, di alamat `nama-toko.tokophi.id`.
+
+## Kalau ada masalah
+
+- Perubahan tidak tampil: pastikan Anda sudah menekan **Publish** pada template yang berlabel **Default**.
+- Halaman kategori tanpa produk: lihat **Tips** di atas, dan pastikan produknya ditambahkan ke kategori dengan cara **Manual** ([langkah 5](/mulai/tambah-produk/)).

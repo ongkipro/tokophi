@@ -1,0 +1,117 @@
+---
+// Home topic groups (DESIGN.md C2): one group per chapter, each an icon + linked heading +
+// one-line description, then its pages as a list with a caret marker.
+import Lucide from "./Lucide.astro";
+
+const groups = [
+  { icon: "list-checks", title: "Mulai di sini", href: "/mulai/", desc: "Tujuh langkah sampai toko siap jualan.", links: [
+    ["Daftar dan tunggu persetujuan", "/mulai/daftar-toko/"],
+    ["Jasa kirim dan COD", "/mulai/pengiriman-dan-cod/"],
+    ["Tambah produk pertama", "/mulai/tambah-produk/"],
+    ["Lihat ketujuh langkah", "/mulai/"],
+  ] },
+  { icon: "package", title: "Produk", href: "/produk/", desc: "Varian, foto, kategori, dan stok.", links: [
+    ["Atur varian produk", "/produk/varian/"],
+    ["Buat kategori dan isi produknya", "/produk/kategori/"],
+    ["Pantau dan ubah stok", "/produk/inventori/"],
+  ] },
+  { icon: "palette", title: "Tampilan toko", href: "/tampilan/", desc: "Store Builder, menu, halaman, domain.", links: [
+    ["Susun halaman dengan Store Builder", "/tampilan/susun-halaman/"],
+    ["Atur menu header dan footer", "/tampilan/menu-navigasi/"],
+    ["Pasang domain sendiri", "/tampilan/domain-sendiri/"],
+  ] },
+  { icon: "truck", title: "Pesanan", href: "/pesanan/", desc: "Dari pesanan masuk sampai paket diterima.", links: [
+    ["Tab dan status pesanan", "/pesanan/tab-dan-status/"],
+    ["Pesan kurir satu per satu atau massal", "/pesanan/booking-pengiriman/"],
+    ["Cetak label pengiriman", "/pesanan/cetak-label/"],
+  ] },
+  { icon: "wallet", title: "Uang", href: "/uang/", desc: "Saldo, penarikan, langganan, dan biaya.", links: [
+    ["Saldo dan penarikan", "/uang/saldo-dan-penarikan/"],
+    ["Langganan dan faktur", "/uang/langganan-dan-faktur/"],
+    ["Biaya yang dibayar pembeli", "/uang/biaya-pembeli/"],
+  ] },
+  { icon: "users", title: "Tim", href: "/tim/", desc: "Ajak anggota tim dan atur aksesnya.", links: [
+    ["Undang anggota tim", "/tim/undang-anggota/"],
+    ["Ubah peran atau keluarkan anggota", "/tim/ubah-peran-dan-hapus/"],
+    ["Peran dan izin", "/referensi/peran-tim/"],
+  ] },
+] as const;
+---
+
+<div class="tp-groups not-content">
+  {groups.map((g) => (
+    <section class="tp-group" aria-labelledby={`g-${g.icon}`}>
+      <div class="tp-group-head">
+        <span class="tp-group-icon"><Lucide name={g.icon} size={22} /></span>
+        <div>
+          <h3 id={`g-${g.icon}`}><a href={g.href}>{g.title}</a></h3>
+          <p>{g.desc}</p>
+        </div>
+      </div>
+      <ul>
+        {g.links.map(([label, href]) => (
+          <li><a href={href}><Lucide name="chevron-right" size={14} class="tp-caret" /><span>{label}</span></a></li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</div>
+
+<style>
+  .tp-groups {
+    display: grid;
+    gap: 2.5rem 4rem;
+    max-width: 50rem;
+    margin: 1rem auto 0;
+  }
+  @media (min-width: 45rem) {
+    .tp-groups { grid-template-columns: 1fr 1fr; }
+  }
+  .tp-group-head {
+    display: flex;
+    gap: 0.875rem;
+    align-items: flex-start;
+    padding-bottom: 0.875rem;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  .tp-group-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    color: var(--sl-color-accent);
+  }
+  :global([data-theme="dark"]) .tp-group-icon { color: var(--sl-color-accent-high); }
+  .tp-group h3 {
+    margin: 0;
+    font-size: var(--sl-text-lg);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .tp-group h3 a { color: var(--sl-color-white); text-decoration: none; }
+  .tp-group h3 a:hover { color: var(--sl-color-accent); }
+  .tp-group-head p {
+    margin: 0.2rem 0 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  .tp-group ul {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0 0 0 3.125rem;
+  }
+  .tp-group li a {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+  .tp-group li a:hover { color: var(--sl-color-accent); }
+  .tp-group li a:hover span { text-decoration: underline; text-underline-offset: 3px; }
+  .tp-group li a:focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 2px; }
+  :global(.tp-caret) { flex: none; font-size: 0.85rem; color: var(--sl-color-gray-4); }
+  .tp-group li a:hover :global(.tp-caret) { color: var(--sl-color-accent); }
+</style>
