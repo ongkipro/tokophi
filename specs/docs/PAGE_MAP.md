@@ -372,7 +372,7 @@
 | `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
 | `checkout.ts` | `getRecoveredCheckout` |
 | `content.ts` | `formatDate` `getArticle` `getArticles` `getPage` `getPages` `parseBody` `readMinutes` |
-| `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` |
+| `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` `isReservedStoreLabel` |
 | `landing.ts` | `getLandingPage` |
 | `nav.ts` | `getFooterNav` `getMainNav` |
 | `promo.ts` | `getPromoConfig` |

@@ -15,6 +15,13 @@
 # PRIORITY 5 — above the storefront .id wildcard (priority 1) so these three hosts are claimed first,
 # and far below the explicit app./rich. routers on .com, which this never touches.
 #
+# 2026-10-12: the APEX tokophi.id (and www.) answered 503 — no router claimed it. Both now go straight to
+# https://tokophi.com/<path> in ONE hop (www.tokophi.id used to bounce via www.tokophi.com first).
+# `panduan.tokophi.id` joins the label map → panduan.tokophi.com (the Seller help center, PR #412);
+# before this it fell through to the storefront and served the demo shop with a self canonical.
+# `toko.tokophi.id` likewise → toko.tokophi.com, the demo shop's own host. Other reserved labels on .id
+# (admin., api., …) are refused by the storefront itself (`isReservedStoreLabel`, host-fallback.ts).
+#
 # `<slug>.tokophi.id` is deliberately NOT matched: that is a real storefront and must keep serving.
 #
 # DEPLOYED TO: /data/coolify/proxy/dynamic/tokophi-id-platform-redirect.yaml (proxy watches the dir →
@@ -22,7 +29,7 @@
 http:
   routers:
     tokophi-id-platform:
-      rule: 'Host(`app.tokophi.id`) || Host(`rich.tokophi.id`) || Host(`www.tokophi.id`)'
+      rule: 'Host(`app.tokophi.id`) || Host(`rich.tokophi.id`) || Host(`panduan.tokophi.id`) || Host(`toko.tokophi.id`)'
       entryPoints:
         - https
       priority: 5
@@ -30,7 +37,21 @@ http:
         - tokophi-id-platform
       service: tokophi-stores@docker
       tls: {}
+    tokophi-id-apex:
+      rule: 'Host(`tokophi.id`) || Host(`www.tokophi.id`)'
+      entryPoints:
+        - https
+      priority: 5
+      middlewares:
+        - tokophi-id-apex
+      service: tokophi-stores@docker
+      tls: {}
   middlewares:
+    tokophi-id-apex:
+      redirectRegex:
+        regex: '^https?://(?:www\.)?tokophi\.id/(.*)'
+        replacement: 'https://tokophi.com/${1}'
+        permanent: true
     tokophi-id-platform:
       redirectRegex:
         # Same label, other TLD: app.tokophi.id/x → app.tokophi.com/x. Path + query preserved, so a

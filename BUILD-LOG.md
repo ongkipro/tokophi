@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-12 06:30 UTC] — EDGE + STOREFRONT · tokophi.id apex → tokophi.com; reserved .id labels stop serving the demo shop
+Executor: Main Session (Claude Code). Branch `fix/tokophi-id-apex-redirect` (worktree `tokophi-uxfix`), from main 733d3b77.
+- Owner (2026-10-12): "kalo di ketik tokophi.id redirect ke tokophi.com"; then "sempurnakan".
+- **Found live:** `https://tokophi.id/` answered 503 (no router); `www.tokophi.id` reached tokophi.com in two hops via `www.tokophi.com`; `panduan.`, `toko.`, `admin.`, `api.tokophi.id` each served the demo shop (200, self canonical). A reserved label yields no candidate slug, so the "named a store → 404" guard never ran, and the platform zone let `isNamelessHost` fall back to the default store.
+- **Traefik** (`ops/tokophi-id-platform-redirect.yaml`, DEPLOYED to `/data/coolify/proxy/dynamic/` 2026-10-12 ~06:10 UTC, previous copy at `/root/traefik-backups/tokophi-id-platform-redirect.yaml.2026-10-12`): new router `tokophi-id-apex` — `tokophi.id` + `www.tokophi.id` → `https://tokophi.com/<path>` (301, one hop, query kept); label map adds `panduan.` and `toko.tokophi.id` → same label on .com.
+- **Storefront** (`apps/storefront/src/data/host-fallback.ts` `isReservedStoreLabel`, used in `store.ts getStoreByHost`): `<reserved label>.<STOREFRONT_BASE_DOMAIN>` → 404 instead of the default store. `toko.tokophi.com` (other zone) still serves the demo. Page map regenerated for the new export.
+- **Verified live (Traefik part):** `tokophi.id/`, `/harga/`, `/fitur/?utm=x`, `www.tokophi.id/demo/` → 301 to the same path on tokophi.com; `http://tokophi.id/` → https; `panduan.tokophi.id/mulai/` → panduan.tokophi.com/mulai/; `toko.tokophi.id/produk` → toko.tokophi.com/produk; `app.tokophi.id` unchanged (→ app.tokophi.com); `batiknusantara.tokophi.id`, `toko.tokophi.com`, `tokophi.com`, `panduan.tokophi.com` 200; proxy log no errors.
+- **Verified (code):** host-fallback tests 30/30 (8 new); `vitest run` 1462 passed, 231 DB suites skipped (no `_test` DB linked); `check:storefront` 0 errors; `tsc -p apps/storefront` exit 0.
+- **Pending deploy:** the storefront 404 for `admin.`/`api.`/other reserved .id labels is live only after this branch merges.
+
 ### [2026-10-12 04:45 UTC] — ADMIN + STOREFRONT · signup headline, checkout estimate, editor overflow at 390px
 Executor: Main Session (Claude Code). Branch `fix/signup-checkout-editor-polish` (worktree `tokophi-uxfix`), from main 9f945531. Closes the "Found, not fixed" items of the 02:40 entry below.
 - **Signup** (`apps/admin/app/daftar/page.tsx`): headline "Tokomu, tayang hari ini" promised same-day publishing although every self-serve store is born locked pending review (`lib/provision.ts`). Now "Tokomu, dengan alamatnya sendiri"; the lead adds "Toko tayang setelah ditinjau tim TokoΦ."
