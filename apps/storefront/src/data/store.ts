@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { cached } from "./cache";
 import { RESERVED_SLUGS } from "@tokophi/lib/store-slug";
 import { isPubliclyServable, lockReason, type LockReason } from "./store-servable";
-import { isNamelessHost } from "./host-fallback";
+import { isNamelessHost, isReservedStoreLabel } from "./host-fallback";
 
 /** The three product-gallery layouts a merchant can pick in Tema (mirrors `stores.product_gallery_layout`). */
 export type GalleryLayout = "thumbnail-left" | "thumbnail-bottom" | "grid";
@@ -237,7 +237,9 @@ export async function getStoreByHost(host: string | null | undefined): Promise<S
     // base apex). It used to apply to ANY host that produced no candidate, which meant a merchant's
     // own domain — routed here but not yet `active` — was answered with the DEFAULT store's shop.
     // Observed live on beautyinu.co, 2026-08-11. A host we cannot explain must be refused.
-    if (!isNamelessHost(h, [normalizeHost(env("STOREFRONT_BASE_DOMAIN"))])) return null;
+    const base = normalizeHost(env("STOREFRONT_BASE_DOMAIN"));
+    if (isReservedStoreLabel(h, base, RESERVED)) return null;
+    if (!isNamelessHost(h, [base])) return null;
     const fallback = env("STORE_SLUG") || env("DEFAULT_STORE_SLUG");
     return fallback ? await getStoreBySlug(fallback) : null;
   });

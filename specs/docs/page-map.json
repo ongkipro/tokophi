@@ -3866,7 +3866,8 @@
         "module": "host-fallback.ts",
         "exports": [
           "PLATFORM_ZONES",
-          "isNamelessHost"
+          "isNamelessHost",
+          "isReservedStoreLabel"
         ]
       },
       {
