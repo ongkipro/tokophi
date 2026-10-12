@@ -28,38 +28,38 @@ and where to inspect a public demo before creating a store.
 
 | Route | Intent |
 |---|---|
-| `/` | Product introduction and route gateway |
+| `/` | Sales page: product introduction, workflow, fees, pricing |
 | `/fitur/` | Verified product capabilities |
-| `/cara-kerja/` | Seller workflow from setup to fulfillment |
-| `/pembayaran-pengiriman/` | Payment and domestic-shipping operating model |
+| `/cara-kerja/` | Signup to first order, daily workflow, billing timeline |
+| `/pembayaran-pengiriman/` | Payment channels, COD rules, couriers, payout, fees |
 | `/demo/` | Privacy-safe public storefront proof |
-| `/faq/` | Verified operational answers |
+| `/harga/` | Subscription price, monthly/annual, and who pays which fee |
+| `/faq/` | Retired 2026-10-12 (owner: FAQ not needed yet); 301 → `/harga/` |
 | `/kontak/` | Operator identity and support channels |
 | `/privasi/` | Privacy notice |
 
-Pricing is intentionally absent until the order-finance policy tracked in GitHub Issue `#180` is
-accepted and implemented.
+Pricing is published since 2026-10-11 (owner request): `/harga/` and the homepage pricing band read
+every figure from `@tokophi/lib` (billing, payment-fees, order-finance), so the page cannot drift from
+what billing and checkout charge. Visual and UX decisions: `apps/landing/DESIGN.md`.
 
 ## Component architecture
 
 ```text
 Base.astro
 └── MarketingLayout.astro
-    ├── SiteHeader.astro
-    │   └── MobileNav.tsx              React + shadcn Sheet, client:load
-    ├── route-owned Astro content
-    │   ├── PageHero.astro
-    │   ├── FeatureIconGrid.tsx        shadcn Card + Lucide, server-rendered
-    │   ├── RouteGateway.astro
-    │   ├── StoreDemo.astro
-    │   └── FinalCta.astro
+    ├── SiteHeader.astro               native <dialog> mobile menu, small inline script
+    ├── route content
+    │   ├── home/*.astro               homepage sections (Hero … Closing)
+    │   ├── PageIntro.astro            inner-page opening (H1, lede, two actions)
+    │   ├── DetailSection.astro        topic + real screen + detail list (/fitur, /pembayaran-pengiriman)
+    │   ├── Pricing.astro, FeeTable.astro
+    │   └── Screen.astro               real screenshots (lib/screens.ts inventory)
     ├── SiteFooter.astro
-    └── MotionLayer.astro              GSAP + ScrollTrigger
 ```
 
-Astro owns routes, metadata, and static content. React is hydrated only where the mobile modal state
-and focus management require it. Tailwind v4 scans only the reused `@tokophi/ui` primitives and maps
-their semantic shadcn tokens onto the existing Tokophi design tokens.
+Astro owns routes, metadata, and static content; there is no React and no hydrated island (removed
+2026-10-12). Figures come from `src/lib/offer.ts`, which imports the constants billing and checkout
+enforce. Icons are inline Lucide SVG (`src/lib/icons.ts`).
 
 ## Requirements
 
@@ -77,15 +77,25 @@ management, active state, keyboard operation, and Escape dismissal.
 
 ### PR-LP-11: Restrained motion
 
-GSAP shall provide hierarchy and scroll reveal without scroll-jacking. Motion shall animate only
-transform and opacity, use one centralized registration point, disable depth effects on smaller
-screens, and leave all content visible under reduced-motion or JavaScript failure.
+Motion shall be CSS only (scroll-driven `animation-timeline: view()` for screenshots below the fold,
+keyframes for the checkout state sequence), animate only transform and opacity, never animate above
+the fold (LCP), never replace native scrolling, and leave all content visible under reduced motion
+or in browsers without scroll-driven animation.
+
+Superseded 2026-10-12 (owner: "jika berat sempurnakan… fokus SEO friendly dan tidak berat"): GSAP +
+ScrollTrigger (115 KB JS, 45 KB gzip) and the hero entrance were removed; Lighthouse mobile home
+went from 92 to 98 Performance, TBT 0 ms, CLS 0. Lenis was considered and rejected
+(`apps/landing/DESIGN.md` "Motion concept").
 
 ### PR-LP-12: Requested implementation stack
 
-The site shall use Astro, TypeScript, Tailwind CSS, shadcn primitives from the existing
-`@tokophi/ui` package, explicit Lucide icon imports, and GSAP. React hydration is limited to the
-mobile navigation; feature cards render on the server.
+The site shall use Astro, TypeScript, Tailwind CSS and inline Lucide SVG, with no React, no hydrated
+island and no animation library (PR-LP-11).
+
+Superseded 2026-10-12 (owner: "jalankan sesuai rekomendasimu"): the earlier stack used shadcn
+primitives from `@tokophi/ui` and a hydrated React mobile menu. A native `<dialog>` does the menu with
+less JavaScript (about 400 KB → 116 KB), so React, `@astrojs/react`, `lucide-react` and `@tokophi/ui`
+were removed from the landing.
 
 ## Content constraints
 

@@ -116,7 +116,9 @@ const SKIPPED_HERE = (rel: string) => rel.split("/").includes("specs");
 // JavaScript in a browser, so it can hold a mint exactly like a `.js` can — the census below exists
 // precisely so a new file type is CLASSIFIED rather than silently skipped. It entered the repo on
 // 2026-08-06 with the rescued 1 August audit dashboard (`specs/docs/audit-2026-08-01/html/`).
-const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx|html)$/;
+// `.mdx` (apps/docs, 2026-10-12) is scanned for the same reason: MDX compiles to a JS module and can
+// `import` and run code at build time.
+const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx|html|mdx)$/;
 
 // ⚠️ EVERY EXTENSION THE REPO HOLDS IS EITHER SCANNED OR NAMED HERE AS INERT. The list above had
 // `mts` and `cts` — neither of which any file in this repo uses — and not `cjs`, which is a module
@@ -132,6 +134,7 @@ const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx|html)$/;
 const INERT_EXTENSIONS = new Set([
   ".webp", ".png", ".svg", ".woff2", ".csv", ".txt", // assets
   ".json", ".sql", ".md", ".css", ".sh", ".yaml", ".yml", // config, migrations, prose, shell
+  ".conf", // nginx server config (apps/docs/nginx.conf) — directives, never executed as JavaScript
 ]);
 
 /**

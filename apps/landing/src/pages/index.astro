@@ -1,31 +1,62 @@
 ---
-import { BILLING } from "@tokophi/lib/billing";
 import MarketingLayout from "../layouts/MarketingLayout.astro";
-import LandingHero from "../components/LandingHero.astro";
-import TrustStrip from "../components/TrustStrip.astro";
-import RouteGateway from "../components/RouteGateway.astro";
-import StoreDemo from "../components/StoreDemo.astro";
-import FinalCta from "../components/FinalCta.astro";
+import Hero from "../components/home/Hero.astro";
+import FactRow from "../components/home/FactRow.astro";
+import WorkflowStory from "../components/home/WorkflowStory.astro";
+import Ads from "../components/home/Ads.astro";
+import FeatureIndex from "../components/home/FeatureIndex.astro";
+import Demo from "../components/home/Demo.astro";
+import Closing from "../components/home/Closing.astro";
+import FeeTable from "../components/FeeTable.astro";
+import PhiOrnament from "../components/PhiOrnament.astro";
+import Pricing from "../components/Pricing.astro";
+import { BILLING } from "@tokophi/lib/billing";
 
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
 const demoUrl = import.meta.env.PUBLIC_DEMO_URL || "https://batiknusantara.tokophi.id";
-const title = "Platform toko online untuk seller Indonesia";
-const description = "Buat toko online dan kelola produk, stok, pesanan, pembayaran, serta pengiriman dari satu Dashboard Seller berbahasa Indonesia.";
+const title = "TokoΦ: Toko Online dengan Pembayaran dan Pengiriman Otomatis";
+const description = "Buka toko online di alamat sendiri, terima QRIS, Virtual Account, dan COD, kirim lewat 10 kurir dari satu Dashboard Seller. Coba gratis 3 hari.";
 const url = "https://tokophi.com/";
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
-    { "@type": "Organization", "@id": `${url}#organization`, name: "TokoΦ", url, areaServed: { "@type": "Country", name: "Indonesia" } },
+    { "@type": "Organization", "@id": `${url}#organization`, name: "TokoΦ", alternateName: "Tokophi", url, logo: `${url}og.png`, areaServed: { "@type": "Country", name: "Indonesia" } },
     { "@type": "WebSite", "@id": `${url}#website`, url, name: "TokoΦ", inLanguage: "id-ID", publisher: { "@id": `${url}#organization` } },
-    { "@type": "SoftwareApplication", name: "TokoΦ", applicationCategory: "BusinessApplication", operatingSystem: "Web", inLanguage: "id-ID", url, description },
+    {
+      "@type": "SoftwareApplication",
+      name: "TokoΦ",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      inLanguage: "id-ID",
+      url,
+      description,
+      offers: { "@type": "Offer", price: BILLING.MONTHLY_IDR, priceCurrency: "IDR", url: `${url}harga/` },
+    },
   ],
 };
 ---
 
 <MarketingLayout {title} {description} path="/" {jsonLd} mainClass="home-main">
-  <LandingHero {signupUrl} trialDays={BILLING.TRIAL_DAYS} demoUrl="/demo/" />
-  <TrustStrip trialDays={BILLING.TRIAL_DAYS} />
-  <RouteGateway />
-  <StoreDemo {demoUrl} />
-  <FinalCta {signupUrl} />
+  <Hero {signupUrl} />
+  <FactRow />
+  <WorkflowStory />
+  <Ads />
+  <FeatureIndex />
+  <section class="band band-white" aria-labelledby="fees-title">
+    <div class="section">
+      <h2 id="fees-title" class="h2">Siapa membayar apa.</h2>
+      <p class="lede">Biaya pembayaran dan ongkir ditanggung pembeli dan tampil jelas di checkout. Langganan adalah satu-satunya biaya Anda.</p>
+      <div class="fees-wrap"><FeeTable /></div>
+    </div>
+  </section>
+  <section class="band band-ink" id="harga" aria-labelledby="harga-title">
+    <PhiOrnament class="band-phi" />
+    <div class="section"><Pricing {signupUrl} /></div>
+  </section>
+  <div class="band band-white"><Demo {demoUrl} /></div>
+  <Closing {signupUrl} />
 </MarketingLayout>
+
+<style>
+  .fees-wrap { margin-top: clamp(2rem, 4vw, 2.75rem); }
+</style>

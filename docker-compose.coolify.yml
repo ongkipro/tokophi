@@ -346,7 +346,11 @@ services:
       # cheaper place). priority 100 > the Coolify-generated routers, so it wins for this host.
       - traefik.enable=true
       - traefik.http.middlewares.www-to-apex.redirectregex.regex=^https?://www\.tokophi\.com/(.*)
-      # Escaped $${1} for docker-compose parsing validation
+      # Escaped $${1} for docker-compose parsing validation.
+      # ⚠️ BROKEN IN PRODUCTION: Coolify passes this label to Traefik un-interpolated, so Traefik sees
+      # `$${1}` and redirects every www URL to the literal `/${1}`. The live redirect is the dynamic file
+      # ops/tokophi-www-apex-redirect.yaml (priority 1000, wins over this router). These labels stay
+      # because Coolify's generated apex router also lists the `www-to-apex` middleware by name.
       - traefik.http.middlewares.www-to-apex.redirectregex.replacement=https://tokophi.com/$${1}
       - traefik.http.middlewares.www-to-apex.redirectregex.permanent=true
       - traefik.http.routers.www-apex.rule=Host(`www.tokophi.com`)

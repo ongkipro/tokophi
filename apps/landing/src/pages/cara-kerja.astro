@@ -1,34 +1,149 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
-import PageHero from "../components/PageHero.astro";
-import FinalCta from "../components/FinalCta.astro";
+import PageIntro from "../components/PageIntro.astro";
+import Closing from "../components/home/Closing.astro";
+import Screen from "../components/Screen.astro";
+import { PRICE } from "../lib/offer";
 
+// Two sequences a new seller asks about before signing up: how a store goes live (signup wizard in
+// apps/admin/app/daftar, review queue in apps/admin/lib/provision.ts), and what they pay when
+// (packages/lib/src/billing.ts). The daily work in between is shown once, on the homepage.
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
-const title = "Cara kerja Tokophi untuk seller online";
-const description = "Pelajari alur Tokophi dari menyiapkan toko dan katalog sampai menerima, memproses, dan mengirim pesanan.";
-const steps = [
-  ["Siapkan toko", "Lengkapi identitas dan informasi dasar yang akan digunakan pada storefront Anda."],
-  ["Susun katalog", "Tambahkan produk, kategori, harga, variasi, dan stok yang akan dilihat pembeli."],
-  ["Terima pesanan", "Periksa detail barang, data penerima, pembayaran, dan layanan pengiriman yang dipilih."],
-  ["Proses pemenuhan", "Siapkan barang dan lanjutkan tahapan pesanan melalui Dashboard Seller."],
-  ["Kirim pesanan", "Gunakan detail pengiriman pada pesanan untuk melanjutkan penyerahan paket."],
+const title = "Cara Kerja TokoΦ: dari Daftar sampai Pesanan Pertama Terkirim";
+const description = "Alur membuka toko di TokoΦ: daftar tanpa kartu kredit, ditinjau tim, siapkan produk dan pengiriman, lalu terima pesanan. Plus jadwal tagihan langganannya.";
+
+const start = [
+  { title: "Daftar", body: "Isi nama toko, email, dan kata sandi. Profil pemilik dan alamat penjemputan paket bisa diisi sekarang atau nanti. Tanpa kartu kredit." },
+  { title: "Ditinjau tim TokoΦ", body: "Setiap toko baru diperiksa lebih dulu. Selama menunggu, Dashboard Seller sudah bisa dibuka, tetapi belum bisa diubah." },
+  { title: "Siapkan toko", body: "Setelah disetujui, tambahkan produk, susun tampilan toko, pilih kurir, dan daftarkan rekening untuk penarikan saldo." },
+  { title: "Bagikan dan terima pesanan", body: "Bagikan alamat toko di bio, chat, atau iklan. Pesanan, pembayaran, dan pengiriman tercatat di Dashboard Seller." },
+] as const;
+
+const billing = [
+  { when: `Hari 1–${PRICE.trialDays}`, what: "Uji coba gratis", body: "Semua fitur terbuka. Tidak ada tagihan selama uji coba." },
+  { when: "Bulan pertama", what: PRICE.firstMonth, body: "Harga khusus untuk bulan pertama setelah uji coba, dibayar lewat Virtual Account." },
+  { when: "Bulan berikutnya", what: `${PRICE.monthly}/bulan`, body: `Atau bayar tahunan ${PRICE.annual} (setara ${PRICE.annualPerMonth}/bulan). Bayar tahunan langsung setelah uji coba berlaku 13 bulan.` },
+  { when: "Bila terlambat bayar", what: `${PRICE.graceDays} hari masa tenggang`, body: "Setelah itu Dashboard Seller menjadi baca-saja sampai tagihan dibayar. Toko Anda tetap tampil untuk pembeli." },
 ] as const;
 ---
 
 <MarketingLayout {title} {description} path="/cara-kerja/">
-  <PageHero eyebrow="Cara kerja" title="Dari toko baru sampai pesanan terkirim." description="Tokophi menyusun perjalanan seller menjadi tahapan yang bisa diperiksa satu per satu." primaryHref={signupUrl} primaryLabel="Mulai buat toko" secondaryHref="/fitur/" secondaryLabel="Pelajari fitur" />
-  <section class="section-block" aria-labelledby="flow-title">
-    <div class="section-heading-wide" data-motion-reveal><h2 id="flow-title">Alur operasional yang mudah diikuti.</h2><p>Tidak semua langkah berlangsung otomatis. Dashboard Seller menunjukkan konteks yang dibutuhkan agar seller dapat mengambil tindakan pada tahap yang tepat.</p></div>
-    <ol class="numbered-flow" data-motion-stagger>
-      {steps.map(([heading, copy]) => <li data-motion-item><h3>{heading}</h3><p>{copy}</p></li>)}
-    </ol>
-  </section>
-  <section class="section-block" aria-labelledby="roles-title">
-    <div class="section-heading-wide" data-motion-reveal><h2 id="roles-title">Dua sisi, satu alur toko.</h2><p>Seller bekerja melalui Dashboard Seller, sementara pembeli berinteraksi melalui storefront. Data pesanan menghubungkan keduanya.</p></div>
-    <div class="content-grid" data-motion-stagger>
-      <article class="content-card" data-motion-item><p class="label">Dashboard Seller</p><h3>Tempat seller mengambil tindakan</h3><p>Kelola produk dan periksa pekerjaan yang mengikuti pesanan masuk.</p></article>
-      <article class="content-card" data-motion-item><p class="label">Storefront</p><h3>Tempat pembeli bertransaksi</h3><p>Jelajahi katalog, tentukan barang, lalu lanjutkan ke checkout.</p></article>
+  <PageIntro
+    title="Dari daftar sampai pesanan pertama."
+    lede="Membuka toko di TokoΦ tidak butuh akun payment gateway, akun kurir, atau jasa pembuat website. Ini urutannya, dan kapan Anda mulai membayar."
+    primary={{ href: signupUrl, label: `Coba gratis ${PRICE.trialDays} hari` }}
+    secondary={{ href: "/harga/", label: "Lihat harga" }}
+  />
+
+  <section class="band band-white" aria-labelledby="start-title">
+    <div class="section start-wrap">
+      <h2 id="start-title" class="h2">Membuka toko, empat langkah.</h2>
+      <ol class="start">
+        {start.map((s, i) => (
+          <li>
+            <span class="start-num" aria-hidden="true">{i + 1}</span>
+            <h3>{s.title}</h3>
+            <p>{s.body}</p>
+          </li>
+        ))}
+      </ol>
+      <div class="start-media" data-settle>
+        <Screen name="seller-daftar-mobile" kind="phone" alt="Formulir daftar TokoΦ di ponsel: tiga langkah, lalu nama toko, email, dan kata sandi" sizes="(min-width: 1024px) 336px, 96vw" />
+      </div>
     </div>
   </section>
-  <FinalCta {signupUrl} />
+
+  <section class="section daily" aria-labelledby="daily-title">
+    <h2 id="daily-title" class="h2">Setelah toko berjalan.</h2>
+    <p class="lede">Pekerjaan hariannya lima: susun katalog, rancang tampilan, terima checkout, kirim pesanan, tarik saldo. Semuanya di Dashboard Seller, dengan screenshot aslinya di beranda.</p>
+    <p class="daily-links">
+      <a class="text-link" href="/#cara-kerja">Lihat lima pekerjaan harian</a>
+      <a class="text-link" href="/fitur/">Rincian setiap fitur</a>
+    </p>
+  </section>
+
+  <section class="band band-white" aria-labelledby="billing-title">
+    <div class="section">
+      <h2 id="billing-title" class="h2">Kapan Anda mulai membayar.</h2>
+      <p class="lede">Satu paket dengan semua fitur. Tagihan dikirim ke Dashboard Seller dan dibayar lewat Virtual Account, tanpa potongan dari hasil penjualan.</p>
+      <ol class="timeline">
+        {billing.map((b) => (
+          <li>
+            <p class="tl-when">{b.when}</p>
+            <h3>{b.what}</h3>
+            <p class="tl-body">{b.body}</p>
+          </li>
+        ))}
+      </ol>
+      <p class="more"><a class="text-link" href="/harga/">Rincian harga dan biaya transaksi</a></p>
+    </div>
+  </section>
+
+  <Closing {signupUrl} />
 </MarketingLayout>
+
+<style>
+  /* Steps on the left (a real sequence, so numbered), the signup form they start with on the right. */
+  .start-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+    grid-template-areas: "head media" "list media";
+    column-gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: start;
+  }
+  .start-wrap .h2 { grid-area: head; }
+  .start { grid-area: list; }
+  .start-media { grid-area: media; display: flex; justify-content: center; }
+  .start-media { position: sticky; top: 6rem; }
+  .start-media :global(.screen-phone) { width: min(21rem, 100%); }
+  .daily-links { display: flex; flex-wrap: wrap; gap: 0.75rem 1.75rem; margin-top: 1.5rem; }
+  .start {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2rem clamp(1.5rem, 3vw, 2.5rem);
+    margin-top: clamp(2.25rem, 4vw, 3rem);
+  }
+  .start li { padding-top: 1.25rem; border-top: 2px solid var(--color-ink); }
+  .start-num {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 700;
+  }
+  .start h3, .timeline h3 {
+    margin-top: 0.9rem;
+    font-family: var(--font-serif);
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .start p { margin-top: 0.5rem; color: var(--color-muted); font-size: 0.9375rem; line-height: 1.65; text-wrap: pretty; }
+
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2rem clamp(1.5rem, 3vw, 2.5rem);
+    margin-top: clamp(2.25rem, 4vw, 3rem);
+  }
+  .timeline li { padding-top: 1.1rem; border-top: 1px solid var(--color-line); }
+  .tl-when { color: var(--color-primary-ink); font-size: 0.875rem; font-weight: 650; }
+  .timeline h3 { margin-top: 0.35rem; }
+  .tl-body { margin-top: 0.5rem; color: var(--color-muted); font-size: 0.9375rem; line-height: 1.65; text-wrap: pretty; }
+  .more { margin-top: 2rem; }
+
+  @media (max-width: 1023px) {
+    /* Narrow: the signup form sits right under the heading, next to step 1 "Daftar". */
+    .start-wrap { grid-template-columns: 1fr; grid-template-areas: "head" "media" "list"; }
+    .start-media { position: static; justify-content: center; margin-top: 2rem; }
+    .timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 599px) {
+    .start, .timeline { grid-template-columns: 1fr; gap: 1.75rem; }
+  }
+</style>

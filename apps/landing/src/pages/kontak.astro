@@ -10,9 +10,9 @@ import { IDENTITY, HAS_CONTACT, MISSING_IDENTITY } from "../lib/identity";
 // submissions would go nowhere while looking like they had been received.
 const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
 
-const title = "Kontak | TokoΦ";
+const title = "Kontak TokoΦ: Identitas Penyelenggara dan Cara Menghubungi Kami";
 const description =
-  "Identitas penyelenggara TokoΦ dan cara menghubungi kami untuk pemilik toko maupun pembeli.";
+  "Identitas penyelenggara TokoΦ dan cara menghubungi kami, untuk pemilik toko maupun pembeli yang berbelanja di toko yang berjalan di TokoΦ.";
 ---
 
 <Base {title} {description} path="/kontak/">
@@ -34,8 +34,8 @@ const description =
               dicantumkan.
             </p>
             <p>
-              Kami memilih menyatakannya secara terbuka daripada memasang keterangan sementara yang
-              tidak bisa dibedakan dari keterangan sungguhan.
+              Badan usaha penyelenggara TokoΦ sedang dalam proses pengurusan. Keterangannya akan
+              dicantumkan di sini setelah terbit, bukan diganti dengan keterangan sementara.
             </p>
           </div>
         )
@@ -60,7 +60,8 @@ const description =
           </dl>
         ) : (
           <p>
-            Identitas badan usaha penyelenggara belum dicantumkan di halaman ini.
+            Badan usaha penyelenggara sedang dalam proses pengurusan dan akan dicantumkan di sini
+            setelah terbit.
           </p>
         )
       }

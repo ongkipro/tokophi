@@ -1,0 +1,99 @@
+---
+import Icon from "../Icon.astro";
+import Screen from "../Screen.astro";
+import PhiOrnament from "../PhiOrnament.astro";
+import { COURIER_COUNT, PRICE } from "../../lib/offer";
+
+interface Props { signupUrl: string }
+const { signupUrl } = Astro.props;
+---
+
+<section class="hero" aria-labelledby="hero-title">
+  <PhiOrnament class="hero-phi" />
+  <div class="hero-copy">
+    <h1 id="hero-title" class="hero-title">
+      Toko online lengkap, dari pembayaran sampai pengiriman.
+    </h1>
+    <p class="hero-lede">
+      Buka toko dengan alamat sendiri, terima QRIS, Virtual Account, dan COD, lalu kirim lewat
+      {COURIER_COUNT} kurir. Semuanya diatur dari satu Dashboard Seller, tanpa perlu mendaftar
+      payment gateway atau akun kurir sendiri.
+    </p>
+    <div class="hero-actions">
+      <a href={signupUrl} class="btn btn-primary btn-lg">Coba gratis {PRICE.trialDays} hari</a>
+      <a href="#demo" class="btn btn-ghost btn-lg">Lihat toko demo</a>
+    </div>
+    <ul class="hero-terms">
+      <li><Icon name="check" size={16} />Setelah uji coba {PRICE.firstMonth} bulan pertama, lalu {PRICE.monthly}/bulan</li>
+      <li><Icon name="check" size={16} />Tanpa kartu kredit, tanpa komisi dari penjualan</li>
+    </ul>
+  </div>
+
+  <div class="hero-media">
+    <Screen
+      name="seller-produk"
+      alt="Dashboard Seller TokoΦ: daftar produk toko demo Batik Nusantara dengan harga, stok, dan status"
+      loading="eager"
+      class="hero-desktop"
+      narrow="seller-produk-narrow"
+      sizes="(min-width: 1024px) 58vw, 100vw"
+    />
+  </div>
+</section>
+
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 12fr) minmax(0, 13fr);
+    align-items: center;
+    gap: clamp(2rem, 4vw, 4rem);
+    padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 7vw, 6rem);
+  }
+  .hero-title {
+    font-family: var(--font-serif);
+    /* The hero headline shares its row with the screenshot, so it stops one step below the
+       inner-page display size and stays at three to four lines. */
+    font-size: min(var(--fs-display), 3.15rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.03;
+    text-wrap: balance;
+  }
+  .hero-lede {
+    margin-top: 1.25rem;
+    max-width: 34rem;
+    color: var(--color-muted);
+    font-size: var(--fs-lede);
+    line-height: 1.65;
+    text-wrap: pretty;
+  }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.75rem; }
+  .hero-terms { display: grid; gap: 0.45rem; margin-top: 1.4rem; color: var(--color-muted); font-size: 0.9rem; }
+  .hero-terms li { display: flex; align-items: flex-start; gap: 0.5rem; }
+  .hero-terms :global(svg) { flex: none; margin-top: 0.2rem; color: var(--color-primary-ink); }
+
+  .hero { position: relative; isolation: isolate; }
+  .hero-media { position: relative; }
+  /* The golden spiral sits behind the screenshot, anchored to the content's right edge (the
+     screenshot itself bleeds further; the ornament must not, or the page scrolls sideways). */
+  .hero > :global(.hero-phi) {
+    position: absolute;
+    z-index: -1;
+    top: 4%;
+    right: 0;
+    width: 62%;
+    color: var(--color-primary);
+    opacity: 0.16;
+  }
+  .hero-media :global(.hero-desktop) { margin-right: calc(-1 * clamp(1.25rem, 5vw, 4.5rem)); }
+
+  @media (max-width: 1023px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero > :global(.hero-phi) { top: auto; bottom: 0; width: 100%; }
+    .hero-media { margin-top: 0.5rem; }
+    .hero-media :global(.hero-desktop) { margin-right: 0; }
+  }
+  @media (max-width: 479px) {
+    .hero-actions :global(.btn) { flex: 1 1 100%; }
+  }
+</style>
