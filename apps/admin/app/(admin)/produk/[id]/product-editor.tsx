@@ -1281,8 +1281,9 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                 onChange={(id, p) => { setGcatId(id); setGcatPath(p); }}
               />
 
-              {/* Feed attributes (ADR 0011 Phase 2). Optional overrides — the feed derives gender from
-                  the title, defaults usia = Dewasa & kondisi = Baru, and takes warna/ukuran from variants. */}
+              {/* Feed attributes (ADR 0011 Phase 2). Optional overrides — kondisi = Baru and warna/ukuran come
+                  from variants; gender and usia are emitted ONLY when set here (product-feed.ts never
+                  invents them), so the empty state reads "Pilih", never a value nobody chose. */}
               <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
                 <p className="text-xs font-medium text-muted-foreground">Atribut feed iklan <span className="font-normal">(Google/Meta — opsional)</span></p>
                 <div className="grid grid-cols-2 gap-3">
@@ -1303,7 +1304,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                     <Label className="text-xs">Usia</Label>
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between font-normal" />}>
-                        {ageGroup ? labelOf(AGE_OPTS, ageGroup) : <span className="text-muted-foreground">Dewasa</span>}
+                        {ageGroup ? labelOf(AGE_OPTS, ageGroup) : <span className="text-muted-foreground">Pilih</span>}
                         <ChevronDown className="text-muted-foreground" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="w-(--anchor-width)">
