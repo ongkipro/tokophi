@@ -99,14 +99,34 @@ const signupUrl = signupUrlProp || "https://app.tokophi.com/daftar";
   .desktop-nav { justify-self: center; }
   .desktop-nav ul { display: flex; align-items: center; gap: clamp(0.9rem, 1.6vw, 1.6rem); }
   .desktop-nav a, .login-link {
+    position: relative;
+    display: inline-block;
+    padding-block: 0.5rem;
     color: var(--color-muted);
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     font-weight: 550;
     white-space: nowrap;
     transition: color 0.18s ease;
   }
-  .desktop-nav a:hover, .desktop-nav a[aria-current="page"], .login-link:hover { color: var(--color-ink); }
-  .desktop-nav a[aria-current="page"] { font-weight: 700; }
+  /* One indicator for both states: a 2px bar under the label, half-strength on hover, full on the
+     current page. Weight does not change, so the row never reflows when the active page changes. */
+  .desktop-nav a::after, .login-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0.1rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--color-primary);
+    transform: scaleX(0);
+    transform-origin: left;
+    opacity: 0.4;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+  .desktop-nav a:hover, .login-link:hover, .desktop-nav a[aria-current="page"] { color: var(--color-ink); }
+  .desktop-nav a:hover::after, .login-link:hover::after { transform: scaleX(1); }
+  .desktop-nav a[aria-current="page"]::after { transform: scaleX(1); opacity: 1; }
   .short-label { display: none; }
   .header-actions { display: flex; align-items: center; gap: 0.9rem; justify-self: end; }
   .header-cta {
@@ -123,6 +143,7 @@ const signupUrl = signupUrlProp || "https://app.tokophi.com/daftar";
     transition: background-color 0.18s ease;
   }
   .header-cta:hover { background: var(--color-primary-hover); }
+  .header-cta:active { transform: scale(0.97); }
   .menu-button {
     display: none;
     width: 2.75rem;
@@ -150,14 +171,16 @@ const signupUrl = signupUrlProp || "https://app.tokophi.com/daftar";
   .site-menu-head .menu-button { display: inline-flex; }
   .site-menu nav ul { margin-top: 1.5rem; display: grid; }
   .site-menu nav a {
-    display: block;
     padding-block: 0.95rem;
     border-bottom: 1px solid var(--color-line);
     font-family: var(--font-serif);
     font-size: 1.5rem;
     font-weight: 600;
   }
+  .site-menu nav a { display: flex; align-items: center; justify-content: space-between; }
   .site-menu nav a[aria-current="page"] { color: var(--color-primary-ink); }
+  .site-menu nav a[aria-current="page"]::after { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 999px; background: currentColor; }
+  .site-menu nav a:active { color: var(--color-primary-ink); }
   .site-menu-actions { display: grid; gap: 0.75rem; margin-top: 2rem; }
 
   @media (max-width: 1180px) {
@@ -173,6 +196,6 @@ const signupUrl = signupUrlProp || "https://app.tokophi.com/daftar";
     .header-cta { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .desktop-nav a, .login-link, .header-cta { transition: none; }
+    .desktop-nav a, .login-link, .header-cta, .desktop-nav a::after, .login-link::after { transition: none; }
   }
 </style>

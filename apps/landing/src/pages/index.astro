@@ -8,6 +8,7 @@ import FeatureIndex from "../components/home/FeatureIndex.astro";
 import Demo from "../components/home/Demo.astro";
 import Closing from "../components/home/Closing.astro";
 import FeeTable from "../components/FeeTable.astro";
+import PhiOrnament from "../components/PhiOrnament.astro";
 import Pricing from "../components/Pricing.astro";
 import { BILLING } from "@tokophi/lib/billing";
 
@@ -49,6 +50,7 @@ const jsonLd = {
     </div>
   </section>
   <section class="band band-ink" id="harga" aria-labelledby="harga-title">
+    <PhiOrnament class="band-phi" />
     <div class="section"><Pricing {signupUrl} /></div>
   </section>
   <div class="band band-white"><Demo {demoUrl} /></div>
@@ -57,5 +59,4 @@ const jsonLd = {
 
 <style>
   .fees-wrap { margin-top: clamp(2rem, 4vw, 2.75rem); }
-  .band-ink { background: #14152a; color: #fff; }
 </style>

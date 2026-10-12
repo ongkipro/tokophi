@@ -1,5 +1,6 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
+import PhiOrnament from "../components/PhiOrnament.astro";
 import Pricing from "../components/Pricing.astro";
 import FeeTable from "../components/FeeTable.astro";
 import Closing from "../components/home/Closing.astro";
@@ -28,6 +29,7 @@ const jsonLd = {
 
 <MarketingLayout {title} {description} path="/harga/" {jsonLd}>
   <section class="band band-ink" aria-labelledby="harga-title">
+    <PhiOrnament class="band-phi" />
     <div class="section"><Pricing {signupUrl} headingLevel="h1" /></div>
   </section>
   <section class="section" aria-labelledby="fees-title">
@@ -40,5 +42,4 @@ const jsonLd = {
 
 <style>
   .fees-wrap { margin-top: clamp(2rem, 4vw, 2.75rem); }
-  .band-ink { background: #14152a; color: #fff; }
 </style>

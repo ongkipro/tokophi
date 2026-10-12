@@ -55,7 +55,6 @@ Base.astro
     │   ├── Pricing.astro, FeeTable.astro
     │   └── Screen.astro               real screenshots (lib/screens.ts inventory)
     ├── SiteFooter.astro
-    └── MotionLayer.astro              GSAP + ScrollTrigger, reduced-motion safe
 ```
 
 Astro owns routes, metadata, and static content; there is no React and no hydrated island (removed
@@ -78,14 +77,20 @@ management, active state, keyboard operation, and Escape dismissal.
 
 ### PR-LP-11: Restrained motion
 
-GSAP shall provide hierarchy and scroll reveal without scroll-jacking. Motion shall animate only
-transform and opacity, use one centralized registration point, disable depth effects on smaller
-screens, and leave all content visible under reduced-motion or JavaScript failure.
+Motion shall be CSS only (scroll-driven `animation-timeline: view()` for screenshots below the fold,
+keyframes for the checkout state sequence), animate only transform and opacity, never animate above
+the fold (LCP), never replace native scrolling, and leave all content visible under reduced motion
+or in browsers without scroll-driven animation.
+
+Superseded 2026-10-12 (owner: "jika berat sempurnakan… fokus SEO friendly dan tidak berat"): GSAP +
+ScrollTrigger (115 KB JS, 45 KB gzip) and the hero entrance were removed; Lighthouse mobile home
+went from 92 to 98 Performance, TBT 0 ms, CLS 0. Lenis was considered and rejected
+(`apps/landing/DESIGN.md` "Motion concept").
 
 ### PR-LP-12: Requested implementation stack
 
-The site shall use Astro, TypeScript, Tailwind CSS, inline Lucide SVG, and GSAP, with no React and no
-hydrated island.
+The site shall use Astro, TypeScript, Tailwind CSS and inline Lucide SVG, with no React, no hydrated
+island and no animation library (PR-LP-11).
 
 Superseded 2026-10-12 (owner: "jalankan sesuai rekomendasimu"): the earlier stack used shadcn
 primitives from `@tokophi/ui` and a hydrated React mobile menu. A native `<dialog>` does the menu with

@@ -3,7 +3,7 @@ import Screen from "../Screen.astro";
 import { COURIER_COUNT, MIN_PAYOUT } from "../../lib/offer";
 
 // Five real steps of running a store, each paired with the screen that does it: text and screenshot
-// side by side on wide screens, stacked on narrow ones. MotionLayer adds a scroll-linked settle to
+// side by side on wide screens, stacked on narrow ones. a CSS scroll-driven settle (global.css) is added to
 // each screenshot; without JS or under reduced motion the screenshots simply sit in place.
 // (A pinned crossfade frame was tried first and dropped: it left a tall empty column beside steps
 // 2–5 and showed the wrong screen whenever the scroll position was restored. See DESIGN.md.)
@@ -84,7 +84,7 @@ const steps = [
   .story-copy h3 {
     margin-top: 0.4rem;
     font-family: var(--font-serif);
-    font-size: clamp(1.45rem, 1.2rem + 0.9vw, 2rem);
+    font-size: var(--fs-h3);
     font-weight: 600;
     letter-spacing: -0.015em;
     line-height: 1.15;

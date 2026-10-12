@@ -2,7 +2,6 @@
 import Base from "./Base.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
-import MotionLayer from "../components/MotionLayer.astro";
 
 interface Props {
   title: string;
@@ -34,5 +33,4 @@ const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/
     </main>
     <SiteFooter {loginUrl} {signupUrl} />
   </div>
-  <MotionLayer />
 </Base>

@@ -89,16 +89,40 @@ product's own screens and from radical fee transparency — the thing no local c
 - **Icons:** inline Lucide SVG, functional only (truck, qr-code, wallet…). lucide-react and React are
   removed from the landing.
 
-### Motion concept (owner asked to consider GSAP / Lenis)
+### Ornament, type scale, chrome (owner 2026-10-12: "bg dibuat ornament, jangan terlalu polos; hindari AI slop")
+
+- **Ornament = the brand's own geometry.** Φ is the golden ratio, so the one background device is a
+  golden rectangle subdivided into its squares with the spiral through them (`PhiOrnament.astro`,
+  computed, 1px strokes, `aria-hidden`). Placed where a left-aligned layout leaves an empty half:
+  hero (behind the screenshot), inner-page intros, the closing band, and the pricing ink band (white,
+  12%). Never behind running text, never more than one per section. Rejected as template signals:
+  gradient blobs, dot/graph-paper grids (removed 2026-10-11), noise textures, floating icon tiles.
+- **Type scale** as tokens in `global.css`: display `clamp(2.4rem → 3.5rem)`, section
+  `clamp(1.85rem → 2.625rem)`, item heading `clamp(1.25rem → 1.5rem)`, lede `clamp(1.0625rem →
+  1.1875rem)`, list item 1.0625rem, small 0.875rem — about 1.33 between steps. The hero headline is
+  capped at 3.15rem because it shares its row with the screenshot.
+- **Header:** one indicator for hover and current page, a 2px indigo bar under the label (40% on
+  hover, full on the current page); weight never changes, so the row never reflows. Mobile menu marks
+  the current page with a dot. **Buttons** lift 1px on hover and settle (scale .98) when pressed.
+- **Footer:** the page closes on the same ink as the pricing band (one dark frame per page plus the
+  footer); four columns (brand + price line + CTA, Produk, Akun, Informasi), real links only, no
+  social icons or badges we cannot back. Text #b9bede / #9298c4 on #14152a = 9.81:1 / 6.41:1.
+
+### Motion concept (revised 2026-10-12: owner "jika berat sempurnakan… fokus SEO friendly dan tidak berat")
 
 | Tool | Decision | Why |
 |---|---|---|
-| **GSAP + ScrollTrigger** (already installed) | **Use, sparingly** | A short entrance on the hero, and each "Alur kerja" screenshot settles in once as it reaches the viewport, so the five steps read in order. A pinned crossfade frame was built first and dropped after review (empty column, wrong screen on scroll restore). No fade-up on every section. |
-| **Lenis (smooth scroll)** | **Rejected** | It replaces native scroll physics: anchor jumps, keyboard paging, find-in-page and trackpad momentum all change, it fights `prefers-reduced-motion`, and it adds JS to every visit without telling the reader anything. ScrollTrigger works on native scroll. |
-| **CSS** | Hover/focus transitions, the pricing toggle | No JS needed. |
+| **GSAP + ScrollTrigger** | **Removed** (was used until 2026-10-12) | 115 KB JS (45 KB gzip) for two effects. The hero entrance faded the H1 and screenshot in, which holds back the largest contentful paint. |
+| **CSS scroll-driven animation** (`animation-timeline: view()`) | **Use** for product screenshots below the fold (`[data-settle]`) | Each screenshot settles in (opacity + 3rem rise) as it enters the viewport, so the five workflow steps read in order. Runs off the main thread, 0 KB JS. Browsers without support and reduced-motion visitors see the screenshots in place. |
+| **Hero entrance** | **Dropped** | Nothing above the fold animates: the H1 and hero screenshot paint at once (LCP). |
+| **Lenis / any smooth-scroll library** | **Rejected** | It replaces native scroll (anchors, keyboard paging, find-in-page, trackpad momentum), fights reduced motion, and adds JS to every visit. Anchor links get native `scroll-behavior: smooth` instead, only without reduced motion. |
+| **Checkout state sequence** | CSS keyframes crossfade of four real captures | No JS; still frame under reduced motion. |
+| **CSS transitions** | Hover/press/focus, nav indicator, pricing toggle | No JS. |
 
-Reduced motion and JS failure: screenshots render in place at full opacity (verified); nothing is
-hidden behind a reveal.
+Measured after the change (local, Lighthouse 12.8.2 mobile): home Performance 98 / A11y 100 / BP 100 /
+SEO 100, LCP 2.4 s, TBT 0 ms, CLS 0; /fitur 99/100/100/100 (was 92 on home with GSAP). Client JS
+bundles: 0 files (only the inline menu script and JSON-LD remain). Scroll-driven settle verified in
+Chrome: opacity 0 below the fold → 0.91 entering → 1 once in view.
 
 ## Page anatomy — homepage (`/`)
 
@@ -370,4 +394,17 @@ Pass 13 (after review round 5 = REVISE; the 5-round cap is reached, these fixes 
 - Known, left as is: "Pilih ekspedisi lain (13)" in the checkout counts courier SERVICES for the
   route, while the page counts 10 couriers; "Rp42.7 jt" (panel summary card) and "Rp 42.674.978"
   (panel table) are the panel's own two formats of the same figure.
+
+Pass 14 (owner 2026-10-12: ornament, type scale, footer, hover/active states; new review log):
+- Rendered after the change (design/renders/home-390.png, design/renders/home-1440.png, design/renders/harga-390.png, design/renders/harga-1440.png, design/renders/fitur-390.png, design/renders/fitur-1440.png, design/renders/cara-kerja-390.png, design/renders/cara-kerja-1440.png, design/renders/bayar-kirim-390.png, design/renders/bayar-kirim-1440.png, design/renders/demo-390.png, design/renders/demo-1440.png): 0 console errors, 0 overflow, one h1 per page.
+- Golden-spiral ornament visible but quiet: behind the hero screenshot (anchored to the content
+  edge; an earlier placement on the bleeding screenshot pushed the page 32–85px sideways and was
+  moved), in the right half of /fitur's intro, mirrored in the closing band, and low on the left of
+  the pricing ink band. Below 1024px only the hero and pricing ones remain.
+- Hero headline was five lines at the new display size beside the screenshot: capped at 3.15rem and
+  the copy column widened 11fr → 12fr; now three lines at 1440.
+- Footer: dark band flush with the viewport bottom at 390 and 1440, four columns → 3 → 2; "Masuk seller"
+  keeps the Akun column on one line per link.
+- Current page in the header reads as a full-strength bar under "Fitur" on /fitur; hover shows the
+  same bar at 40%.
 

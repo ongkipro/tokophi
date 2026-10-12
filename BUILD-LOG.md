@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-12 02:40 UTC] — LANDING · golden-ratio ornament, type scale, dark footer, nav states; GSAP removed (CSS scroll-driven motion)
+Executor: Main Session (Claude Code). Branch `feat/landing-polish` (worktree `tokophi-landing`), from main d4d3f5bd.
+- Owner (2026-10-12): background less plain without AI slop; refine type sizes, footer, hover/active and header links; motion: lighten if heavy, alternative to Lenis, SEO friendly and light.
+- **Ornament:** `PhiOrnament.astro` draws the brand's own geometry (Φ = golden ratio: golden rectangle, its squares, the spiral) as computed 1px strokes, `aria-hidden`; in the hero (behind the screenshot), inner-page intros, closing band, pricing ink band. Gradient blobs, dot grids and noise rejected (DESIGN.md "Ornament, type scale, chrome").
+- **Type scale** tokens in `global.css` (display / section / item / lede / list / small) used by Hero, PageIntro, WorkflowStory, Pricing, cara-kerja, DetailSection, Ads, demo; hero headline capped at 3.15rem (3 lines at 1440).
+- **Chrome:** header links get one 2px indicator (40% on hover, full on the current page, no weight change); mobile menu marks the current page; buttons settle when pressed; `.text-link` hover. Footer is an ink band flush with the viewport bottom: brand + price line + CTA, Produk, Akun, Informasi; text contrast 9.81:1 / 6.41:1.
+- **Motion:** GSAP + ScrollTrigger removed (115 KB JS, 45 KB gzip) with the hero entrance (it delayed LCP). Screenshots below the fold settle in with CSS `animation-timeline: view()` (0 KB JS; static where unsupported or under reduced motion); anchors use native smooth scroll. Lenis rejected (replaces native scroll, adds JS). `gsap` dependency and typings removed; `MotionLayer.astro` deleted; `LANDING_PRD.md` PR-LP-11/12 superseded with the reason.
+- **Verified:** `astro check` 0/0; build OK, 0 client JS bundle files; Playwright on 6 pages × 390/1440: 0 console errors, 0 overflow (an ornament placement that pushed the home page 32–85px sideways was found and moved), one h1; scroll-driven settle measured in Chrome (opacity 0 → 0.91 → 1). Lighthouse 12.8.2 mobile, local: home 98/100/100/100 (was 92 Performance), LCP 2.4 s, TBT 0, CLS 0; /fitur 99/100/100/100. `vitest` 1446 passed; `verify-doc-authority` ok.
+- **Not verified:** the independent visual review timed out twice at its 900 s limit (197 image slices) and returned no verdict; `design-gate.py` therefore cannot pass for this change set.
+
 ### [2026-10-12 02:25 UTC] — CATALOG · merchant category no longer defaults to "Fashion"; Google-category suggester fixed; all-tenant data repair
 Executor: Main Session (Claude Code). Branch `fix/merchant-category-google-catalog` (worktree `tokophi-catalog-fix`).
 - Owner report: every seller storefront shows "Fashion" on the product page (taniniaga.com sells fertiliser). Owner: "sekalian scan keseluruhan tenant", then "ya lanjut dan sempurnakan".
