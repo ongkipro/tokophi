@@ -660,7 +660,9 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
       </div>
 
       {/* Body */}
-      <div className="grid gap-5 lg:grid-cols-3">
+      {/* grid-cols-1 = minmax(0,1fr): an implicit column sizes to its content, and the variant table
+          then widened the whole editor past a 390px phone. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* MAIN */}
         <div className="flex flex-col gap-5 lg:col-span-2">
           {/* Judul + Deskripsi */}
@@ -1037,7 +1039,9 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                     </div>
                   )}
 
-                  {/* generated variant matrix — price/stock/sku per combo */}
+                  {/* generated variant matrix — price/stock/sku per combo. The inputs carry a MIN width: without
+                      one, a 390px phone squeezed SKU and Harga to ~25px ("S", "Rp") instead of letting
+                      this box scroll sideways. */}
                   {combos.length > 0 ? (
                     <div className="overflow-x-auto rounded-lg border">
                       <Table>
@@ -1057,16 +1061,16 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                               <TableRow key={key}>
                                 <TableCell className="font-medium whitespace-nowrap">{key}</TableCell>
                                 <TableCell>
-                                  <Input value={row.sku} onChange={(e) => setVariantField(key, "sku", e.target.value)} placeholder="SKU" className="max-w-32" />
+                                  <Input value={row.sku} onChange={(e) => setVariantField(key, "sku", e.target.value)} placeholder="SKU" className="min-w-24 max-w-32" />
                                 </TableCell>
                                 <TableCell>
-                                  <div className="relative max-w-36">
+                                  <div className="relative min-w-28 max-w-36">
                                     <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
                                     <Input inputMode="numeric" value={row.price} onChange={(e) => setVariantField(key, "price", e.target.value.replace(/[^\d]/g, ""))} className="pl-8 tabular-nums" />
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <Input inputMode="numeric" value={row.stock} onChange={(e) => setVariantField(key, "stock", e.target.value.replace(/[^\d]/g, ""))} className="max-w-24 tabular-nums" />
+                                  <Input inputMode="numeric" value={row.stock} onChange={(e) => setVariantField(key, "stock", e.target.value.replace(/[^\d]/g, ""))} className="min-w-16 max-w-24 tabular-nums" />
                                 </TableCell>
                               </TableRow>
                             );

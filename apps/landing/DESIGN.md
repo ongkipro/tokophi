@@ -392,7 +392,8 @@ Pass 13 (after review round 5 = REVISE; the 5-round cap is reached, these fixes 
 - Phone frame: `Screen.astro` gives phone captures a 6px dark bezel (desktop captures keep the 1px
   hairline frame). Deliberate: it marks "this is the buyer's phone" next to Seller-panel screens.
 - Known, left as is: "Pilih ekspedisi lain (13)" in the checkout counts courier SERVICES for the
-  route, while the page counts 10 couriers; "Rp42.7 jt" (panel summary card) and "Rp 42.674.978"
+  route, while the page counts 10 couriers (checkout label now "(N layanan)", 2026-10-12; the
+  screenshot predates it); "Rp42.7 jt" (panel summary card) and "Rp 42.674.978"
   (panel table) are the panel's own two formats of the same figure.
 
 Pass 14 (owner 2026-10-12: ornament, type scale, footer, hover/active states; new review log):
