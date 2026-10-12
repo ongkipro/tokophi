@@ -66,9 +66,10 @@ export default async function DaftarPage({ searchParams }: { searchParams: Promi
       eyebrow="Buka toko online"
       claimable
       // Judulnya menamai HASILNYA, bukan formulirnya. "Buat toko online Anda" menyuruh; ini
-      // menggambarkan apa yang orang itu dapatkan sesudah tiga langkah.
-      title="Tokomu, tayang hari ini"
-      lead="Tiga langkah. Langkah pertama sudah cukup untuk mulai — sisanya bisa dilengkapi nanti."
+      // menggambarkan apa yang orang itu dapatkan sesudah tiga langkah. Jangan menjanjikan "tayang
+      // hari ini": setiap toko baru ditinjau dulu (lib/provision.ts), jadi lead-nya menyebut itu.
+      title="Tokomu, dengan alamatnya sendiri"
+      lead="Tiga langkah. Langkah pertama sudah cukup untuk mulai — sisanya bisa dilengkapi nanti. Toko tayang setelah ditinjau tim TokoΦ."
       footer={
         <>
           Sudah punya toko?{" "}

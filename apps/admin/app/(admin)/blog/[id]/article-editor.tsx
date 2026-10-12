@@ -186,7 +186,7 @@ export function ArticleEditor({ post, blogs }: { post?: BlogPost; blogs: BlogRef
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* MAIN */}
         <div className="flex flex-col gap-5 lg:col-span-2">
           <Card>

@@ -42,7 +42,7 @@ export default async function LanggananPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2"><Sparkles className="size-4 text-primary" /> Paket {BILLING.PLAN_NAME}</CardTitle>

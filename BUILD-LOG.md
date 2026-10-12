@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-12 04:45 UTC] — ADMIN + STOREFRONT · signup headline, checkout estimate, editor overflow at 390px
+Executor: Main Session (Claude Code). Branch `fix/signup-checkout-editor-polish` (worktree `tokophi-uxfix`), from main 9f945531. Closes the "Found, not fixed" items of the 02:40 entry below.
+- **Signup** (`apps/admin/app/daftar/page.tsx`): headline "Tokomu, tayang hari ini" promised same-day publishing although every self-serve store is born locked pending review (`lib/provision.ts`). Now "Tokomu, dengan alamatnya sendiri"; the lead adds "Toko tayang setelah ditinjau tim TokoΦ."
+- **Checkout** (`apps/storefront/src/pages/checkout.astro`): a service with no vendor estimate rendered "Estimasi  hari". `etdLine()` shows the line only when the estimate has a number and never doubles "hari". The alternatives row now reads "Pilih ekspedisi lain (N layanan)": N counts services (JNE REG, YES, …), not the 10 couriers the landing names.
+- **Seller product editor at 390px**: the variant table squeezed SKU/Harga inputs to ~25px ("S", "Rp"). Inputs get min widths (96/112/64px) and the table scrolls inside its box. Root cause of the page then widening by 152px: the editor body grid had only `lg:grid-cols-3`, so below `lg` its implicit column sized to content. `grid-cols-1` (minmax(0,1fr)) added there and on the 9 other admin pages built on the same grid (customer, order, collection, discount, page, article editors; pemasaran; akun profil/langganan).
+- **Not changed:** `/privasi` Google sign-in paragraph — it is conditional ("Bila Anda memilih masuk dengan akun Google") and signup still has `googleEnabled()` behind an env flag.
+- **Verified (local, DB read-only):** Playwright against admin dev :3107 with a locally minted demo-owner session: 10 touched pages × 390/1440 → page overflow 0; variant inputs 96/112/64px, table box 324px scrolling 492px. `/daftar` at 390/1440 shows the new headline, 0 overflow. `etdLine` cases ("1-2", "2", "1-3 hari", "3 HARI", "", "-", null) checked in node. `npm test`: 192 files / 1683 tests passed, astro check storefront + landing 0 errors; `tsc -p apps/admin` exit 0; admin lint 0 errors (14 pre-existing warnings).
+- **Not verified:** the empty-estimate checkout row in a browser (needs a vendor quote with no `etd`; the logic is checked, not the render).
+
 ### [2026-10-12 02:40 UTC] — LANDING · golden-ratio ornament, type scale, dark footer, nav states; GSAP removed (CSS scroll-driven motion)
 Executor: Main Session (Claude Code). Branch `feat/landing-polish` (worktree `tokophi-landing`), from main d4d3f5bd.
 - Owner (2026-10-12): background less plain without AI slop; refine type sizes, footer, hover/active and header links; motion: lighten if heavy, alternative to Lenis, SEO friendly and light.

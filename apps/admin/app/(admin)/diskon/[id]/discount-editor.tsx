@@ -204,7 +204,7 @@ export function DiscountEditor({ discount }: { discount?: Discount }) {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* MAIN column */}
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Card>
