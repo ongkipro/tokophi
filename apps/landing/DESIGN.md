@@ -20,7 +20,7 @@ section.
   and removed on the owner's call, 2026-10-11: "faq sepertinya belum perlu". The facts it carried —
   COD limits, review on signup, read-only grace — live in the fact row and the pricing panel.)
 - **One primary action:** "Coba gratis 3 hari" → `app.tokophi.com/daftar`. Secondary: "Lihat toko
-  demo". No WhatsApp CTA (owner invariant; no official channel is configured yet anyway).
+  demo". No WhatsApp CTA (owner invariant). The platform number exists since 2026-10-14 and appears only as contact information on /kontak and /privasi, never as a button.
 
 ## Claim sources (nothing on the page may go beyond these)
 
@@ -167,7 +167,7 @@ were deleted with `@astrojs/react`, `react`, `react-dom` and `lucide-react`.
 |---|---|
 | Subscription PPN toggle is OFF today; if it is switched on, the page must say "belum termasuk PPN". Keep the page silent on PPN until then? | Nothing now; recheck when the toggle changes |
 | Using the demo store's real Saldo / Pemasaran screens as imagery | Resolved 2026-10-12: kept (owner: "jalankan sesuai rekomendasimu"; it is the public demo store) |
-| Legal identity + contact (`PUBLIC_LEGAL_*`, `PUBLIC_CONTACT_*`) still unset: the entity is being registered (owner, 2026-10-12); pages say so | Ads review; fill the env vars when issued |
+| Legal identity + contact | Resolved 2026-10-14 (owner): PT Tokophi Nusantara, Perumahan The Gayungsari Blok H-I No. 01 Surabaya 60234, hello@tokophi.com, WhatsApp 6281283098098 — defaults in `src/lib/identity.ts`, env still overrides. /privasi is not reviewed by counsel (beta, owner 2026-10-14); a one-line "Versi beta" note says so |
 
 ## Render critique
 
@@ -425,3 +425,33 @@ Pass 15 (2026-10-14, fresh renders after #409–#415; every page re-inspected at
 - Still known: the checkout captures show "Pilih ekspedisi lain (13)", the label before #411 changed
   it to "(13 layanan)". Re-capturing needs a new checkout session on the live demo store (a
   production write), so it waits for the owner's go-ahead.
+
+Pass 16 (2026-10-14, owner: "kebutuhan isi, ui ux, style … lanjut dulu"; content and wayfinding):
+- Rendered (design/renders/home-390.png, design/renders/home-1440.png, design/renders/harga-390.png, design/renders/harga-1440.png, design/renders/fitur-390.png, design/renders/fitur-1440.png, design/renders/cara-kerja-390.png, design/renders/cara-kerja-1440.png, design/renders/bayar-kirim-390.png, design/renders/bayar-kirim-1440.png, design/renders/demo-390.png, design/renders/demo-1440.png): 0 console errors, 0 overflow, one h1 per page; /kontak and the 404 also rendered and inspected at 390 and 1440.
+- Panduan seller (panduan.tokophi.com, live since #412) was linked from nowhere on the apex: now in the
+  footer's Informasi column, under /kontak "Anda pemilik toko?", beside /cara-kerja's daily-work
+  links (→ /mulai/), and as the 404's secondary action (it replaced "Kontak", a page that today lists
+  no contact channel). One constant, `PANDUAN_URL` in `lib/navigation.ts`.
+- /kontak notice began a sentence in lower case ("… belum lengkap. nama badan usaha …"): capitalised.
+  "panel Seller" → "Dashboard Seller" there and in /privasi (CLAUDE.md naming rule).
+- 404: the mono "• 404" pill (a template eyebrow, the only one left on the site) removed; the H1 says
+  it. Stacked `.cta` buttons share one width below 480px, like every page intro.
+- Fact row courier line: four names + "dan 6 lainnya" (was five), so column 2 no longer runs a line
+  longer than its neighbours at 1440.
+- The share image (the og PNG in public/) still said "Seluruh toko Anda, dalam satu panel." with a tracked mono
+  "TOKOPHI.COM • BAHASA INDONESIA • RUPIAH" strip: re-rendered from `design/og.html` with the current
+  hero headline, the price line and the real Produk screen; og/twitter alt updated to match.
+
+Pass 17 (2026-10-14, owner supplied the operator's identity; testimonials NOT added):
+- Rendered (design/renders/home-390.png, design/renders/home-1440.png, design/renders/harga-390.png, design/renders/harga-1440.png, design/renders/fitur-390.png, design/renders/fitur-1440.png, design/renders/cara-kerja-390.png, design/renders/cara-kerja-1440.png, design/renders/bayar-kirim-390.png, design/renders/bayar-kirim-1440.png, design/renders/demo-390.png, design/renders/demo-1440.png): 0 console errors, 0 overflow, one h1; /kontak and /privasi also rendered at 390 and 1440 and inspected.
+- /kontak and /privasi §9 now name PT Tokophi Nusantara (legal form confirmed by the owner), the registered address, hello@tokophi.com and
+  WhatsApp shown as "+62 812-8309-8098" (link keeps `wa.me/6281283098098`); footer © reads the
+  legal name. The "belum lengkap" notices disappear by themselves (they were gated on the data).
+- `.doc dt` labels were tracked uppercase mono (template chrome): now sentence case, 600 weight,
+  muted, the same voice as the rest of the page.
+- Owner asked for invented testimonials ("kau buat aja"): declined. A made-up quote under a real-
+  looking name is a fabricated endorsement, which the Never-claim list and the owner's own "no
+  invented social proof" rule forbid, and which a reader cannot tell from a real one.
+- /privasi: with identity complete the pending notice no longer shows, but no counsel has reviewed
+  the text (owner: still beta), so a one-line muted "Versi beta … belum ditinjau oleh penasihat
+  hukum" note sits under the lede.

@@ -53,14 +53,14 @@ const ogImage = new URL("/og.png", `${site}/`).href;
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:alt" content="TokoΦ, seluruh toko Anda dalam satu panel." />
+    <meta property="og:image:alt" content="TokoΦ: toko online lengkap, dari pembayaran sampai pengiriman. Daftar produk di Dashboard Seller." />
 
     {/* summary_large_image, not summary: with a 1200x630 card the small variant crops it to a square. */}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    <meta name="twitter:image:alt" content="TokoΦ, seluruh toko Anda dalam satu panel." />
+    <meta name="twitter:image:alt" content="TokoΦ: toko online lengkap, dari pembayaran sampai pengiriman. Daftar produk di Dashboard Seller." />
 
     {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />}
   </head>

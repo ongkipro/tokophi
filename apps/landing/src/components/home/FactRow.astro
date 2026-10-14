@@ -5,7 +5,7 @@ import { COD, COURIER_COUNT, COURIER_NAMES, VA_BANKS } from "../../lib/offer";
 // Four facts a seller checks first, each true on production today (DESIGN.md "Claim sources").
 const facts = [
   { icon: "qr-code", title: "QRIS dan Virtual Account", body: `VA ${VA_BANKS.join(", ")}. Dana masuk ke saldo toko Anda.` },
-  { icon: "truck", title: `${COURIER_COUNT} kurir, ongkir otomatis`, body: `${COURIER_NAMES.slice(0, 5).join(", ")}, dan ${COURIER_COUNT - 5} lainnya. Ongkir dari alamat gudang Anda.` },
+  { icon: "truck", title: `${COURIER_COUNT} kurir, ongkir otomatis`, body: `${COURIER_NAMES.slice(0, 4).join(", ")}, dan ${COURIER_COUNT - 4} lainnya. Ongkir dari alamat gudang Anda.` },
   { icon: "banknote", title: `COD lewat ${COD.courier}`, body: `Bisa Anda aktifkan untuk ${COD.provinces.length} provinsi di Jawa, sampai ${COD.cap} per pesanan.` },
   { icon: "receipt-text", title: "Tanpa komisi penjualan", body: "Biaya Anda hanya langganan. Hasil penjualan barang tidak dipotong." },
 ] as const;
