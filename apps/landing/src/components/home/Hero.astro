@@ -74,8 +74,8 @@ const { signupUrl } = Astro.props;
 
   .hero { position: relative; isolation: isolate; }
   .hero-media { position: relative; }
-  /* The golden spiral sits behind the screenshot, anchored to the content's right edge (the
-     screenshot itself bleeds further; the ornament must not, or the page scrolls sideways). */
+  /* The golden spiral sits behind the screenshot, anchored to the content's right edge like the
+     screenshot itself, so both end on the grid line the header and sections share. */
   .hero > :global(.hero-phi) {
     position: absolute;
     z-index: -1;
@@ -85,13 +85,12 @@ const { signupUrl } = Astro.props;
     color: var(--color-primary);
     opacity: 0.16;
   }
-  .hero-media :global(.hero-desktop) { margin-right: calc(-1 * clamp(1.25rem, 5vw, 4.5rem)); }
 
   @media (max-width: 1023px) {
     .hero { grid-template-columns: 1fr; }
-    .hero > :global(.hero-phi) { top: auto; bottom: 0; width: 100%; }
+    /* Stacked, the only free space is under the screenshot, where the arc read as stray lines. */
+    .hero > :global(.hero-phi) { display: none; }
     .hero-media { margin-top: 0.5rem; }
-    .hero-media :global(.hero-desktop) { margin-right: 0; }
   }
   @media (max-width: 479px) {
     .hero-actions :global(.btn) { flex: 1 1 100%; }

@@ -325,7 +325,7 @@ Pass 10 (after review round 2 of 2026-10-12 = REVISE, "no payment choice in any 
 - New checkout capture from the live demo store: one product in the cart, kecamatan "Gubeng" picked,
   QRIS selected; no name, WhatsApp, address or payment entered. It shows SPX Standard Rp 5.700, the
   three payment choices (QRIS, Virtual Account with the five banks, COD) and the total with the QRIS
-  fee (`design/shots/sf-checkout-bayar.png`). Used on home step 3, /fitur Penjualan and
+  fee (capture `sf-checkout-bayar` in design/shots/). Used on home step 3, /fitur Penjualan and
   /pembayaran-pengiriman Pembayaran; the address-form capture is retired. Side effect: the demo
   store's own analytics/pixels and a checkout-session record fired, as on 2026-10-11.
 - Workflow rows: copy top-aligned and sticky (top 6rem) beside tall screens, static under 1024px.
@@ -348,7 +348,7 @@ Pass 11 (after review round 3 = REVISE, "screens must agree with the text beside
   a column to look busier would be the kind of invented signal this page avoids.
 - /demo product phone re-captured from the live demo PDP with the star/ulasan row hidden (ratings are
   on the Never-claim list): photo, gallery, title, Rp 110.000, stock, colour and size choices
-  (`design/shots/sf-pdp-harga.png`).
+  (capture `sf-pdp-harga` in design/shots/).
 - /cara-kerja keeps the workflow rows but with its own H2 and intro ("Setelah toko berjalan:
   pekerjaan harian.") instead of repeating the homepage's.
 
@@ -356,7 +356,7 @@ Pass 12 (after review round 4 = REVISE, "phone screens unreadable at 390; crops 
 imagery repeats"), owner go-ahead to generate media where it helps:
 - Media decision: no generated people, products or illustrations (they would break "show the panel"
   and the Never-claim list). The motion added is real: the demo checkout captured in four states
-  (`design/shots/sf-checkout-s1-kecamatan.png`, `-s3-qris`, `-s4-va`, `-s5-cod`) crossfading in the
+  (captures `sf-checkout-s1-kecamatan`, `-s3-qris`, `-s4-va`, `-s5-cod` in design/shots/) crossfading in the
   phone frame, CSS only (2.8s per state, frames overlap so nothing flashes), still QRIS frame under
   reduced motion. A screen recording was tried first; the only local encoder (Playwright's ffmpeg)
   cannot decode VP8, so it could not be trimmed, and stills are sharper and lighter anyway.
@@ -365,7 +365,7 @@ imagery repeats"), owner go-ahead to generate media where it helps:
   Media + Harga cards cut from the desktop capture (the panel's own phone layout overflows); bulk
   shipping = action bar, note and one whole order row; builder = the category tile row.
 - Less repetition, more evidence: /pembayaran-pengiriman now shows the COD setting card
-  (`design/shots/v6-pengaturan-kirim.png`) beside the COD rules and the Jasa Kirim service toggles
+  (capture `v6-pengaturan-kirim` in design/shots/) beside the COD rules and the Jasa Kirim service toggles
   beside the courier list (replacing the fourth Pengiriman Massal); /cara-kerja drops the repeated
   workflow rows for a two-line summary linking to the homepage and /fitur; signup screen larger and
   sticky beside the steps.
@@ -409,3 +409,19 @@ Pass 14 (owner 2026-10-12: ornament, type scale, footer, hover/active states; ne
 - Current page in the header reads as a full-strength bar under "Fitur" on /fitur; hover shows the
   same bar at 40%.
 
+
+Pass 15 (2026-10-14, fresh renders after #409–#415; every page re-inspected at 390 and 1440):
+- Rendered (design/renders/home-390.png, design/renders/home-1440.png, design/renders/harga-390.png, design/renders/harga-1440.png, design/renders/fitur-390.png, design/renders/fitur-1440.png, design/renders/cara-kerja-390.png, design/renders/cara-kerja-1440.png, design/renders/bayar-kirim-390.png, design/renders/bayar-kirim-1440.png, design/renders/demo-390.png, design/renders/demo-1440.png): 0 console errors, 0 overflow, one h1 per page, titles 55–63 and descriptions 143–154 characters.
+- Hero screenshot ended at x≈1375 at 1440, between the content edge (1304) and the viewport: neither
+  aligned nor a real bleed. The negative right margin is gone; screenshot and ornament now end on the
+  same grid line as the header's "Coba gratis".
+- Hero ornament below 1024px sat under the stacked screenshot, where its arc read as stray lines
+  between the frame and the fact row: hidden there (the pricing band keeps the narrow ornament).
+- /fitur Pemasaran screenshot ran full section width (~1.4× its capture, double card edge visible):
+  capped at 56rem like the homepage Ads section (`DetailSection` `screen.max`).
+- Section by section against §4.3.1: no centred badge/headline template, no equal card grids, lists
+  stay plain rows; every image is a real capture beside the copy it proves. Inner-page intros share
+  one composition (left copy, spiral right) by design: same job, same template.
+- Still known: the checkout captures show "Pilih ekspedisi lain (13)", the label before #411 changed
+  it to "(13 layanan)". Re-capturing needs a new checkout session on the live demo store (a
+  production write), so it waits for the owner's go-ahead.

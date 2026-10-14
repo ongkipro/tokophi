@@ -9,7 +9,7 @@ interface Props {
   title: string;
   lede: string;
   items: readonly { title: string; body: string }[];
-  screen?: { name: ScreenName; narrow?: ScreenName; alt: string; kind?: "desktop" | "phone"; frames?: readonly ScreenName[]; beside?: boolean };
+  screen?: { name: ScreenName; narrow?: ScreenName; alt: string; kind?: "desktop" | "phone"; frames?: readonly ScreenName[]; beside?: boolean; /** CSS max width when the capture is narrower than the section. */ max?: string };
   white?: boolean;
 }
 const { id, title, lede, items, screen, white = false } = Astro.props;
@@ -25,7 +25,7 @@ const side = phone || Boolean(screen?.beside);
       <p class="lede">{lede}</p>
     </div>
     {screen && (
-      <div class="detail-media" data-settle>
+      <div class="detail-media" data-settle style={screen.max ? `max-width:${screen.max}` : undefined}>
         <Screen
           name={screen.name}
           narrow={screen.narrow}
