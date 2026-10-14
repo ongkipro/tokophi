@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-14 09:50 UTC] — LANDING + PANDUAN · hero on the grid, /fitur Pemasaran scale, panduan mobile search row
+Executor: Main Session (Claude Code). Branch `fix/landing-review-r6` (worktree `tokophi-landing`), from main 037a112a.
+- **Landing** (`apps/landing`): fresh renders of every page at 390/1440 after #409–#415 (DESIGN.md Render critique, pass 15). Hero screenshot ended at x≈1375 at 1440 (neither on the 1304 content edge nor a bleed) → negative margin removed, screenshot and ornament end on the header's grid line. Hero ornament hidden below 1024px (its arc showed as stray lines under the stacked screenshot). /fitur Pemasaran screenshot capped at 56rem like the homepage (`DetailSection` `screen.max`), it ran ~1.4× its capture.
+- **Panduan** (`apps/docs/src/styles/search.css`): on phones Starlight narrows the search input by `--sl-search-cancel-space`, so the hairline stopped before "Batal" and the button sat 9px shorter and flush with the screen edge. Input now spans the row (text padded clear of the clear/cancel buttons); "Batal" gets the input's 3.75rem height and a 1rem gutter. Desktop (≥50rem) unchanged.
+- **Verified:** landing `astro check` 0 errors; all pages 0 console errors, 0 overflow, one h1. Panduan local build + preview at 390, light and dark: input 388px wide with full hairline, Batal x=319 w=70 h=60 aligned with the input row; `check-routes` 70, `check-seo` 42 pages, `check-links` 43 pages ok.
+- **Not done:** independent visual review (`design/review.md`) still running at commit time, so the landing design gate is not yet PASS. Checkout captures still show "Pilih ekspedisi lain (13)" (pre-#411 label); re-capturing needs a checkout session on the live demo store.
+
 ### [2026-10-12 06:30 UTC] — EDGE + STOREFRONT · tokophi.id apex → tokophi.com; reserved .id labels stop serving the demo shop
 Executor: Main Session (Claude Code). Branch `fix/tokophi-id-apex-redirect` (worktree `tokophi-uxfix`), from main 733d3b77.
 - Owner (2026-10-12): "kalo di ketik tokophi.id redirect ke tokophi.com"; then "sempurnakan".

@@ -46,6 +46,17 @@ site-search .dialog-frame { gap: 0; padding: 0.75rem 0 0; }
   inset-inline-start: 1.25rem;
 }
 #starlight__search .pagefind-ui__search-clear { height: 3.75rem; }
+/* Phone: Starlight narrows the input by --sl-search-cancel-space to make room for "Batal", so the
+   hairline stopped short of the button and the button sat lower and flush with the screen edge. Run
+   the input (and its hairline) under the whole row, keep the text clear of the clear/cancel buttons,
+   and give "Batal" the input's height and an inner gutter. */
+@media (max-width: 49.99rem) {
+  #starlight__search .pagefind-ui__search-input {
+    width: 100%;
+    padding-inline-end: calc(var(--sl-search-cancel-space) + 3.5rem);
+  }
+  site-search button[data-close-modal] { height: 3.75rem; padding-inline: 1rem; }
+}
 
 /* Results area */
 #starlight__search .pagefind-ui__drawer { padding: 0.25rem 0.75rem 0.75rem; }
