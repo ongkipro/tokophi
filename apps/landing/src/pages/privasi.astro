@@ -2,7 +2,7 @@
 import Base from "../layouts/Base.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
-import { IDENTITY, IDENTITY_COMPLETE, MISSING_IDENTITY } from "../lib/identity";
+import { IDENTITY, IDENTITY_COMPLETE, MISSING_IDENTITY, whatsappDisplay } from "../lib/identity";
 
 // ⚠️ EVERY FACTUAL CLAIM BELOW WAS READ OUT OF THIS CODEBASE, and each one carries the file it
 // came from so the next person can re-check it instead of trusting the prose:
@@ -35,6 +35,17 @@ const description =
         <strong>UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi</strong>. Identitas
         penyelenggara ada di <a href="#kontak">bagian 9</a>.
       </p>
+
+      {/* Beta (owner, 2026-10-14): the identity is complete but no counsel has reviewed the text yet,
+          so the page says so in one line instead of passing for a final notice. */}
+      {
+        IDENTITY_COMPLETE && (
+          <p class="doc-note">
+            Versi beta. Isi dokumen ini sesuai dengan cara kerja TokoΦ saat ini dan belum ditinjau
+            oleh penasihat hukum. Pertanyaan tentang data pribadi dapat dikirim lewat <a href="#kontak">bagian 9</a>.
+          </p>
+        )
+      }
 
       {
         !IDENTITY_COMPLETE && (
@@ -96,7 +107,7 @@ const description =
           Google. Kami tidak menerima kata sandi Google Anda.
         </li>
         <li>
-          Setelah masuk, satu cookie sesi (httpOnly) dipasang di domain panel Seller. Cookie itu
+          Setelah masuk, satu cookie sesi (httpOnly) dipasang di domain Dashboard Seller. Cookie itu
           wajib ada agar Anda tetap dalam keadaan masuk, bukan untuk iklan atau pengukuran.
         </li>
         <li>
@@ -218,7 +229,7 @@ const description =
       <h2>8. Perubahan kebijakan ini</h2>
       <p>
         Bila cara kerja layanan berubah, halaman ini ikut diperbarui. Perubahan yang berdampak
-        besar akan kami sampaikan kepada pemilik toko melalui panel Seller.
+        besar akan kami sampaikan kepada pemilik toko melalui Dashboard Seller.
       </p>
 
       <h2 id="kontak">9. Kontak</h2>
@@ -249,7 +260,7 @@ const description =
               <>
                 <dt>WhatsApp</dt>
                 <dd>
-                  <a href={`https://wa.me/${IDENTITY.whatsapp}`}>+{IDENTITY.whatsapp}</a>
+                  <a href={`https://wa.me/${IDENTITY.whatsapp}`}>{whatsappDisplay(IDENTITY.whatsapp)}</a>
                 </dd>
               </>
             )}

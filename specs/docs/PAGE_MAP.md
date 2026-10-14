@@ -226,13 +226,13 @@
 
 | URL | what it is | file | layout | src/data | src/lib | locals | set:html | tests |
 |---|---|---|---|---|---|---|---|---|
-| `/404` | Not found. | `apps/landing/src/pages/404.astro` | `Base` | — | — |  |  | — |
-| `/cara-kerja` | Signup → review → setup → first order, the daily workflow, and the subscription billing timeline. | `apps/landing/src/pages/cara-kerja.astro` | `MarketingLayout` | — | `offer` |  |  | — |
+| `/404` | Not found. | `apps/landing/src/pages/404.astro` | `Base` | — | `navigation` |  |  | — |
+| `/cara-kerja` | Signup → review → setup → first order, the daily workflow, and the subscription billing timeline. | `apps/landing/src/pages/cara-kerja.astro` | `MarketingLayout` | — | `navigation` `offer` |  |  | — |
 | `/demo` | What to try on the demo storefront (batiknusantara.tokophi.id), with its real screens. | `apps/landing/src/pages/demo.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/fitur` | Every feature in the one plan, grouped (store, sales, shipping, marketing, operations) with real screenshots. | `apps/landing/src/pages/fitur.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/harga` | Subscription pricing (one plan, monthly/annual switch) and the who-pays-which-fee table. | `apps/landing/src/pages/harga.astro` | `MarketingLayout` | — | — |  |  | — |
 | `/` | tokophi.com front door. | `apps/landing/src/pages/index.astro` | `MarketingLayout` | — | — |  |  | — |
-| `/kontak` | Contact. | `apps/landing/src/pages/kontak.astro` | `Base` | — | `identity` |  |  | — |
+| `/kontak` | Contact. | `apps/landing/src/pages/kontak.astro` | `Base` | — | `identity` `navigation` |  |  | — |
 | `/pembayaran-pengiriman` | Payment channels, COD rules, couriers, payout, and the who-pays-which-fee table, all from code constants. | `apps/landing/src/pages/pembayaran-pengiriman.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/privasi` | Privacy policy. | `apps/landing/src/pages/privasi.astro` | `Base` | — | `identity` |  |  | — |
 

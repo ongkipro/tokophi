@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
+import { PANDUAN_URL } from "../lib/navigation";
 
 // The apex had no 404 at all: every stale link, old campaign URL and mistyped path was answered by
 // the Node adapter's own bare "Not found" — no branding, no way back, and nothing to tell a visitor
@@ -20,7 +21,6 @@ const description = "Alamat yang Anda buka tidak ada di tokophi.com.";
     <SiteHeader />
 
     <main class="doc">
-      <p class="eyebrow pill"><span class="dot" aria-hidden="true"></span>404</p>
       <h1>Halaman ini tidak ada.</h1>
       <p class="doc-lede">
         Alamat yang Anda buka tidak ada di tokophi.com. Mungkin tautannya sudah berubah, atau ada
@@ -29,7 +29,7 @@ const description = "Alamat yang Anda buka tidak ada di tokophi.com.";
 
       <div class="cta">
         <a href="/" class="btn btn-primary">Kembali ke beranda</a>
-        <a href="/kontak/" class="btn btn-ghost">Kontak</a>
+        <a href={PANDUAN_URL} class="btn btn-ghost">Panduan seller</a>
       </div>
 
       <p>

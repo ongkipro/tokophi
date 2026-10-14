@@ -1,6 +1,6 @@
 ---
 import { IDENTITY } from "../lib/identity";
-import { MARKETING_ROUTES } from "../lib/navigation";
+import { MARKETING_ROUTES, PANDUAN_URL } from "../lib/navigation";
 import { PRICE } from "../lib/offer";
 
 interface Props {
@@ -48,6 +48,7 @@ const year = new Date().getFullYear();
     <nav class="footer-group" aria-label="Informasi">
       <p>Informasi</p>
       <ul>
+        <li><a href={PANDUAN_URL}>Panduan seller</a></li>
         <li><a href="/kontak/">Kontak</a></li>
         <li><a href="/privasi/">Kebijakan Privasi</a></li>
       </ul>

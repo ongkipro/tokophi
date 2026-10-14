@@ -8,6 +8,18 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-14 10:45 UTC] — LANDING · Panduan links, /kontak + 404 copy, share image, fact-row length
+Executor: Main Session (Claude Code). Branch `feat/landing-content-r7` (worktree `tokophi-landing`), from main 232a24fb. Owner: "kebutuhan isi, ui ux, style, dan lain-lain lanjut dulu baru sempurnakan".
+- **Wayfinding:** `PANDUAN_URL` (`apps/landing/src/lib/navigation.ts`, env `PUBLIC_PANDUAN_URL`, default https://panduan.tokophi.com) linked from the footer (Informasi → "Panduan seller"), /kontak, /cara-kerja (→ /mulai/) and the 404 (secondary action, replacing "Kontak").
+- **Copy:** /kontak notice capitalised; "panel Seller" → "Dashboard Seller" in /kontak and /privasi. Fact row lists four couriers + "dan 6 lainnya".
+- **Style:** 404 eyebrow pill removed; `.cta` buttons full width below 480px (`global.css`).
+- **Share image:** `apps/landing/public/og.png` re-rendered from new source `apps/landing/design/og.html` (current hero headline, price line, real Produk screen; no tracked-caps strip); `og:image:alt`/`twitter:image:alt` updated (`layouts/Base.astro`).
+- **Verified:** `astro check` 0 errors; local build rendered at 390/1440 for home, harga, fitur, cara-kerja, pembayaran-pengiriman, demo, kontak, 404: 0 overflow, one h1, all images with alt (4 empty alts = decorative checkout frames, by design); og.png 1200×630 served 200; `design/og.html` re-render is pixel-identical to the committed PNG. DESIGN.md render critique pass 16.
+- **Operator identity (owner, 2026-10-14):** `apps/landing/src/lib/identity.ts` now defaults to PT Tokophi Nusantara, Perumahan The Gayungsari Blok H-I No. 01 Gayungan Surabaya 60234, hello@tokophi.com, WhatsApp 6281283098098 (env vars still override). /kontak and /privasi §9 show them; WhatsApp displayed `+62 812-8309-8098` (`whatsappDisplay`); the "belum lengkap" notices disappear; footer © uses the legal name. `.doc dt` labels changed from tracked uppercase mono to sentence case.
+- **Not done, on purpose:** invented testimonials (owner: "kau buat aja") — a fabricated endorsement; real merchant stories only, with the merchant's consent.
+- **/privasi beta note:** not reviewed by counsel yet (owner: beta) — one muted line under the lede says so.
+- **Open:** `mailto:` links on /kontak and /privasi will make Cloudflare Email Obfuscation inject its render-blocking script on those two pages (`specs/docs/CLOUDFLARE-PERF.md`).
+
 ### [2026-10-14 09:50 UTC] — LANDING + PANDUAN · hero on the grid, /fitur Pemasaran scale, panduan mobile search row
 Executor: Main Session (Claude Code). Branch `fix/landing-review-r6` (worktree `tokophi-landing`), from main 037a112a.
 - **Landing** (`apps/landing`): fresh renders of every page at 390/1440 after #409–#415 (DESIGN.md Render critique, pass 15). Hero screenshot ended at x≈1375 at 1440 (neither on the 1304 content edge nor a bleed) → negative margin removed, screenshot and ornament end on the header's grid line. Hero ornament hidden below 1024px (its arc showed as stray lines under the stacked screenshot). /fitur Pemasaran screenshot capped at 56rem like the homepage (`DetailSection` `screen.max`), it ran ~1.4× its capture.
