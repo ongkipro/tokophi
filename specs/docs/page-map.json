@@ -2657,7 +2657,9 @@
             "Base"
           ],
           "data": [],
-          "lib": [],
+          "lib": [
+            "navigation"
+          ],
           "locals": false,
           "db": false,
           "gate": [],
@@ -2675,6 +2677,7 @@
           ],
           "data": [],
           "lib": [
+            "navigation",
             "offer"
           ],
           "locals": false,
@@ -2766,7 +2769,8 @@
           ],
           "data": [],
           "lib": [
-            "identity"
+            "identity",
+            "navigation"
           ],
           "locals": false,
           "db": false,
