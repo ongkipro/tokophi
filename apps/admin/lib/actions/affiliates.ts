@@ -1,12 +1,14 @@
 "use server";
 import { schema } from "@tokophi/db";
 import { clampBps, normalizeAffiliateCode, suggestAffiliateCode } from "@tokophi/lib/affiliate";
+import { affiliateLinkSecret, issueAffiliateLink } from "@tokophi/lib/affiliate-link";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 import { normalizePhone } from "@tokophi/lib/validate";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { systemDomainFor } from "@/lib/data/domain";
 
 // Seller panel → Affiliate writes (Task 9.4). Every action: capability first, tenant transaction,
 // explicit `store_id` predicate, and a returned `{ ok, error }` (a thrown Error is masked in prod).
@@ -123,4 +125,23 @@ export async function setProductAffiliateRate(productId: string, ratePct: number
   if (!rows.length) return { ok: false, error: "Produk tidak ditemukan." };
   revalidatePath(PATH);
   return { ok: true };
+}
+
+/** F-A18: the affiliate's private dashboard link (interim until buyer-account sign-in, F-A15). Owner/
+ *  admin/advertiser only — staff never mints one. Active affiliates only: the page re-checks `aktif`,
+ *  so deactivating an affiliate kills every link already sent. */
+export async function affiliateDashboardLink(id: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const { storeId } = await requireCapability("affiliates:write");
+  const secret = affiliateLinkSecret();
+  if (!secret) return { ok: false, error: "Link dashboard affiliate belum diaktifkan di server." };
+  const [row] = await withTenant(storeId, (db) =>
+    db
+      .select({ id: schema.affiliates.id, slug: schema.stores.slug })
+      .from(schema.affiliates)
+      .innerJoin(schema.stores, eq(schema.stores.id, schema.affiliates.storeId))
+      .where(and(eq(schema.affiliates.id, id), eq(schema.affiliates.storeId, storeId), eq(schema.affiliates.status, "aktif")))
+      .limit(1),
+  );
+  if (!row) return { ok: false, error: "Hanya affiliate aktif yang punya link dashboard." };
+  return { ok: true, url: `https://${systemDomainFor(row.slug)}/affiliate/saya?t=${issueAffiliateLink(row.id, storeId, secret)}` };
 }

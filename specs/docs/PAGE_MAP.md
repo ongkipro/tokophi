@@ -52,7 +52,7 @@
 |---|---|---|---|
 | Seller (merchant panel) | 57 | 3 | 19 |
 | Super Admin (platform control plane) | 12 | 2 | 1 |
-| Storefront (multi-tenant shopper site) | 19 | — | 10 |
+| Storefront (multi-tenant shopper site) | 20 | — | 10 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
 ## Seller (merchant panel) — `apps/admin`
@@ -179,7 +179,7 @@
 
 ## Storefront (multi-tenant shopper site) — `apps/storefront`
 
-19 pages · 10 endpoints
+20 pages · 10 endpoints
 
 ### Pages
 
@@ -187,6 +187,7 @@
 |---|---|---|---|---|---|---|---|---|
 | `/404` | Not found (also what a wrong Host resolves to). | `apps/storefront/src/pages/404.astro` | `Layout` | — | — | ✓ |  | — |
 | `/affiliate` | 'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5). | `apps/storefront/src/pages/affiliate.astro` | `Layout` | `affiliate` `catalog` | `chat` | ✓ |  | — |
+| `/affiliate/saya` | 'Dashboard affiliate' — interim self-view opened by a signed link (?t=, F-A18, Task 9.13): code, share link, totals, commission history; 404 unless the token verifies for this store and the affiliate is aktif; no third-party pixels. | `apps/storefront/src/pages/affiliate/saya.astro` | `Layout` | `affiliate` | — | ✓ |  | — |
 | `/blog/[handle]` | One article. | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
@@ -299,7 +300,7 @@
 
 | module | exports |
 |---|---|
-| `affiliates.ts` | `createAffiliate` `markCommissionPaid` `saveAffiliateSettings` `setAffiliateStatus` `setProductAffiliateRate` |
+| `affiliates.ts` | `affiliateDashboardLink` `createAffiliate` `markCommissionPaid` `saveAffiliateSettings` `setAffiliateStatus` `setProductAffiliateRate` |
 | `articles.ts` | `createArticle` `deleteArticle` `updateArticle` |
 | `auth.ts` | `signIn` `signOut` |
 | `billing.ts` | `cancelSubscriptionInvoice` `createSubscriptionPayment` `getInvoicePayment` `getPendingSubscription` |
@@ -372,7 +373,7 @@
 
 | module | exports |
 |---|---|
-| `affiliate.ts` | `applyAffiliate` |
+| `affiliate.ts` | `applyAffiliate` `getAffiliateDashboard` |
 | `cache.ts` | `cacheClear` `cached` `ttlMs` |
 | `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeAffiliateEnabled` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
 | `checkout.ts` | `getRecoveredCheckout` |

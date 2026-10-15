@@ -6,6 +6,7 @@ import { systemDomainFor } from "@/lib/data/domain";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac-policy";
 import { affiliateContactView } from "@/lib/affiliate-mask";
+import { affiliateLinkSecret } from "@tokophi/lib/affiliate-link";
 
 // Seller panel → Affiliate (Task 9.4, specs/AFFILIATE_SPEC.md). Every read runs under the tenant
 // context (RLS) AND filters on `storeId` explicitly — the WHERE is the rule, the policy is the net.
@@ -50,6 +51,8 @@ export type CommissionRow = {
 export type AffiliateProgram = {
   /** `<slug>.tokophi.id` — the base of every share link and of the public `/affiliate` form. */
   storeHost: string;
+  /** F-A18: dashboard links can be minted (AFFILIATE_LINK_SECRET set) AND this viewer may mint them. */
+  dashboardLinks: boolean;
   settings: { enabled: boolean; rateBps: number; holdDays: number };
   affiliates: AffiliateRow[];
   commissions: CommissionRow[];
@@ -146,6 +149,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
     const iso = (d: Date | null) => (d ? d.toISOString() : null);
     return {
       storeHost: systemDomainFor(store?.slug ?? ""),
+      dashboardLinks: fullContact && affiliateLinkSecret() !== null,
       settings: { enabled: s?.enabled ?? false, rateBps: s?.rateBps ?? 1000, holdDays: s?.holdDays ?? 3 },
       affiliates: affiliates.map((a) => ({
         id: a.id,

@@ -107,6 +107,7 @@
     "storefront:/halaman/[handle]": "Static page.",
     "storefront:/cari": "Search results page (the ⌘K palette uses `/api/search`).",
     "storefront:/affiliate": "'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5).",
+    "storefront:/affiliate/saya": "'Dashboard affiliate' — interim self-view opened by a signed link (?t=, F-A18, Task 9.13): code, share link, totals, commission history; 404 unless the token verifies for this store and the affiliate is aktif; no third-party pixels.",
     "storefront:/kontak": "Contact + WhatsApp.",
     "storefront:/404": "Not found (also what a wrong Host resolves to).",
     "storefront:/api/checkout-session": "Progressive checkout capture (debounced beacons; tenant from Host; fails quiet).",

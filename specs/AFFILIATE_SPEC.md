@@ -1,7 +1,7 @@
 # TokoΦ — Store Affiliate Programme (seller-run)
 
 > **Status:** PRD v1.1 (2026-10-15). v1 (`F-A1`–`F-A10`) is **built** on `feat/store-affiliate` and
-> verified as recorded in §12; `F-A11`–`F-A17` are new, planned or blocked on an owner decision.
+> verified as recorded in §12; `F-A11`–`F-A18` are new, planned or blocked on an owner decision.
 > This is the feature PRD — the only one: requirements are `F-A*` (mirrored in
 > `specs/docs/REQUIREMENTS.md` §2.10), tasks are root `TASKS.md` Stage 9. If code and this file
 > disagree, code wins — fix this file. Revised 2026-10-15 against the branch code (owner: "prd baru
@@ -194,6 +194,19 @@ PRD). TokoΦ therefore never computes or withholds tax; it gives the merchant a 
   "Affiliate dihapus", keeping the code and every commission row (the merchant's financial record).
   - Acceptance: Given a `nonaktif` affiliate with 2 commissions, When the owner erases it, Then its
     personal fields are null, both commissions still exist, and an `aktif` affiliate cannot be erased.
+- **F-A18** (Should, event — **interim, replaced by F-A15**; owner pick 2026-10-15 "link rahasia dulu")
+  When a user with `affiliates:write` copies an `aktif` affiliate's dashboard link, the system shall
+  mint a signed link (`@tokophi/lib/affiliate-link`: HMAC over affiliate + store + issue time,
+  `AFFILIATE_LINK_SECRET` ≥ 32 chars on admin AND storefront, 90-day validity) to
+  `<store>/affiliate/saya?t=…`, where the affiliate sees their code, share link, totals (ditahan /
+  siap / dibayar) and commission history — order number, date, base, commission, status — and no
+  buyer data. The page answers 404 for a missing/forged/expired token, another store's token, or an
+  affiliate no longer `aktif` (deactivating kills every link sent); it is `no-store`, `no-referrer`,
+  `noindex` and loads none of the merchant's third-party pixels (they report the full URL). Secret
+  unset = no button and a 404 page. Staff never mint links (server-side capability check).
+  - Acceptance: Given the owner copies RINA10's link, When it is opened on the store's host, Then
+    Rina's commissions show; a tampered token, no token, or the same link after deactivation → 404;
+    a staff session shows no copy action.
 
 ## 9. Data (migration `0116_store_affiliates`)
 

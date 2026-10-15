@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   },
   transpilePackages: ["@tokophi/db", "@tokophi/lib", "@tokophi/sections", "@tokophi/ui"],
   serverExternalPackages: ["postgres", "sharp"],
+  // `next dev` only: hosts allowed to load dev resources (HMR, client chunks) when the panel is opened
+  // from another device, e.g. a Tailscale IP. Comma-separated; unset = Next's default (localhost only).
+  allowedDevOrigins: process.env.DEV_ALLOWED_ORIGINS?.split(",").map((h) => h.trim()).filter(Boolean),
   // The whole merchant admin (app.tokophi.com) must stay out of search engines: login, /daftar,
   // the Akun/credential screens, printable /faktur/*, every /api/* route and every uploaded file.
   // `headers()` matches BEFORE the filesystem, so this covers API routes, /public assets and

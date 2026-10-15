@@ -26,6 +26,7 @@
     "./payment-fees": "./src/payment-fees.ts",
     "./order-finance": "./src/order-finance.ts",
     "./affiliate": "./src/affiliate.ts",
+    "./affiliate-link": "./src/affiliate-link.ts",
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
     "./theme": "./src/theme.ts",

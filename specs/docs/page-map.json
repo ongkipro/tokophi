@@ -2134,6 +2134,25 @@
           "whatItIs": "'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5)."
         },
         {
+          "url": "/affiliate/saya",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/storefront/src/pages/affiliate/saya.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Dashboard affiliate' — interim self-view opened by a signed link (?t=, F-A18, Task 9.13): code, share link, totals, commission history; 404 unless the token verifies for this store and the affiliate is aktif; no third-party pixels."
+        },
+        {
           "url": "/api/chat/poll",
           "kind": "endpoint",
           "methods": [
@@ -3269,6 +3288,7 @@
       {
         "module": "affiliates.ts",
         "exports": [
+          "affiliateDashboardLink",
           "createAffiliate",
           "markCommissionPaid",
           "saveAffiliateSettings",
@@ -3881,7 +3901,8 @@
       {
         "module": "affiliate.ts",
         "exports": [
-          "applyAffiliate"
+          "applyAffiliate",
+          "getAffiliateDashboard"
         ]
       },
       {

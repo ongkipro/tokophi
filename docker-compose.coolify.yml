@@ -157,6 +157,8 @@ services:
       INTEGRATION_TOKEN_KEY: ${INTEGRATION_TOKEN_KEY:-}
       # Optional: pins Meta's Graph version (defaults to a pinned one in lib/capi.ts).
       META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-}
+      # F-A18 — signs affiliate dashboard links. SAME value on admin and storefront; unset = feature off.
+      AFFILIATE_LINK_SECRET: ${AFFILIATE_LINK_SECRET:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
       # CNAME target a merchant points their custom domain at (Pengaturan → Domain). The live
       # Cloudflare-for-SaaS fallback origin is cname.tokophi.cc.
@@ -293,6 +295,8 @@ services:
       # explicitly because a var set in Coolify reaches nothing unless a block forwards it — the
       # SIGNUP_ENABLED lesson above.
       PLATFORM_DEFAULT_THEME_STORE_ID: ${PLATFORM_DEFAULT_THEME_STORE_ID:-}
+      # F-A18 — verifies affiliate dashboard links (/affiliate/saya). SAME value as admin; unset = 404.
+      AFFILIATE_LINK_SECRET: ${AFFILIATE_LINK_SECRET:-}
     expose:
       - "4327"
     labels:

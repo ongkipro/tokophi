@@ -1064,6 +1064,15 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 - **Escalation Conditions:** OD-A1 chooses a claw-back record → new migration, re-plan.
 - **Status:** `[ ]` **BLOCKED — owner decision OD-A1.**
 
+### Task 9.13: Interim Affiliate Dashboard by Signed Link
+- **Requirement:** `F-A18`
+- **Risk Level:** R2 — a bearer link to one affiliate's commission figures.
+- **Allowed Paths:** `packages/lib/src/affiliate-link{,.test}.ts`, `apps/admin/lib/actions/affiliates.ts`, `apps/admin/lib/data/affiliates.ts`, `apps/admin/app/(admin)/affiliate/**`, `apps/storefront/src/pages/affiliate/saya.astro`, `apps/storefront/src/data/affiliate.ts`, `apps/storefront/src/layouts/Layout.astro`, `apps/admin/lib/env-health.ts`, `docker-compose.coolify.yml`
+- **Accepted Invariants:** token binds affiliate + store; secret < 32 chars = off; page re-checks `aktif` and the Host's store; no buyer personal data; no third-party pixels on the page; staff cannot mint.
+- **Depends On:** Task 9.4
+- **Done when:** `affiliate-link.test.ts` passes (tampered, expired, other store, short secret); in a browser the owner copies RINA10's link and it opens at 390px with Rina's commissions and 0 page errors; tampered and missing tokens 404; a staff session has no copy action.
+- **Status:** `[x]` **DONE 2026-10-15** — see BUILD-LOG. Superseded by Task 9.11 once the buyer account ships.
+
 ### Task 9.11: Affiliate Self-View Through the Buyer Account — Phase 2
 - **Requirement:** `F-A15`
 - **Risk Level:** R3 — cross-store identity link, personal financial data.

@@ -71,6 +71,8 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   GOOGLE_SGTM_ENDPOINT: { required: false, why: "Endpoint Server-side GTM untuk Google Ads/GA4; kosong = sinyal browser sahaja." },
   APP_DATABASE_URL: { required: false, why: "Connection string untuk tokophi_app (unprivileged role RLS); kosong = fallback ke DATABASE_URL." },
   DATABASE_RUNTIME_ROLE: { required: false, why: "Peran PostgreSQL runtime (tokophi_app vs owner); kosong = ikuti kredensial koneksi." },
+  DEV_ALLOWED_ORIGINS: { required: false, why: "Hanya `next dev`: host lain (mis. IP Tailscale) yang boleh memuat resource dev. Tidak dipakai di produksi." },
+  AFFILIATE_LINK_SECRET: { required: false, why: "Menandatangani link dashboard affiliate (admin + storefront, nilai SAMA). Kosong atau < 32 karakter = tombol link disembunyikan dan halaman /affiliate/saya 404." },
   CHECKOUT_RECOVERY_SECRET: { required: false, why: "Menandatangani tautan pemulihan keranjang; ada fallback ke AUTH_SECRET." },
   NODE_ENV: { required: false, why: "Disetel runtime, bukan oleh operator — didaftar agar sensusnya lengkap." },
 };

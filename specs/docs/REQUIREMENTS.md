@@ -240,6 +240,7 @@ The normative statement, verification method, and current status for each identi
 | F-A15 | A verified buyer account linked (with consent) to an `aktif` affiliate sees that affiliate's commissions. | Task 9.11 | BLOCKED — OD-A3 + buyer account (Stage 10) |
 | F-A16 | Affiliate notified on approval / ready / paid through the platform messaging channel. | Task 9.12 | BLOCKED — messaging channel (WhatsApp/SMS) not set up |
 | F-A17 | `affiliates:write` erases a `ditolak`/`nonaktif` affiliate's personal fields; commissions kept. | Task 9.9 | PLANNED |
+| F-A18 | Interim affiliate self-view: `affiliates:write` copies a signed 90-day link to `/affiliate/saya` (code, totals, commissions, no buyer data; 404 when forged/expired/other store/not `aktif`; no third-party pixels). Replaced by F-A15. | `packages/lib/src/affiliate-link.test.ts`; Chrome owner + staff sessions 2026-10-15 (BUILD-LOG) | MET |
 
 ---
 
