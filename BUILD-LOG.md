@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-15 14:30 UTC] — ACCOUNT · TokoΦ Account (buyer) — plan on `main`'s docs + OTP primitive (Task 10.1)
+Executor: Main Session fork (Claude Code). Branch `feat/buyer-account` (worktree `tokophi-buyer-account`), from origin/main `702e957d`. Owner: "sambil kita develop local kebutuhan akun user (pembeli)".
+- **Carried over:** the account-ux-local work was committed WIP on `feature/buyer-account-ux-local` (`ab35bd74`: PRD draft, `prototypes/tokophi-account/`, four task docs, log/task entries). Brought here: `prototypes/tokophi-account/` and `specs/docs/tasks/2026-09-{13,26,29}-buyer-account-*.md`. NOT brought: root `PRD-BUYER-ACCOUNT.md` (a second PRD beside `specs/PRD.md`; its text survives as `tasks/2026-09-26-buyer-account-prd.md`) and that branch's BUILD-LOG/TASKS/STATUS edits (100 commits behind; this entry replaces them). Prototype history: its own task docs + `ab35bd74`.
+- **Spec:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` stub replaced by the `8dc12d7` draft (§1–15, verbatim) under a new status header (local development authorised, production undecided, ADR 0016 still PROPOSED) + **§17 implementation plan**: reuse map against `main`, `ACC-1`…`ACC-9`, proposed `apps/account` host (alternatives rejected with reasons), proposed schema, OTP seam, a table of where the 2026-09-26 PRD draft is overruled (phone-wide aggregation → claim + consent), owner decisions OD-1…OD-6.
+- **Tasks:** root `TASKS.md` Task 5.8 → `[~]` (local build directed); new **Stage 10** (10.1–10.11). `specs/docs/TASKS.md` ledger line. `REQUIREMENTS.md` F-K11 status. `SYSTEM_MAP.md` §1 lib row.
+- **Code (Task 10.1, no migration):** `packages/lib/src/buyer-otp.ts` + test, `./buyer-otp` export. No caller yet — Stage 10's schema waits for `0116` (`feat/store-affiliate`).
+- **Requirements:** `REQUIREMENTS.md` §2.11 `ACC-1`…`ACC-9` (`verify:traceability` refused Stage 10 until they existed there).
+- **Guard touched:** `packages/lib/src/password.test.ts` `INERT_EXTENSIONS` += `.jpg` — the prototype's fixture photos are the first `.jpg` tracked, and the scanner demands every file type be classified.
+- **Verified:** `buyer-otp` 7/7; full `vitest run` 1469 passed, 231 DB suites skipped (no `_test` DB in this worktree); `tsc -p packages/lib` 0; `verify:doc-authority` ok; `verify:traceability` ok; page map fresh. Nothing driven in a browser (no UI yet).
+
 ### [2026-10-14 10:45 UTC] — LANDING · Panduan links, /kontak + 404 copy, share image, fact-row length
 Executor: Main Session (Claude Code). Branch `feat/landing-content-r7` (worktree `tokophi-landing`), from main 232a24fb. Owner: "kebutuhan isi, ui ux, style, dan lain-lain lanjut dulu baru sempurnakan".
 - **Wayfinding:** `PANDUAN_URL` (`apps/landing/src/lib/navigation.ts`, env `PUBLIC_PANDUAN_URL`, default https://panduan.tokophi.com) linked from the footer (Informasi → "Panduan seller"), /kontak, /cara-kerja (→ /mulai/) and the 404 (secondary action, replacing "Kontak").

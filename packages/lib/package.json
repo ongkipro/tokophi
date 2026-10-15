@@ -21,6 +21,7 @@
     "./provider-label": "./src/provider-label.ts",
     "./form-config": "./src/form-config.ts",
     "./totp": "./src/totp.ts",
+    "./buyer-otp": "./src/buyer-otp.ts",
     "./password": "./src/password.ts",
     "./integration-status": "./src/integration-status.ts",
     "./payment-fees": "./src/payment-fees.ts",

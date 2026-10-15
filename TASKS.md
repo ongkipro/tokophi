@@ -245,7 +245,7 @@
 - **Target Files:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md`, `specs/PRD.md`, release/readiness docs that currently claim or omit the account surface.
 - **Change:** Record one explicit owner decision: integrate the accepted account architecture into the production release, or defer the account and remove it from production release claims. Do not treat the standalone localStorage prototype as production evidence.
 - **Done when:** One decision is recorded with owner, rationale, release impact, and acceptance boundary; every canonical product/release document agrees; implementation tasks are added only if integration is chosen.
-- **Status:** `[ ]` **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
+- **Status:** `[~]` **2026-10-15: owner directed LOCAL development** ("sambil kita develop local kebutuhan akun user (pembeli)") — spec carried onto `main`'s path (`specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §1–15 from `8dc12d7`, §17 plan), implementation tasks in **Stage 10**. **Production release is still undecided** (spec §17.7 OD-5); ADR 0016 stays PROPOSED. Earlier: **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
 
 ### Task 5.9: Make Multi-Store Selection Explicit and Deterministic
 - **Requirement:** `F-T10`
@@ -969,3 +969,84 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
   3. `AGENTS.md`'s seed-rot note covers CHARTS only ("the demo looks dead"); add the write path, because the symptom there is a save that fails with a message about suspension on a store nobody suspended.
 - **Done when:** on a machine whose clock is past the anchor, `npm run seed:recent -w @tokophi/db` is enough to make an admin save succeed; no agent has to hand-edit `stores` to drive a write path.
 - **Status:** `[x]` **DONE 2026-09-09** — finding first: `seed.ts` was ALREADY relative (`fromNow(20)` on `batiknusantara`, `baa70c6`); the `2026-08-04` on the dev DB was "seeded 2026-07-15 + 20 days" rot, so the main seed is untouched and every deliberately overdue/trial/VIP store keeps its shape. `seed-recent.ts` gained `seedBillingPeriod(exec, storeId)` — ONE idempotent UPDATE `set current_period_end = now() + 30 days where id = $1 and current_period_end < now()` — run first by `main()`, plus an `import.meta.url` entrypoint guard so importing the module cannot run the top-up. `packages/db/src/seed-recent-billing.test.ts` (6 real-Postgres tests, verdict from `computeBilling()` itself; 3 mutations → 3 reds). Dev DB: `batiknusantara` `2026-08-04` → `2026-10-09` after one `seed:recent`; second run "masih aktif — tidak disentuh"; the other 7 stores byte-identical. No migration needed (`verify-migrations` ✓). AGENTS.md note added by the parent.
+
+## Stage 10: TokoΦ Account — Buyer Account (local phase 1)
+
+Spec and plan: `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §17 (requirements `ACC-1`…`ACC-9`, owner decisions OD-1…OD-6). Built locally only; production is Task 5.8. ⚠️ **No migration until `feat/store-affiliate` (`0116`) is on `main`** — the buyer migration is the next number after it, re-checked against `origin/main`'s journal at the time.
+
+### Task 10.1: OTP Primitives and the Delivery Seam (`@tokophi/lib/buyer-otp`)
+- **Requirement:** `ACC-1 (constraints: ACC-2)`
+- **Target Files:** `packages/lib/src/buyer-otp.ts`, `packages/lib/src/buyer-otp.test.ts`, `packages/lib/package.json`
+- **Change:** Six-digit code from the CSPRNG; stored form is an HMAC bound to phone + secret; `checkOtp` refuses malformed → consumed → expired → locked before comparing (constant-time); 60 s resend cooldown; `OtpSender` interface with a dev stub that throws in a production build.
+- **Done when:** `vitest run packages/lib/src/buyer-otp.test.ts` passes and covers right/wrong/expired/consumed/locked, the refusal order, the cooldown and the production refusal.
+- **Status:** `[x]` **DONE 2026-10-15** — 7/7 tests; no migration, no caller yet.
+
+### Task 10.2: Buyer Account Schema — One Idempotent Migration
+- **Requirement:** `ACC-1 (constraints: ACC-3…ACC-8)`
+- **Target Files:** `packages/db/drizzle/<next>_buyer_account.sql` + journal, `packages/db/src/schema.ts`, `specs/docs/SCHEMA.md`, `schema-indexes.test.ts`
+- **Change:** Tables of spec §17.4, hand-written and idempotent (AGENTS.md); RLS policy on `buyer_store_links` (it has `store_id`).
+- **Done when:** Migration applies twice on a branch DB (`tokophi_buyer`), `verify-migrations` ✓, `verify-rls` counts the new table, doc counts updated.
+- **Status:** `[ ]` **BLOCKED** on `0116` reaching `main`.
+
+### Task 10.3: `apps/account` Scaffold, OTP Sign-in and Sign-out
+- **Requirement:** `ACC-1 (constraints: ACC-2)`
+- **Target Files:** `apps/account/**`, root `package.json` scripts, `docker-compose.yml` (dev only)
+- **Change:** Astro SSR app per §17.3; phone form → challenge (rate-limited per phone and IP via `rate-limit-store`) → code form → session row + `tphi_account` cookie; sign-out revokes the row.
+- **Done when:** A real-Postgres test drives send → verify → session, and the wrong/expired/locked/cooldown paths of ACC-2; a browser run signs in with the dev-printed code at 390 and 1280 px with 0 console errors.
+- **Status:** `[ ]` — needs 10.2 and owner decision OD-2.
+
+### Task 10.4: Sessions List and "Keluar dari Perangkat Lain"
+- **Requirement:** `ACC-3`
+- **Target Files:** `apps/account/src/pages/akun/**`, its data module + test
+- **Change:** List the buyer's live sessions; revoke-others in one `update … where buyer_id = $1 and id <> $2`.
+- **Done when:** Test with two sessions: after revoke-others the second cookie is signed out on its next request, the first still works.
+- **Status:** `[ ]`
+
+### Task 10.5: Claim an Order and Link the Store (with Consent)
+- **Requirement:** `ACC-4`
+- **Target Files:** `apps/account/src/pages/klaim/**`, link data module + test
+- **Change:** Order number + verified phone must match the order; consent screen names the store and what is shared; creates/re-activates the link; one message for unknown and not-yours.
+- **Done when:** Real-Postgres test: matching phone + consent → active link; other phone, unknown number, declined consent → no row, identical message.
+- **Status:** `[ ]` — OD-4 decides whether a stronger proof is required.
+
+### Task 10.6: Order Hub and Order Detail from Linked Stores Only
+- **Requirement:** `ACC-5`
+- **Target Files:** `apps/account/src/pages/pesanan/**`, hub data module + test
+- **Change:** Orders reached only through `active` links, projected through an explicit allowlist (spec §3).
+- **Done when:** Test: links to A and B, store C shares the phone without a link → A and B listed, C absent; no excluded field in the response; a revoked link drops its store.
+- **Status:** `[ ]`
+
+### Task 10.7: "Toko" — Linked Stores with a Way Back
+- **Requirement:** `ACC-6`
+- **Target Files:** `apps/account/src/pages/toko/**`
+- **Change:** Stores derived from linked orders; each opens its canonical storefront host.
+- **Done when:** Test: exactly the linked stores appear, each with its storefront URL.
+- **Status:** `[ ]`
+
+### Task 10.8: Saved Addresses (max 10, one primary, snapshots untouched)
+- **Requirement:** `ACC-7`
+- **Target Files:** `apps/account/src/pages/alamat/**`, address data module + test
+- **Change:** CRUD with the KiriminAja district id; primary flip in one transaction; 11th refused.
+- **Done when:** Test: editing an address used by an order leaves that order's `ship_*` unchanged; 11th insert refused; exactly one primary.
+- **Status:** `[ ]`
+
+### Task 10.9: Unlink a Store
+- **Requirement:** `ACC-8`
+- **Target Files:** `apps/account/src/pages/toko/**`, link data module + test
+- **Change:** Set the link `revoked`; nothing store-owned is written.
+- **Done when:** Test: the store leaves the hub; `orders`/`customers`/`payments` counts for that store identical before/after.
+- **Status:** `[ ]`
+
+### Task 10.10: Optional Account Offer on the Checkout Success Page
+- **Requirement:** `ACC-9`
+- **Target Files:** `apps/storefront/src/pages/checkout/sukses.astro` (or `thanks.astro`), storefront test
+- **Change:** One link to the account origin after a confirmed order; guest checkout untouched.
+- **Done when:** Storefront verify suite green; the success page renders the link; with the env var unset the page renders exactly as before.
+- **Status:** `[ ]`
+
+### Task 10.11: Browser Proof and the Tenant-Negative Sweep
+- **Requirement:** `ACC-5 (constraints: ACC-1…ACC-9)`
+- **Target Files:** `apps/account/scripts/check-*.mjs`, `BUILD-LOG.md`, `specs/docs/STATUS.md`
+- **Change:** Drive every phase-1 screen at 390 and 1280 px, keyboard and both themes; one sweep proving a buyer can never read an unlinked store's order by id or number.
+- **Done when:** Checks pass on a local build against the branch DB; STATUS.md records the result.
+- **Status:** `[ ]`
