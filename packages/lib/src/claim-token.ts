@@ -20,6 +20,7 @@ export function claimSecret(env: Record<string, string | undefined> = process.en
 const mac = (secret: string, payload: string) => createHmac("sha256", secret).update(`order-claim:${payload}`).digest();
 
 export function issueClaimToken(orderId: string, secret: string, nowMs = Date.now()): string {
+  if (secret.length < MIN_SECRET_LEN) throw new Error("issueClaimToken: secret too short");
   if (!UUID.test(orderId)) throw new Error("issueClaimToken: orderId must be a uuid");
   const payload = `${orderId.toLowerCase()}.${Math.floor(nowMs / 1000)}`;
   return `${Buffer.from(payload).toString("base64url")}.${mac(secret, payload).toString("base64url")}`;
@@ -28,6 +29,8 @@ export function issueClaimToken(orderId: string, secret: string, nowMs = Date.no
 /** The order id the token was issued for, or null (malformed, forged, expired, future-dated, or —
  *  when `expectOrderId` is given — issued for a different order). Constant-time on the MAC. */
 export function verifyClaimToken(token: string, secret: string, nowMs = Date.now(), expectOrderId?: string): { orderId: string; issuedAt: number } | null {
+  // A short/empty secret never verifies, whatever the caller passed (e.g. `env.X ?? ""`).
+  if (typeof secret !== "string" || secret.length < MIN_SECRET_LEN) return null;
   const parts = typeof token === "string" ? token.split(".") : [];
   if (parts.length !== 2) return null;
   const payload = Buffer.from(parts[0], "base64url").toString("utf8");

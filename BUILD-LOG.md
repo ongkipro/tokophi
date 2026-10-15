@@ -4471,3 +4471,9 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Verified:** `TEST_DB_REQUIRED=1 vitest run` on throwaway `tokophi_buyer_account_test` → 196 files, 1713/1713; `tsc -p apps/admin` 0, `tsc -p packages/lib` 0; admin lint 0 errors (14 warnings, pre-existing); page map unchanged.
 - **Not verified / not done:** no real Google sign-in (no account app yet, owner step pending); `.env.example` `ACCOUNT_CLAIM_SECRET` line not added (file behind the secret-read guard); 10.13 needs an independent review (order route).
 
+
+### [2026-10-15 16:30 UTC] — ACCOUNT · Task 10.13 independent review + hardening
+- **Review (independent agent, read-only, commit 29fe0eb3):** no material finding — token cannot be forged, extended, or rebound to another order; `claimToken` only on the two `ok: true` order answers (not 409 duplicate / price-changed, not 502/503); issuance after commit inside try/catch; Google OAuth move behaviour-identical; order UUID in the token exposes nothing (no public endpoint accepts an order UUID without a secret).
+- **Hardening applied:** `issueClaimToken` throws and `verifyClaimToken` returns null for a secret under 32 chars, so a future caller passing `env.X ?? ""` cannot accept forged tokens (`packages/lib/src/claim-token.ts`, +1 test); `ACCOUNT_CLAIM_SECRET` listed in `apps/admin/lib/env-health.ts` (optional; short = feature off).
+- **Verified:** `route.test.ts` 7/7 against the throwaway `tokophi_buyer_account_test` (previously only run by the authoring agent); full vitest with DB suites 196 files, 1714/1714; `tsc` lib + admin 0.
+- **Open, by design:** replay within 30 days is bearer-by-design; single claimant is Task 10.5's unique `buyer_order_claims.order_id`. Storefront does not yet store `claimToken` (Task 10.10).

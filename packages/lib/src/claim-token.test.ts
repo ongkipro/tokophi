@@ -51,3 +51,12 @@ describe("claim-token (Task 10.13, D-3)", () => {
     expect(() => issueClaimToken("ORD-1001", S, T0)).toThrow();
   });
 });
+
+describe("short secret", () => {
+  it("never issues or verifies with a secret under 32 chars", () => {
+    expect(() => issueClaimToken("3f1e2d4c-5b6a-4789-8abc-def012345678", "")).toThrow();
+    const t = issueClaimToken("3f1e2d4c-5b6a-4789-8abc-def012345678", S);
+    expect(verifyClaimToken(t, "")).toBeNull();
+    expect(verifyClaimToken(t, S.slice(0, 31))).toBeNull();
+  });
+});
