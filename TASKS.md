@@ -245,7 +245,7 @@
 - **Target Files:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md`, `specs/PRD.md`, release/readiness docs that currently claim or omit the account surface.
 - **Change:** Record one explicit owner decision: integrate the accepted account architecture into the production release, or defer the account and remove it from production release claims. Do not treat the standalone localStorage prototype as production evidence.
 - **Done when:** One decision is recorded with owner, rationale, release impact, and acceptance boundary; every canonical product/release document agrees; implementation tasks are added only if integration is chosen.
-- **Status:** `[ ]` **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
+- **Status:** `[~]` **2026-10-15: owner directed LOCAL development, and confirmed it holds "sampai final" (OD-5)** ("sambil kita develop local kebutuhan akun user (pembeli)") — spec carried onto `main`'s path (`specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §1–15 from `8dc12d7`, §17 plan), implementation tasks in **Stage 10**. **Production release is still undecided** (spec §17.7 OD-5); ADR 0016 stays PROPOSED. Earlier: **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
 
 ### Task 5.9: Make Multi-Store Selection Explicit and Deterministic
 - **Requirement:** `F-T10`
@@ -970,6 +970,15 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
 - **Done when:** on a machine whose clock is past the anchor, `npm run seed:recent -w @tokophi/db` is enough to make an admin save succeed; no agent has to hand-edit `stores` to drive a write path.
 - **Status:** `[x]` **DONE 2026-09-09** — finding first: `seed.ts` was ALREADY relative (`fromNow(20)` on `batiknusantara`, `baa70c6`); the `2026-08-04` on the dev DB was "seeded 2026-07-15 + 20 days" rot, so the main seed is untouched and every deliberately overdue/trial/VIP store keeps its shape. `seed-recent.ts` gained `seedBillingPeriod(exec, storeId)` — ONE idempotent UPDATE `set current_period_end = now() + 30 days where id = $1 and current_period_end < now()` — run first by `main()`, plus an `import.meta.url` entrypoint guard so importing the module cannot run the top-up. `packages/db/src/seed-recent-billing.test.ts` (6 real-Postgres tests, verdict from `computeBilling()` itself; 3 mutations → 3 reds). Dev DB: `batiknusantara` `2026-08-04` → `2026-10-09` after one `seed:recent`; second run "masih aktif — tidak disentuh"; the other 7 stores byte-identical. No migration needed (`verify-migrations` ✓). AGENTS.md note added by the parent.
 
+### Task 8.38: Platform Messaging Channel — One Sender for WhatsApp/SMS (owner-gated)
+- **Requirement:** `MSG-1`
+- **Tracing:** owner 2026-10-15 — *"api wa ini dan sms belum aku urus"*, *"untuk wa dan sms nanti aja masuk task"*. A task, not a PRD, until the owner picks a provider.
+- **Target Files:** `packages/lib/src/messaging.ts` (new; the `OtpSender` seam in `buyer-otp.ts` becomes one use of it), its test, the provider's env names in `.env.example`; callers later: account OTP (Task 10.14), order/shipping notices, abandoned-cart + CRM follow-up (today `wa.me` links opened by the seller), affiliate notices (Stage 9).
+- **Change:** one `send({ to, template, params })` interface with a dev stub that prints locally and **refuses in a production build**; one provider adapter once chosen; per-recipient rate limit through `rate-limit-store`; no message body or code in logs.
+- **Owner steps first (all UNVERIFIED — to be checked against the chosen provider's official documentation before any code):** (1) choose WhatsApp Business Platform (directly or via a provider) and/or an SMS vendor, and the budget; (2) complete the provider's business verification; (3) register the sender (WhatsApp business phone number / SMS sender ID); (4) get the message templates approved — OTP/authentication, order status, follow-up; (5) put the credentials into `secrets-env`, never into the repo.
+- **Done when:** with the chosen provider's sandbox/test credentials, a test sends one OTP template and one order-status template to the owner's own number and records the provider's message id; with no provider configured a production build refuses to send (unit test).
+- **Status:** `[ ]` **BLOCKED on the owner** — no provider chosen, no account, no credentials (2026-10-15).
+
 ## Stage 9: Store Affiliate Programme
 
 Spec + owner decisions: [`specs/AFFILIATE_SPEC.md`](specs/AFFILIATE_SPEC.md) (PRD v1.1 2026-10-15, requirements `F-A1`–`F-A17`,
@@ -1088,3 +1097,114 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 - **Depends On:** Task 9.4; the platform messaging channel (WhatsApp/SMS — owner 2026-10-15: "nanti aja masuk task").
 - **Done when:** approving an affiliate queues one message; a send failure does not undo the approval.
 - **Status:** `[ ]` **BLOCKED — no messaging provider.**
+
+## Stage 10: TokoΦ Account — Buyer Account (phased)
+
+Spec/PRD: `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §17 **rev 2** (requirements `ACC-1`…`ACC-14`, decisions D-1…D-5, owner questions OD-1…OD-7). **Phase 1 needs no messaging provider** (Google sign-in + order claim token); phase 2 = phone OTP after Task 8.38; phase 3 = affiliate binding after Stage 9 merges. Built locally only; production is Task 5.8. ⚠️ **No migration until `feat/store-affiliate` (`0116`) is on `main`** — the buyer migration takes the next number after it, re-checked against `origin/main`'s journal at the time.
+
+Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 → 10.7 → 10.8 → 10.4 → 10.9 → 10.10 → 10.11.
+
+### Task 10.1: OTP Primitives and the Delivery Seam (`@tokophi/lib/buyer-otp`)
+- **Requirement:** `ACC-1 (constraints: ACC-2)`
+- **Target Files:** `packages/lib/src/buyer-otp.ts`, `packages/lib/src/buyer-otp.test.ts`, `packages/lib/package.json`
+- **Change:** Six-digit code from the CSPRNG; stored form is an HMAC bound to phone + secret; `checkOtp` refuses malformed → consumed → expired → locked before comparing (constant-time); 60 s resend cooldown; `OtpSender` interface with a dev stub that throws in a production build.
+- **Done when:** `vitest run packages/lib/src/buyer-otp.test.ts` passes and covers right/wrong/expired/consumed/locked, the refusal order, the cooldown and the production refusal.
+- **Status:** `[x]` **DONE 2026-10-15** — 7/7 tests; no migration, no caller yet.
+
+### Task 10.12: Lift Google Sign-in into `@tokophi/lib` (admin keeps working)
+- **Requirement:** `ACC-10`
+- **Target Files:** `packages/lib/src/google-oauth.ts` (new) + test, `packages/lib/package.json`, `apps/admin/lib/google.ts` (re-exports / thin wrapper), `apps/admin/app/api/auth/google/{start,callback}/route.ts` (imports only)
+- **Change:** move `googleConfig`-style config reading, `authorizeUrl` and `exchangeCode` (JWKS verify, issuer + audience, `email_verified`) into the shared package unchanged in behaviour, parameterised by redirect URI; admin imports them. No new dependency (`jose` is already used).
+- **Done when:** a unit test builds the authorize URL (exact params) and rejects an id_token with the wrong audience/issuer using a locally signed JWKS; `tsc -p apps/admin` 0 and the admin suite green — the Seller Google login path is byte-for-byte the same URL as before.
+- **Status:** `[x]` **DONE 2026-10-15** — `packages/lib/src/google-oauth.ts` (+ `newOAuthState` / `stateMatches`, `verifyIdToken` with injectable keys); admin start/callback/login/daftar import it, `apps/admin/lib/google.ts` deleted. `google-oauth.test.ts` 5/5 (exact authorize URL as before, per-app redirect variable, state, local-JWKS verify: wrong aud/iss/key/missing sub, `email_verified` only as boolean true). The lost `import "server-only"` is replaced by `test/google-oauth-server-only.test.ts` (no `"use client"` file may import it; mutation-proved red). Not driven against real Google.
+
+### Task 10.2: Buyer Account Schema — One Idempotent Migration (phase 1 tables)
+- **Requirement:** `ACC-10 (constraints: ACC-3, ACC-6…ACC-8, ACC-11, ACC-12)`
+- **Target Files:** `packages/db/drizzle/<next>_buyer_account.sql` + journal, `packages/db/src/schema.ts`, `specs/docs/SCHEMA.md`, `schema-indexes.test.ts`
+- **Change:** `buyer_accounts`, `buyer_sessions`, `buyer_store_links`, `buyer_order_claims` (unique `order_id`), `buyer_addresses` per spec §17.9 — hand-written and idempotent (AGENTS.md); RLS policies on the two tables with `store_id`. `buyer_otp_challenges` is **not** in this migration (phase 2).
+- **Done when:** migration applies twice on a branch DB (`tokophi_buyer`), `verify-migrations` ✓, `verify-rls` counts both new store-scoped tables, doc counts updated.
+- **Status:** `[ ]` **BLOCKED** on `0116` reaching `main`.
+
+### Task 10.3: `apps/account` Scaffold, Google Sign-in and Sign-out
+- **Requirement:** `ACC-10`
+- **Target Files:** `apps/account/**`, root `package.json` scripts, `docker-compose.yml` (dev only)
+- **Change:** Astro SSR app per D-1; `/masuk` → Google (shared helper, account redirect URI, `state` cookie) → callback finds/creates `buyer_accounts` by `sub` → `buyer_sessions` row + `tphi_account` cookie (D-5); sign-out revokes the row. Feature-flagged: no Google env ⇒ no button, no crash.
+- **Done when:** a real-Postgres test drives callback success (twice → one account, two sessions) and every refusal of ACC-10 (state mismatch, `error`, unverified email, failed exchange → no row, no cookie); a browser run signs in with a localhost Google test client at 390 and 1280 px with 0 console errors.
+- **Status:** `[ ]` — needs 10.2, 10.12, owner OD-2 and OD-7 (a localhost redirect URI on a Google client).
+
+### Task 10.13: Claim Token — Issued by the Order API, Verified by the Account
+- **Requirement:** `ACC-13`
+- **Target Files:** `packages/lib/src/claim-token.ts` (new) + test, `apps/admin/app/api/public/order/route.ts` (one added response field), `.env.example` (`ACCOUNT_CLAIM_SECRET`)
+- **Change:** D-3 — `issueClaimToken(orderId, now)` / `verifyClaimToken(token, now)` (HMAC-SHA256, constant-time, 30-day validity); the order API adds `claimToken` beside `orderNumber` on every success response, and only when the secret is set.
+- **Done when:** unit tests: a token verifies for its order only, fails after 30 days, fails on any flipped byte or a different secret; the order-route tests still pass with every existing field unchanged and `claimToken` present (secret set) / absent (unset).
+- **Status:** `[x]` **DONE 2026-10-15** — `packages/lib/src/claim-token.ts` 6/6 tests (own order only, 30-day expiry, future-dated refused, other secret, every single-char flip, forged payload, malformed). `/api/public/order` adds `claimToken` to the two `ok: true` answers only (COD + gateway success), issuance wrapped so it can never fail a written order; `route.test.ts` 7/7 on `tokophi_buyer_account_test` (absent without the secret; present + verifies for the created order with it; absent on the replay 409; mutation-proved). **Not done:** `.env.example` line for `ACCOUNT_CLAIM_SECRET` (the file is behind the workstation secret-read guard — add it by hand). R3: independent review before merge.
+
+### Task 10.4: Sessions List and "Keluar dari Perangkat Lain"
+- **Requirement:** `ACC-3`
+- **Target Files:** `apps/account/src/pages/akun/**`, its data module + test
+- **Change:** list the buyer's live sessions; revoke-others in one `update … where buyer_id = $1 and id <> $2`.
+- **Done when:** test with two sessions: after revoke-others the second cookie is signed out on its next request, the first still works.
+- **Status:** `[ ]`
+
+### Task 10.5: Claim an Order with the Token and Link the Store (with Consent)
+- **Requirement:** `ACC-11`
+- **Target Files:** `apps/account/src/pages/klaim/**`, claim/link data module + test
+- **Change:** `/klaim?t=…` (sign-in first if needed, the token survives the round trip) → consent screen naming the store and what is shared → one transaction inserts `buyer_order_claims` and creates/re-activates `buyer_store_links`; one message for every refusal.
+- **Done when:** real-Postgres test: valid token + consent → one claim + one active link; tampered, expired, other-order, declined, already-claimed-by-another → no row and the identical message; same buyer again → no-op success.
+- **Status:** `[ ]` — needs 10.2, 10.3, 10.13.
+
+### Task 10.6: Order Hub and Order Detail — Claimed Orders Only
+- **Requirement:** `ACC-12`
+- **Target Files:** `apps/account/src/pages/pesanan/**`, hub data module + test
+- **Change:** orders reached only through `buyer_order_claims` joined to an `active` link, projected through an explicit allowlist (spec §3).
+- **Done when:** test: claims on one order in A and one in B, an unclaimed A order of the same customer and a store C sharing the phone → exactly the two claimed orders listed; unclaimed/other-store order by id or number → not-found; revoked B link drops B; no excluded field in the response.
+- **Status:** `[ ]`
+
+### Task 10.7: "Toko" — Linked Stores with a Way Back
+- **Requirement:** `ACC-6`
+- **Target Files:** `apps/account/src/pages/toko/**`
+- **Change:** stores derived from claimed orders with an active link; each opens its canonical storefront host.
+- **Done when:** test: exactly the linked stores appear, each with its storefront URL.
+- **Status:** `[ ]`
+
+### Task 10.8: Saved Addresses (max 10, one primary, snapshots untouched)
+- **Requirement:** `ACC-7`
+- **Target Files:** `apps/account/src/pages/alamat/**`, address data module + test
+- **Change:** CRUD with the KiriminAja district id; primary flip in one transaction; 11th refused.
+- **Done when:** test: editing an address used by an order leaves that order's `ship_*` unchanged; 11th insert refused; exactly one primary.
+- **Status:** `[ ]`
+
+### Task 10.9: Unlink a Store
+- **Requirement:** `ACC-8`
+- **Target Files:** `apps/account/src/pages/toko/**`, link data module + test
+- **Change:** set the link `revoked`; nothing store-owned is written; claims stay recorded but are hidden while the link is revoked.
+- **Done when:** test: the store leaves the hub; `orders`/`customers`/`payments` counts for that store identical before/after.
+- **Status:** `[ ]`
+
+### Task 10.10: "Simpan ke Akun TokoΦ" on the Checkout Success Page
+- **Requirement:** `ACC-13`
+- **Target Files:** `apps/storefront/src/pages/checkout/sukses.astro` (its client script), `apps/storefront/src/pages/thanks.astro`, storefront test
+- **Change:** when the kept order carries `claimToken` and `PUBLIC_ACCOUNT_URL` is set, render one link `${PUBLIC_ACCOUNT_URL}/klaim?t=…`; otherwise render exactly what renders today.
+- **Done when:** storefront verify suite green; a browser checkout on the branch DB shows the link with a token that verifies for that order; with the env unset the page HTML is unchanged.
+- **Status:** `[ ]` — needs 10.13.
+
+### Task 10.11: Browser Proof and the Tenant-Negative Sweep (phase 1)
+- **Requirement:** `ACC-12 (constraints: ACC-3, ACC-6…ACC-8, ACC-10, ACC-11, ACC-13)`
+- **Target Files:** `apps/account/scripts/check-*.mjs`, `BUILD-LOG.md`, `specs/docs/STATUS.md`
+- **Change:** drive every phase-1 screen at 390 and 1280 px, keyboard and both themes; one sweep proving a buyer can never read an unclaimed or unlinked order by id or number.
+- **Done when:** checks pass on a local build against the branch DB; STATUS.md records the phase-1 checkpoint.
+- **Status:** `[ ]`
+
+### Task 10.14: Phase 2 — Phone OTP Sign-in, Add Phone, Full Linked-Store History
+- **Requirement:** `ACC-1 (constraints: ACC-2, ACC-5)`
+- **Target Files:** migration `<next>_buyer_otp.sql` (`buyer_otp_challenges`), `apps/account/src/pages/masuk/**`, `apps/account/src/pages/akun/**`, tests
+- **Change:** wire Task 10.1's primitive to the Task 8.38 sender; sign in by phone, or verify a phone on a Google account; with a verified phone the hub widens to ACC-5.
+- **Done when:** real-Postgres tests for ACC-1/ACC-2 acceptance and the ACC-5 negative case (store C with the same phone and no link stays hidden); one real OTP delivered through the chosen provider's test credentials.
+- **Status:** `[ ]` **BLOCKED** on Task 8.38.
+
+### Task 10.15: Phase 3 — Affiliate Signs In with the Buyer Account
+- **Requirement:** `ACC-14`
+- **Target Files:** migration (`store_affiliates.buyer_id`), Seller `/affiliate` (issue invitation), `apps/account/src/pages/komisi/**`, tests
+- **Change:** on approval the seller can share a one-use invitation link; accepting it binds the affiliate to the account; "Komisi" lists that affiliate's commissions for that store only.
+- **Done when:** test: binding via a valid invitation shows store A's commissions only; another affiliate's invitation or an already-bound one creates nothing; no binding by email/phone match.
+- **Status:** `[ ]` **BLOCKED** on Stage 9 (`feat/store-affiliate`) reaching `main` and owner OD-3.

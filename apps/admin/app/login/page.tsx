@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { googleEnabled } from "@/lib/google";
+import { googleEnabled } from "@tokophi/lib/google-oauth";
 import { FrontDoorShell } from "@/components/admin/front-door/front-door-shell";
 import { LoginForm } from "./login-form";
 

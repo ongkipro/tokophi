@@ -73,6 +73,7 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   DATABASE_RUNTIME_ROLE: { required: false, why: "Peran PostgreSQL runtime (tokophi_app vs owner); kosong = ikuti kredensial koneksi." },
   DEV_ALLOWED_ORIGINS: { required: false, why: "Hanya `next dev`: host lain (mis. IP Tailscale) yang boleh memuat resource dev. Tidak dipakai di produksi." },
   AFFILIATE_LINK_SECRET: { required: false, why: "Menandatangani link dashboard affiliate (admin + storefront, nilai SAMA). Kosong atau < 32 karakter = tombol link disembunyikan dan halaman /affiliate/saya 404." },
+  ACCOUNT_CLAIM_SECRET: { required: false, why: "Menandatangani token klaim pesanan (akun pembeli). Kosong atau < 32 karakter = token tidak dibuat; fitur klaim mati." },
   CHECKOUT_RECOVERY_SECRET: { required: false, why: "Menandatangani tautan pemulihan keranjang; ada fallback ke AUTH_SECRET." },
   NODE_ENV: { required: false, why: "Disetel runtime, bukan oleh operator — didaftar agar sensusnya lengkap." },
 };

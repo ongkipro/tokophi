@@ -132,7 +132,7 @@ const SOURCE = /\.(?:ts|tsx|mts|cts|cjs|astro|mjs|js|jsx|html|mdx)$/;
 // application code — so such a file cannot BE the second mint an app reaches. A standalone ops script
 // that mints a credential is a real risk and a different guard; it is not this one.
 const INERT_EXTENSIONS = new Set([
-  ".webp", ".png", ".svg", ".woff2", ".csv", ".txt", // assets
+  ".webp", ".png", ".jpg", ".svg", ".woff2", ".csv", ".txt", // assets (".jpg": prototypes/tokophi-account fixtures)
   ".json", ".sql", ".md", ".css", ".sh", ".yaml", ".yml", // config, migrations, prose, shell
   ".conf", // nginx server config (apps/docs/nginx.conf) — directives, never executed as JavaScript
 ]);
