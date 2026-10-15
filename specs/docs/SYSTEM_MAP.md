@@ -31,7 +31,7 @@ TokoΦ is an npm-workspaces monorepo. Four deployable surfaces, five shared pack
 | Package | What it is | Consumed by |
 |---|---|---|
 | `@tokophi/db` | Drizzle schema (`src/schema.ts`, 971 lines), `db` client, `withTenant()` (RLS), migrations, seed. | admin, super-admin, storefront |
-| `@tokophi/lib` | `format` (IDR/num/timeAgo), `billing`, `autolaris` (PSP client), `kiriminaja` (courier client), `cache` (+ in-process `rateLimit`), `colors`, `couriers`, `totp`, `integration-status`, `payment-fees`, **`buyer-otp`** (2026-10-15 — buyer-account sign-in code: CSPRNG code, phone-bound HMAC as the stored form, refusal order, 60 s cooldown, `OtpSender` seam with a dev-only stub; no caller yet — spec `TOKOPHI_ACCOUNT_SPEC.md` §17). | admin, super-admin, storefront |
+| `@tokophi/lib` | `format` (IDR/num/timeAgo), `billing`, `autolaris` (PSP client), `kiriminaja` (courier client), `cache` (+ in-process `rateLimit`), `colors`, `couriers`, `totp`, `integration-status`, `payment-fees`, **`buyer-otp`** (2026-10-15 — buyer-account sign-in code: CSPRNG code, phone-bound HMAC as the stored form, refusal order, 60 s cooldown, `OtpSender` seam with a dev-only stub; no caller yet — wired in account phase 2 after root Task 8.38, spec `TOKOPHI_ACCOUNT_SPEC.md` §17). | admin, super-admin, storefront |
 | `@tokophi/ui` | 22 shadcn primitives on **Base UI** (not Radix) + Tailwind v4 tokens. | super-admin (admin still has its own local copy) |
 | `@tokophi/sections` | **Types only, zero runtime.** The Store-Builder section contract (`SECTION_TYPES`, `SECTION_DEFAULTS`, `StoredTemplateData` = the shape of `page_templates.sections`). | admin (Puck editor) **and** storefront (Astro renderer) — this is what stops the two from drifting. |
 

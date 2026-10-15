@@ -6,11 +6,11 @@
 > "build locally"; whether and when it ships is still Task 5.8. [ADR 0016](../decisions/0016-global-buyer-account.md)
 > remains **PROPOSED** — its draft lives on `feature/buyer-account-local` (`8dc12d7`) and is not
 > accepted here. Sections 1–15 are that branch's 2026-08-12 draft, carried verbatim as the working
-> product contract; §17 is the implementation plan against `main` as of 2026-10-15.
+> product contract; **§17 is the PRD (rev 2, 2026-10-15): phases, `ACC-*` requirements, decisions and owner questions against `main`. Where §1–15 assume a phone-verified account or phone-match claims, §17 wins: phase 1 is Google sign-in + an order-specific claim token, phone comes in phase 2.**
 >
 > **Canonical ownership:** This document owns global buyer-account behavior, object lifecycle, buyer/merchant projections, UI/UX contracts, and the account implementation plan (§17). [`SECURITY.md`](SECURITY.md) owns authentication/control requirements; [`PRIVACY-COMPLIANCE.md`](PRIVACY-COMPLIANCE.md) owns applicability, consent/rights/retention gates (still a stub); `packages/db/src/schema.ts` owns implemented storage; [`../openapi/account.yaml`](../openapi/account.yaml) will own HTTP operations once written. Execution state lives in root `TASKS.md` Stage 10.
 >
-> **Superseded draft:** `PRD-BUYER-ACCOUNT.md` (account-ux-local branch, 2026-09-26) and its copy in [`tasks/2026-09-26-buyer-account-prd.md`](tasks/2026-09-26-buyer-account-prd.md) are research input, not a second PRD. Where they disagree with this file, this file wins — see §17.6.
+> **Superseded draft:** `PRD-BUYER-ACCOUNT.md` (account-ux-local branch, 2026-09-26) and its copy in [`tasks/2026-09-26-buyer-account-prd.md`](tasks/2026-09-26-buyer-account-prd.md) are research input, not a second PRD. Where they disagree with this file, this file wins — see §17.11.
 >
 > **Prototype:** [`../../prototypes/tokophi-account/`](../../prototypes/tokophi-account/) (fixture-only; design notes in its `DESIGN.md`). Prototype acceptance is UX evidence only, never auth, privacy, API or database evidence.
 
@@ -538,9 +538,25 @@ Implemented merchant sketch:
 
 **COD evidence boundary:** Production currently maps courier outcomes to canonical order states and may persist a generic return reason, but it does not preserve enough raw provider evidence to attribute buyer COD refusal safely. Codes `310` and `311`, provider event identity, occurrence time, source order, review state, expiry, appeal, audit, and policy version must be implemented and accepted before any score or restriction can run.
 
-## 17. Implementation plan — local phase 1 (written 2026-10-15 against `main` `702e957d`)
+## 17. PRD — buyer account, phased delivery (rev 2, 2026-10-15)
 
-### 17.1 What `main` already has, and what it does not
+> **Rev 2, owner direction 2026-10-15:** *"api wa ini dan sms belum aku urus"* → *"prd baru sekalian
+> affiliate dan user akun kau buat dan sempurnakan, untuk wa dan sms nanti aja masuk task"*. No
+> WhatsApp or SMS provider exists, so **phase 1 must need none**: Google sign-in + an order-specific
+> claim token. Phone OTP (ACC-1/ACC-2) moves to phase 2 behind the platform messaging task (root
+> `TASKS.md` Task 8.38). Rev 1 (same day, `3c667cb0`) is superseded where this section says so; IDs
+> are never renumbered or reused.
+
+### 17.1 Overview
+
+A buyer who ordered from one or more TokoΦ shops gets one place — `account.tokophi.com` (proposed,
+OD-2) — to see those orders, track them, find the shop again and keep delivery addresses, without
+TokoΦ ever showing one merchant another merchant's buyer, and without making login a condition of
+checkout. Why now: the owner directed local development (2026-10-15), and the store affiliate
+programme (Stage 9, spec `specs/AFFILIATE_SPEC.md` on branch `feat/store-affiliate`) needs a
+sign-in for affiliates to see their own commissions — one identity serves both.
+
+### 17.2 What `main` already has, and what it does not
 
 | Need | On `main` today | Reuse |
 |---|---|---|
@@ -551,79 +567,171 @@ Implemented merchant sketch:
 | Revocation from a row, every request | Super Admin rule "rank from the row, never the cookie" | The session JWT carries a session id; the `buyer_sessions` row decides. |
 | Store customer | `customers` per `store_id`, `registered_at` NULL = guest, `password_hash` dormant | Never merged across stores; the link points at it (§3). |
 | Order snapshot | `orders.ship_*` frozen at purchase (0042) | REQ-019 invariant is already true; the hub reads the snapshot. |
-| OTP delivery | **nothing** (no WhatsApp/SMS provider anywhere) | `OtpSender` seam + dev stub (`@tokophi/lib/buyer-otp`, Task 10.1). |
-| Buyer identity, sessions, links, addresses | **nothing** | New tables (§17.4), one migration after `0116` lands. |
-| A host for the account UI | **nothing** | Proposed `apps/account` (§17.3). |
+| OTP delivery | **nothing** (no WhatsApp/SMS provider anywhere; owner has not set one up) | `OtpSender` seam + dev stub (`@tokophi/lib/buyer-otp`, Task 10.1) — wired in phase 2 only. |
+| Google sign-in | `apps/admin/lib/google.ts` (`authorizeUrl`, `exchangeCode`: code flow, `state` cookie, id_token verified against Google JWKS, `email_verified` required) | Lifted into `@tokophi/lib` so admin and account share one implementation (Task 10.12). |
+| Order-specific proof | **nothing** — `/checkout/sukses` renders the order the checkout script kept in `localStorage` from the order API response; `/thanks` (the `/promo` funnel) reads the number from the query | Signed claim token (§17.8 D-3, Task 10.13). |
+| Buyer identity, sessions, links, addresses | **nothing** | New tables (§17.9), one migration after `0116` lands. |
+| A host for the account UI | **nothing** | Proposed `apps/account` (§17.8 D-1). |
 
-### 17.2 Requirements (phase 1)
+### 17.3 Users and current workaround
 
-IDs are `ACC-*`; each task in root `TASKS.md` Stage 10 traces to exactly one. All are **Must** unless marked.
+| Role | Job to be done | Current workaround | Evidence status |
+|---|---|---|---|
+| Guest buyer | Buy without registering | Checkout as today; nothing to sign up for | Observed (`main`: guest-only checkout) |
+| Returning buyer | Find "my order" again, check its status, reach the shop | Keeps the WhatsApp chat or the success-page tab; asks the seller | Assumed — no buyer research beyond the 2026-09-26 draft |
+| Multi-store buyer | See orders from several TokoΦ shops in one list | None — each shop is a separate site | Assumed |
+| Store affiliate | See own referral commissions | Asks the seller over WhatsApp; the affiliate has no login (Stage 9 is form-only) | Observed (`feat/store-affiliate`) |
+| Merchant | Serve its own buyers | Seller panel `/pelanggan`; must never see cross-store data | Observed |
 
-- **ACC-1** (event) When a visitor submits a valid Indonesian mobile number, the system shall create a sign-in challenge storing only `hashOtp(phone, code)`, deliver the 6-digit code through the configured `OtpSender`, and on a correct code within 5 minutes create or reuse the `buyer_accounts` row for that phone and start a session.
+First-use journey (phase 1): checkout → success page → "Simpan ke Akun TokoΦ" → Google sign-in →
+consent screen naming the shop → order appears in "Pesanan".
+
+### 17.4 Product, audience and market context
+
+- Country-specific: Indonesia; Bahasa Indonesia UI, IDR, `id-ID` (NF-4); mobile-first (390 px).
+- Indonesian buyers are phone/WhatsApp-first. Google sign-in is chosen for phase 1 **because it needs
+  no messaging provider**, not because it is the preferred identity; phone becomes the second factor
+  of identity in phase 2. Assumption, owner-visible: a meaningful share of buyers will accept Google
+  sign-in. Not measured.
+- Trust: no payment instrument is ever stored (§1 non-goals); a phone match alone never reveals an
+  order (§5E.5).
+
+### 17.5 Goals, success measure, non-goals
+
+**Goals**
+- G-1: a buyer can reach an order they placed from any TokoΦ shop after closing the success page, without contacting the seller.
+- G-2: no merchant can see another merchant's buyers or orders through the account (0 cross-tenant reads in the negative sweep).
+- G-3: phase 1 ships locally with zero dependency on a WhatsApp/SMS provider.
+- G-4: a store affiliate can sign in with the same account to see their commissions (phase 3).
+
+**Success measure** (read 30 days after a production launch, which is still undecided — OD-5):
+share of orders claimed into an account; baseline 0 % (no account exists), target set by the owner
+at launch. Local phase is judged by the acceptance criteria below, not by a metric.
+
+**Non-goals (phase 1–3)** — everything in §1 non-goals, plus: phone OTP before Task 8.38 is done;
+SMS/WhatsApp notifications; returning-buyer checkout prefill and PKCE store authorisation (§5B/F);
+notification centre (§5H); voucher handoff (§5I); COD standing (gate 13); account recovery intake;
+email sending of any kind (the platform has no email provider either).
+
+### 17.6 Core features and phases
+
+| Feature | Phase | Requirements |
+|---|---|---|
+| Google sign-in, sessions, sign-out, revoke other devices | 1 | ACC-10, ACC-3 |
+| Claim link on the success page (signed, order-specific) | 1 | ACC-13 |
+| Claim an order + consent to link its store | 1 | ACC-11 |
+| "Pesanan" — claimed orders only | 1 | ACC-12 |
+| "Toko" — linked stores with a way back | 1 | ACC-6 |
+| Saved addresses | 1 | ACC-7 |
+| Unlink a store | 1 | ACC-8 |
+| Phone OTP sign-in / add phone to an account | 2 (blocked on Task 8.38) | ACC-1, ACC-2 |
+| Full history of a linked store for a phone-verified buyer | 2 | ACC-5 |
+| Affiliate sees own commissions with the same account | 3 (blocked on Stage 9 merge + OD-3) | ACC-14 |
+
+### 17.7 Requirements
+
+IDs `ACC-*`, EARS, MoSCoW. **Rev-1 rows keep their IDs**; changed ones are marked.
+
+- **ACC-1** (Must, phase 2, event) When a visitor submits a valid Indonesian mobile number, the system shall create a sign-in challenge storing only `hashOtp(phone, code)`, deliver the 6-digit code through the configured `OtpSender`, and on a correct code within 5 minutes create or reuse the `buyer_accounts` row for that phone and start a session. *(Rev 2: moved to phase 2 — needs Task 8.38.)*
   - Acceptance: Given phone `0812…`, When the buyer submits the code printed by the dev sender, Then one `buyer_accounts` row with `phone = '62812…'` exists, a `buyer_sessions` row exists, the HttpOnly account cookie is set, and the challenge's `consumed_at` is stamped.
-- **ACC-2** (unwanted) If a code is wrong, expired, already used, or the challenge has 5 wrong attempts, then the system shall refuse it without revealing which, start no session, and refuse a resend within 60 s of the last one.
+- **ACC-2** (Must, phase 2, unwanted) If a code is wrong, expired, already used, or the challenge has 5 wrong attempts, then the system shall refuse it without revealing which, start no session, and refuse a resend within 60 s of the last one.
   - Acceptance: Given a live challenge, When 5 wrong codes are sent, Then the 6th submission — even the correct code — is refused and no session row exists; a resend inside 60 s is refused with the remaining seconds.
-- **ACC-3** (event) When the buyer chooses "Keluar dari perangkat lain", the system shall revoke every other session of that account and keep the current one.
+- **ACC-3** (Must, phase 1, event) When the buyer chooses "Keluar dari perangkat lain", the system shall revoke every other session of that account and keep the current one.
   - Acceptance: Given two sessions, When one revokes the others, Then the other cookie's next request is signed out and the current one still works.
-- **ACC-4** (event) When a signed-in buyer submits an order number whose order phone equals the buyer's verified phone, and accepts the store-link consent, the system shall create (or re-activate) the `buyer_store_links` row for that store and customer.
-  - Acceptance: Given order `PHI-…` placed with the buyer's phone, When they claim it and consent, Then an `active` link exists for that store; a different phone, an unknown number, or declined consent creates nothing and the message does not distinguish "unknown" from "not yours".
-- **ACC-5** (state) While a store link is `active`, the system shall list that store's orders for the linked customer in the hub, using only the allowlisted projection of §3 (no notes, tags, fees, ledger, provider ids).
-  - Acceptance: Given links to stores A and B, When the hub loads, Then orders from A and B appear and none from store C (which shares the phone but has no link); the response body contains none of the excluded fields.
-- **ACC-6** (state, Should) While links exist, the system shall list the linked stores ("Toko") derived from eligible linked orders, each opening the store's canonical storefront.
+- **ACC-4** — **SUPERSEDED by ACC-11 (rev 2).** Claim by "verified phone = order phone" needs phone verification, which needs a provider; the token claim answers OD-4 instead.
+- **ACC-5** (Must, phase 2, state) While a store link is `active` **and** the buyer's verified phone equals that store customer's phone, the system shall list every order of that customer in the hub, through the allowlisted projection of §3 (no notes, tags, fees, ledger, provider ids). *(Rev 2: phase 2, adds the phone condition; phase 1 uses ACC-12.)*
+  - Acceptance: Given links to stores A and B and a verified phone matching both customers, When the hub loads, Then all A and B orders appear and none from store C (same phone, no link); the response body contains none of the excluded fields.
+- **ACC-6** (Should, phase 1, state) While links exist, the system shall list the linked stores ("Toko") derived from the buyer's claimed orders, each opening the store's canonical storefront.
   - Acceptance: Given links to A and B, When Toko opens, Then exactly A and B appear with their storefront URL.
-- **ACC-7** (ubiquitous) The system shall let the buyer keep up to 10 saved addresses, each with the KiriminAja district id, and one primary; editing or deleting one never changes an order snapshot.
+- **ACC-7** (Must, phase 1, ubiquitous) The system shall let the buyer keep up to 10 saved addresses, each with the KiriminAja district id, and one primary; editing or deleting one never changes an order snapshot.
   - Acceptance: Given an order shipped to address X, When X is edited, Then the order's `ship_*` columns are unchanged; an 11th address is refused.
-- **ACC-8** (event) When the buyer unlinks a store, the system shall set the link `revoked`, stop showing that store's orders, and leave every store-owned row unchanged.
+- **ACC-8** (Must, phase 1, event) When the buyer unlinks a store, the system shall set the link `revoked`, stop showing that store's orders, and leave every store-owned row unchanged.
   - Acceptance: Given an active link, When unlinked, Then the hub drops the store and `orders`/`customers`/`payments` row counts for that store are identical before and after.
-- **ACC-9** (event, Should) When a guest checkout completes, the success page shall offer an optional "Simpan ke Akun TokoΦ" link to the account origin, and guest checkout shall stay exactly as it is.
-  - Acceptance: Given a guest order, When the success page renders, Then the link is present and the order and checkout flow are byte-for-byte unchanged with the link absent or broken.
+- **ACC-9** — **SUPERSEDED by ACC-13 (rev 2).** The success-page offer now carries the claim token; a bare link proves nothing.
+- **ACC-10** (Must, phase 1, event) When a visitor completes Google sign-in and Google's id_token verifies (issuer, audience, signature) with `email_verified = true` and the returned `state` equals the state cookie, the system shall find the `buyer_accounts` row by Google `sub` (else create one holding `sub`, email and name) and start a session.
+  - Acceptance: Given a dev Google client, When the buyer signs in twice, Then exactly one `buyer_accounts` row exists for that `sub`, each sign-in creates a `buyer_sessions` row, and the `tphi_account` cookie is HttpOnly and host-only. A mismatched `state`, a Google `error`, an unverified email or a failed exchange creates no row and no cookie.
+- **ACC-11** (Must, phase 1, event) When a signed-in buyer opens a valid claim link and accepts the consent screen naming the store and what is shared, the system shall record the claim for that order and create (or re-activate) the `buyer_store_links` row for that store and customer.
+  - Acceptance: Given a valid token for order `PHI-…`, When the buyer consents, Then one `buyer_order_claims` row and one `active` link exist. A tampered, expired or wrong-order token, a declined consent, or an order already claimed by **another** buyer creates nothing and shows one identical message; the same buyer re-claiming is a no-op success.
+- **ACC-12** (Must, phase 1, state) While the buyer has claims, the hub shall list exactly the claimed orders whose store link is `active`, through the allowlisted projection of §3.
+  - Acceptance: Given claims on one order in A and one in B, and another A order of the same customer that was not claimed, When the hub loads, Then exactly the two claimed orders appear; revoking B's link drops B's order; no excluded field is in the response; requesting an unclaimed order by id or number returns not-found.
+- **ACC-13** (Must, phase 1, event) When a storefront order is created, the success page shall offer "Simpan ke Akun TokoΦ" carrying a claim token bound to that order (D-3); guest checkout and the order request/response contract stay unchanged except for the added token field.
+  - Acceptance: Given a guest order, When the success page renders, Then the link carries a token that verifies for that order id only and expires after 30 days; with the account origin env unset the page renders exactly as before; the order API's existing fields are byte-identical.
+- **ACC-14** (Should, phase 3, event) Where the store affiliate programme exists, when a signed-in buyer opens an affiliate invitation link issued by the seller on approval and accepts it, the system shall bind that affiliate record to the buyer account and show that affiliate's commissions for that store only.
+  - Acceptance: Given an approved affiliate in store A, When the buyer accepts A's invitation, Then the account shows A's commissions for that affiliate and nothing from store B; an invitation for another affiliate or an already-bound one creates nothing. Matching by email or phone alone binds nothing.
 
-Phase 2 (not planned in tasks yet): store authorization with PKCE + checkout prefill (§5B/F), notification center (§5H), voucher handoff (§5I), COD standing (gate 13), phone change, recovery intake, account closure.
 
-### 17.3 Architecture — proposal, owner decision OD-2
+### 17.8 Technical decisions (ADR-lite)
 
-- **Host: a new `apps/account`** (Astro SSR, `@astrojs/node` standalone, like `apps/storefront`; dev port 4329; proposed prod host `account.tokophi.com`, **not deployed**).
-  - Rejected — a route inside `apps/storefront`: every storefront request is tenant-resolved from `Host`, so its cookie would be per-shop; the account must be one origin across all shops (§10).
-  - Rejected — a route inside `apps/admin`: that origin carries the Seller session; mixing buyer and merchant cookies on `app.tokophi.com` widens the merchant surface for no gain.
-- **Database role: the owner connection (`db`)**, the same standing as the storefront and `/api/public/*` — a buyer is cross-tenant by definition, so there is no `store_id` to put in the GUC. Every query carries an explicit `buyer_id` predicate, and tenant rows are reached **only** through an `active` `buyer_store_links` join. Negative tests (ACC-5) are what hold this, not RLS.
-- **Session:** jose JWT (audience `tokophi-account`) in a host-only cookie `tphi_account`, carrying a `buyer_sessions.id`; the row is read on every request (revoked/absent ⇒ signed out).
+- **D-1 Host — new `apps/account`** (Astro SSR, `@astrojs/node` standalone like `apps/storefront`; dev port 4329; proposed prod host `account.tokophi.com`, **not deployed**; owner decision OD-2).
+  **Why:** one origin across every shop (§10). **Rejected:** a route in `apps/storefront` — every request there is tenant-resolved from `Host`, so its cookie would be per shop; a route in `apps/admin` — that origin carries the Seller session, and mixing buyer and merchant cookies on `app.tokophi.com` widens the merchant surface for no gain.
+  **Consequence:** a fifth deployable surface (compose service, Traefik router, DNS record) when production is decided.
+- **D-2 Google sign-in reuses the admin flow, not a library.** `authorizeUrl` / `exchangeCode` move from `apps/admin/lib/google.ts` into `@tokophi/lib` and both apps import them (Task 10.12). Same contract as today: authorization-code flow, random `state` in an HttpOnly cookie compared on return, id_token verified against Google's JWKS with issuer + audience, `email_verified` required. The account app has its **own** redirect URI; Google requires `redirect_uri` to "exactly match one of the authorized redirect URIs for the OAuth 2.0 client", HTTPS except localhost, no raw IP hosts (developers.google.com/identity/protocols/oauth2/web-server, read 2026-10-15) — so the owner adds the account callback to the existing client or creates a second one (OD-7). PKCE is **not** relied on: the confidential-client + `state` pattern already in production is kept.
+  **Consequence:** buyer and merchant identities stay separate tables (`buyer_accounts` vs `users`) even for the same Google account; a seller who also buys has two sessions on two origins, by design.
+- **D-3 Claim token — stateless HMAC, single claimant.** `token = base64url(orderId · issuedAt · HMAC-SHA256(ACCOUNT_CLAIM_SECRET, "order-claim:" ‖ orderId ‖ issuedAt))`, issued by `/api/public/order` as one added response field, kept by the checkout script with the rest of the order and placed in the success-page link (`/checkout/sukses` renders client-side from `localStorage`; the `/thanks` funnel gets it in its query); valid 30 days. No new table for issuance. **Single claimant** is enforced by `buyer_order_claims` (unique `order_id`): the first buyer to consent owns the claim; a forwarded link after that is refused. Verification is constant-time.
+  **Why:** answers OD-4 without a provider, and the proof is order-specific — unlike a phone match, which §5E.5 forbids as enumeration. **Rejected:** a random token stored per order (a migration on the money path's table for no extra guarantee); phone + order number (needs OTP).
+  **Consequence:** whoever holds the link before the buyer claims it can claim that **one** order (same exposure as the success-page URL today); it never grants other orders of that customer — that needs phase 2 phone verification (ACC-5). Secret rotation invalidates unclaimed links.
+- **D-4 Database role — owner connection.** A buyer is cross-tenant, so there is no `store_id` for the GUC. Every query carries an explicit `buyer_id` predicate and reaches tenant rows only through an `active` link **and** a claim (phase 1). Negative tests (ACC-12, Task 10.11) hold this, not RLS. `buyer_store_links` and `buyer_order_claims` have `store_id` and get RLS policies so a merchant-side read can only see its own store.
+- **D-5 Session** — jose JWT (audience `tokophi-account`) in host-only cookie `tphi_account`, carrying a `buyer_sessions.id`; the row is read on every request (revoked/absent ⇒ signed out), the Super Admin "rank from the row, never the cookie" rule.
 
-### 17.4 Data schema — proposed, one migration after `0116` is on `main`
+### 17.9 Data schema — proposed, one migration after `0116` is on `main`
 
 | Table | Columns | Notes |
 |---|---|---|
-| `buyer_accounts` | `id`, `phone` unique (canonical `62…`), `name`, `email`, `status` (`active`/`suspended`/`closed`), `created_at` | No `store_id`: platform-level. |
-| `buyer_otp_challenges` | `id`, `phone`, `code_hash`, `expires_at`, `attempts`, `consumed_at`, `sent_at` | Index `(phone, sent_at desc)`; rows older than a day are purged by the existing cron. |
-| `buyer_sessions` | `id`, `buyer_id`, `created_at`, `last_seen_at`, `revoked_at`, `user_agent` | Consumed with one `update … where revoked_at is null returning` per check. |
-| `buyer_store_links` | `buyer_id`, `store_id`, `customer_id`, `status`, `consent_version`, `consented_at`, `revoked_at`, `claim_method` | Unique `(buyer_id, store_id)`. **Has `store_id` → `verify-rls` will require an RLS policy**; give it one (`store_id = app_current_store_id()`) so a merchant read can only ever see its own store's links. |
-| `buyer_addresses` | `id`, `buyer_id`, `label`, `recipient`, `phone`, `address`, `district_id` (KiriminAja), `kelurahan`, `postal_code`, `is_primary` | Max 10 enforced in the action; one primary via partial unique index. |
+| `buyer_accounts` | `id`, `google_sub` unique nullable, `email`, `phone` unique nullable (canonical `62…`, set only by phase-2 verification), `phone_verified_at`, `name`, `status` (`active`/`suspended`/`closed`), `created_at` | No `store_id`. Check: at least one of `google_sub`, `phone`. |
+| `buyer_sessions` | `id`, `buyer_id`, `created_at`, `last_seen_at`, `revoked_at`, `user_agent` | |
+| `buyer_store_links` | `buyer_id`, `store_id`, `customer_id`, `status`, `consent_version`, `consented_at`, `revoked_at`, `claim_method` (`token` / `phone`) | Unique `(buyer_id, store_id)`; RLS `store_id = app_current_store_id()`. |
+| `buyer_order_claims` | `order_id` **unique**, `buyer_id`, `store_id`, `claimed_at` | Single claimant (D-3); RLS as above. |
+| `buyer_addresses` | `id`, `buyer_id`, `label`, `recipient`, `phone`, `address`, `district_id` (KiriminAja), `kelurahan`, `postal_code`, `is_primary` | Max 10 in the action; one primary via partial unique index. |
+| `buyer_otp_challenges` | `id`, `phone`, `code_hash`, `expires_at`, `attempts`, `consumed_at`, `sent_at` | **Phase 2 migration**, not in the first one. |
+| affiliate binding | `store_affiliates.buyer_id` nullable (table from `0116`) | **Phase 3**, after Stage 9 merges and OD-3. |
 
-### 17.5 OTP delivery
+### 17.10 Messaging dependency
 
-`OtpSender` (`@tokophi/lib/buyer-otp`) is the only seam. Local development uses `devOtpSender`, which prints the code to the server log and **throws in a production build**, so a missing provider fails loudly instead of logging live codes. The production provider (WhatsApp Business API or an SMS vendor), sender identity, cost per message and fallback are owner decision OD-1.
+`OtpSender` (`@tokophi/lib/buyer-otp`) stays the only seam for phone codes; `devOtpSender` prints the
+code locally and **throws in a production build**. The production sender is not an account concern:
+it is the platform **messaging channel**, root `TASKS.md` **Task 8.38** (one sender interface for
+OTP, order/shipping notices, abandoned-cart and CRM follow-up, affiliate notices). Phase 2 starts
+when that task is done.
 
-### 17.6 Where the 2026-09-26 PRD draft is overruled
+### 17.11 Where the 2026-09-26 PRD draft is overruled
 
 | Draft | Ruling here | Why |
 |---|---|---|
-| REQ-007: aggregate **all** orders matching the verified phone across all stores | ACC-4/ACC-5: only stores the buyer claimed and consented to | §5E.5 — a phone match never enumerates orders; recycled numbers would expose a stranger's history. |
+| REQ-007: aggregate **all** orders matching the verified phone across all stores | ACC-11/ACC-12 (claimed orders), ACC-5 (phase 2, linked + verified) | §5E.5 — a phone match never enumerates orders; recycled numbers would expose a stranger's history. |
+| Passwordless phone OTP as the only sign-in | Google first (ACC-10), phone in phase 2 | No messaging provider (owner, 2026-10-15). |
 | "Midtrans, Xendit, DOKU, AutoLaris" | AutoLaris is the only gateway | `main` — `@tokophi/lib/autolaris`, ADR 0004. |
 | REQ-013 "payment simulation button" | Prototype fixture only | No payment action exists in phase 1. |
-| REQ-025/026 COD standing + appeal | Phase 2, gated | Gate 13: policy owner approval, courier outcome persistence. |
-| REQ-006 recovery intake | Phase 2 | Needs operator capability + runbook (§10). |
-| `/account`, `/orders` paths under `akun.tokophi.com` | `account.tokophi.com`, paths per prototype | Host is OD-2; paths stay the prototype's. |
+| REQ-025/026 COD standing + appeal | Out of scope | Gate 13. |
+| REQ-006 recovery intake | Out of scope | Needs operator capability + runbook (§10). |
+| `/account`, `/orders` under `akun.tokophi.com` | `account.tokophi.com`, paths per prototype | Host is OD-2. |
 
-### 17.7 Owner decisions (open questions)
+### 17.12 Risks
+
+| Risk | Mitigation |
+|---|---|
+| A forwarded success link is claimed by someone else first | Exposure is one order (already visible at that URL today); claimer is recorded; support can release a claim (phase 2 runbook). |
+| Cross-tenant leak through the owner connection | Claim + active link required on every read; Task 10.11 negative sweep; RLS on the two `store_id` tables for merchant-side reads. |
+| Google client misconfigured in production (redirect URI) | Feature-flagged like admin: unset env ⇒ no button, no crash (`googleConfig()` pattern). |
+| Buyers expect phone, not Google | Phase 2 adds phone; phase-1 claim works with either identity. |
+| Migration number collides with `0116` | No migration until `feat/store-affiliate` is on `main`; re-read `origin/main` journal first. |
+| Privacy obligations (UU PDP) unreviewed | Production gated on OD-6; local data only. |
+
+### 17.13 Open owner decisions
 
 | ID | Question | Blocks |
 |---|---|---|
-| OD-1 | OTP provider (WhatsApp Business API vs SMS vendor), sender identity, budget, fallback. | Any non-local use of ACC-1. |
-| OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed) or another shape. | Task 10.3. |
-| OD-3 | May a store **affiliate** (Stage 9, form-only today) sign in with this same buyer account to see commissions? Not built; deciding it later costs a link table, deciding it never costs nothing. | Nothing in phase 1. |
-| OD-4 | Is "verified phone = order phone + order number" enough proof to claim an order, or is an order-specific token (sent on the success page / WhatsApp) required? | Task 10.5. |
+| OD-1 | Messaging provider (WhatsApp Business API vs SMS vendor), sender identity, budget, fallback — **now Task 8.38**. | Phase 2. |
+| OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed). | Task 10.3. |
+| OD-3 | Affiliates sign in with the buyer account (**recommended: yes**, via a seller-issued invitation, ACC-14). | Phase 3. |
+| OD-4 | ~~Proof for claiming an order~~ — **answered by D-3** (signed order-specific token, single claimant). Owner to confirm the 30-day validity. | Task 10.13 (validity only). |
 | OD-5 | Task 5.8: does the account ship to production, and when. | Deploy only. |
 | OD-6 | Privacy review (`PRIVACY-COMPLIANCE.md` is a stub): consent text, retention, deletion, UU PDP. | Production only. |
+| OD-7 | Google OAuth client: add the account callback to the existing client, or a separate client. | Any non-localhost sign-in. |
 
-### 17.8 Tasks
+### 17.14 Milestones and tasks
 
-Root [`TASKS.md`](../../TASKS.md) **Stage 10** (10.1–10.11). Milestone order: primitives → schema → sign-in → sessions → claim/link → hub → Toko → addresses → unlink → success-page offer → browser + tenant-negative verification. Close each with `specs/docs/STATUS.md`.
+Root [`TASKS.md`](../../TASKS.md) **Stage 10**. Phase 1 order: 10.1 (done) → 10.12 Google lift → 10.2
+schema (after `0116`) → 10.3 sign-in → 10.13 claim token → 10.5 claim + link → 10.6 hub → 10.7 Toko
+→ 10.8 addresses → 10.4 sessions → 10.9 unlink → 10.10 success-page offer → 10.11 browser +
+tenant-negative sweep. Phase 2 = 10.14 (after Task 8.38). Phase 3 = 10.15 (after Stage 9 + OD-3).
+Close each phase in `specs/docs/STATUS.md`.

@@ -219,19 +219,32 @@ The normative statement, verification method, and current status for each identi
 | F-K12 | An authenticated buyer can open **Toko**, an order-derived list of merchants represented in eligible linked/claimed orders, then choose `Belanja lagi` to open the merchant's current storefront. This is not a wishlist/follow graph and must not recreate an old cart or assume historical price, promotion, publication, or stock. | [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §5D/§6; proposed `GET /stores` in [`../openapi/account.yaml`](../openapi/account.yaml) | **NOT MET — PLANNED**: local prototype/contract only; no account service or production endpoint exists. |
 | F-K13 | After explicit store authorization, returning-buyer checkout prefills only the accepted contact and selected saved address as a **reviewable summary**. The buyer confirms or edits instead of re-entering all fields; checkout never auto-submits and recalculates shipping, promotions, inventory, and totals before acceptance. Guest checkout remains available. | [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §5F/§6; account authorization projection | **NOT MET — PLANNED**: no central identity, tenant BFF session, production prefill, or conformance evidence exists. |
 
-### 2.11 TokoΦ Account — local phase 1 (spec: [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §17, 2026-10-15)
+### 2.11 TokoΦ Account — phased (spec: [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §17, rev 2 2026-10-15)
+
+Phase 1 needs no messaging provider (Google sign-in + order claim token); phase 2 adds phone OTP after Task 8.38; phase 3 binds store affiliates.
 
 | ID | Requirement | Verify | Status |
 |---|---|---|---|
-| ACC-1 | Phone + 6-digit code signs a buyer in: only `hashOtp` is stored, delivery goes through `OtpSender`, a correct code within 5 min creates/reuses `buyer_accounts` and starts a session. | Task 10.1 (primitive) / 10.3 | PARTIAL — primitive only (`@tokophi/lib/buyer-otp`) |
-| ACC-2 | Wrong / expired / used / 5-attempt-locked codes are refused without saying which; no resend inside 60 s. | Task 10.1 / 10.3 | PARTIAL — refusal order + cooldown pure-tested |
+| ACC-1 | **Phase 2.** Phone + 6-digit code signs a buyer in: only `hashOtp` is stored, delivery goes through `OtpSender`, a correct code within 5 min creates/reuses `buyer_accounts` and starts a session. | Task 10.1 (primitive) / 10.14 | PARTIAL — primitive only (`@tokophi/lib/buyer-otp`) |
+| ACC-2 | **Phase 2.** Wrong / expired / used / 5-attempt-locked codes are refused without saying which; no resend inside 60 s. | Task 10.1 / 10.14 | PARTIAL — refusal order + cooldown pure-tested |
 | ACC-3 | "Keluar dari perangkat lain" revokes every other session, keeps the current one. | Task 10.4 | PLANNED |
-| ACC-4 | Claiming an order (order number + verified phone = order phone + consent) creates/re-activates the store link; failures create nothing and read the same. | Task 10.5 | PLANNED |
-| ACC-5 | The hub lists only `active`-linked stores' orders, through the allowlisted projection. | Task 10.6 / 10.11 | PLANNED |
+| ACC-4 | ~~Claim by verified phone = order phone~~ — SUPERSEDED by ACC-11 (rev 2). | — | SUPERSEDED |
+| ACC-5 | **Phase 2.** With an active link AND a verified phone equal to the store customer's, the hub lists all that customer's orders through the allowlisted projection. | Task 10.14 | PLANNED |
 | ACC-6 | "Toko" lists exactly the linked stores, each opening its storefront (narrows F-K12). | Task 10.7 | PLANNED |
 | ACC-7 | ≤ 10 saved addresses with KiriminAja district id, one primary; edits never touch an order snapshot. | Task 10.8 | PLANNED |
 | ACC-8 | Unlinking revokes the link and writes nothing store-owned. | Task 10.9 | PLANNED |
-| ACC-9 | The checkout success page offers an optional account link; guest checkout is unchanged. | Task 10.10 | PLANNED |
+| ACC-9 | ~~Success-page account link~~ — SUPERSEDED by ACC-13 (rev 2). | — | SUPERSEDED |
+| ACC-10 | Google sign-in (state cookie, id_token verified, `email_verified`) finds/creates `buyer_accounts` by Google `sub` and starts a session; any failure creates nothing. | Task 10.12 / 10.3 | PLANNED |
+| ACC-11 | A signed-in buyer with a valid claim token + consent records the order claim and creates/re-activates the store link; tampered/expired/already-claimed-by-another/declined creates nothing, one message. | Task 10.5 | PLANNED |
+| ACC-12 | **Phase 1 hub:** exactly the claimed orders of active links, allowlisted projection; unclaimed orders are not-found. | Task 10.6 / 10.11 | PLANNED |
+| ACC-13 | The order API returns a 30-day signed claim token for the order; the success page offers "Simpan ke Akun TokoΦ" with it; guest checkout and existing response fields unchanged. | Task 10.13 / 10.10 | PLANNED |
+| ACC-14 | **Phase 3.** A seller-issued affiliate invitation binds an approved store affiliate to the buyer account, which then shows that affiliate's commissions for that store only. | Task 10.15 | PLANNED |
+
+### 2.12 Platform messaging channel (owner-gated)
+
+| ID | Requirement | Verify | Status |
+|---|---|---|---|
+| MSG-1 | One platform sender interface (WhatsApp and/or SMS) carries OTP codes, order/shipping notices, abandoned-cart and CRM follow-up, and affiliate notices; with no provider configured, production refuses to send rather than log codes. | Task 8.38 | PLANNED — blocked on owner (provider not chosen) |
 
 ---
 
