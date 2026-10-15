@@ -286,7 +286,7 @@ function SaluranTab({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {channels.map((c) => (
           <ChannelCard key={c.key} channel={c} st={status[c.key as TrackingChannelKey]} onSetup={onSetup} />
         ))}

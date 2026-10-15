@@ -1,0 +1,95 @@
+---
+// A real product screenshot in a thin frame; the file inventory and its provenance live in
+// lib/screens.ts.
+import { FILES, type ScreenName } from "../lib/screens";
+
+interface Props {
+  name: ScreenName;
+  alt: string;
+  kind?: "desktop" | "phone";
+  loading?: "eager" | "lazy";
+  class?: string;
+  sizes?: string;
+  /** Narrow-screen art direction: a tighter crop of the same screen, used below 1024px. */
+  narrow?: ScreenName;
+  /**
+   * Real captures of the same screen in successive states (same size as `name`), played in order as
+   * a CSS crossfade loop over `name`. `name` stays the still frame for reduced motion and for the alt.
+   */
+  frames?: ScreenName[];
+}
+const { name, alt, kind = "desktop", loading = "lazy", class: className, sizes, narrow, frames = [] } = Astro.props;
+const [, large, w, h] = FILES[name];
+const set = (n: ScreenName) => { const [s, l] = FILES[n]; return `/screens/${n}-${s}.webp ${s}w, /screens/${n}-${l}.webp ${l}w`; };
+---
+
+<figure class:list={["screen", `screen-${kind}`, frames.length > 0 && "screen-seq", className]} style={frames.length ? `--seq-n:${frames.length}` : undefined}>
+  {kind === "desktop" && <div class="screen-bar" aria-hidden="true"><span></span><span></span><span></span></div>}
+  <picture>
+    {narrow && <source media="(max-width: 1023px)" srcset={set(narrow)} sizes="100vw" width={FILES[narrow][2]} height={FILES[narrow][3]} />}
+    <img
+      src={`/screens/${name}-${large}.webp`}
+      srcset={set(name)}
+      sizes={sizes ?? (kind === "phone" ? "(min-width: 1024px) 260px, 60vw" : "(min-width: 1280px) 760px, 92vw")}
+      width={w}
+      height={h}
+      {alt}
+      {loading}
+      decoding="async"
+      fetchpriority={loading === "eager" ? "high" : undefined}
+    />
+  </picture>
+  {frames.map((f, i) => (
+    <img
+      class="seq-frame"
+      src={`/screens/${f}-${FILES[f][1]}.webp`}
+      srcset={set(f)}
+      sizes={sizes ?? "(min-width: 1024px) 260px, 60vw"}
+      width={FILES[f][2]}
+      height={FILES[f][3]}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      decoding="async"
+      style={`--seq-i:${i}`}
+    />
+  ))}
+</figure>
+
+<style>
+  .screen {
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+    box-shadow: 0 1px 2px rgba(20, 21, 42, 0.05), 0 24px 48px -28px rgba(20, 21, 42, 0.32);
+  }
+  .screen-desktop { border-radius: 0.75rem; }
+  .screen-phone { border-radius: 1.75rem; border-width: 6px; border-color: #1b1c30; }
+  .screen-bar {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-canvas);
+  }
+  .screen-bar span { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: var(--color-hairline); }
+  .screen img { display: block; width: 100%; height: auto; }
+
+  /* State sequence: each frame holds for 2.8s and crossfades into the next; the frames overlap during
+     the fade, so the still frame underneath never flashes through. Reduced motion keeps the still. */
+  .screen-seq { position: relative; }
+  .seq-frame { position: absolute; inset: 0; opacity: 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .seq-frame {
+      animation: seq calc(var(--seq-n) * 2.8s) linear infinite;
+      animation-delay: calc(var(--seq-i) * 2.8s);
+    }
+  }
+  @keyframes seq {
+    0% { opacity: 0; }
+    4% { opacity: 1; }
+    27% { opacity: 1; }
+    31% { opacity: 0; }
+    100% { opacity: 0; }
+  }
+</style>

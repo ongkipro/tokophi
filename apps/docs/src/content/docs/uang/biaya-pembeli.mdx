@@ -1,0 +1,67 @@
+---
+title: "Biaya yang dibayar pembeli"
+seoTitle: "Biaya Transaksi Pembeli: QRIS, VA, dan COD"
+description: "Biaya pembayaran QRIS, Virtual Account, dan COD ditanggung pembeli. Pelajari cara hitungnya, di mana pembeli melihatnya, dan di mana Anda mengeceknya."
+routes: ["/pesanan", "/pesanan/[id]"]
+verified: 2026-10-12
+---
+
+Setiap metode pembayaran punya biaya transaksi. Biaya ini **ditambahkan ke total belanja pembeli**, jadi Anda tidak menanggungnya dan tidak ada yang dipotong dari hasil penjualan Anda. Setelah membaca ini Anda bisa menjelaskan ke pembeli dari mana angka itu berasal.
+
+## Tarif per metode
+
+| Metode | Biaya | Dihitung dari |
+|---|---|---|
+| QRIS | 0,7% | Harga barang setelah diskon |
+| Virtual Account BCA | Rp6.500 | Per transaksi |
+| Virtual Account bank lain | Rp3.000 | Per transaksi |
+| COD (bayar di tempat) | 3%, minimal Rp2.500, ditambah PPN 11% atas biaya itu | Harga barang setelah diskon + ongkir |
+
+Tabel yang sama, beserta harga langganan dan aturan penarikan, ada di [Biaya dan harga](/referensi/biaya/#biaya-yang-dibayar-pembeli). PPN barang yang Anda tagihkan tidak pernah ikut menjadi dasar perhitungan biaya.
+
+Daftar metode yang muncul di checkout diatur oleh TokoΦ untuk semua toko. Anda tidak bisa menambah, mematikan, atau memindahkan biaya ini ke toko Anda. Yang bisa Anda atur hanya menerima COD atau tidak, lewat **Pengaturan → Pengiriman** (lihat [Pilih jasa kirim dan atur COD](/mulai/pengiriman-dan-cod/)).
+
+## Contoh hitungan
+
+**QRIS.** Barang Rp100.000, ongkir Rp20.000. Biaya 0,7% × Rp100.000 = Rp700. Pembeli membayar Rp120.700.
+
+**Virtual Account BCA.** Barang dan ongkir yang sama. Biaya Rp6.500. Pembeli membayar Rp126.500.
+
+**COD.** Barang Rp100.000, ongkir Rp20.000.
+
+- Biaya COD: 3% × Rp120.000 = Rp3.600.
+- PPN biaya COD: 11% × Rp3.600 = Rp396.
+- Pembeli membayar Rp120.000 + Rp3.600 + Rp396 = Rp123.996 ke kurir.
+
+**COD pesanan kecil.** Barang Rp50.000, ongkir Rp10.000. 3% × Rp60.000 = Rp1.800, di bawah minimum, jadi biaya COD menjadi Rp2.500. PPN-nya Rp275. Pembeli membayar Rp62.775.
+
+Di semua contoh itu, yang masuk ke saldo Anda tetap harga barangnya. Lihat [Saldo dan penarikan](/uang/saldo-dan-penarikan/).
+
+## Yang dilihat pembeli
+
+Di ringkasan checkout, pembeli melihat **Subtotal**, **Ongkir**, lalu satu baris biaya sesuai metode yang dipilih:
+
+- **Biaya pembayaran** untuk QRIS dan Virtual Account.
+- **Biaya COD** dan **PPN biaya COD** untuk bayar di tempat.
+
+Angka **Total** di checkout sudah termasuk biaya itu. Setelah memesan dengan QRIS atau Virtual Account, halaman pembayaran menampilkan **Biaya admin** dan **Total bayar**, dengan pesan agar pembeli membayar persis sejumlah **Total bayar**.
+
+## Yang Anda lihat
+
+Buka pesanan dari menu **Pesanan**. Kartu **Rekonsiliasi** di halaman detail merinci uang pesanan itu:
+
+- **Hasil barang** dan **Hak Seller**: bagian Anda.
+- **Ongkir dibayar pembeli** dan **Biaya kurir aktual**: ongkir yang ditagih dan tarif kurir yang benar-benar dipesan.
+- **Biaya gateway**: biaya pembayaran QRIS atau Virtual Account yang dibayar pembeli.
+- **Biaya COD** dan **PPN biaya COD**: hanya pada pesanan COD.
+- **Total dibayar pembeli**: semua yang dibayar pembeli, termasuk biaya di atas.
+
+:::note[Catatan]
+**Total dibayar pembeli** lebih besar dari angka yang masuk ke saldo Anda. Selisihnya adalah ongkir dan biaya transaksi, yang memang bukan milik toko. Itu bukan potongan dari TokoΦ.
+:::
+
+## Kalau ada masalah
+
+- Pembeli bertanya kenapa totalnya lebih besar dari harga barang. Jelaskan bahwa ongkir dan biaya transaksi tercantum terpisah di checkout sebelum pembeli menekan bayar, dan tarifnya sama untuk semua toko TokoΦ.
+- Pilihan COD tidak muncul di checkout. COD hanya berlaku untuk SPX, enam provinsi di Jawa, dan pesanan sampai Rp2.000.000, dan harus Anda aktifkan sendiri. Lihat [Pilih jasa kirim dan atur COD](/mulai/pengiriman-dan-cod/).
+- Kartu **Rekonsiliasi** bertanda **Ada selisih**. Angka pesanan itu tidak cocok satu sama lain. Buka tiket di menu [**Bantuan**](https://app.tokophi.com/bantuan) dan sertakan nomor pesanannya.

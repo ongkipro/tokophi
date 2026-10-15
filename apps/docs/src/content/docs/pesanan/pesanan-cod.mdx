@@ -1,0 +1,54 @@
+---
+title: "Pesanan COD"
+seoTitle: "Pesanan COD: Dari Masuk Sampai Uang Masuk Saldo"
+description: "Perjalanan pesanan bayar di tempat (COD) di Dashboard Seller: syaratnya, cara mengirim, kapan uangnya masuk saldo, dan apa yang terjadi bila paket ditolak."
+routes: ["/pesanan", "/pesanan/massal", "/pesanan/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Pada pesanan COD, pembeli membayar tunai kepada kurir saat paket tiba. Setelah membaca ini Anda tahu bedanya pesanan COD dengan pesanan QRIS atau VA di setiap tahap, dan kapan uangnya bisa ditarik. Cara menyalakan COD ada di [Pilih jasa kirim dan atur COD](/mulai/pengiriman-dan-cod/).
+
+:::caution[Penting (per 12 Oktober 2026)]
+Layanan pengiriman TokoΦ Kirim masih berjalan dalam mode uji. Pemesanan kurir dan nomor resi terlihat seperti aslinya, tetapi **belum ada kurir yang datang menjemput**. Tombol bertanda *"mode demo"* atau *"resi contoh"* juga berasal dari mode ini. Sebelum mengirim pesanan sungguhan, hubungi tim TokoΦ lewat menu [**Bantuan**](https://app.tokophi.com/bantuan). Langkah di bawah tetap berguna untuk mengenal alurnya.
+:::
+
+## Yang Anda perlukan
+
+- **Aktifkan COD** menyala di **Pengaturan → Pengiriman**, dan minimal satu layanan berlabel **COD** aktif.
+- Pembeli hanya bisa memilih COD kalau semua syarat ini terpenuhi: kurir Shopee Express (SPX), tujuan di DKI Jakarta, Jawa Barat, Jawa Tengah, DI Yogyakarta, Jawa Timur, atau Banten, dan total pesanan maksimal Rp2.000.000.
+
+## Langkah
+
+<Steps>
+
+1. **Pesanan masuk.** Pesanan COD langsung masuk ke tab **Perlu Dikirim**, tidak lewat **Belum Bayar**, dan tidak batal otomatis setelah 24 jam. Di daftar pesanan, metode bayarnya tertulis **COD (Bayar di Tempat)**. Untuk melihat pesanan COD saja, pilih filter **Metode Bayar → COD (Bayar di Tempat)**.
+2. **Pesan kurir** seperti pesanan lain, lewat **Pengiriman Massal** atau detail pesanan ([Pesan kurir](/pesanan/booking-pengiriman/)). TokoΦ menandai paketnya sebagai COD secara otomatis berdasarkan cara bayar pembeli. Di **Cek Ongkir**, kotak **COD — kurir menagih Rp…** tercentang dan tidak bisa diubah, dan hanya layanan berlabel **COD** yang bisa dipilih.
+3. **Cetak label.** Label pesanan COD memuat kotak **COD** berisi total yang ditagih kurir kepada pembeli ([Cetak label](/pesanan/cetak-label/)).
+4. **Paket diantar.** Kurir menagih total pesanan kepada pembeli. Saat kurir melaporkan paket diterima, status berubah menjadi **Selesai**.
+5. **Uang tercatat.** Pada saat **Selesai**, pembayaran COD dicatat lunas dan hasil penjualannya langsung masuk **Saldo tersedia**. Sebelum Selesai, hasil penjualan pesanan COD belum tercatat di saldo. Lihat [Uang](/uang/) untuk cara menariknya.
+
+</Steps>
+
+:::note[Catatan]
+Pesanan COD tetap berlabel **Belum dibayar** di daftar pesanan sampai statusnya **Selesai**. Itu normal, karena uangnya baru ditagih saat paket tiba.
+:::
+
+:::caution[Penting]
+Menekan **Selesaikan** di daftar atau **Tandai selesai** di detail pesanan COD dicatat sebagai uang COD sudah diterima kurir, dan hasil penjualannya langsung masuk saldo. Tekan hanya kalau Anda yakin pembeli sudah menerima paket dan membayar. Biasanya Anda cukup menunggu status berubah sendiri dari data kurir.
+:::
+
+## Biaya COD
+
+Biaya COD, yaitu 3% dari harga barang plus ongkir (minimal Rp2.500) ditambah PPN 11% atas biaya itu, dibayar pembeli dan tidak memotong hasil penjualan Anda. Rinciannya terlihat di kartu **Rekonsiliasi** pada detail pesanan, di baris **Biaya COD** dan **PPN biaya COD**. Angka **Hak Seller** di kartu yang sama adalah yang menjadi hak Anda. Rincian semua biaya ada di [Biaya dan harga](/referensi/biaya/).
+
+## Kalau paket ditolak
+
+Kalau pembeli menolak paket, kurir mengembalikannya dan status pesanan berubah menjadi **Retur**. Tagihan COD ditandai gagal, tidak ada uang yang masuk saldo, dan stok kembali. Lihat [Retur: paket kembali](/pesanan/retur/). Tab **Pengembalian/Pembatalan** menampilkan **Tingkat retur COD** untuk memantau seberapa sering paket COD ditolak.
+
+## Kalau ada masalah
+
+- *"Pesanan … dibayar COD — resi harus dibuat dengan penagihan COD."* Ini muncul saat memesan dari detail pesanan sementara COD toko sedang tidak aktif. Pastikan **Aktifkan COD** masih menyala di **Pengaturan → Pengiriman**. Kalau sudah menyala, buka tiket di [**Bantuan**](https://app.tokophi.com/bantuan).
+- Tombol **Pilih** tidak bisa diklik pada sebuah layanan, dengan keterangan *"Layanan ini tidak mendukung COD"*. Pilih layanan berlabel **COD**.
+- Pembeli bilang COD tidak muncul di checkout. Salah satu syarat di atas tidak terpenuhi. Checkout menjelaskan alasannya kepada pembeli.

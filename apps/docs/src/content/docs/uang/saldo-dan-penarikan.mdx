@@ -1,0 +1,79 @@
+---
+title: "Saldo dan penarikan"
+seoTitle: "Saldo Toko: Uang Masuk dan Cara Menariknya"
+description: "Baca halaman Saldo, pahami kapan hasil penjualan masuk dan bisa ditarik, isi rekening pencairan, lalu ajukan penarikan ke rekening bank Anda."
+routes: ["/saldo", "/pengaturan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import saldo from "../../../assets/screens/seller-saldo-1600.webp";
+
+Setelah membaca ini Anda tahu arti setiap angka di halaman **Saldo**, kapan uang dari sebuah pesanan bisa ditarik, dan cara mencairkannya ke rekening bank Anda.
+
+## Yang Anda perlukan
+
+- Login sebagai **Pemilik** toko. Hanya pemilik yang bisa mengisi rekening dan menarik saldo. Peran lain bisa melihat halaman ini, tetapi tidak bisa mengubah rekening atau menarik saldo. Lihat [Peran tim](/referensi/peran-tim/).
+- Pesanan yang sudah berstatus **Selesai**. Lihat [Proses pesanan pertama](/mulai/pesanan-pertama/).
+
+## Membaca halaman Saldo
+
+Buka **Keuangan → Saldo Saya**, atau klik ikon dompet dan angka saldo di bilah atas Dashboard Seller.
+
+<Shot src={saldo} alt="Halaman Saldo dengan empat kartu: Saldo tersedia, Dana dalam proses, Sudah ditarik, dan Ditarik kembali (retur)." caption="Empat kartu di bagian atas halaman Saldo, dari toko demo." />
+
+- **Saldo tersedia**: uang yang sudah bisa ditarik ke rekening.
+- **Dana dalam proses**: uang dari pesanan yang belum selesai. Klik **Lihat rincian** untuk melihat pesanan mana yang menahannya.
+- **Sudah ditarik**: total penarikan yang pernah Anda ajukan.
+- **Ditarik kembali (retur)**: hasil penjualan yang ditarik lagi karena paketnya kembali atau pesanannya dibatalkan.
+
+### Kapan uang masuk
+
+| Jenis pesanan | Masuk **Dana dalam proses** | Pindah ke **Saldo tersedia** |
+|---|---|---|
+| QRIS atau Virtual Account | Begitu pembayaran berhasil | Saat pesanan berstatus **Selesai** |
+| COD | Tidak lewat tahap ini | Langsung saat pesanan berstatus **Selesai** |
+
+Untuk COD, pembeli baru membayar ke kurir saat paket tiba, jadi uangnya baru dicatat setelah pesanan selesai. Yang dicatat adalah harga barang setelah diskon, ditambah PPN barang kalau Anda mengaktifkannya. Ongkir dan biaya transaksi tidak masuk ke saldo. Rinciannya ada di [Biaya dan harga](/referensi/biaya/#yang-masuk-ke-saldo-anda).
+
+Kalau pesanan yang sudah dibayar kemudian **Batal** atau **Retur**, jumlah yang sama dicatat keluar sebagai **Retur**, jadi saldo kembali seperti sebelum pesanan itu.
+
+### Tab di bawah kartu
+
+- **Mutasi**: semua uang masuk dan keluar, dikelompokkan per hari. Klik baris **Penjualan** untuk melihat isi pesanan dan rinciannya.
+- **Dana dalam proses**: daftar pesanan yang uangnya masih ditahan, lengkap dengan status pesanannya.
+- **Penarikan**: riwayat penarikan Anda dan statusnya.
+- **Rekening**: rekening tujuan pencairan.
+
+## Langkah
+
+<Steps>
+
+1. Isi rekening sekali saja. Buka tab **Rekening** di halaman Saldo, atau **Pengaturan → Rekening**. Isi **Nama bank**, **Nomor rekening**, dan **Nama pemilik rekening**, lalu klik **Simpan rekening**. Kedua tempat itu menyimpan data yang sama.
+2. Di kartu **Tarik saldo**, pastikan baris **Rekening** menampilkan rekening yang benar. Minimum penarikan tertulis di kartu ini.
+3. Ketik angkanya di **Jumlah penarikan**, lalu klik **Tarik**.
+4. Periksa jumlah dan rekening di jendela **Tarik saldo?**, lalu klik **Ya, tarik**. Muncul pesan *"Penarikan diajukan. Dana diproses dalam 1–2 hari kerja."*
+5. Pantau di tab **Penarikan**. Statusnya berjalan dari **Menunggu** ke **Diproses**, lalu **Selesai**. Saat **Selesai**, kolom **Cair** berisi tanggal transfer, dan nomor referensi transfer tampil sebagai *Ref: …* di bawah rekening. Cocokkan nomor itu dengan mutasi rekening bank Anda.
+
+</Steps>
+
+Tim TokoΦ memeriksa setiap penarikan secara manual. Tidak ada biaya penarikan.
+
+:::caution[Penting]
+Penarikan yang sudah diajukan **tidak bisa dibatalkan**, dan jumlahnya langsung berkurang dari **Saldo tersedia**. Rekening harus atas nama pemilik toko. Rekening atas nama pihak lain akan ditolak saat pencairan.
+:::
+
+:::note[Catatan]
+Mengubah rekening tidak mengubah riwayat. Setiap penarikan menyimpan salinan rekening pada saat diajukan, jadi penarikan yang sedang berjalan tetap dikirim ke rekening lama.
+:::
+
+## Kalau ada masalah
+
+- *"Lengkapi rekening bank dulu sebelum menarik saldo."* Isi tab **Rekening** seperti langkah 1.
+- *"Nama bank, nomor rekening, dan nama pemilik wajib diisi."* Ketiga kolom rekening harus terisi.
+- *"Minimum penarikan Rp…"* Jumlahnya di bawah batas minimum. Tunggu sampai saldo cukup.
+- *"Saldo tersedia tidak mencukupi."* Jumlah yang diminta lebih besar dari **Saldo tersedia**. Uang di **Dana dalam proses** belum bisa ditarik.
+- Tombol **Tarik** abu-abu. Rekening belum diisi, kolom jumlah masih kosong, atau Anda tidak login sebagai Pemilik.
+- Status penarikan **Gagal**. Alasannya tampil sebagai *Alasan: …* di bawah rekening. Jumlahnya dikembalikan ke **Saldo tersedia** dan tercatat sebagai **Penyesuaian** di tab **Mutasi**.
+- Toko sedang ditinjau atau langganan ditangguhkan. Selama Dashboard Seller dalam mode baca-saja, penarikan tidak bisa diajukan. Rekening tetap bisa disimpan. Lihat [Langganan dan faktur](/uang/langganan-dan-faktur/).

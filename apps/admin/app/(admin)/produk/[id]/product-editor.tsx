@@ -60,16 +60,6 @@ import {
   DialogClose,
 } from "@tokophi/ui/dialog";
 
-const CATEGORIES = [
-  "Dress",
-  "Atasan",
-  "Bawahan",
-  "Busana Muslim",
-  "Outerwear",
-  "Loungewear",
-  "Aksesoris",
-];
-
 // Google/Meta feed attribute options (ADR 0011 Phase 2). Values are the Google enum; labels are ID.
 const GENDER_OPTS: { value: string; label: string }[] = [
   { value: "female", label: "Wanita" },
@@ -127,7 +117,7 @@ function purchaseVariantLabel(variant: SavedVariant): string {
 }
 
 
-export function ProductEditor({ product }: { product?: Product }) {
+export function ProductEditor({ product, categoryOptions = [] }: { product?: Product; categoryOptions?: string[] }) {
   const isEdit = Boolean(product);
 
   // RBAC (UI): mirror the server guard so we don't offer actions the role can't do.
@@ -198,7 +188,12 @@ export function ProductEditor({ product }: { product?: Product }) {
     product?.status ?? "draft"
   );
 
-  const [category, setCategory] = React.useState(product?.category ?? "Fashion");
+  // The merchant's own free-text label, suggested from THIS store's vocabulary (`categoryOptions`).
+  // ⚠️ It used to default to "Fashion" and offer only a hardcoded 7-item fashion list, so every product
+  // of every non-fashion shop (a fertiliser store included) was saved as "Fashion" — which then became
+  // the storefront breadcrumb, the PDP "Kategori" row, a 404 `/kategori/fashion` link and the feed's
+  // `product_type`. Blank is honest: the storefront falls back to the product's real collection.
+  const [category, setCategory] = React.useState(product?.category ?? "");
   // Standard Google taxonomy (ADR 0011) — separate from the merchant's own `category` above.
   const [gcatId, setGcatId] = React.useState<number | null>(product?.googleCategoryId ?? null);
   const [gcatPath, setGcatPath] = React.useState(product?.googleCategoryPath ?? "");
@@ -665,7 +660,9 @@ export function ProductEditor({ product }: { product?: Product }) {
       </div>
 
       {/* Body */}
-      <div className="grid gap-5 lg:grid-cols-3">
+      {/* grid-cols-1 = minmax(0,1fr): an implicit column sizes to its content, and the variant table
+          then widened the whole editor past a 390px phone. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* MAIN */}
         <div className="flex flex-col gap-5 lg:col-span-2">
           {/* Judul + Deskripsi */}
@@ -1042,7 +1039,9 @@ export function ProductEditor({ product }: { product?: Product }) {
                     </div>
                   )}
 
-                  {/* generated variant matrix — price/stock/sku per combo */}
+                  {/* generated variant matrix — price/stock/sku per combo. The inputs carry a MIN width: without
+                      one, a 390px phone squeezed SKU and Harga to ~25px ("S", "Rp") instead of letting
+                      this box scroll sideways. */}
                   {combos.length > 0 ? (
                     <div className="overflow-x-auto rounded-lg border">
                       <Table>
@@ -1062,16 +1061,16 @@ export function ProductEditor({ product }: { product?: Product }) {
                               <TableRow key={key}>
                                 <TableCell className="font-medium whitespace-nowrap">{key}</TableCell>
                                 <TableCell>
-                                  <Input value={row.sku} onChange={(e) => setVariantField(key, "sku", e.target.value)} placeholder="SKU" className="max-w-32" />
+                                  <Input value={row.sku} onChange={(e) => setVariantField(key, "sku", e.target.value)} placeholder="SKU" className="min-w-24 max-w-32" />
                                 </TableCell>
                                 <TableCell>
-                                  <div className="relative max-w-36">
+                                  <div className="relative min-w-28 max-w-36">
                                     <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
                                     <Input inputMode="numeric" value={row.price} onChange={(e) => setVariantField(key, "price", e.target.value.replace(/[^\d]/g, ""))} className="pl-8 tabular-nums" />
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <Input inputMode="numeric" value={row.stock} onChange={(e) => setVariantField(key, "stock", e.target.value.replace(/[^\d]/g, ""))} className="max-w-24 tabular-nums" />
+                                  <Input inputMode="numeric" value={row.stock} onChange={(e) => setVariantField(key, "stock", e.target.value.replace(/[^\d]/g, ""))} className="min-w-16 max-w-24 tabular-nums" />
                                 </TableCell>
                               </TableRow>
                             );
@@ -1264,27 +1263,18 @@ export function ProductEditor({ product }: { product?: Product }) {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-2">
-                <Label>Kategori</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                      />
-                    }
-                  >
-                    {category}
-                    <ChevronDown className="text-muted-foreground" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--anchor-width]">
-                    {CATEGORIES.map((c) => (
-                      <DropdownMenuItem key={c} onClick={() => setCategory(c)}>
-                        {c}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Label htmlFor="product-category">Kategori toko</Label>
+                <Input
+                  id="product-category"
+                  list="product-category-options"
+                  value={category}
+                  maxLength={100}
+                  placeholder="mis. Pupuk Organik"
+                  onChange={(e) => setCategory(e.target.value)}
+                />
+                <datalist id="product-category-options">
+                  {categoryOptions.map((c) => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <GoogleCategoryField
                 value={gcatId}
@@ -1295,8 +1285,9 @@ export function ProductEditor({ product }: { product?: Product }) {
                 onChange={(id, p) => { setGcatId(id); setGcatPath(p); }}
               />
 
-              {/* Feed attributes (ADR 0011 Phase 2). Optional overrides — the feed derives gender from
-                  the title, defaults usia = Dewasa & kondisi = Baru, and takes warna/ukuran from variants. */}
+              {/* Feed attributes (ADR 0011 Phase 2). Optional overrides — kondisi = Baru and warna/ukuran come
+                  from variants; gender and usia are emitted ONLY when set here (product-feed.ts never
+                  invents them), so the empty state reads "Pilih", never a value nobody chose. */}
               <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
                 <p className="text-xs font-medium text-muted-foreground">Atribut feed iklan <span className="font-normal">(Google/Meta — opsional)</span></p>
                 <div className="grid grid-cols-2 gap-3">
@@ -1317,7 +1308,7 @@ export function ProductEditor({ product }: { product?: Product }) {
                     <Label className="text-xs">Usia</Label>
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between font-normal" />}>
-                        {ageGroup ? labelOf(AGE_OPTS, ageGroup) : <span className="text-muted-foreground">Dewasa</span>}
+                        {ageGroup ? labelOf(AGE_OPTS, ageGroup) : <span className="text-muted-foreground">Pilih</span>}
                         <ChevronDown className="text-muted-foreground" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="w-(--anchor-width)">
@@ -1397,18 +1388,15 @@ export function ProductEditor({ product }: { product?: Product }) {
             <DialogDescription>Pilih kategori untuk produk ini.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            <Label>Kategori</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" className="w-full justify-between font-normal" />}>
-                {category}
-                <ChevronDown className="text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-(--anchor-width)">
-                {CATEGORIES.map((c) => (
-                  <DropdownMenuItem key={c} onClick={() => setCategory(c)}>{c}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Label htmlFor="product-category-dialog">Kategori</Label>
+            <Input
+              id="product-category-dialog"
+              list="product-category-options"
+              value={category}
+              maxLength={100}
+              placeholder="mis. Pupuk Organik"
+              onChange={(e) => setCategory(e.target.value)}
+            />
           </div>
           <DialogFooter>
             <DialogClose render={<Button variant="outline">Batal</Button>} />

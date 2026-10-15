@@ -1,0 +1,75 @@
+---
+title: "Langganan dan faktur"
+seoTitle: "Bayar Langganan TokoΦ dan Cetak Faktur Tagihan"
+description: "Cek status langganan dan sisa hari, bayar tagihan bulanan atau tahunan, lalu cetak atau simpan faktur PDF dari riwayat pembayaran di Dashboard Seller."
+routes: ["/akun/langganan", "/faktur/[number]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+TokoΦ punya satu paket berlangganan dengan semua fitur terbuka. Di sini Anda belajar membaca status langganan, membayar tagihan, dan mencetak faktur untuk pembukuan. Harga lengkapnya ada di [Biaya dan harga](/referensi/biaya/#langganan).
+
+## Yang Anda perlukan
+
+- Login sebagai **Pemilik** toko. Hanya pemilik yang bisa membayar atau membatalkan tagihan langganan.
+
+## Membaca status langganan
+
+Buka halaman **Langganan** lewat menu avatar di kanan atas, atau, di layar lebar, klik kotak **Langganan** di bawah logo pada sidebar. Kotak itu juga menampilkan status dan sisa harinya.
+
+Kartu **Paket TokoΦ** menampilkan **Status** dan hitungan mundurnya:
+
+| Status | Hitungan mundur | Artinya |
+|---|---|---|
+| **Masa uji coba** | **Sisa uji coba** | Uji coba gratis 3 hari sejak mendaftar |
+| **Aktif** | **Perpanjang dalam** | Periode yang sudah dibayar masih berjalan |
+| **Menunggu pembayaran** | **Tenggat** | Sudah jatuh tempo. Ada masa tenggang 3 hari dengan akses penuh |
+| **Ditangguhkan** | — | Masa tenggang habis. Dashboard Seller baca-saja sampai tagihan dibayar. Toko Anda tetap bisa dikunjungi pembeli |
+
+Kotak **Tagihan berikutnya** menunjukkan jumlah yang akan Anda bayar. Kartu **Rincian harga** di sebelahnya menunjukkan semua harga paket.
+
+:::note[Catatan]
+Toko baru yang masih **menunggu tinjauan** juga tampil sebagai **Ditangguhkan** di halaman ini, lengkap dengan kalimat *"Toko ditangguhkan (mode baca-saja)"*. Itu bukan karena tagihan terlambat. Sidebar menampilkan status yang benar, **Menunggu review**. Status berubah sendiri setelah toko disetujui. Lihat [Daftar dan tunggu persetujuan](/mulai/daftar-toko/).
+:::
+
+## Langkah
+
+<Steps>
+
+1. Di kartu **Paket TokoΦ**, pilih **Bulanan** atau **Tahunan**. Kalau Anda belum pernah membayar, **Bulanan** berharga promo bulan pertama, dan **Tahunan** memberi **13 bln (1 gratis)**.
+2. Klik **Lanjutkan pembayaran**.
+3. Di jendela **Pilih metode pembayaran**, pilih salah satu metode yang tersedia, lalu klik **Bayar**.
+4. Bayar sesuai instruksi yang muncul. Untuk Virtual Account, klik **Salin** lalu transfer dari aplikasi bank Anda. Untuk QRIS, pindai kodenya dengan aplikasi apa pun yang mendukung QRIS. Bayar sebelum tagihan kedaluwarsa.
+5. Tunggu. Langganan aktif otomatis setelah pembayaran diterima. Anda tidak perlu mengirim bukti transfer.
+
+</Steps>
+
+Kalau Anda membuka halaman ini lagi sebelum membayar, instruksi pembayaran yang sama ditampilkan lagi. Tagihan ganda tidak dibuat. Untuk berganti dari bulanan ke tahunan atau sebaliknya, klik **Batalkan tagihan**, lalu ulangi dari langkah 1.
+
+## Riwayat pembayaran dan faktur
+
+Bagian **Riwayat pembayaran** di bawah halaman Langganan mencantumkan setiap tagihan: **No. Faktur**, **Jenis**, **Jumlah**, **Status**, dan **Tanggal**. **Total dibayar** di pojok kanan menjumlahkan tagihan yang sudah **Lunas**.
+
+<Steps>
+
+1. Klik baris tagihan. Kolom **Aksi** menunjukkan apa yang bisa dilakukan: **Bayar** untuk tagihan yang menunggu, **Cetak** untuk tagihan lunas.
+2. Halaman faktur terbuka. Tagihan yang belum dibayar menampilkan kotak **Lanjutkan pembayaran** dengan instruksinya.
+3. Klik **Cetak / Simpan PDF**. Pilih printer, atau pilih simpan sebagai PDF di jendela cetak browser Anda.
+4. Klik **Kembali ke Langganan** untuk kembali.
+
+</Steps>
+
+Faktur mencantumkan nama toko, tanggal terbit, tanggal bayar, **Subtotal (DPP)**, dan **Total**. Baris **PPN 11%** hanya muncul kalau tagihan itu memang dikenai PPN. Faktur ini sah tanpa tanda tangan.
+
+:::tip[Tips]
+Faktur hanya bisa dibuka saat Anda login ke toko yang bersangkutan. Untuk pembukuan, simpan setiap faktur lunas sebagai PDF.
+:::
+
+## Kalau ada masalah
+
+- *"Pilih metode pembayaran."* Pilih salah satu metode di jendela sebelum menekan **Bayar**.
+- *"Belum ada metode pembayaran aktif. Hubungi TokoΦ."* atau *"Pembayaran belum dikonfigurasi oleh platform."* Pembayaran dari pihak TokoΦ sedang tidak tersedia. Buka tiket di menu [**Bantuan**](https://app.tokophi.com/bantuan).
+- *"Tagihan tidak bisa dibatalkan."* Tagihan itu sudah dibayar atau sudah dibatalkan. Muat ulang halaman.
+- Tagihan yang Anda batalkan tercatat dengan status **Gagal** di riwayat. Itu normal, artinya tagihan tersebut tidak berlaku lagi.
+- Sudah membayar tetapi status belum **Aktif**. Muat ulang halaman. Kalau masih belum berubah, buka tiket di menu **Bantuan** dan sertakan nomor faktur.

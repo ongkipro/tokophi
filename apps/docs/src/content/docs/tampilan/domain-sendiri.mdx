@@ -1,0 +1,56 @@
+---
+title: "Pasang domain sendiri"
+seoTitle: "Pasang Domain Sendiri untuk Toko Online Anda"
+description: "Hubungkan domain milik Anda ke toko lewat Pengaturan → Domain: tambah domain, isi record CNAME dan TXT, verifikasi, lalu jadikan domain utama."
+routes: ["/pengaturan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Setiap toko selalu punya alamat bawaan `nama-toko.tokophi.id` yang aktif otomatis dan tidak bisa diubah. Setelah mengikuti artikel ini, toko Anda juga bisa dibuka di [domain sendiri](/referensi/kamus/#domain-sendiri), misalnya `namatoko.com`, dan pengunjung alamat bawaan dialihkan ke sana.
+
+## Yang Anda perlukan
+
+- Peran **Pemilik**. Hanya Pemilik yang bisa menambah dan mengatur domain ([Peran tim](/referensi/peran-tim/)).
+- Domain yang sudah Anda beli, dan akses ke panel DNS di penyedia domain tersebut.
+
+Batasnya satu domain utama (tanpa `www`) ditambah satu domain `www`, misalnya `namatoko.com` dan `www.namatoko.com`.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Pengaturan**, lalu pilih **Domain**. Alamat bawaan toko tampil di bagian **Domain bawaan**.
+2. Di bagian **Domain kustom**, ketik domain Anda, lalu klik **Tambah**. Muncul pesan *"Domain ditambahkan."* dan domain tampil dengan status **Belum diverifikasi**.
+3. Di bawah domain itu tampil *"Tambahkan 2 record ini di panel DNS domainmu:"*. Buka panel DNS di penyedia domain Anda dan buat keduanya:
+   - **CNAME**: **Nama / Host** `@` untuk domain tanpa `www` (atau dikosongkan, tergantung penyedia), atau `www` untuk domain `www`. **Nilai / Value** salin dari layar.
+   - **TXT**: **Nama / Host** `_tokophi-verify` (atau `_tokophi-verify.www` untuk domain `www`). **Nilai / Value** salin dari layar. Nilainya diawali `tokophi-verify=`.
+
+   Klik kotak nilai untuk menyalinnya, supaya tidak salah ketik.
+4. Kembali ke **Pengaturan → Domain**, lalu klik **Verifikasi**. Kalau berhasil, muncul *"Kepemilikan terverifikasi."* dan status berubah menjadi **Menunggu aktivasi** sementara sertifikat keamanan (SSL) diterbitkan otomatis.
+5. Setelah status menjadi **Aktif**, klik **Jadikan utama**. Muncul *"Domain utama diperbarui."* dan semua pengunjung diarahkan ke domain ini.
+
+</Steps>
+
+Menurut layar Domain, sertifikat biasanya terbit dalam beberapa menit, sedangkan perubahan DNS bisa perlu waktu hingga 24 jam. Record TXT boleh dihapus setelah domain aktif.
+
+:::caution[Penting]
+Begitu status menjadi **Menunggu aktivasi** atau **Aktif**, domain dikunci dan tidak bisa dihapus sendiri. Untuk mengubah atau melepasnya, klik **Ajukan perubahan**. Permintaan Anda menjadi tiket yang diproses tim TokoΦ. Sebelum terverifikasi, domain masih bisa dihapus lewat ikon tempat sampah.
+:::
+
+:::tip[Tips]
+Sebagian penyedia domain tidak mengizinkan CNAME di domain tanpa `www`. Pakai fitur ALIAS, ANAME, atau CNAME flattening kalau tersedia. Atau jadikan `www.namatoko.com` sebagai domain utama, lalu arahkan (redirect) domain tanpa `www` ke sana dari panel penyedia domain. Jangan menyalin alamat IP secara manual.
+:::
+
+## Kalau ada masalah
+
+- *"Format domain tidak valid. Contoh: toko.com atau www.toko.com"*: ketik nama domain saja, tanpa spasi.
+- *"Domain bawaan sistem tidak bisa ditambahkan. Masukkan domain milikmu sendiri (mis. toko-kamu.com)."*: alamat `.tokophi.id` sudah aktif otomatis dan tidak perlu ditambahkan.
+- *"Kamu sudah punya satu domain utama. Batasnya satu domain utama + satu www …"* atau *"Kamu sudah punya satu domain www. …"*: batas domain sudah penuh.
+- *"Domain ini sudah terdaftar. Hubungi kami jika kamu yakin ini milikmu."*: domain itu sudah dipakai toko lain. Buat [tiket bantuan](/referensi/kamus/#tiket) kalau domain itu milik Anda.
+- *"Data TXT belum ditemukan. Tunggu propagasi DNS lalu coba lagi."*: record TXT belum terbaca. Tunggu, lalu klik **Verifikasi** lagi.
+- *"Data TXT ditemukan tapi nilainya belum cocok. Pastikan disalin persis."*: salin ulang nilai TXT dari layar ke panel DNS.
+- *"CNAME mengarah ke …, bukan ke …."*: ubah nilai CNAME ke nilai yang ditampilkan di layar.
+- Status **Bermasalah**: baca pesan di bawah nama domain, perbaiki record DNS-nya, lalu klik **Coba lagi**.
+- *"Hanya domain yang sudah aktif yang bisa dijadikan domain utama."*: tunggu sampai status **Aktif**.

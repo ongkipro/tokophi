@@ -2049,6 +2049,15 @@ const RECOVER = recovered && {
       return el ? el.value : null;
     }
 
+    // Some services come back with no estimate ("" or "-"): "Estimasi  hari" reads as a broken page
+    // at the moment the buyer is deciding. Show the line only when the vendor sent a number, and never
+    // double "hari" when the vendor already wrote it.
+    function etdLine(e) {
+      var t = String(e || "").replace(/\s*hari\s*$/i, "").trim();
+      if (!/\d/.test(t)) return "";
+      return '<span class="block text-xs text-[var(--co-muted)]">Estimasi ' + esc(t) + " hari</span>";
+    }
+
     function rateRow(s, checked, opts) {
       opts = opts || {};
       // ⚠️ BADGES ONLY WHEN THE FULL SET IS KNOWN. "Termurah" ranked against the two fast couriers is
@@ -2091,7 +2100,7 @@ const RECOVER = recovered && {
       var radius = (opts.first ? " rounded-t-[7px]" : "") + (opts.last ? " rounded-b-[7px]" : "");
       return '<label class="group relative flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-black/[0.02] has-[:checked]:bg-[var(--co-accent-weak)] has-[:checked]:z-10 has-[:checked]:outline-1 has-[:checked]:-outline-offset-1 has-[:checked]:outline-[var(--co-accent)]' + radius + '">' +
         '<input type="radio" name="shipping" value="' + esc(keyOf(s)) + '" data-price="' + s.cost + '" data-label="' + esc(s.name) + '" data-cod="' + (s.cod ? "1" : "0") + '" data-svc-code="' + esc(s.code) + '" data-svc-type="' + esc(s.type) + '"' + (checked ? " checked" : "") + ' required class="h-4 w-4 shrink-0 accent-[var(--co-accent)]" />' +
-        '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span><span class="block text-xs text-[var(--co-muted)]">Estimasi ' + esc(s.etd) + ' hari</span></span>' +
+        '<span class="min-w-0 flex-1"><span class="block text-sm font-medium text-ink">' + esc(s.name) + tags + '</span>' + etdLine(s.etd) + '</span>' +
         '<span class="shrink-0 text-sm font-semibold text-ink tabular-nums">' + idr.format(s.cost) + "</span></label>";
     }
 
@@ -2170,7 +2179,7 @@ const RECOVER = recovered && {
         moreBox.innerHTML = others.length
           ? others.map(function (x, i) { return rateRow(x, keyOf(x) === sel, { last: i === others.length - 1 }); }).join("")
           : '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Tidak ada ekspedisi lain untuk rute ini.</p>';
-        if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + ")";
+        if (moreLabel) moreLabel.textContent = "Pilih ekspedisi lain (" + others.length + " layanan)"; // services, not couriers: JNE alone has REG/YES/…
       }
       bindShipping();
     }

@@ -9,6 +9,7 @@
 // pure function of its inputs so it can be exercised without a database.
 import type { Product } from "../data/catalog";
 import { retailerId, itemGroupId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
+import { feedAgeGroup, feedGender } from "@tokophi/lib/taxonomy-suggest";
 
 export type FeedProfile = {
   /**
@@ -146,13 +147,14 @@ export function feedItems({ product: p, origin, storeName, scheme, profile }: Fe
   const link = `${origin}/produk/${p.handle}`;
   // The merchant's own brand when they set one; the shop name is the fallback, not the definition.
   const brand = clamp(p.vendor?.trim() || storeName, 70);
-  const gender = p.gender || "";
+  // Enum-guarded: a stray "women" in the row is normalised, anything unknown is omitted (not rejected).
+  const gender = feedGender(p.gender) ?? "";
   // ⚠️ NOT `|| "adult"`. `age_group` is factual to all three platforms, and blank is the DEFAULT state
   // (createProduct writes null when the merchant leaves it empty) — so defaulting it published every SKU
   // of a children's-wear shop as adult apparel: mis-targeted delivery and a mismatched-attribute
   // disapproval risk, invented by us. `gender` on the line above already does the right thing: emit it
   // when it is known, omit it when it is not.
-  const ageGroup = p.ageGroup || "";
+  const ageGroup = feedAgeGroup(p.ageGroup) ?? "";
   const category = (() => {
     const path = p.googleCategoryPath || "";
     if (!path || profile.maxCategoryLevels === null) return path;

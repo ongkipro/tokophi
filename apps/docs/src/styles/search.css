@@ -1,0 +1,177 @@
+/* Search modal (spec §6.4 C2d). Starlight's Pagefind dialog, restyled: one clean surface, a large
+   borderless input with a hairline under it, results as plain rows (no grey cards, no tree lines),
+   matches in the accent colour. Unlayered on purpose so it wins over Starlight's layered rules. */
+
+site-search dialog {
+  background: var(--sl-color-bg);
+  border: 1px solid var(--sl-color-hairline);
+}
+site-search dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+  backdrop-filter: blur(2px);
+}
+@media (min-width: 50rem) {
+  site-search dialog {
+    margin-top: 12vh;
+    max-width: 42rem;
+    border-radius: 0.875rem;
+    box-shadow: 0 24px 64px -16px rgb(15 23 42 / 0.35), 0 2px 6px rgb(15 23 42 / 0.08);
+  }
+  site-search .dialog-frame { padding: 0; }
+}
+site-search .dialog-frame { gap: 0; padding: 0.75rem 0 0; }
+
+#starlight__search {
+  --pagefind-ui-scale: 0.9;
+  --pagefind-ui-border-radius: 0;
+  --pagefind-ui-background: var(--sl-color-bg);
+}
+
+/* Input row */
+#starlight__search .pagefind-ui__form { position: relative; }
+#starlight__search .pagefind-ui__search-input {
+  height: 3.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  border-radius: 0;
+  background: transparent;
+  font-size: 1.0625rem;
+  padding-inline-start: 3.25rem;
+  outline: none;
+}
+#starlight__search .pagefind-ui__search-input::placeholder { color: var(--sl-color-gray-3); }
+#starlight__search input:focus { --pagefind-ui-border: var(--sl-color-hairline); }
+#starlight__search .pagefind-ui__form::before {
+  --pagefind-ui-text: var(--sl-color-accent);
+  inset-inline-start: 1.25rem;
+}
+#starlight__search .pagefind-ui__search-clear { height: 3.75rem; }
+/* Phone: Starlight narrows the input by --sl-search-cancel-space to make room for "Batal", so the
+   hairline stopped short of the button and the button sat lower and flush with the screen edge. Run
+   the input (and its hairline) under the whole row, keep the text clear of the clear/cancel buttons,
+   and give "Batal" the input's height and an inner gutter. */
+@media (max-width: 49.99rem) {
+  #starlight__search .pagefind-ui__search-input {
+    width: 100%;
+    padding-inline-end: calc(var(--sl-search-cancel-space) + 3.5rem);
+  }
+  site-search button[data-close-modal] { height: 3.75rem; padding-inline: 1rem; }
+}
+
+/* Results area */
+#starlight__search .pagefind-ui__drawer { padding: 0.25rem 0.75rem 0.75rem; }
+#starlight__search .pagefind-ui__message {
+  padding: 0.75rem 0.5rem 0.25rem;
+  font-size: var(--sl-text-xs);
+  font-weight: 500;
+  color: var(--sl-color-gray-3);
+}
+#starlight__search .pagefind-ui__results > * + * { margin-top: 0.25rem; }
+#starlight__search .pagefind-ui__result-inner { gap: 0; }
+
+/* Page row and section rows: plain, no card background, no tree diagram. */
+#starlight__search .pagefind-ui__result-title:not(:where(.pagefind-ui__result-nested *)),
+#starlight__search .pagefind-ui__result-nested {
+  background: transparent;
+  border-radius: 0.5rem;
+}
+#starlight__search .pagefind-ui__result-inner > .pagefind-ui__result-title {
+  padding: 0.6rem 0.75rem 0.35rem 2.5rem;
+}
+#starlight__search .pagefind-ui__result-inner > .pagefind-ui__result-title::before {
+  inset-inline-start: 0.6rem;
+  width: 1.25rem;
+  background: var(--sl-color-gray-3);
+}
+#starlight__search .pagefind-ui__result-nested { padding: 0.45rem 0.75rem 0.45rem 2.5rem; }
+#starlight__search .pagefind-ui__result-nested::before { content: none; }
+#starlight__search .pagefind-ui__result-link { font-weight: 600; }
+#starlight__search .pagefind-ui__result-nested .pagefind-ui__result-link {
+  font-weight: 500;
+  --pagefind-ui-text: var(--sl-color-gray-1);
+}
+#starlight__search .pagefind-ui__result-excerpt {
+  margin-top: 0.15rem;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+#starlight__search mark {
+  background: transparent;
+  color: var(--sl-color-accent);
+  font-weight: 600;
+}
+:root[data-theme="dark"] #starlight__search mark { color: var(--sl-color-accent-high); }
+
+/* Hover / keyboard focus: a quiet accent tint and a 2px rule, never a heavy outline. */
+#starlight__search .pagefind-ui__result-title:not(:where(.pagefind-ui__result-nested *)):hover,
+#starlight__search .pagefind-ui__result-title:not(:where(.pagefind-ui__result-nested *)):focus-within,
+#starlight__search .pagefind-ui__result-nested:hover,
+#starlight__search .pagefind-ui__result-nested:focus-within {
+  outline: none;
+  background: color-mix(in srgb, var(--sl-color-accent-low) 55%, transparent);
+  box-shadow: inset 2px 0 0 var(--sl-color-accent);
+}
+#starlight__search .pagefind-ui__result-link:focus-visible { outline: none; }
+
+#starlight__search .pagefind-ui__button {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--sl-color-gray-2);
+  font-weight: 500;
+  height: 2.5rem;
+}
+#starlight__search .pagefind-ui__button:hover { border-color: var(--sl-color-gray-3); color: var(--sl-color-white); }
+
+/* Empty state + footer hint (injected by SearchExtras.astro). Shown only while the field is empty. */
+.tp-search-empty { display: none; padding: 1rem 1.25rem 0.5rem; }
+.dialog-frame:has(.pagefind-ui__search-input:placeholder-shown) .tp-search-empty { display: block; }
+.tp-search-empty h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  color: var(--sl-color-gray-3);
+}
+.tp-search-empty ul { list-style: none; margin: 0; padding: 0; }
+.tp-search-empty a {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  margin-inline: -0.75rem;
+  border-radius: 0.5rem;
+  color: var(--sl-color-gray-1);
+  text-decoration: none;
+}
+.tp-search-empty a svg { flex: none; color: var(--sl-color-gray-4); font-size: 1rem; }
+.tp-search-empty a:hover,
+.tp-search-empty a:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--sl-color-accent-low) 55%, transparent);
+  box-shadow: inset 2px 0 0 var(--sl-color-accent);
+  color: var(--sl-color-white);
+}
+.tp-search-foot {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding: 0.65rem 1.25rem;
+  border-top: 1px solid var(--sl-color-hairline);
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+}
+.tp-search-foot kbd {
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.25rem;
+  font-family: inherit;
+  font-size: inherit;
+}
+@media (min-width: 50rem) { .tp-search-foot { display: flex; } }
+/* Page titles in results: one step above section rows, not a heading-sized jump. */
+#starlight__search .pagefind-ui__result-inner > .pagefind-ui__result-title .pagefind-ui__result-link { font-size: var(--sl-text-base); }
+/* Hierarchy (render critique): a section row must never out-size its page row. */
+#starlight__search .pagefind-ui__result-nested .pagefind-ui__result-link { font-size: 0.9375rem; }
+/* The page-top section repeats the page title (review 2026-10-12): the page row already says it. */
+#starlight__search .pagefind-ui__result-nested:has(a[href$="#_top"]) { display: none; }

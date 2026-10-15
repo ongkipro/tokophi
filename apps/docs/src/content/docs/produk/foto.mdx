@@ -1,0 +1,68 @@
+---
+title: "Tambah dan atur foto produk"
+seoTitle: "Foto Produk: Format, Batas 2 MB, dan Foto Utama"
+description: "Unggah foto produk dalam format yang diterima, pahami batas 2 MB dan konversi WebP, lalu tentukan foto mana yang menjadi gambar utama di toko."
+routes: ["/produk/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import editor from "../../../assets/screens/seller-produk-editor-1600.webp";
+
+Setelah langkah ini produk Anda punya foto di kartu **Media**, dengan foto yang benar sebagai gambar utama di daftar produk dan halaman produk.
+
+## Yang Anda perlukan
+
+- Produk yang sudah disimpan minimal sekali. Pada produk yang belum pernah disimpan, kartu **Media** bertuliskan **Foto belum bisa ditambahkan**. Lihat [Tambah produk pertama](/mulai/tambah-produk/).
+- Foto berformat JPG, PNG, WebP, atau SVG, maksimal 2 MB per foto.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Produk**, lalu klik produknya.
+2. Di kartu **Media**, klik kotak **Unggah** dan pilih foto. Anda juga bisa menyeret satu atau beberapa foto sekaligus ke area foto.
+3. Tunggu sampai tulisan **Mengunggah…** hilang dan muncul pesan *"Gambar diunggah (dikonversi ke WebP)."* Foto langsung tersimpan, tidak perlu menekan **Simpan**.
+4. Foto pertama diberi label **Utama**. Foto ini yang tampil di daftar produk dan sebagai gambar pertama di halaman produk.
+5. Untuk menghapus foto, arahkan kursor ke foto itu lalu klik ikon tempat sampah.
+
+</Steps>
+
+<Shot src={editor} alt="Kartu Media di editor produk: foto berlabel Utama, kotak Unggah, dan keterangan maksimal 2MB serta konversi WebP." caption="Kartu Media. Foto pertama otomatis menjadi gambar utama." />
+
+### Apa yang terjadi pada foto Anda
+
+- JPG, PNG, dan GIF diubah menjadi WebP supaya toko tetap ringan. GIF bergerak menjadi gambar diam.
+- Foto yang sisi terpanjangnya lebih dari 2000 piksel diperkecil menjadi 2000 piksel.
+- Foto WebP hanya dikompres ulang kalau hasilnya benar-benar lebih kecil. Kalau tidak, file Anda disimpan apa adanya.
+- SVG disimpan tanpa diubah.
+- Orientasi foto dari kamera ponsel diikuti, jadi foto tidak tampil miring.
+
+### Mengganti gambar utama
+
+Tidak ada tombol untuk menggeser urutan foto. Urutan mengikuti urutan unggah, dan foto yang dihapus membuat foto berikutnya naik ke urutan pertama. Jadi, untuk menjadikan foto lain sebagai gambar utama:
+
+<Steps>
+
+1. Hapus foto yang sekarang berlabel **Utama**, beserta foto lain yang harus berada di depan foto pilihan Anda.
+2. Foto pilihan Anda sekarang berada di urutan pertama dan berlabel **Utama**.
+3. Unggah lagi foto yang tadi dihapus kalau masih ingin dipakai. Foto itu masuk di urutan paling belakang.
+
+</Steps>
+
+:::tip[Tips]
+Unggah foto utama lebih dulu, baru foto pendukungnya. Dengan begitu Anda tidak perlu menghapus dan mengunggah ulang.
+:::
+
+:::note[Catatan]
+Foto berlaku untuk seluruh produk. Belum ada pengaturan foto khusus per [varian](/produk/varian/).
+:::
+
+## Kalau ada masalah
+
+- *"… melebihi 2MB (… MB)."*: perkecil atau kompres foto di bawah 2 MB, lalu unggah lagi.
+- *"… harus berupa gambar."*: file yang dipilih bukan gambar. Pilih file JPG, PNG, WebP, atau SVG.
+- *"… gagal diunggah."*: coba unggah ulang. Untuk SVG, file yang berisi skrip atau bagian aktif lain ditolak. Simpan ulang SVG tanpa bagian itu, atau ubah ke PNG.
+- *"Gagal menghapus gambar"*: muat ulang halaman, lalu coba lagi.
+- Kotak **Unggah** tidak ada: peran Anda di toko tidak punya izin mengubah media. Minta pemilik toko mengunggahnya.

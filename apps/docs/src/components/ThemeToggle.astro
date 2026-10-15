@@ -1,0 +1,68 @@
+---
+// ThemeSelect override: one icon button instead of a dropdown (owner ruling 2026-10-12).
+// Default = follow the device (auto). A click switches to the other theme; switching back to what the
+// device prefers clears the stored choice, so the site returns to following the device automatically.
+// Same storage key as Starlight's ThemeProvider ("starlight-theme"), which applies it before first paint.
+import Lucide from "./Lucide.astro";
+---
+
+<starlight-theme-toggle>
+  <button type="button" class="tp-theme-btn" aria-label="Ganti tema">
+    <Lucide name="moon" size={18} class="i-moon" />
+    <Lucide name="sun" size={18} class="i-sun" />
+  </button>
+</starlight-theme-toggle>
+
+<style>
+  .tp-theme-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+  }
+  .tp-theme-btn:hover { color: var(--sl-color-white); background: var(--sl-color-gray-6); }
+  .tp-theme-btn:focus-visible { outline: 2px solid var(--sl-color-accent); outline-offset: 2px; }
+  :global([data-theme="light"]) .tp-theme-btn :global(.i-sun) { display: none; }
+  :global([data-theme="dark"]) .tp-theme-btn :global(.i-moon) { display: none; }
+</style>
+
+<script>
+  const KEY = "starlight-theme";
+  const media = matchMedia("(prefers-color-scheme: light)");
+  const device = () => (media.matches ? "light" : "dark");
+  const stored = () => {
+    try { return localStorage.getItem(KEY) || ""; } catch { return ""; }
+  };
+  const store = (v: string) => {
+    try { localStorage.setItem(KEY, v); } catch { /* storage blocked: the choice lasts for this page only */ }
+  };
+  const current = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
+  const label = () => {
+    const next = current() === "dark" ? "terang" : "gelap";
+    document.querySelectorAll<HTMLButtonElement>(".tp-theme-btn").forEach((b) => {
+      b.setAttribute("aria-label", `Ganti ke mode ${next}`);
+      b.title = `Mode ${next}`;
+    });
+  };
+  media.addEventListener("change", () => {
+    if (!stored()) { document.documentElement.dataset.theme = device(); label(); }
+  });
+
+  class ThemeToggle extends HTMLElement {
+    connectedCallback() {
+      label();
+      this.querySelector("button")?.addEventListener("click", () => {
+        const next = current() === "dark" ? "light" : "dark";
+        store(next === device() ? "" : next);
+        document.documentElement.dataset.theme = next;
+        label();
+      });
+    }
+  }
+  if (!customElements.get("starlight-theme-toggle")) customElements.define("starlight-theme-toggle", ThemeToggle);
+</script>

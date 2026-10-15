@@ -1,0 +1,20 @@
+---
+// A real Dashboard Seller / storefront screenshot with a caption. Never a drawn mock (spec §6.5).
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+  src: ImageMetadata;
+  alt: string;
+  caption?: string;
+  phone?: boolean;
+}
+const { src, alt, caption, phone = false } = Astro.props;
+---
+<figure class={phone ? "shot-phone" : undefined}>
+  {/* The link opens the full-size original: wide panel captures are hard to read on a phone. */}
+  <a href={src.src} aria-label={`Buka gambar ukuran penuh: ${alt}`}>
+    <Image src={src} alt={alt} widths={phone ? [320, 640] : [480, 736, 1200]} sizes={phone ? "20rem" : "(min-width: 72rem) 46rem, 100vw"} />
+  </a>
+  <figcaption>{caption && <span>{caption} </span>}<span class="tp-zoom">Ketuk atau klik gambar untuk memperbesar.</span></figcaption>
+</figure>

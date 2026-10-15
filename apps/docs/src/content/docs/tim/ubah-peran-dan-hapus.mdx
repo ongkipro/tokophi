@@ -1,0 +1,67 @@
+---
+title: "Ubah peran atau keluarkan anggota"
+seoTitle: "Ubah Peran atau Keluarkan Anggota Tim Toko Online"
+description: "Ganti peran anggota tim atau keluarkan mereka dari Dashboard Seller. Perubahan berlaku seketika, tanpa menunggu anggota keluar dan login ulang."
+routes: ["/pengaturan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Di sini Anda menyesuaikan akses anggota tim: menaikkan atau menurunkan perannya, atau mencabut aksesnya sama sekali saat ia berhenti bekerja. Hasilnya, setiap anggota hanya memegang akses yang memang ia butuhkan hari ini.
+
+## Yang Anda perlukan
+
+- Masuk sebagai **Pemilik** toko. Admin dan peran lain bisa melihat daftar anggota, tetapi tidak melihat tombol aksinya.
+- Anggota yang sudah ada di tim. Kalau belum, [undang dulu](/tim/undang-anggota/).
+
+## Langkah
+
+### Ubah peran
+
+<Steps>
+
+1. Buka **Pengaturan**, lalu klik **Pengguna** di daftar kiri.
+2. Di baris anggota, klik tombol tiga titik (**Aksi anggota**) di ujung kanan.
+3. Di bawah **Ubah peran**, klik peran barunya. Menu hanya menampilkan peran selain peran anggota saat ini.
+4. Muncul pesan **Peran diperbarui.** dan label peran di baris itu berganti.
+
+</Steps>
+
+Peran baru berlaku seketika. Setiap tindakan berikutnya dari anggota itu diperiksa dengan peran barunya, tanpa ia perlu keluar dan masuk lagi. Menu dan tombol di layarnya ikut menyesuaikan setelah ia memuat ulang halaman.
+
+### Keluarkan anggota
+
+<Steps>
+
+1. Buka **Pengaturan → Pengguna**, lalu klik tombol tiga titik di baris anggota.
+2. Klik **Keluarkan** di bagian paling bawah menu.
+3. Muncul pesan **Anggota dikeluarkan.** dan anggota hilang dari daftar.
+
+</Steps>
+
+:::caution[Penting]
+**Keluarkan** langsung bekerja tanpa jendela konfirmasi. Periksa nama di baris itu sebelum mengklik.
+:::
+
+Anggota yang dikeluarkan kehilangan akses ke toko Anda seketika: halaman atau tindakan berikutnya darinya ditolak dan ia harus masuk lagi. Akun TokoΦ-nya sendiri tidak dihapus, karena akun yang sama bisa dipakai di toko lain. Tidak ada status "nonaktif": mengeluarkan anggota adalah satu-satunya cara mencabut aksesnya.
+
+:::note[Catatan]
+Kalau anggota yang sudah dikeluarkan Anda undang lagi, ia masuk dengan kata sandi lamanya. TokoΦ tidak membuat kata sandi sementara baru untuk akun yang sudah ada. Jadi mengeluarkan lalu mengundang ulang **bukan** cara mereset kata sandi yang terlupa. Untuk itu, hubungi tim TokoΦ lewat halaman [Kontak](https://tokophi.com/kontak/).
+:::
+
+## Yang tidak bisa diubah
+
+- Peran **Pemilik** tidak bisa diubah, dan pemilik tidak bisa dikeluarkan. Baris pemilik tidak punya tombol tiga titik.
+- Anda tidak bisa menjadikan anggota lain **Pemilik**. Pilihan peran hanya **Admin**, **Staf**, **Staf Gudang**, **Advertiser**, dan **Customer Service**.
+- Anda tidak bisa mengeluarkan diri sendiri.
+
+Bingung memilih peran? Bandingkan aksesnya di [Peran tim](/referensi/peran-tim/).
+
+## Kalau ada masalah
+
+- *"Peran pemilik tidak bisa diubah."* atau *"Pemilik tidak bisa dikeluarkan."* Pemilik toko selalu tetap pemilik.
+- *"Anda tidak bisa mengeluarkan diri sendiri."* Akun yang sedang Anda pakai tidak bisa dikeluarkan dari layar ini.
+- *"Anggota tidak ditemukan."* Anggota ini sudah dikeluarkan, mungkin dari tab lain. Muat ulang halaman.
+- Label peran di baris anggota **Advertiser** atau **Customer Service** tampil kosong. Ini kekurangan tampilan di kartu **Pengguna & Peran**. Perannya tetap tersimpan dengan benar. Anggota bisa melihat perannya sendiri di menu avatar kanan atas.
+- Anggota yang dikeluarkan mendapat *"Akun ini tidak punya akses ke toko mana pun. Minta pemilik toko mengundangmu lagi."* saat login. Ini berarti aksesnya memang sudah dicabut dan ia tidak tergabung di toko lain.

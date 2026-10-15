@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isNamelessHost } from "./host-fallback";
+import { isNamelessHost, isReservedStoreLabel } from "./host-fallback";
 
 
 
@@ -39,4 +39,21 @@ describe("isNamelessHost", () => {
   // A lookalike must not slip through on a suffix match.
   it.each(["nottokophi.id", "tokophi.id.evil.com", "faketokophi.com"])("refuses lookalike %j", (h) =>
     expect(isNamelessHost(h)).toBe(false));
+});
+
+describe("isReservedStoreLabel", () => {
+  const reserved = new Set(["admin", "api", "toko", "panduan", "www"]);
+  // 🔴 Live 2026-10-12: each of these served the demo shop (200, self canonical).
+  it.each(["admin.tokophi.id", "api.tokophi.id", "toko.tokophi.id", "panduan.tokophi.id"])(
+    "refuses %j — a reserved name on the store domain is not a store",
+    (h) => expect(isReservedStoreLabel(h, "tokophi.id", reserved)).toBe(true),
+  );
+  it.each([
+    ["batiknusantara.tokophi.id", "a real store slug"],
+    ["toko.tokophi.com", "the demo host lives in another zone"],
+    ["tokophi.id", "the apex has no label"],
+    ["a.admin.tokophi.id", "two labels deep is not <label>.<base>"],
+    ["localhost", "local development"],
+  ])("leaves %j alone (%s)", (h) => expect(isReservedStoreLabel(h, "tokophi.id", reserved)).toBe(false));
+  it("does nothing without a base domain", () => expect(isReservedStoreLabel("admin.tokophi.id", "", reserved)).toBe(false));
 });

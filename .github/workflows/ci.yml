@@ -235,6 +235,10 @@ jobs:
   #     `npm run build -w @tokophi/landing`  (no DB, no DATABASE_URL — by design; PUBLIC_* are
   #      baked at build time and every one of them has either a Dockerfile default or a deliberate
   #      "unset means not supplied" contract, so a bare build is the honest one)
+  #   apps/docs/Dockerfile
+  #     `npm run check -w @tokophi/docs`  (routes ⊂ page-map, astro build, SEO, internal links —
+  #      the Dockerfile runs the same script, so a red docs page is caught here and not as a
+  #      failed Coolify image build of the whole compose stack after merge)
   #
   # ⚠️ THE DUMMY DATABASE_URL IS NOT OPTIONAL FOR THE TWO NEXT BUILDS. Route collection imports
   # `@tokophi/db`, whose `client.ts` throws AT MODULE LOAD when `planPools()` cannot resolve a
@@ -245,10 +249,10 @@ jobs:
   # refusal-to-start by design (Task 4.12). There is no service container here on purpose — a build
   # that needs a live database to succeed is a build the Dockerfile could not run either.
   #
-  # COST (the repo is private again since 2026-09-04, so minutes are metered): three parallel
+  # COST (the repo is private again since 2026-09-04, so minutes are metered): four parallel
   # ubuntu jobs, each `npm ci` (or a node_modules cache hit) + one build. Measured 2026-09-08 from a
   # clean `npm ci` on a dev laptop (warm npm cache): npm ci 34 s · admin 52 s · super-admin 21 s ·
-  # landing 13 s. A hosted runner is ~2× slower, so budget ~2–4 min each ⇒ ~6–12 billed minutes
+  # landing 13 s (docs, added 2026-10-12: ~10 s check). A hosted runner is ~2× slower, so budget ~2–4 min each ⇒ ~6–12 billed minutes
   # per run on top of the ~20 the `test` job already spends. `needs: test` so a PR that is
   # already red on tests does not also pay for three builds; the price is that a build-only
   # breakage is reported after the test job, not beside it.
@@ -261,7 +265,7 @@ jobs:
       # Every surface's verdict is evidence; a red admin must not hide a red landing.
       fail-fast: false
       matrix:
-        app: [admin, super-admin, landing]
+        app: [admin, super-admin, landing, docs]
 
     env:
       NEXT_TELEMETRY_DISABLED: "1"
@@ -300,7 +304,7 @@ jobs:
       # so today it saves the TypeScript pass and little else; it is cheap and becomes worth more
       # if Turbopack's persistent build cache is ever switched on. Do not expect it to hide a slow
       # build.
-      - if: matrix.app != 'landing'
+      - if: matrix.app != 'landing' && matrix.app != 'docs'
         uses: actions/cache@v4
         with:
           path: apps/${{ matrix.app }}/.next/cache
@@ -308,7 +312,7 @@ jobs:
           restore-keys: |
             next-${{ matrix.app }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
-      - run: npm run build -w @tokophi/${{ matrix.app }}
+      - run: npm run ${{ matrix.app == 'docs' && 'check' || 'build' }} -w @tokophi/${{ matrix.app }}
 
 # NOT here yet, deliberately:
 #   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it

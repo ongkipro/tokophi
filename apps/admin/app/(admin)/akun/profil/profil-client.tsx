@@ -29,7 +29,7 @@ export function ProfilClient({ profile }: { profile: Profile }) {
     });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       {/* identity */}
       <Card className="lg:col-span-1">
         <CardContent className="flex flex-col items-center gap-3 py-8 text-center">

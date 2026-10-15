@@ -1,0 +1,45 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import PhiOrnament from "../components/PhiOrnament.astro";
+import Pricing from "../components/Pricing.astro";
+import FeeTable from "../components/FeeTable.astro";
+import Closing from "../components/home/Closing.astro";
+import { BILLING } from "@tokophi/lib/billing";
+
+const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
+const title = "Harga Langganan Toko Online Rp275.000 per Bulan - TokoΦ";
+const description = "Satu paket TokoΦ dengan semua fitur: uji coba 3 hari, Rp50.000 bulan pertama, lalu Rp275.000/bulan atau Rp2.700.000/tahun. Tanpa komisi penjualan.";
+const url = "https://tokophi.com/harga/";
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Product",
+      name: "TokoΦ: langganan toko online",
+      description,
+      brand: { "@type": "Brand", name: "TokoΦ" },
+      offers: [
+        { "@type": "Offer", name: "Bulanan", price: BILLING.MONTHLY_IDR, priceCurrency: "IDR", url },
+        { "@type": "Offer", name: "Tahunan", price: BILLING.ANNUAL_IDR, priceCurrency: "IDR", url },
+      ],
+    },
+  ],
+};
+---
+
+<MarketingLayout {title} {description} path="/harga/" {jsonLd}>
+  <section class="band band-ink" aria-labelledby="harga-title">
+    <PhiOrnament class="band-phi" />
+    <div class="section"><Pricing {signupUrl} headingLevel="h1" /></div>
+  </section>
+  <section class="section" aria-labelledby="fees-title">
+    <h2 id="fees-title" class="h2">Siapa membayar apa.</h2>
+    <p class="lede">Biaya pembayaran dan ongkir ditanggung pembeli dan tampil jelas di checkout. Langganan adalah satu-satunya biaya Anda.</p>
+    <div class="fees-wrap"><FeeTable /></div>
+  </section>
+  <Closing {signupUrl} secondary={{ href: "/#demo", label: "Lihat toko demo" }} tight />
+</MarketingLayout>
+
+<style>
+  .fees-wrap { margin-top: clamp(2rem, 4vw, 2.75rem); }
+</style>

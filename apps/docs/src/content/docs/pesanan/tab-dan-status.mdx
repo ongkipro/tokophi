@@ -1,0 +1,73 @@
+---
+title: "Tab dan status pesanan"
+seoTitle: "Tab dan Status Pesanan: Cari, Saring, dan Tindak"
+description: "Cara membaca tab di halaman Pesanan, mencari dan menyaring pesanan, serta tombol yang tepat untuk setiap status, dari Belum Bayar sampai Selesai."
+routes: ["/pesanan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Setelah membaca artikel ini Anda tahu tab mana yang perlu dibuka setiap hari, cara menemukan satu pesanan dengan cepat, dan tombol apa yang aman ditekan untuk setiap status. Arti lengkap setiap status ada di [Status pesanan](/referensi/status-pesanan/#arti-setiap-status).
+
+## Yang Anda perlukan
+
+- Peran Pemilik, Admin, Staf, atau Customer Service. Peran lain hanya bisa melihat pesanan, tanpa tombol aksi. Lihat [Peran tim](/referensi/peran-tim/).
+
+## Langkah
+
+<Steps>
+
+1. Klik menu **Pesanan** di sidebar. Anda langsung dibawa ke tab **Perlu Dikirim**, yaitu pesanan yang angkanya muncul di menu. Submenu **Pesanan Saya** membuka semua pesanan, dan **Pengembalian/Pembatalan** membuka pesanan yang batal atau retur.
+2. Pilih tab. Angka di samping setiap tab menghitung pesanan yang cocok dengan pencarian dan filter yang sedang aktif.
+3. Untuk mencari, klik tombol di kiri kotak pencarian dan pilih **No. Pesanan**, **Nama Pembeli**, **Produk**, atau **No. Resi**. Ketik kata kuncinya, lalu klik **Cari**.
+4. Persempit dengan filter **Jasa Kirim** atau **Metode Bayar**. Klik **Reset** untuk menghapus pencarian dan semua filter.
+5. Lakukan tindakan lewat tombol di kolom **Aksi**. Tombolnya mengikuti status pesanan (lihat tabel di bawah). Menu **⋯** di sebelahnya berisi **Lihat detail**.
+
+</Steps>
+
+Satu halaman menampilkan 10 pesanan. Tombol **Ekspor halaman** mengunduh file CSV berisi pesanan yang sedang tampil saja, bukan seluruh daftar.
+
+### Tombol aksi menurut status
+
+| Status | Tombol di kolom Aksi | Yang perlu Anda lakukan |
+|---|---|---|
+| **Baru**, tab Belum Bayar | **Proses** | Jangan ditekan. Tunggu pembeli membayar. |
+| **Baru**, tab Perlu Dikirim | **Proses** | Siapkan paket, lalu pesan kurir. Lihat [Pesan kurir](/pesanan/booking-pengiriman/). |
+| **Diproses** | **Atur Pengiriman** | Membuka detail pesanan untuk memesan kurir. |
+| **Dikirim** | **Selesaikan** | Biasanya tidak perlu ditekan. Status berubah sendiri dari data kurir. |
+| **Selesai**, **Batal**, **Retur** | **Lihat** | Tidak ada tindakan lagi. |
+
+Di kolom pembayaran, label **Belum dibayar** menandai pesanan yang belum lunas. Di kolom **Jasa Kirim**, label **Kendala** muncul kalau kurir melaporkan masalah pada paket. Label itu hilang sendiri begitu paket bergerak lagi. **Belum diatur** berarti kurir belum dipesan.
+
+:::caution[Penting]
+Tombol **Proses** juga muncul pada pesanan yang belum dibayar. Jangan ditekan: pesanan QRIS atau VA yang belum dibayar hanya batal otomatis setelah 24 jam selama statusnya masih **Baru**. Pesanan yang sudah Anda ubah ke **Diproses** tidak ikut batal otomatis dan tetap menunggu di tab **Belum Bayar**.
+:::
+
+### Membatalkan pesanan
+
+:::caution[Penting]
+**Batalkan** langsung dijalankan tanpa jendela konfirmasi dan tidak bisa diurungkan. Tombol ini juga tidak membatalkan kurir yang sudah dipesan.
+:::
+
+<Steps>
+
+1. Kalau kurir sudah dipesan, buka detail pesanan dan batalkan pengirimannya dulu dari kartu **Pengiriman**.
+2. Di daftar pesanan, klik menu **⋯** pada pesanan itu, lalu pilih **Batalkan**. Menu ini hanya ada pada pesanan yang belum Selesai, Batal, atau Retur.
+3. Status langsung berubah menjadi **Batal**, stok kembali, dan hasil penjualan pesanan itu ditarik dari saldo. Untuk pesanan yang sudah dibayar, baris **Pengembalian dana** muncul di kartu **Pembayaran** pada detail pesanan. Pengembalian dana ke pembeli diurus TokoΦ, bukan oleh Seller.
+
+</Steps>
+
+Kolom tenggat kirim memang tidak ada. Halaman Pesanan menuliskannya sendiri: *"Batas Waktu Pengiriman belum ada."*
+
+:::tip[Tips]
+Tab, pencarian, dan filter tersimpan di alamat halaman. Simpan alamatnya sebagai bookmark atau kirim ke anggota tim untuk membuka daftar yang sama.
+:::
+
+## Kalau ada masalah
+
+- *"Tidak ada pesanan yang cocok dengan pencarian/filter ini."* Klik **Reset**, lalu cari lagi dengan kata kunci yang lebih pendek.
+- *"Belum ada jasa kirim pada pesanan mana pun …"* di filter **Jasa Kirim**. Filter ini hanya berisi kurir yang sudah pernah dipesan untuk pesanan Anda.
+- *"Status pesanan sudah seperti itu — tidak ada yang diubah."* Orang lain atau data kurir sudah mengubahnya lebih dulu. Tidak perlu tindakan.
+- *"Perubahan status itu tidak diizinkan dari status pesanan saat ini. Muat ulang halaman untuk melihat status terbarunya."* Muat ulang halaman. Perpindahan yang boleh ada di [Status pesanan](/referensi/status-pesanan/#perpindahan-yang-diperbolehkan).
+- *"Pesanan ini sudah dibatalkan atau diretur, jadi statusnya tidak bisa diubah lagi. …"* Batal dan Retur adalah status akhir.
