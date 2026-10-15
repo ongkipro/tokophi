@@ -2,7 +2,7 @@
 import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown, Info } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
-import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip, UPLOAD_WIDTHS } from "../data/catalog";
+import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip, storeAffiliateEnabled, UPLOAD_WIDTHS } from "../data/catalog";
 import { noVariantChoice } from "../lib/cart-variant";
 import { getRecoveredCheckout } from "../data/checkout";
 import { PAYMENT_FEES, channelFeeValue, type FeeKind } from "@tokophi/lib/payment-fees";
@@ -104,6 +104,7 @@ const TAX_INCLUSIVE = TAX.inclusive;
 // Automatic free shipping (PROMO P1). The order API is authoritative; this only makes the summary show
 // ongkir GRATIS the moment the threshold is met, matching what will be charged.
 const FS = await storeFreeShip(store.id);
+const AFFILIATE_ON = await storeAffiliateEnabled(store.id); // 0116: the optional code field below
 const FREE_SHIP_ENABLED = FS.enabled;
 const FREE_SHIP_MIN = FS.minIdr;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
@@ -244,6 +245,11 @@ const RECOVER = recovered && {
         </div>
         <p id="voucher-msg" class="mt-1.5 text-xs" hidden></p>
       </div>
+      {/* Affiliate code (0116) — a selector the order API resolves; a wrong one never blocks the order. */}
+      {AFFILIATE_ON && (
+        <div class="mt-3"><label for="affiliate-input" class="mb-1.5 block text-sm text-[var(--co-muted)]">Kode affiliate (opsional)</label>
+          <input id="affiliate-input" type="text" autocomplete="off" spellcheck="false" maxlength="20" class="w-full rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-sm uppercase text-ink outline-none focus:border-[var(--co-accent)]" /></div>
+      )}
 
       <div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">
         <span class="text-base font-medium text-ink">Total</span>
@@ -2692,6 +2698,9 @@ const RECOVER = recovered && {
           // PROMO P0 — the voucher CODE (a choice); the order API re-validates + re-prices it (lib/promo),
           // never trusting the client's discount amount. Empty when no voucher applied.
           discountCode: voucherCode || undefined,
+          // Affiliate (0116): the typed code, and the `?ref=` MarketingPixels captured — only within 30 days.
+          affiliateCode: (document.getElementById("affiliate-input") || {}).value || undefined,
+          refCode: (function () { try { var r = JSON.parse(localStorage.getItem("tphi:ref") || "null"); return r && Date.now() - Number(r.t || 0) <= 30 * 86400000 ? String(r.v).slice(0, 20) : undefined; } catch (e) { return undefined; } })(),
           // The checkout session this order came from → /api/public/order marks it `pulih` with
           // recovered_order_id. "Recovered" = THIS session became THAT order; anything else is a guess.
           sessionId: SESSION_ID,

@@ -219,6 +219,21 @@ The normative statement, verification method, and current status for each identi
 | F-K12 | An authenticated buyer can open **Toko**, an order-derived list of merchants represented in eligible linked/claimed orders, then choose `Belanja lagi` to open the merchant's current storefront. This is not a wishlist/follow graph and must not recreate an old cart or assume historical price, promotion, publication, or stock. | [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §5D/§6; proposed `GET /stores` in [`../openapi/account.yaml`](../openapi/account.yaml) | **NOT MET — PLANNED**: local prototype/contract only; no account service or production endpoint exists. |
 | F-K13 | After explicit store authorization, returning-buyer checkout prefills only the accepted contact and selected saved address as a **reviewable summary**. The buyer confirms or edits instead of re-entering all fields; checkout never auto-submits and recalculates shipping, promotions, inventory, and totals before acceptance. Guest checkout remains available. | [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §5F/§6; account authorization projection | **NOT MET — PLANNED**: no central identity, tenant BFF session, production prefill, or conformance evidence exists. |
 
+### 2.10 Store affiliate programme (spec: [`AFFILIATE_SPEC.md`](../AFFILIATE_SPEC.md), 2026-10-11)
+
+| ID | Requirement | Verify | Status |
+|---|---|---|---|
+| F-A1 | Programme off ⇒ no `/affiliate` page, no applications, no attribution. | Task 9.2 / 9.5 tests | PLANNED |
+| F-A2 | Public application on the storefront creates a `menunggu` affiliate for the Host's store; bot-filtered, 5/hour/IP. | Task 9.5 | PLANNED |
+| F-A3 | `affiliates:write` approves / rejects / deactivates / adds affiliates, store-scoped. | Task 9.4 | PLANNED |
+| F-A4 | Typed code beats a captured `?ref` (30 days, last click); only `aktif` affiliates of that store attribute. | Task 9.2 | PLANNED |
+| F-A5 | Unknown / inactive code or self-referral (same phone) ⇒ order normal, no commission. | Task 9.2 | PLANNED |
+| F-A6 | Commission frozen at order time in the order txn: Σ line × (goods proceeds / subtotal) × rate, floored. | Task 9.1 / 9.2 | PLANNED |
+| F-A7 | `batal`/`retur` voids an unpaid commission; `selesai` sets `eligible_at = now + hold days`; ready is derived. | Task 9.3 | PLANNED |
+| F-A8 | Mark paid only when ready; sets `dibayar` + `paid_at`. Platform never moves affiliate money. | Task 9.4 | PLANNED |
+| F-A9 | Per-product `affiliate_commission_pct` overrides the store default. | Task 9.1 / 9.4 | PLANNED |
+| F-A10 | `affiliates` / `affiliate_commissions` carry `store_id` + RLS; seller reads/writes via `withTenant`. | `verify-rls` | PLANNED |
+
 ---
 
 ## 3. Non-functional requirements

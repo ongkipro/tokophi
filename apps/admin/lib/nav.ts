@@ -109,6 +109,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Voucher", href: "/diskon" },
           { label: "Flash Sale", href: "/flash-sale" },
           { label: "Landing Page", href: "/promo" },
+          { label: "Affiliate", href: "/affiliate" },
         ],
       },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },

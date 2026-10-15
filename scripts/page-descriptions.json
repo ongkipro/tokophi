@@ -2,6 +2,7 @@
   "$comment": "Hand-curated. Merged into PAGE_MAP.md by scripts/gen-page-map.mjs as the 'what it is' column. Keys are '<app>:<url>' exactly as the generator derives them; the generator FAILS when a route has no entry here or an entry names a route that no longer exists, so this file cannot rot. Write one line per route: what a person sees / what the endpoint decides, in plain words, with the Indonesian menu label in quotes so a grep on either language finds it.",
   "routes": {
     "admin:/": "Dashboard Seller — today's sales, orders, KPIs and the 7/30-day chart, all derived live from `orders` (never `analytics_daily`).",
+    "admin:/affiliate": "'Affiliate' (under Promo) — store affiliate programme: commissions with 'Tandai dibayar', affiliates (approve/reject/deactivate/add), programme settings and per-product rates (Task 9.4, `specs/AFFILIATE_SPEC.md`).",
     "admin:/akun/profil": "'Profil' — the signed-in user's name/email/avatar.",
     "admin:/akun/keamanan": "'Keamanan' — change password (revokes other sessions), 2FA/TOTP.",
     "admin:/akun/langganan": "'Langganan' — the store's plan, trial/period countdown, payment history, link to the printable faktur.",
@@ -105,6 +106,7 @@
     "storefront:/blog/[handle]": "One article.",
     "storefront:/halaman/[handle]": "Static page.",
     "storefront:/cari": "Search results page (the ⌘K palette uses `/api/search`).",
+    "storefront:/affiliate": "'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5).",
     "storefront:/kontak": "Contact + WhatsApp.",
     "storefront:/404": "Not found (also what a wrong Host resolves to).",
     "storefront:/api/checkout-session": "Progressive checkout capture (debounced beacons; tenant from Host; fails quiet).",

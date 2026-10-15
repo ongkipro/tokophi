@@ -517,6 +517,9 @@ export const products = pgTable(
     // is retired forever, because handing it to the next variant re-points a live catalog item at a
     // different SKU — a silent mis-attribution, not an error.
     variantSeqNext: integer().notNull().default(1),
+    // Affiliate commission override in basis points (0116). NULL = the store default
+    // (`store_settings.affiliate_rate_bps`); 0 is a real "no commission on this product".
+    affiliateRateBps: integer(),
   },
   (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
 );
@@ -1713,6 +1716,70 @@ export const refunds = pgTable(
   }),
 );
 
+// ── Store affiliate programme (0116, specs/AFFILIATE_SPEC.md) ─────────────────────────────────────
+// The merchant pays affiliates OUTSIDE TokoΦ: nothing here touches `ledger_entries` or `payouts`.
+export const affiliateStatus = pgEnum("affiliate_status", ["menunggu", "aktif", "ditolak", "nonaktif"]);
+export const affiliateCommissionStatus = pgEnum("affiliate_commission_status", [
+  "pending",
+  "dibayar",
+  "batal",
+]);
+export const affiliates = pgTable(
+  "affiliates",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    /** Upper-case, `[A-Z0-9]{3,20}` — what the shopper types and what `?ref=` carries. Unique per store. */
+    code: text().notNull(),
+    name: text().notNull(),
+    /** Canonical `62…` (normalizePhone) — also the self-referral check against the buyer's phone. */
+    phone: text().notNull(),
+    email: text(),
+    bankName: text(),
+    bankAccount: text(),
+    bankHolder: text(),
+    status: affiliateStatus().notNull().default("menunggu"),
+    /** Applicant's pitch (where they promote) or the merchant's note. */
+    note: text(),
+    createdAt: createdAt(),
+    approvedAt: ts(),
+  },
+  (t) => [unique().on(t.storeId, t.code), index("affiliates_store_status_idx").on(t.storeId, t.status)],
+);
+export const affiliateCommissions = pgTable(
+  "affiliate_commissions",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    affiliateId: uuid()
+      .notNull()
+      .references(() => affiliates.id),
+    /** One commission per order, ever — the database's guarantee, not a check-then-write. */
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    /** `kode` = typed at checkout · `link` = captured `?ref=`. */
+    source: text().notNull(),
+    /** Goods value after discount that the rate applied to (frozen at order time). */
+    baseIdr: money().notNull().default(0),
+    commissionIdr: money().notNull().default(0),
+    /** Human-readable rate snapshot, e.g. "10%" or "10% / 20% (per produk)". */
+    rateNote: text(),
+    status: affiliateCommissionStatus().notNull().default("pending"),
+    /** Set when the order reaches `selesai` (+ hold days). Pending AND eligible_at <= now() = payable. */
+    eligibleAt: ts(),
+    paidAt: ts(),
+    paidNote: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("affiliate_commissions_store_idx").on(t.storeId, t.status)],
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),
@@ -1775,6 +1842,12 @@ export const storeSettings = pgTable("store_settings", {
   promoHubTitle: text(),
   promoHubSubtitle: text(),
   promoHubBannerUrl: text(),
+  // Store affiliate programme (0116, specs/AFFILIATE_SPEC.md). OFF by default: an existing store never
+  // starts paying commissions it did not choose. Rate in BASIS POINTS (1000 = 10%) — integers, so a
+  // commission is never a float. Hold days = the return window before a commission is payable.
+  affiliateEnabled: boolean().notNull().default(false),
+  affiliateRateBps: integer().notNull().default(1000),
+  affiliateHoldDays: integer().notNull().default(7),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

@@ -962,3 +962,58 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
   3. `AGENTS.md`'s seed-rot note covers CHARTS only ("the demo looks dead"); add the write path, because the symptom there is a save that fails with a message about suspension on a store nobody suspended.
 - **Done when:** on a machine whose clock is past the anchor, `npm run seed:recent -w @tokophi/db` is enough to make an admin save succeed; no agent has to hand-edit `stores` to drive a write path.
 - **Status:** `[x]` **DONE 2026-09-09** — finding first: `seed.ts` was ALREADY relative (`fromNow(20)` on `batiknusantara`, `baa70c6`); the `2026-08-04` on the dev DB was "seeded 2026-07-15 + 20 days" rot, so the main seed is untouched and every deliberately overdue/trial/VIP store keeps its shape. `seed-recent.ts` gained `seedBillingPeriod(exec, storeId)` — ONE idempotent UPDATE `set current_period_end = now() + 30 days where id = $1 and current_period_end < now()` — run first by `main()`, plus an `import.meta.url` entrypoint guard so importing the module cannot run the top-up. `packages/db/src/seed-recent-billing.test.ts` (6 real-Postgres tests, verdict from `computeBilling()` itself; 3 mutations → 3 reds). Dev DB: `batiknusantara` `2026-08-04` → `2026-10-09` after one `seed:recent`; second run "masih aktif — tidak disentuh"; the other 7 stores byte-identical. No migration needed (`verify-migrations` ✓). AGENTS.md note added by the parent.
+
+## Stage 9: Store Affiliate Programme
+
+Spec + owner decisions: [`specs/AFFILIATE_SPEC.md`](specs/AFFILIATE_SPEC.md) (requirements `F-A1`–`F-A10`,
+mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`; its own dev database
+(`tokophi_affiliate`) per `AGENTS.md` § Database rule 3. One PR per phase, `npm run test:db` +
+`verify:guards` before each merge.
+
+### Task 9.1: Affiliate Data Model and the Commission Calculator
+- **Requirement:** `F-A6` (constraints: `F-A1`, `F-A9`, `F-A10`)
+- **Risk Level:** R3 — migration + tenant-owned tables.
+- **Allowed Paths:** `packages/db/drizzle/0116_store_affiliates.sql`, `packages/db/drizzle/meta/_journal.json`, `packages/db/src/schema.ts`, `packages/lib/src/affiliate.ts`, `packages/lib/src/affiliate.test.ts`, `packages/lib/package.json`, doc-count anchors (`AGENTS.md`, `specs/docs/STATUS.md`, `specs/docs/CODE_MAP.md`, `specs/docs/SCHEMA.md`).
+- **Change:** additive migration `0116` (two enums, `affiliates`, `affiliate_commissions` with RLS `tenant_isolation`, three `store_settings` columns, `products.affiliate_commission_pct`); pure `computeAffiliateCommission()` + `normalizeAffiliateCode()` in `@tokophi/lib/affiliate`.
+- **Done when:** `verify-migrations` and `verify-rls` pass on a database migrated to `0116`; the F-A6 acceptance example (200 000 / 20 000 / 10 %+20 %) returns 27 000 in a unit test, plus rounding, zero-subtotal and override cases.
+- **Status:** `[x]` **DONE 2026-10-15** — `verify-rls` on the branch DB `tokophi_affiliate` (at `0116`): **56/57** store-scoped tables, sole exception `platform_activity`, "RLS verified ✅"; `@tokophi/lib/affiliate` 10/10 incl. F-A6. Earlier: **BUILT 2026-10-11.** `0116` applied twice to the branch DB `tokophi_affiliate` (idempotent: second run all "already exists, skipping"); `verify-migrations` ✓; RLS on both tables measured by hand on the branch DB (two stores' rows inserted, `SET LOCAL ROLE tokophi_app` + store A's GUC sees 1); `tokophi_app` holds SELECT/INSERT/UPDATE/DELETE via default privileges. `@tokophi/lib/affiliate` 10 tests green incl. the F-A6 example (27 000) and the floor-once case. Doc counts moved to 86 tables · 117 migrations · 49 enums (`doc-counts.test.ts` 18/18), indexes classified (`schema-indexes.test.ts` 8/8). **Left:** `npm run verify-rls` against a database migrated to `0116` (needs this worktree's `DATABASE_URL` pointed at `tokophi_affiliate`).
+
+### Task 9.2: Attribute the Order and Freeze the Commission in `/api/public/order`
+- **Requirement:** `F-A4` (constraints: `F-A1`, `F-A5`, `F-A6`)
+- **Risk Level:** R3 — the public money route.
+- **Allowed Paths:** `apps/admin/app/api/public/order/route.ts`, `apps/admin/lib/affiliate-attribution.ts`, `apps/admin/lib/affiliate-attribution.test.ts`.
+- **Depends On:** Task 9.1
+- **Done when:** a real-Postgres test places orders with typed code, captured ref, both, an inactive code, a self-referral and the programme off, and asserts exactly the F-A4/F-A5/F-A1 outcomes; a commission row is written in the order transaction (an order rollback leaves none).
+- **Status:** `[x]` **DONE 2026-10-15** — `affiliate-attribution.test.ts` 8/8 on the throwaway `tokophi_affiliate_test` (`TEST_DB_REQUIRED=1`, migrated to `0116` by `db-setup`). Earlier: **CODE DONE 2026-10-11.** `apps/admin/lib/affiliate-attribution.ts` `attachAffiliateCommission` (typed code first, else captured ref; aktif + same store only; self-referral by phone; per-product override; `on conflict (order_id) do nothing`), called inside the order transaction in `/api/public/order` after the voucher bump. Body gains `affiliateCode` / `refCode`. `tsc` 0. Test file `affiliate-attribution.test.ts` (5 attribution cases) runs once the worktree points at the branch DB.
+
+### Task 9.3: Commission Lifecycle on Order Status Changes
+- **Requirement:** `F-A7`
+- **Risk Level:** R3
+- **Allowed Paths:** `apps/admin/lib/order-status.ts`, `apps/admin/lib/affiliate-attribution.ts`, `apps/admin/lib/order-status.test.ts`.
+- **Depends On:** Task 9.2
+- **Done when:** a real-Postgres test moves orders to `batal`, `retur` and `selesai` through `applyOrderStatusChange` and asserts `batal` / `eligible_at = now + hold days`; a `dibayar` commission is untouched.
+- **Status:** `[x]` **DONE 2026-10-15** — lifecycle cases in the same 8/8 run. Earlier: **CODE DONE 2026-10-11.** `onOrderStatusForAffiliate` is called by `applyOrderStatusChange` after `settleOrderLedger`, same transaction: `batal`/`retur` → `batal` unless `dibayar`; `selesai` → `eligible_at = now() + store hold days`. 3 lifecycle cases in `affiliate-attribution.test.ts`.
+
+### Task 9.4: Seller Panel — Programme Settings, Affiliates, Commissions, Mark Paid
+- **Requirement:** `F-A3` (constraints: `F-A8`, `F-A9`, `F-A10`)
+- **Risk Level:** R2 — new tenant screens on the established guard.
+- **Allowed Paths:** `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/data/affiliates.ts`, `apps/admin/lib/actions/affiliates.ts`, `apps/admin/lib/rbac-policy.ts`, `apps/admin/lib/rbac-census.test.ts`, `apps/admin/lib/nav.ts`, `apps/admin/lib/types/domain.ts`, `specs/docs/PAGE_MAP.md`, `specs/docs/page-map.json`.
+- **Depends On:** Task 9.1
+- **Done when:** in a browser on the branch DB the owner enables the programme, approves an applicant, sets a product override, and marks a ready commission paid; a not-ready commission is refused; a `staff` session sees no write controls and its server action is refused; store A's session lists none of store B's affiliates.
+- **Status:** `[~]` **BUILT 2026-10-11, browser check pending.** `/affiliate` (Promo → Affiliate): stats, tabs Komisi (Tandai dibayar only on `siap`), Affiliate (approve/reject/deactivate, copy link, WhatsApp), Pengaturan (programme toggle, default %, hold days, per-product rates); "Tambah affiliate" dialog. `affiliates:write` = owner, admin (census `admin-too`), advertiser. `markCommissionPaid` is one guarded UPDATE (pending + eligible_at <= now()). `tsc` 0, lint 0 errors, page map regenerated.
+
+### Task 9.5: Storefront — `/affiliate` Application Form, `?ref=` Capture, Checkout Code Field
+- **Requirement:** `F-A2` (constraints: `F-A1`, `F-A4`)
+- **Risk Level:** R2
+- **Allowed Paths:** `apps/storefront/src/pages/affiliate.astro`, `apps/storefront/src/pages/api/affiliate/apply.ts`, `apps/storefront/src/components/MarketingPixels.astro`, `apps/storefront/src/pages/checkout.astro`.
+- **Depends On:** Task 9.2
+- **Done when:** in a browser: the form creates a `menunggu` row for the Host's store and the 6th post in an hour is refused; `/?ref=CODE` then checkout sends `refCode`; a typed code is sent as `affiliateCode`; `/affiliate` is 404 with the programme off; `checkout.astro` stays under its source-size cap.
+- **Status:** `[~]` **BUILT 2026-10-11, browser check pending.** `storefront/src/pages/affiliate.astro` (plain POST form, honeypot, 5/hour/IP, 404 when off) + `src/data/affiliate.ts`; `?ref=` captured in the always-on inline script of `MarketingPixels.astro` (`tphi:ref`); checkout shows "Kode affiliate (opsional)" only when the programme is on and sends `affiliateCode` + `refCode` (≤ 30 days). `checkout.astro` 2848 / 2864. `astro check` 0 errors.
+
+### Task 9.6: Landing-Funnel Attribution (`/lp`, OrderFunnel) — v1.1
+- **Requirement:** `F-A4`
+- **Risk Level:** R2
+- **Allowed Paths:** `apps/storefront/src/components/OrderFunnel.astro`
+- **Depends On:** Task 9.5
+- **Done when:** an order placed through a landing page opened with `?ref=CODE` carries a commission.
+- **Status:** `[ ]`

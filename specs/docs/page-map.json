@@ -6,6 +6,27 @@
       "label": "Seller (merchant panel)",
       "routes": [
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/affiliate/page.tsx",
+          "clients": [
+            "affiliate-client.tsx"
+          ],
+          "data": [
+            "affiliates"
+          ],
+          "actions": [
+            "affiliates"
+          ],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "'Affiliate' (under Promo) — store affiliate programme: commissions with 'Tandai dibayar', affiliates (approve/reject/deactivate/add), programme settings and per-product rates (Task 9.4, `specs/AFFILIATE_SPEC.md`)."
+        },
+        {
           "url": "/akun/keamanan",
           "kind": "page",
           "methods": [],
@@ -2087,6 +2108,30 @@
           "whatItIs": "Not found (also what a wrong Host resolves to)."
         },
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/storefront/src/pages/affiliate.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate",
+            "catalog"
+          ],
+          "lib": [
+            "chat"
+          ],
+          "locals": true,
+          "db": false,
+          "gate": [
+            "rate-limit"
+          ],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5)."
+        },
+        {
           "url": "/api/chat/poll",
           "kind": "endpoint",
           "methods": [
@@ -2832,6 +2877,12 @@
         ]
       },
       {
+        "module": "affiliates.ts",
+        "exports": [
+          "getAffiliateProgram"
+        ]
+      },
+      {
         "module": "analytics.ts",
         "exports": [
           "SERIES_DAYS",
@@ -3200,6 +3251,16 @@
       }
     ],
     "apps/admin/lib/actions": [
+      {
+        "module": "affiliates.ts",
+        "exports": [
+          "createAffiliate",
+          "markCommissionPaid",
+          "saveAffiliateSettings",
+          "setAffiliateStatus",
+          "setProductAffiliateRate"
+        ]
+      },
       {
         "module": "articles.ts",
         "exports": [
@@ -3803,6 +3864,12 @@
     ],
     "apps/storefront/src/data": [
       {
+        "module": "affiliate.ts",
+        "exports": [
+          "applyAffiliate"
+        ]
+      },
+      {
         "module": "cache.ts",
         "exports": [
           "cacheClear",
@@ -3827,6 +3894,7 @@
           "promoHub",
           "randomProducts",
           "recentProducts",
+          "storeAffiliateEnabled",
           "storeCodEnabled",
           "storeCodPolicy",
           "storeFreeShip",
