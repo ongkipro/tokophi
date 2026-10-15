@@ -219,20 +219,27 @@ The normative statement, verification method, and current status for each identi
 | F-K12 | An authenticated buyer can open **Toko**, an order-derived list of merchants represented in eligible linked/claimed orders, then choose `Belanja lagi` to open the merchant's current storefront. This is not a wishlist/follow graph and must not recreate an old cart or assume historical price, promotion, publication, or stock. | [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §5D/§6; proposed `GET /stores` in [`../openapi/account.yaml`](../openapi/account.yaml) | **NOT MET — PLANNED**: local prototype/contract only; no account service or production endpoint exists. |
 | F-K13 | After explicit store authorization, returning-buyer checkout prefills only the accepted contact and selected saved address as a **reviewable summary**. The buyer confirms or edits instead of re-entering all fields; checkout never auto-submits and recalculates shipping, promotions, inventory, and totals before acceptance. Guest checkout remains available. | [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §5F/§6; account authorization projection | **NOT MET — PLANNED**: no central identity, tenant BFF session, production prefill, or conformance evidence exists. |
 
-### 2.10 Store affiliate programme (spec: [`AFFILIATE_SPEC.md`](../AFFILIATE_SPEC.md), 2026-10-11)
+### 2.10 Store affiliate programme (spec: [`AFFILIATE_SPEC.md`](../AFFILIATE_SPEC.md), PRD v1.1 2026-10-15)
 
 | ID | Requirement | Verify | Status |
 |---|---|---|---|
-| F-A1 | Programme off ⇒ no `/affiliate` page, no applications, no attribution. | Task 9.2 / 9.5 tests | PLANNED |
-| F-A2 | Public application on the storefront creates a `menunggu` affiliate for the Host's store; bot-filtered, 5/hour/IP. | Task 9.5 | PLANNED |
-| F-A3 | `affiliates:write` approves / rejects / deactivates / adds affiliates, store-scoped. | Task 9.4 | PLANNED |
-| F-A4 | Typed code beats a captured `?ref` (30 days, last click); only `aktif` affiliates of that store attribute. | Task 9.2 | PLANNED |
-| F-A5 | Unknown / inactive code or self-referral (same phone) ⇒ order normal, no commission. | Task 9.2 | PLANNED |
-| F-A6 | Commission frozen at order time in the order txn: Σ line × (goods proceeds / subtotal) × rate, floored. | Task 9.1 / 9.2 | PLANNED |
-| F-A7 | `batal`/`retur` voids an unpaid commission; `selesai` sets `eligible_at = now + hold days`; ready is derived. | Task 9.3 | PLANNED |
-| F-A8 | Mark paid only when ready; sets `dibayar` + `paid_at`. Platform never moves affiliate money. | Task 9.4 | PLANNED |
-| F-A9 | Per-product `affiliate_commission_pct` overrides the store default. | Task 9.1 / 9.4 | PLANNED |
-| F-A10 | `affiliates` / `affiliate_commissions` carry `store_id` + RLS; seller reads/writes via `withTenant`. | `verify-rls` | PLANNED |
+| F-A1 | Programme off ⇒ no `/affiliate` page, no applications, no attribution. | `affiliate-attribution.test.ts` (no commission when off); storefront 404 in `BUILD-LOG.md` 2026-10-15 | MET |
+| F-A2 | Public application on the storefront creates a `menunggu` affiliate for the Host's store; honeypot, 5/hour/IP. | browser check in `BUILD-LOG.md` 2026-10-15 (Task 9.5) | MET |
+| F-A3 | `affiliates:write` approves / rejects / deactivates / adds affiliates, store-scoped. | Task 9.4 browser check | **PARTIAL** — built (`apps/admin/lib/actions/affiliates.ts`), not driven in a browser (local seller login). |
+| F-A4 | Typed code beats a captured `?ref` (30 days, last click); only `aktif` affiliates of that store attribute. | `affiliate-attribution.test.ts` | MET |
+| F-A5 | Unknown / inactive code or self-referral (same phone) ⇒ order normal, no commission. | `affiliate-attribution.test.ts` | MET |
+| F-A6 | Commission frozen at order time in the order txn: Σ line × (goods proceeds / subtotal) × rate, floored once. | `packages/lib/src/affiliate.test.ts`; `affiliate-attribution.test.ts` | MET |
+| F-A7 | `batal`/`retur` voids an unpaid commission; `selesai` sets `eligible_at = now + hold days`; ready is derived. | `affiliate-attribution.test.ts` | MET |
+| F-A8 | Mark paid only when ready; sets `dibayar` + `paid_at`. Platform never moves affiliate money. | Task 9.4 browser check | **PARTIAL** — single guarded UPDATE in `markCommissionPaid`; refusal not yet exercised by a test or browser. |
+| F-A9 | Per-product `products.affiliate_rate_bps` overrides the store default; `0` = none; clamped 0–100 %. | `packages/lib/src/affiliate.test.ts` | **PARTIAL** — calculation tested; Seller override UI not driven. |
+| F-A10 | `affiliates` / `affiliate_commissions` carry `store_id` + RLS; seller reads/writes via `withTenant`. | `npm run verify-rls -w @tokophi/db`; `affiliate-attribution.test.ts` (other store's code never attributes) | MET |
+| F-A11 | `affiliates:write` exports the store's commissions as CSV; nothing from another store. | Task 9.8 | PLANNED |
+| F-A12 | Without `affiliates:write`, the Seller panel masks affiliate bank account and phone (last 4) and hides `wa.me`. | Task 9.7 | PLANNED |
+| F-A13 | Landing-page funnel (`/lp`, OrderFunnel) sends typed code / captured ref exactly like checkout. | Task 9.6 | PLANNED |
+| F-A14 | `retur` after `dibayar` keeps the row paid and flags it for the merchant. | Task 9.10 | BLOCKED — owner decision OD-A1 |
+| F-A15 | A verified buyer account linked (with consent) to an `aktif` affiliate sees that affiliate's commissions. | Task 9.11 | BLOCKED — OD-A3 + buyer account (Stage 10) |
+| F-A16 | Affiliate notified on approval / ready / paid through the platform messaging channel. | Task 9.12 | BLOCKED — messaging channel (WhatsApp/SMS) not set up |
+| F-A17 | `affiliates:write` erases a `ditolak`/`nonaktif` affiliate's personal fields; commissions kept. | Task 9.9 | PLANNED |
 
 ---
 

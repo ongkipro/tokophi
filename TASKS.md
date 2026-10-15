@@ -972,7 +972,7 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
 
 ## Stage 9: Store Affiliate Programme
 
-Spec + owner decisions: [`specs/AFFILIATE_SPEC.md`](specs/AFFILIATE_SPEC.md) (requirements `F-A1`–`F-A10`,
+Spec + owner decisions: [`specs/AFFILIATE_SPEC.md`](specs/AFFILIATE_SPEC.md) (PRD v1.1 2026-10-15, requirements `F-A1`–`F-A17`,
 mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`; its own dev database
 (`tokophi_affiliate`) per `AGENTS.md` § Database rule 3. One PR per phase, `npm run test:db` +
 `verify:guards` before each merge.
@@ -981,7 +981,7 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 - **Requirement:** `F-A6` (constraints: `F-A1`, `F-A9`, `F-A10`)
 - **Risk Level:** R3 — migration + tenant-owned tables.
 - **Allowed Paths:** `packages/db/drizzle/0116_store_affiliates.sql`, `packages/db/drizzle/meta/_journal.json`, `packages/db/src/schema.ts`, `packages/lib/src/affiliate.ts`, `packages/lib/src/affiliate.test.ts`, `packages/lib/package.json`, doc-count anchors (`AGENTS.md`, `specs/docs/STATUS.md`, `specs/docs/CODE_MAP.md`, `specs/docs/SCHEMA.md`).
-- **Change:** additive migration `0116` (two enums, `affiliates`, `affiliate_commissions` with RLS `tenant_isolation`, three `store_settings` columns, `products.affiliate_commission_pct`); pure `computeAffiliateCommission()` + `normalizeAffiliateCode()` in `@tokophi/lib/affiliate`.
+- **Change:** additive migration `0116` (two enums, `affiliates`, `affiliate_commissions` with RLS `tenant_isolation`, three `store_settings` columns, `products.affiliate_rate_bps`); pure `computeAffiliateCommission()` + `normalizeAffiliateCode()` in `@tokophi/lib/affiliate`.
 - **Done when:** `verify-migrations` and `verify-rls` pass on a database migrated to `0116`; the F-A6 acceptance example (200 000 / 20 000 / 10 %+20 %) returns 27 000 in a unit test, plus rounding, zero-subtotal and override cases.
 - **Status:** `[x]` **DONE 2026-10-15** — `verify-rls` on the branch DB `tokophi_affiliate` (at `0116`): **56/57** store-scoped tables, sole exception `platform_activity`, "RLS verified ✅"; `@tokophi/lib/affiliate` 10/10 incl. F-A6. Earlier: **BUILT 2026-10-11.** `0116` applied twice to the branch DB `tokophi_affiliate` (idempotent: second run all "already exists, skipping"); `verify-migrations` ✓; RLS on both tables measured by hand on the branch DB (two stores' rows inserted, `SET LOCAL ROLE tokophi_app` + store A's GUC sees 1); `tokophi_app` holds SELECT/INSERT/UPDATE/DELETE via default privileges. `@tokophi/lib/affiliate` 10 tests green incl. the F-A6 example (27 000) and the floor-once case. Doc counts moved to 86 tables · 117 migrations · 49 enums (`doc-counts.test.ts` 18/18), indexes classified (`schema-indexes.test.ts` 8/8). **Left:** `npm run verify-rls` against a database migrated to `0116` (needs this worktree's `DATABASE_URL` pointed at `tokophi_affiliate`).
 
@@ -1012,15 +1012,70 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 ### Task 9.5: Storefront — `/affiliate` Application Form, `?ref=` Capture, Checkout Code Field
 - **Requirement:** `F-A2` (constraints: `F-A1`, `F-A4`)
 - **Risk Level:** R2
-- **Allowed Paths:** `apps/storefront/src/pages/affiliate.astro`, `apps/storefront/src/pages/api/affiliate/apply.ts`, `apps/storefront/src/components/MarketingPixels.astro`, `apps/storefront/src/pages/checkout.astro`.
+- **Allowed Paths:** `apps/storefront/src/pages/affiliate.astro`, `apps/storefront/src/data/affiliate.ts`, `apps/storefront/src/components/MarketingPixels.astro`, `apps/storefront/src/pages/checkout.astro`.
 - **Depends On:** Task 9.2
 - **Done when:** in a browser: the form creates a `menunggu` row for the Host's store and the 6th post in an hour is refused; `/?ref=CODE` then checkout sends `refCode`; a typed code is sent as `affiliateCode`; `/affiliate` is 404 with the programme off; `checkout.astro` stays under its source-size cap.
 - **Status:** `[~]` **BUILT 2026-10-11; browser-checked 2026-10-15 except the order POST.** Chrome (Playwright, 390px) on `astro dev` against `tokophi_affiliate`: `/affiliate` 404 with the programme off, 200 on; posts 1–5 created 5 `menunggu` rows (codes `UJIAFF…`), post 6 refused ("Terlalu banyak…"); `/?ref=uji123` stored `tphi:ref` = `UJI123`; checkout HTML carries `#affiliate-input` when on; 0 page errors. Test rows deleted and the toggle restored afterwards. **Not driven:** `refCode`/`affiliateCode` in the actual order request (needs a cart + the admin order API running). `storefront/src/pages/affiliate.astro` (plain POST form, honeypot, 5/hour/IP, 404 when off) + `src/data/affiliate.ts`; `?ref=` captured in the always-on inline script of `MarketingPixels.astro` (`tphi:ref`); checkout shows "Kode affiliate (opsional)" only when the programme is on and sends `affiliateCode` + `refCode` (≤ 30 days). `checkout.astro` 2848 / 2864. `astro check` 0 errors.
 
 ### Task 9.6: Landing-Funnel Attribution (`/lp`, OrderFunnel) — v1.1
-- **Requirement:** `F-A4`
-- **Risk Level:** R2
+- **Requirement:** `F-A13` (constraints: `F-A4`, `F-A5`)
+- **Risk Level:** R2 — touches the public order payload, not the money computation.
 - **Allowed Paths:** `apps/storefront/src/components/OrderFunnel.astro`
+- **Canonical Contract Owners:** `/api/public/order` body (`affiliateCode`, `refCode`).
+- **Accepted Invariants:** the funnel sends the same fields with the same 30-day rule as `checkout.astro`; a wrong code never blocks the order.
 - **Depends On:** Task 9.5
-- **Done when:** an order placed through a landing page opened with `?ref=CODE` carries a commission.
+- **Done when:** in a browser on the branch DB, `/lp/<slug>?ref=CODE` (enabled store, `CODE` aktif) → place the funnel order → one `affiliate_commissions` row with `source='link'` for that order.
+- **Non-Scope:** a code field in the funnel form (later, if owners ask).
+- **Status:** `[ ]` — gap confirmed 2026-10-15: `OrderFunnel.astro` posts to `/api/public/order` without either field.
+
+### Task 9.7: Mask Affiliate Personal Data for Roles Without `affiliates:write`
+- **Requirement:** `F-A12`
+- **Risk Level:** R2 — personal data on an established tenant screen.
+- **Allowed Paths:** `apps/admin/lib/data/affiliates.ts`, `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/affiliate-mask.test.ts`
+- **Accepted Invariants:** masking happens on the server (the full value never reaches the HTML); `owner`/`admin`/`advertiser` views unchanged.
+- **Depends On:** Task 9.4
+- **Done when:** a test renders the data for a `staff` capability set and finds no full phone/bank number; a browser `staff` session shows `••••1234` and no `wa.me` link.
 - **Status:** `[ ]`
+
+### Task 9.8: Commission CSV Export
+- **Requirement:** `F-A11` (constraints: `F-A10`)
+- **Risk Level:** R2
+- **Allowed Paths:** `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/data/affiliates.ts`
+- **Accepted Invariants:** reuses `apps/admin/lib/csv.ts`; store-scoped read under `withCurrentTenant`; gated on `affiliates:write`.
+- **Depends On:** Task 9.4
+- **Done when:** with two stores seeded on the branch DB, store A's export holds only A's rows with the F-A11 columns, and a `staff` session has no export control and its request is refused.
+- **Status:** `[ ]` — note line per OD-A4 once decided.
+
+### Task 9.9: Erase a Rejected or Inactive Affiliate's Personal Data
+- **Requirement:** `F-A17`
+- **Risk Level:** R2 — destructive on personal fields only.
+- **Allowed Paths:** `apps/admin/lib/actions/affiliates.ts`, `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/affiliate-erase.test.ts`
+- **Accepted Invariants:** commission rows and the code survive; an `aktif` or `menunggu` affiliate cannot be erased; confirm dialog via `components/admin/confirm-delete.tsx`.
+- **Depends On:** Task 9.4
+- **Done when:** a real-Postgres test erases a `nonaktif` affiliate with 2 commissions → personal fields null, name "Affiliate dihapus", both commissions present; erasing an `aktif` one is refused.
+- **Status:** `[ ]` — OD-A5 (manual vs automatic) decides whether a cron follows.
+
+### Task 9.10: Flag a Return After a Commission Was Paid
+- **Requirement:** `F-A14`
+- **Risk Level:** R3 — commission lifecycle inside the order-status transaction.
+- **Allowed Paths:** `apps/admin/lib/affiliate-attribution.ts`, `apps/admin/lib/affiliate-attribution.test.ts`, `apps/admin/app/(admin)/affiliate/**`
+- **Depends On:** Task 9.3
+- **Done when:** the existing "a paid commission is never voided by a later return" test still passes and a new case asserts the flag; the Seller list shows "retur setelah dibayar".
+- **Escalation Conditions:** OD-A1 chooses a claw-back record → new migration, re-plan.
+- **Status:** `[ ]` **BLOCKED — owner decision OD-A1.**
+
+### Task 9.11: Affiliate Self-View Through the Buyer Account — Phase 2
+- **Requirement:** `F-A15`
+- **Risk Level:** R3 — cross-store identity link, personal financial data.
+- **Allowed Paths:** decided with the buyer-account plan (`specs/docs/TOKOPHI_ACCOUNT_SPEC.md`).
+- **Depends On:** Task 9.4; buyer account sign-in (root Stage 10)
+- **Done when:** a verified account confirms the link to its affiliate record and sees only that affiliate's commissions per store; a different account sees none (negative test).
+- **Status:** `[ ]` **BLOCKED — OD-A3 and the buyer account.**
+
+### Task 9.12: Affiliate Notifications — Phase 2
+- **Requirement:** `F-A16`
+- **Risk Level:** R2
+- **Allowed Paths:** decided with the messaging-channel task.
+- **Depends On:** Task 9.4; the platform messaging channel (WhatsApp/SMS — owner 2026-10-15: "nanti aja masuk task").
+- **Done when:** approving an affiliate queues one message; a send failure does not undo the approval.
+- **Status:** `[ ]` **BLOCKED — no messaging provider.**

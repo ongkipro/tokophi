@@ -1,8 +1,11 @@
 # TokoΦ — Store Affiliate Programme (seller-run)
 
-> **Status:** SPEC (2026-10-11, owner decisions recorded below) — being built on `feat/store-affiliate`.
-> This is the feature PRD. Requirements are `F-A*` (mirrored in `specs/docs/REQUIREMENTS.md` §2.10);
-> tasks are root `TASKS.md` Stage 9. If code and this file disagree, code wins — fix this file.
+> **Status:** PRD v1.1 (2026-10-15). v1 (`F-A1`–`F-A10`) is **built** on `feat/store-affiliate` and
+> verified as recorded in §12; `F-A11`–`F-A17` are new, planned or blocked on an owner decision.
+> This is the feature PRD — the only one: requirements are `F-A*` (mirrored in
+> `specs/docs/REQUIREMENTS.md` §2.10), tasks are root `TASKS.md` Stage 9. If code and this file
+> disagree, code wins — fix this file. Revised 2026-10-15 against the branch code (owner: "prd baru
+> sekalian affiliate dan user akun kau buat dan sempurnakan, untuk wa dan sms nanti aja masuk task").
 
 ## 1. Overview
 
@@ -17,7 +20,8 @@ ledger; the merchant still pays the affiliate themselves.
 | Role | Job to be done | Current workaround | Evidence status |
 |---|---|---|---|
 | Merchant (owner/admin) | Grow sales through resellers/KOLs without paying ads up front | Gives each reseller a WhatsApp code; buyers mention it in chat; owner tallies in a sheet | Assumed (owner request 2026-10-11) |
-| Affiliate (public, no account) | Sign up to promote a store and be credited for sales | Asks the seller on WhatsApp, trusts the seller's tally | Assumed |
+| Affiliate (public, no account in v1) | Sign up to promote a store and be credited for sales | Asks the seller on WhatsApp, trusts the seller's tally | Assumed |
+| Store staff without `affiliates:write` (`staff`, `cs`) | Answer a buyer or affiliate question | Opens `/affiliate` (readable by every store role today) | Observed in code (2026-10-15) |
 | Shopper | Buy through a creator's link, or type the creator's code | — (no friction today) | — |
 
 First-use journey: merchant enables the programme (Pengaturan) → affiliate opens `<store>/affiliate`,
@@ -29,8 +33,20 @@ clicks "Tandai dibayar".
 
 Country-specific (Indonesia), Bahasa Indonesia UI, IDR, phone/WhatsApp-first identity (F-K2). TikTok
 and Instagram bios often drop query strings, so a **typed code** is a first-class attribution path, not
-a fallback. No affiliate login: affiliates have no account in v1 (the TokoΦ buyer account, Task 5.8, is
-the later home for an affiliate self-view).
+a fallback. No affiliate login in v1. The later home for an affiliate self-view is the **TokoΦ buyer
+account** ([`docs/TOKOPHI_ACCOUNT_SPEC.md`](docs/TOKOPHI_ACCOUNT_SPEC.md), root `TASKS.md` Stage 10) —
+recommended default for owner decision OD-A3 (§10), not built.
+
+**Messaging is not available.** No WhatsApp Business API or SMS provider is set up (owner 2026-10-15:
+"untuk wa dan sms nanti aja masuk task"). Everything an affiliate needs to hear in v1 goes through the
+merchant's own `wa.me` link from the Seller list. Automated notifications (`F-A16`) depend on the
+platform messaging-channel task and carry no provider design here.
+
+**Tax is the merchant's.** The merchant pays the affiliate outside TokoΦ, so any withholding on that
+payment is the merchant's obligation. Commissions to individual non-employees fall under PPh 21
+(PMK 168/2023 — identified through DDTC News' summary, the official text was not checked for this
+PRD). TokoΦ therefore never computes or withholds tax; it gives the merchant a record to file from
+(`F-A11`).
 
 ## 4. Owner decisions (2026-10-11)
 
@@ -57,7 +73,10 @@ the later home for an affiliate self-view).
 - No multi-level / tiered commissions, no per-affiliate custom rate, no shopper discount tied to the
   affiliate code (a merchant who wants one creates a normal voucher).
 - No cross-store affiliates; an affiliate belongs to one store.
-- Landing-page funnel (`/lp`, OrderFunnel) attribution is v1.1 (Task 9.6), not v1.
+- Landing-page funnel (`/lp`, OrderFunnel) attribution is v1.1 (`F-A13`, Task 9.6), not v1.
+- No tax computation or withholding, no bukti potong (the merchant's obligation, §3).
+- No messaging-provider design here: WhatsApp/SMS is a separate platform task (`F-A16` only consumes it).
+- No affiliate account of its own: phase 2 reuses the buyer account (`F-A15`), never a second login.
 
 ## 7. Core features
 
@@ -72,6 +91,13 @@ the later home for an affiliate self-view).
 | Mark paid | Must | Merchant's record of what was paid | F-A8 |
 | Per-product rate | Should | Higher/lower margin products | F-A9 |
 | Isolation | Must | No store sees another's affiliates | F-A10 |
+| Commission export | Should (v1.1) | Merchant's bookkeeping and tax record | F-A11 |
+| Personal-data masking | Should (v1.1) | Staff can work the list without seeing bank accounts | F-A12 |
+| Landing-funnel attribution | Must (v1.1) | `/lp` sales credit the affiliate too | F-A13 |
+| Return-after-paid flag | Should (blocked OD-A1) | Merchant knows a paid commission's order came back | F-A14 |
+| Affiliate self-view | Should (phase 2, blocked OD-A3) | Affiliate sees own commissions without asking | F-A15 |
+| Affiliate notifications | Could (phase 2, blocked on messaging) | Affiliate hears approval / ready / paid | F-A16 |
+| Personal-data erasure | Should (v1.1) | A rejected or departed affiliate's details do not linger | F-A17 |
 
 ## 8. Requirements
 
@@ -81,8 +107,11 @@ the later home for an affiliate self-view).
     Then no `affiliate_commissions` row is written and `/affiliate` answers 404.
 - **F-A2** (Must, event) When a visitor submits the `/affiliate` form on an enabled store, the system
   shall create an `affiliates` row with status `menunggu` for the Host-resolved store, a unique code,
-  and the submitted name/phone/bank details; it is bot-filtered (honeypot) and rate-limited
-  (5/hour/IP). A phone that already applied to this store creates nothing ("sudah terdaftar").
+  and the submitted name/phone/email/bank details (the "where do you promote" answer is kept in
+  `note`); it is bot-filtered (honeypot answered as a success) and rate-limited (5/hour/IP,
+  in-process — the NF-6 caveat applies). A phone that already applied to this store creates nothing
+  ("Nomor ini sudah terdaftar"). The storefront writes on the owner connection with an explicit
+  `store_id` predicate (the storefront is outside RLS, SYSTEM_MAP §1).
   - Acceptance: Given an enabled store, When a valid form is posted, Then one `menunggu` row exists for
     that store and the page shows "Pendaftaran diterima"; a 6th post within the hour from the same IP
     creates nothing.
@@ -116,11 +145,53 @@ the later home for an affiliate self-view).
   - Acceptance: Given a pending commission with `eligible_at` in the future, When "Tandai dibayar" is
     sent, Then it stays `pending` and the action returns a refusal.
 - **F-A9** (Should, optional) Where a product has `affiliate_rate_bps`, the system shall use it
-  instead of the store default for that product's lines.
+  instead of the store default for that product's lines; `0` means no commission on that product and
+  any rate is clamped to 0–100 %.
 - **F-A10** (Must, ubiquitous) `affiliates` and `affiliate_commissions` shall carry `store_id` with RLS
   `tenant_isolation`, and every Seller-panel read/write shall run through `withTenant`.
   - Acceptance: `verify-rls` passes; under store A's tenant context a select of store B's affiliate
     returns 0 rows.
+
+- **F-A11** (Should, event) When a user with `affiliates:write` exports commissions for a date range,
+  the system shall return a CSV of that store's commissions (order number, affiliate name + code,
+  source, base, rate, commission, state, `paid_at`, `paid_note`) and nothing from another store.
+  - Acceptance: Given store A with 3 commissions and store B with 1, When A's owner exports, Then the
+    file has 3 data rows and every row is A's; a `staff` user gets no export.
+- **F-A12** (Should, state) While the signed-in user lacks `affiliates:write`, the Seller panel shall
+  show an affiliate's bank account and phone masked to the last 4 digits and no `wa.me` link.
+  (Today every store role can read `/affiliate` in full — gap found 2026-10-15.)
+  - Acceptance: Given a `staff` session, When `/affiliate` renders, Then no full bank account or phone
+    number appears in the HTML.
+- **F-A13** (Must, event) When an order is placed through a store landing page (`/lp`, OrderFunnel),
+  the system shall send the typed code / captured ref exactly as checkout does, so F-A4–F-A6 apply
+  unchanged.
+  - Acceptance: Given `/lp/<slug>?ref=CODE` opened on an enabled store with `CODE` active, When the
+    funnel order is placed, Then one commission row with `source='link'` exists for that order.
+- **F-A14** (Should, unwanted) If an order whose commission is `dibayar` moves to `retur`, then the
+  system shall keep the commission `dibayar` and mark it "retur setelah dibayar" for the merchant.
+  **Blocked on OD-A1** (claw-back policy); v1 leaves the paid row untouched, pinned by
+  `affiliate-attribution.test.ts`.
+  - Acceptance: Given a `dibayar` commission, When its order is set `retur`, Then the row stays
+    `dibayar` and the Seller list shows the flag.
+- **F-A15** (Should, event) When a signed-in TokoΦ buyer account whose verified phone equals an
+  `aktif` affiliate's phone opens "Affiliate", the system shall list that affiliate's commissions per
+  store (state, amount, `eligible_at`, `paid_at`) and never another person's. **Phase 2, blocked on
+  OD-A3 and on the buyer account (Stage 10).** The phone match only *offers* the link; the affiliate
+  confirms it, mirroring the account spec's consent rule for orders.
+  - Acceptance: Given account X verified as `62811…` and an active affiliate with that phone in store
+    A, When X confirms the link, Then X sees A's commissions for that affiliate only; an account with
+    another phone sees none.
+- **F-A16** (Could, event) When an affiliate is approved, a commission becomes ready, or a commission
+  is marked paid, the system shall notify the affiliate through the platform messaging channel.
+  **Phase 2, blocked on the messaging-channel task** (WhatsApp/SMS not set up). Until then the
+  merchant's `wa.me` link is the channel.
+  - Acceptance: Given the messaging channel is live, When an affiliate is approved, Then one message is
+    queued to the affiliate's phone and the approval succeeds even if sending fails.
+- **F-A17** (Should, event) When a user with `affiliates:write` erases a `ditolak` or `nonaktif`
+  affiliate, the system shall clear its phone, email and bank fields and replace the name with
+  "Affiliate dihapus", keeping the code and every commission row (the merchant's financial record).
+  - Acceptance: Given a `nonaktif` affiliate with 2 commissions, When the owner erases it, Then its
+    personal fields are null, both commissions still exist, and an `aktif` affiliate cannot be erased.
 
 ## 9. Data (migration `0116_store_affiliates`)
 
@@ -134,10 +205,57 @@ the later home for an affiliate self-view).
 | `affiliate_commissions` | id, store_id, affiliate_id, order_id (unique), source (`link`/`kode`), base_idr, commission_idr, rate_note, status `affiliate_commission_status` (`pending`,`dibayar`,`batal`), eligible_at, paid_at, paid_note, created_at | RLS |
 
 "Siap dibayar" is derived (`status='pending' and eligible_at <= now()`), not stored: no cron needed.
+The `?ref=` capture is `localStorage["tphi:ref"] = {v, t}` on the store's own origin (MarketingPixels
+inline script); checkout sends it as `refCode` only while `t` is under 30 days old. The order route
+treats `affiliateCode` / `refCode` as **selectors**, resolved against the store's `aktif` affiliates
+inside the order transaction (`apps/admin/lib/affiliate-attribution.ts`). `F-A11`–`F-A17` need no new
+table; `F-A14` may need one boolean column (decided with OD-A1), `F-A15` a link table owned by the
+account spec.
 
-## 10. Open questions
+**Retention.** Affiliate personal data (phone, email, bank) lives until the merchant erases it
+(`F-A17`); commission rows are the merchant's financial record and are never deleted by the app.
 
-| Question | Owner | Gate |
+## 10. Open questions and owner decisions
+
+| ID | Question | Recommended default | Owner | Blocks |
+|---|---|---|---|---|
+| OD-A1 | A `retur` after `dibayar`: flag only, or record a claw-back the merchant deducts from the next payment? | Flag only (`F-A14`); TokoΦ never moves the money, so it cannot claw it back | Owner | Task 9.10 |
+| OD-A2 | Defaults: 10 % rate, 7 hold days (0–90 allowed). | Keep; 7 days covers the usual return window after delivery | Owner | Release |
+| OD-A3 | May an affiliate sign in with the TokoΦ buyer account to see commissions? (Same question as the account spec's OD-3.) | **Yes** — one identity per person, no second login (`F-A15`) | Owner | Task 9.11 |
+| OD-A4 | Tax: export only (`F-A11`), or also a tax note on the export? | Export only + a one-line note that withholding is the merchant's | Owner | Task 9.8 |
+| OD-A5 | Erasure (`F-A17`): manual only, or automatic after N days for `ditolak`? | Manual only in v1.1 | Owner | Task 9.9 |
+
+## 11. Risks and abuse
+
+| Risk | Where it bites | Handling (built / planned) |
 |---|---|---|
-| Should a `retur` after `dibayar` create a claw-back note for the merchant? v1 leaves a paid commission untouched. | Owner | Before Task 9.4 ships |
-| Default rate 10 % and 7 hold days acceptable? | Owner | Before release |
+| Self-referral | Affiliate buys with own code to earn a "discount" | Phone match voids it (`F-A5`, built). A different phone (family) passes — the merchant's approval and the hold window are the remaining controls. |
+| Cookie stuffing / ref overwrite | Anyone can open `?ref=` to take last-click credit | Only approved `aktif` affiliates of that store attribute; typed code wins over the ref; the 30-day window is client-side only (accepted: the ref is a selector, not a credential). |
+| Refund abuse | Commission paid, then the order is returned | Payable only after `selesai` + hold days (`F-A7`, built); paid-then-returned is flagged (`F-A14`, OD-A1). |
+| Application spam | Bots fill `/affiliate` | Honeypot + 5/hour/IP (built); limiter is in-process (NF-6). Programme off by default. |
+| Personal data exposure | Bank accounts and phones visible to every store role | Masking (`F-A12`) and erasure (`F-A17`), planned. |
+| Money correctness | Rounding, discounts, overrides | Integer basis points, one floor at the end, frozen at order time (`F-A6`, unit + DB tests). |
+
+## 12. Technical decisions (ADR-lite)
+
+- **Decision:** the merchant pays affiliates outside TokoΦ. **Why:** TokoΦ already holds merchant money
+  as a custodian (PRD §1); adding third-party payouts would widen that liability. **Consequence:** no
+  `ledger_entries`/`payouts` rows for commissions; "Tandai dibayar" is a record, not a transfer.
+- **Decision:** "siap dibayar" is derived from `eligible_at`, not stored. **Why:** no cron, no stale
+  state. **Consequence:** every reader uses the same predicate (`markCommissionPaid`, `getAffiliateProgram`).
+- **Decision:** commission frozen in the order transaction. **Why:** a later rate change must not
+  rewrite history. **Consequence:** rate changes apply to new orders only.
+- **Decision:** phase-2 self-view reuses the buyer account. **Why:** one identity per person; the
+  account spec already owns phone verification and consent. **Consequence:** `F-A15` waits for Stage 10.
+
+## 13. Milestones and verification status
+
+- [x] **v1 built** (`F-A1`–`F-A10`, Tasks 9.1–9.5): migration `0116`; `affiliate.test.ts` 10/10 and
+  `affiliate-attribution.test.ts` 8/8 on a throwaway DB; `verify-rls` 56/57; storefront browser check
+  of `/affiliate`, the rate limit, `?ref=` capture and the checkout field (BUILD-LOG 2026-10-15).
+  **Not yet driven:** the Seller `/affiliate` screen (Task 9.4, blocked on a local seller login) and a
+  real order POST carrying `refCode`/`affiliateCode`.
+- [ ] **v1.1:** `F-A13` landing funnel (9.6), `F-A12` masking (9.7), `F-A11` export (9.8), `F-A17`
+  erasure (9.9), `F-A14` after OD-A1 (9.10).
+- [ ] **Phase 2:** `F-A15` self-view via buyer account (9.11), `F-A16` notifications (9.12) — both
+  blocked on other work.
