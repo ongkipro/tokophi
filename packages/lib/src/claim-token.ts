@@ -6,7 +6,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // single-claimant is enforced later by `buyer_order_claims.order_id` unique (Task 10.5), not here.
 // No secret configured → no token issued and none verifies: the feature is simply off.
 
-export const CLAIM_TOKEN_TTL_SEC = 30 * 24 * 60 * 60; // 30 days — validity still open with the owner (OD-4 confirm)
+export const CLAIM_TOKEN_TTL_SEC = 30 * 24 * 60 * 60; // 30 days — owner-delegated decision 2026-10-15 (spec §17 OD-4)
 const CLOCK_SKEW_SEC = 60;
 const MIN_SECRET_LEN = 32;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

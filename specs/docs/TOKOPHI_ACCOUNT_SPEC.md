@@ -723,7 +723,7 @@ when that task is done.
 | OD-1 | Messaging provider (WhatsApp Business API vs SMS vendor), sender identity, budget, fallback — **now Task 8.38**. | Phase 2. |
 | OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed). | Task 10.3. |
 | OD-3 | ✅ **Answered 2026-10-15 (owner: "oke boleh"): YES** — affiliates sign in with the buyer account via a seller-issued invitation (ACC-14). | Phase 3 (still after Stage 9 merges). |
-| OD-4 | ~~Proof for claiming an order~~ — **answered by D-3** (signed order-specific token, single claimant). Owner to confirm the 30-day validity. | Task 10.13 (validity only). |
+| OD-4 | ~~Proof for claiming an order~~ — **answered by D-3** (signed order-specific token, single claimant). **Validity CLOSED 2026-10-15** — owner delegated ("rekomendasimu kau sesuaikan"): **30 days**. It covers delivery plus the complaint window, keeps a leaked link short-lived, and an order missed after 30 days is still reachable in phase 2 by verified-phone claim (ACC-5). | — |
 | OD-5 | ✅ **Answered 2026-10-15 (owner: "local development dulu sampai final"):** local development only until the feature is final — no push, no PR, no production. When it ships is decided then. | Deploy only. |
 | OD-6 | Privacy review (`PRIVACY-COMPLIANCE.md` is a stub): consent text, retention, deletion, UU PDP. | Production only. |
 | OD-7 | ✅ **Answered 2026-10-15 (owner: "pakai client yang sudah ada"): reuse the existing client.** Owner step (Google Cloud Console → that OAuth client → Authorized redirect URIs): add the account callback — local `http://localhost:4329/auth/google/callback` now; the production URI once OD-2 fixes the host. | Any sign-in from the account app. |

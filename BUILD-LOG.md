@@ -4477,3 +4477,6 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Hardening applied:** `issueClaimToken` throws and `verifyClaimToken` returns null for a secret under 32 chars, so a future caller passing `env.X ?? ""` cannot accept forged tokens (`packages/lib/src/claim-token.ts`, +1 test); `ACCOUNT_CLAIM_SECRET` listed in `apps/admin/lib/env-health.ts` (optional; short = feature off).
 - **Verified:** `route.test.ts` 7/7 against the throwaway `tokophi_buyer_account_test` (previously only run by the authoring agent); full vitest with DB suites 196 files, 1714/1714; `tsc` lib + admin 0.
 - **Open, by design:** replay within 30 days is bearer-by-design; single claimant is Task 10.5's unique `buyer_order_claims.order_id`. Storefront does not yet store `claimToken` (Task 10.10).
+
+### [2026-10-15 16:50 UTC] — ACCOUNT · OD-4 closed: claim token valid 30 days
+- Owner delegated the choice ("rekomendasimu kau sesuaikan dan sempurnakan"). 30 days kept: delivery + complaint window, short life for a leaked link; orders missed after expiry stay claimable in phase 2 via verified phone (ACC-5). Spec §17 OD-4 row and the `CLAIM_TOKEN_TTL_SEC` comment updated; no behaviour change.
