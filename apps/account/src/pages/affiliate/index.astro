@@ -1,0 +1,53 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myAffiliateStores } from "../../data/affiliate";
+import { signInUrl } from "../../lib/nav";
+import { STATUS_LABEL } from "../../lib/affiliate-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const stores = await myAffiliateStores(db, account.id);
+const sum = (k: "readyIdr" | "heldIdr" | "paidIdr") => stores.reduce((s, x) => s + x[k], 0);
+---
+<Layout title="Affiliate">
+  <h1>Affiliate</h1>
+  <p class="lede">Semua toko yang Anda promosikan, dalam satu akun. Komisi dibayar oleh masing-masing toko.</p>
+  {Astro.url.searchParams.get("daftar") && <p class="alert ok" role="status">Pendaftaran terkirim. Seller akan meninjaunya.</p>}
+
+  <div class="stats" role="group" aria-label="Total semua toko">
+    <div class="stat"><div class="k">Siap dibayar</div><div class="v num">{IDR(sum("readyIdr"))}</div></div>
+    <div class="stat"><div class="k">Masih ditahan</div><div class="v num">{IDR(sum("heldIdr"))}</div></div>
+    <div class="stat"><div class="k">Sudah dibayar</div><div class="v num">{IDR(sum("paidIdr"))}</div></div>
+  </div>
+
+  <h2>Toko saya</h2>
+  {stores.length === 0 ? (
+    <p class="card muted">Belum ada. Gabung ke program affiliate sebuah toko di bawah, atau buka link undangan yang dikirim seller.</p>
+  ) : (
+    <ul class="plain card">
+      {stores.map((s) => (
+        <li>
+          <div class="row">
+            <a href={`/affiliate/${s.affiliateId}`}><strong>{s.storeName}</strong></a>
+            <span class={`pill ${STATUS_LABEL[s.status].tone}`}>{STATUS_LABEL[s.status].text}</span>
+          </div>
+          <div class="row muted">
+            <span>Kode <span class="mono">{s.code}</span> · {s.orders} pesanan</span>
+            <span class="num">siap {IDR(s.readyIdr)}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )}
+
+  <h2>Gabung program toko</h2>
+  <form class="card stack" method="get" action="/affiliate/gabung">
+    <label>Alamat toko
+      <span class="hint">Nama toko di alamatnya, mis. <span class="mono">batiknusantara</span> dari batiknusantara.tokophi.id</span>
+      <input name="toko" required pattern="[a-z0-9\-]{1,63}" autocapitalize="none" autocomplete="off" />
+    </label>
+    <button class="btn primary" type="submit">Lanjut</button>
+  </form>
+</Layout>

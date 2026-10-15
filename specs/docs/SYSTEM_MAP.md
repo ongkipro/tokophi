@@ -17,7 +17,7 @@
 
 ---
 
-## 1. The four surfaces
+## 1. The four surfaces (+ `apps/account`, local only — §6b)
 
 TokoΦ is an npm-workspaces monorepo. Four deployable surfaces, five shared packages, one Postgres.
 
@@ -284,7 +284,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | `/pelanggan/segmen` | `segments` | `customer_segments` | `segments` | `customer_segments` |
 | `/pelanggan/ulasan` | `reviews` | `reviews`, `customers` | — | — |
 | `/crm`, `/crm/{followup,pipeline,template}` | `crm` | `followups`, `leads`, `wa_templates`, `customers` | `crm` | `followups` |
-| **`/affiliate`** (Promo → Affiliate, 0116) | `affiliates` (`getAffiliateProgram` — phone/email/bank pass through `lib/affiliate-mask.ts` and are masked unless the viewer holds `affiliates:write`, F-A12) | `store_settings` (`affiliate_enabled`, `affiliate_rate_bps`, `affiliate_hold_days`), `stores`, `affiliates`, `affiliate_commissions` ("siap" is derived: `pending` and `eligible_at <= now()`), `products` | `affiliates.{saveAffiliateSettings,setAffiliateStatus,createAffiliate,markCommissionPaid,setProductAffiliateRate,affiliateDashboardLink}` (all `affiliates:write`; `affiliateDashboardLink` mints the F-A18 signed link for an `aktif` affiliate, read-only) | `store_settings`, `affiliates`, `affiliate_commissions` (`dibayar` only when ready), `products.affiliate_rate_bps` |
+| **`/affiliate`** (Promo → Affiliate, 0116) | `affiliates` (`getAffiliateProgram` — phone/email/bank pass through `lib/affiliate-mask.ts` and are masked unless the viewer holds `affiliates:write`, F-A12) | `store_settings` (`affiliate_enabled`, `affiliate_rate_bps`, `affiliate_hold_days`), `stores`, `affiliates`, `affiliate_commissions` ("siap" is derived: `pending` and `eligible_at <= now()`), `products` | `affiliates.{saveAffiliateSettings,setAffiliateStatus,createAffiliate,markCommissionPaid,setProductAffiliateRate,inviteAffiliateToAccount}` (all `affiliates:write`; `inviteAffiliateToAccount` mints the single-use 7-day TokoΦ Account invitation for an `aktif`, unlinked affiliate — only its sha256 is written, `affiliates.invite_hash`; hidden unless `ACCOUNT_APP_URL` is set). The list shows "Terhubung ke Akun TokoΦ" when `affiliates.account_id` is set | `store_settings`, `affiliates`, `affiliate_commissions` (`dibayar` only when ready), `products.affiliate_rate_bps` |
 | `/diskon/*` | `discounts` | `discounts` | `discounts` | `discounts`, `discount_usages` |
 | `/analitik` | `analytics`, `funnel` | `orders`, `order_line_items`, `products`, `analytics_daily`, **`analytics_events`** | — | — |
 | `/pemasaran` | `marketing` | `orders` (+ `ad_channels` for *labels only*) | — | — |
@@ -391,8 +391,7 @@ The resolved `{store, catalog}` goes on `Astro.locals`; all reads are memoised p
 | `/blog` | `blog/index.astro` | **`articles` (per-tenant, `status='terbit'`) via `content.ts`.** `/blog/[handle]` detail route exists (2026-07-14). |
 | `/akun` | `akun.astro` | **none — non-functional demo form** ("sistem akun aktif setelah backend terhubung") |
 | `/kontak` | `kontak.astro` | `stores` — WhatsApp from `store.whatsapp`; hardcoded email removed (2026-07-15) |
-| **`/affiliate`** (GET form + POST) | `affiliate.astro` + `data/affiliate.ts` | **404 unless `store_settings.affiliate_enabled`**; POST **INSERTs `affiliates`** (`menunggu`, per-store unique code) behind a honeypot and 5/hour/IP (`lib/chat` `rateLimit`) |
-| **`/affiliate/saya?t=`** (F-A18, interim) | `affiliate/saya.astro` + `data/affiliate.ts#getAffiliateDashboard` | Read-only. `@tokophi/lib/affiliate-link` verifies the token (HMAC, `AFFILIATE_LINK_SECRET`, 90 days) against the **Host's** store; the affiliate must be `aktif`; else 404. Reads `affiliates` (name, code) + `affiliate_commissions` ⋈ `orders` (number, `placed_at` only — no buyer data). `no-store`, `no-referrer`, `noindex`; `Layout pixels={false}` (no third-party pixels: they report the URL with the token). |
+| **`/affiliate`** (GET form + POST; links to the account app's `/affiliate/gabung?toko=<slug>` when `ACCOUNT_APP_URL` is set) | `affiliate.astro` + `data/affiliate.ts` | **404 unless `store_settings.affiliate_enabled`**; POST **INSERTs `affiliates`** (`menunggu`, per-store unique code) behind a honeypot and 5/hour/IP (`lib/chat` `rateLimit`) |
 | **`POST /api/track`** | `api/track.ts` | **INSERT `analytics_events`** |
 | **`POST /api/checkout-session`** | `api/checkout-session.ts` | **UPSERT `checkout_sessions`** |
 
@@ -407,6 +406,27 @@ These two are the storefront's only API routes. (Its only other write is the `/a
 ⚠️ The bot and rate-limit guards are **per-process in-memory** — they do not hold across replicas, and there is no proof-of-work, no signature, and no session validation. A distributed script with a browser UA can still inflate the funnel (and now the cart table).
 
 ---
+
+## 6b. `apps/account` — TokoΦ Account (added 2026-10-15, branch `feat/accounts`, **local only**)
+
+The fifth surface: one origin for every shop's buyers and affiliates (account spec §17, AFFILIATE_SPEC
+`F-A15`). Astro SSR (`@astrojs/node` standalone), dev port **4329**, proposed `account.tokophi.com`
+(OD-2) — **no compose service, Traefik router or DNS yet**. **NOT tenant-resolved**: the account is
+cross-tenant, so there is no Host → store step. Owner DB connection; every read carries an explicit
+`buyer_id` / `affiliates.account_id` predicate (`src/data/*.ts`), held by
+`account-data.test.ts`; the two account tables have RLS on with **no policy**, so `tokophi_app` reads
+nothing from them.
+
+| Route | Reads / writes |
+|---|---|
+| every request (`src/middleware.ts`) | cookie `tphi_account` (jose JWT, aud `tokophi-account`, carries a `buyer_sessions.id`) → the **row** decides (revoked / > 30 days / account not `active` ⇒ signed out, cookie cleared); sets `no-store`, `no-referrer`, `noindex`, `DENY` framing |
+| `/masuk`, `POST /masuk/dev` | Google button when `GOOGLE_CLIENT_ID/SECRET` + `ACCOUNT_GOOGLE_REDIRECT_URI` are set; **dev sign-in** (`dev:<email>` subject, no password) only when not a production build — UPSERT `buyer_accounts` by `google_sub`, INSERT `buyer_sessions` |
+| `/auth/google/{start,callback}` | `@tokophi/lib/google-oauth` (same flow as Seller); `state` cookie; `email_verified` required |
+| `POST /keluar`, `/sesi` | revoke own session; list live sessions; "Keluar dari perangkat lain" (ACC-3) |
+| `/affiliate`, `/affiliate/[id]` | `affiliates` (where `account_id` = me) ⋈ `stores` ⟕ `affiliate_commissions` ⋈ `orders` (number, `placed_at` only) — totals ditahan / siap / dibayar per store; another account's id ⇒ 404 |
+| `/affiliate/gabung?toko=` | store must exist, not be locked (`suspended_at`), programme on → INSERT `affiliates` (`menunggu`, `account_id` = me); 5/h/account (DB count); same phone already in that store ⇒ refused, never taken over |
+| `/affiliate/undangan?t=` | preview, then ONE conditional UPDATE binds `affiliates.account_id` and clears `invite_hash` (aktif, unlinked, unexpired, account not already in that store) |
+| `/` | home; the buyer order area is a stated placeholder (claim flow is Tasks 10.5–10.10) |
 
 ## 7. `apps/landing`
 

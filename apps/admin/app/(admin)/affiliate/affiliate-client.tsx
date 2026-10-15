@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, LayoutDashboard, MessageCircle, Plus, Users } from "lucide-react";
+import { Copy, MessageCircle, Plus, UserPlus, Users } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { ToggleRow } from "@/components/admin/pengaturan/toggle-row";
@@ -12,8 +12,8 @@ import { IDR, num, waLink } from "@tokophi/lib/format";
 import { formatRateBps } from "@tokophi/lib/affiliate";
 import type { AffiliateProgram, AffiliateRow, CommissionState } from "@/lib/data/affiliates";
 import {
-  affiliateDashboardLink,
   createAffiliate,
+  inviteAffiliateToAccount,
   markCommissionPaid,
   saveAffiliateSettings,
   setAffiliateStatus,
@@ -196,14 +196,14 @@ function AffiliateTable({ program }: { program: AffiliateProgram }) {
   const copy = (text: string) => navigator.clipboard.writeText(text).then(() => toast.success("Disalin."));
   // The link is minted server-side; the clipboard can be missing (plain-http origin) or refuse after
   // the await, so fall back to a prompt the seller can copy from.
-  const copyDashboard = async (a: AffiliateRow) => {
-    const r = await affiliateDashboardLink(a.id);
+  const invite = async (a: AffiliateRow) => {
+    const r = await inviteAffiliateToAccount(a.id);
     if (!r.ok) return void toast.error(r.error);
     try {
       await navigator.clipboard.writeText(r.url);
-      toast.success(`Link dashboard ${a.name} disalin. Kirim hanya ke ${a.name}.`);
+      toast.success(`Link undangan untuk ${a.name} disalin (berlaku 7 hari, sekali pakai). Kirim hanya ke ${a.name}.`);
     } catch {
-      window.prompt(`Link dashboard ${a.name} — kirim hanya ke ${a.name}:`, r.url);
+      window.prompt(`Link undangan ${a.name} — kirim hanya ke ${a.name} (7 hari, sekali pakai):`, r.url);
     }
   };
   return (
@@ -245,6 +245,7 @@ function AffiliateTable({ program }: { program: AffiliateProgram }) {
                 </TableCell>
                 <TableCell>
                   <Badge className={AFF_STATUS[a.status].className}>{AFF_STATUS[a.status].label}</Badge>
+                  {a.linked && <div className="mt-1 text-xs text-muted-foreground">Terhubung ke Akun TokoΦ</div>}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
@@ -265,15 +266,15 @@ function AffiliateTable({ program }: { program: AffiliateProgram }) {
                         <MessageCircle />
                       </Button>
                     )}
-                    {program.dashboardLinks && a.status === "aktif" && (
+                    {program.invites && a.status === "aktif" && !a.linked && (
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        aria-label={`Salin link dashboard ${a.name}`}
-                        title="Salin link dashboard affiliate"
-                        onClick={() => copyDashboard(a)}
+                        aria-label={`Undang ${a.name} ke Akun TokoΦ`}
+                        title="Undang ke Akun TokoΦ"
+                        onClick={() => invite(a)}
                       >
-                        <LayoutDashboard />
+                        <UserPlus />
                       </Button>
                     )}
                     {canWrite && a.status !== "aktif" && a.status !== "ditolak" && (

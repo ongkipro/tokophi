@@ -1,0 +1,43 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { googleEnabled } from "@tokophi/lib/google-oauth";
+import { devSignInAllowed } from "../lib/dev-signin";
+import { safeNext } from "../lib/nav";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+if (Astro.locals.account) return Astro.redirect(next);
+const google = googleEnabled("ACCOUNT_GOOGLE_REDIRECT_URI");
+const dev = devSignInAllowed();
+const ERRORS: Record<string, string> = {
+  google_batal: "Masuk dengan Google dibatalkan.",
+  google_state: "Sesi masuk kedaluwarsa. Coba lagi.",
+  google_gagal: "Google tidak bisa memverifikasi akun ini. Pastikan email Google Anda sudah terverifikasi.",
+  dev_email: "Masukkan alamat email yang valid.",
+  akun: "Akun ini tidak aktif.",
+};
+const error = ERRORS[Astro.url.searchParams.get("e") ?? ""] ?? null;
+---
+<Layout title="Masuk">
+  <h1>Masuk ke Akun TokoΦ</h1>
+  <p class="lede">Satu akun untuk berbelanja dan menjadi affiliate di banyak toko TokoΦ.</p>
+  {error && <p class="alert bad" role="alert">{error}</p>}
+
+  {google && (
+    <p><a class="btn primary block" href={`/auth/google/start?next=${encodeURIComponent(next)}`}>Masuk dengan Google</a></p>
+  )}
+  {!google && !dev && <p class="alert warn">Masuk belum tersedia di server ini.</p>}
+
+  {dev && (
+    <section class="card" aria-labelledby="dev-h">
+      <h2 id="dev-h" style="margin-top:0">Masuk lokal (pengembangan)</h2>
+      <p class="muted">Hanya ada di server pengembangan. Tanpa kata sandi — jangan pernah aktif di produksi.</p>
+      <form class="stack" method="post" action="/masuk/dev">
+        <input type="hidden" name="next" value={next} />
+        <label>Email
+          <input type="email" name="email" required autocomplete="email" />
+        </label>
+        <button class="btn" type="submit">Masuk</button>
+      </form>
+    </section>
+  )}
+</Layout>

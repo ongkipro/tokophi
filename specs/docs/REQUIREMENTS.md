@@ -237,10 +237,10 @@ The normative statement, verification method, and current status for each identi
 | F-A12 | Without `affiliates:write`, the Seller panel masks affiliate bank account and phone (last 4) and email, and hides `wa.me`. | `apps/admin/lib/affiliate-mask.test.ts`; Chrome staff session 2026-10-15 (BUILD-LOG) | MET |
 | F-A13 | Landing-page funnel (`/lp`, OrderFunnel) sends typed code / captured ref exactly like checkout. | Task 9.6 | PLANNED |
 | F-A14 | `retur` after `dibayar` keeps the row paid and flags it for the merchant. | Task 9.10 | BLOCKED — owner decision OD-A1 |
-| F-A15 | A verified buyer account linked (with consent) to an `aktif` affiliate sees that affiliate's commissions. | Task 9.11 | BLOCKED — OD-A3 + buyer account (Stage 10) |
+| F-A15 | **Phase 1 (2026-10-15).** One TokoΦ Account is an affiliate of many stores (one `affiliates` row per store, `account_id`, 0117): apply while signed in (`menunggu`, merchant approves; 5/h/account; never takes over a same-phone form row), bind an existing `aktif` row only via the seller's single-use 7-day invitation, and see every store's code, link, totals and commissions — never another account's (404). | `apps/account/src/data/account-data.test.ts`; `apps/admin/lib/affiliate-invite.test.ts`; Chrome 390/1280 2026-10-15 (BUILD-LOG) | MET |
 | F-A16 | Affiliate notified on approval / ready / paid through the platform messaging channel. | Task 9.12 | BLOCKED — messaging channel (WhatsApp/SMS) not set up |
 | F-A17 | `affiliates:write` erases a `ditolak`/`nonaktif` affiliate's personal fields; commissions kept. | Task 9.9 | PLANNED |
-| F-A18 | Interim affiliate self-view: `affiliates:write` copies a signed 90-day link to `/affiliate/saya` (code, totals, commissions, no buyer data; 404 when forged/expired/other store/not `aktif`; no third-party pixels). Replaced by F-A15. | `packages/lib/src/affiliate-link.test.ts`; Chrome owner + staff sessions 2026-10-15 (BUILD-LOG) | MET |
+| F-A18 | ~~Interim signed per-store dashboard link~~ — SUPERSEDED 2026-10-15 by F-A15 (owner: affiliate account like a user account, many stores). Code removed on `feat/accounts`. | — | SUPERSEDED |
 
 ### 2.11 TokoΦ Account — phased (spec: [`TOKOPHI_ACCOUNT_SPEC.md`](TOKOPHI_ACCOUNT_SPEC.md) §17, rev 2 2026-10-15)
 
@@ -250,18 +250,18 @@ Phase 1 needs no messaging provider (Google sign-in + order claim token); phase 
 |---|---|---|---|
 | ACC-1 | **Phase 2.** Phone + 6-digit code signs a buyer in: only `hashOtp` is stored, delivery goes through `OtpSender`, a correct code within 5 min creates/reuses `buyer_accounts` and starts a session. | Task 10.1 (primitive) / 10.14 | PARTIAL — primitive only (`@tokophi/lib/buyer-otp`) |
 | ACC-2 | **Phase 2.** Wrong / expired / used / 5-attempt-locked codes are refused without saying which; no resend inside 60 s. | Task 10.1 / 10.14 | PARTIAL — refusal order + cooldown pure-tested |
-| ACC-3 | "Keluar dari perangkat lain" revokes every other session, keeps the current one. | Task 10.4 | PLANNED |
+| ACC-3 | "Keluar dari perangkat lain" revokes every other session, keeps the current one. | `apps/account/src/data/account-data.test.ts` (Task 10.4) | MET |
 | ACC-4 | ~~Claim by verified phone = order phone~~ — SUPERSEDED by ACC-11 (rev 2). | — | SUPERSEDED |
 | ACC-5 | **Phase 2.** With an active link AND a verified phone equal to the store customer's, the hub lists all that customer's orders through the allowlisted projection. | Task 10.14 | PLANNED |
 | ACC-6 | "Toko" lists exactly the linked stores, each opening its storefront (narrows F-K12). | Task 10.7 | PLANNED |
 | ACC-7 | ≤ 10 saved addresses with KiriminAja district id, one primary; edits never touch an order snapshot. | Task 10.8 | PLANNED |
 | ACC-8 | Unlinking revokes the link and writes nothing store-owned. | Task 10.9 | PLANNED |
 | ACC-9 | ~~Success-page account link~~ — SUPERSEDED by ACC-13 (rev 2). | — | SUPERSEDED |
-| ACC-10 | Google sign-in (state cookie, id_token verified, `email_verified`) finds/creates `buyer_accounts` by Google `sub` and starts a session; any failure creates nothing. | Task 10.12 ✅ (shared sign-in core, 2026-10-15) / 10.3 | PLANNED |
+| ACC-10 | Google sign-in (state cookie, id_token verified, `email_verified`) finds/creates `buyer_accounts` by Google `sub` and starts a session; any failure creates nothing. | Task 10.12 ✅ / 10.3 (`apps/account/src/pages/auth/google/*` built; one row per `sub` in `apps/account/src/data/account-data.test.ts`) | PARTIAL — not driven against a real Google client (needs ACCOUNT_GOOGLE_REDIRECT_URI on the existing client, OD-7) |
 | ACC-11 | A signed-in buyer with a valid claim token + consent records the order claim and creates/re-activates the store link; tampered/expired/already-claimed-by-another/declined creates nothing, one message. | Task 10.5 | PLANNED |
 | ACC-12 | **Phase 1 hub:** exactly the claimed orders of active links, allowlisted projection; unclaimed orders are not-found. | Task 10.6 / 10.11 | PLANNED |
 | ACC-13 | The order API returns a 30-day signed claim token for the order; the success page offers "Simpan ke Akun TokoΦ" with it; guest checkout and existing response fields unchanged. | Task 10.13 ✅ (token issued + verified, 2026-10-15) / 10.10 | PLANNED |
-| ACC-14 | **Phase 3.** A seller-issued affiliate invitation binds an approved store affiliate to the buyer account, which then shows that affiliate's commissions for that store only. | Task 10.15 | PLANNED |
+| ACC-14 | **Phase 1 since 2026-10-15** (owner: cross-store affiliate account). A seller-issued affiliate invitation binds an approved store affiliate to the account, which then shows that affiliate's commissions for that store only; never by email/phone match. | `apps/admin/lib/affiliate-invite.test.ts`; `apps/account/src/data/account-data.test.ts` (Task 9.11) | MET |
 
 ### 2.12 Platform messaging channel (owner-gated)
 

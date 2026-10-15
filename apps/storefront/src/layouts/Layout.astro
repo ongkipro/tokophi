@@ -31,14 +31,11 @@ interface Props {
    * mechanisms do different jobs.
    */
   robots?: string;
-  /** `false` drops the merchant's third-party pixels: they report the full URL, so a page whose URL
-   *  carries a secret (`/affiliate/saya?t=…`) must never load them. First-party Analytics stays. */
-  pixels?: boolean;
 }
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
 const { store, catalog, origin } = Astro.locals;
-const { title, description = store.tagline, image, type = "website", head, robots, pixels = true } = Astro.props;
+const { title, description = store.tagline, image, type = "website", head, robots } = Astro.props;
 
 const fullTitle = `${title} - ${store.name}`;
 
@@ -152,7 +149,7 @@ const ogImage = (() => {
     {/* Funnel/device tracking → POST /api/track → analytics_events → admin /analitik. */}
     <Analytics />
     {/* Merchant's own marketing pixels (Meta/Google/TikTok), per store — Pemasaran → Pelacakan. */}
-    {pixels && <MarketingPixels />}
+    <MarketingPixels />
     <ImageFallback />
   </head>
   <body class="min-h-screen bg-cream text-ink antialiased">

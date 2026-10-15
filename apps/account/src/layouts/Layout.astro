@@ -1,0 +1,35 @@
+---
+// One shell for every account page. Bahasa Indonesia, mobile first, no third-party script of any kind
+// (pages here carry personal data and, on invitation links, a secret in the URL).
+import "../styles/global.css";
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const account = Astro.locals.account;
+---
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{`${title} · Akun TokoΦ`}</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="/">Akun TokoΦ</a>
+        {account && (
+          <nav aria-label="Menu akun">
+            <a href="/affiliate">Affiliate</a>
+            <a href="/sesi">Keamanan</a>
+          </nav>
+        )}
+      </header>
+      <main>
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

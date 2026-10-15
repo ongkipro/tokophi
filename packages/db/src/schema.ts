@@ -1724,6 +1724,37 @@ export const affiliateCommissionStatus = pgEnum("affiliate_commission_status", [
   "dibayar",
   "batal",
 ]);
+// ── TokoΦ Account (0117, specs/docs/TOKOPHI_ACCOUNT_SPEC.md §17.9) ─────────────────────────────────
+// One platform identity per person (buyer area + affiliate area of apps/account). Cross-tenant: no
+// store_id, no RLS — apps/account reads only with an explicit buyer_id predicate (§17.8 D-4).
+export const buyerAccounts = pgTable("buyer_accounts", {
+  id: pk(),
+  /** Google `sub`. `dev:<email>` only from the local dev sign-in, which refuses production builds. */
+  googleSub: text().unique(),
+  email: text(),
+  /** Canonical `62…`, set only by phase-2 phone verification. */
+  phone: text().unique(),
+  phoneVerifiedAt: ts(),
+  name: text(),
+  /** active | suspended | closed (check constraint in 0117). */
+  status: text().notNull().default("active"),
+  createdAt: createdAt(),
+});
+export const buyerSessions = pgTable(
+  "buyer_sessions",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    createdAt: createdAt(),
+    lastSeenAt: createdAt(),
+    revokedAt: ts(),
+    userAgent: text(),
+  },
+  (t) => [index("buyer_sessions_buyer_idx").on(t.buyerId)],
+);
+
 export const affiliates = pgTable(
   "affiliates",
   {
@@ -1745,8 +1776,20 @@ export const affiliates = pgTable(
     note: text(),
     createdAt: createdAt(),
     approvedAt: ts(),
+    /** TokoΦ Account owning this per-store row (0117) — one account, many stores. Set by applying while
+     *  signed in or by accepting the seller's invitation; NEVER by email/phone match. */
+    accountId: uuid().references((): AnyPgColumn => buyerAccounts.id),
+    /** sha256 of the seller-issued invitation token (single use: cleared on accept). */
+    inviteHash: text(),
+    inviteExpiresAt: ts(),
   },
-  (t) => [unique().on(t.storeId, t.code), index("affiliates_store_status_idx").on(t.storeId, t.status)],
+  (t) => [
+    unique().on(t.storeId, t.code),
+    index("affiliates_store_status_idx").on(t.storeId, t.status),
+    unique("affiliates_store_id_account_id_unique").on(t.storeId, t.accountId),
+    index("affiliates_account_idx").on(t.accountId),
+    uniqueIndex("affiliates_invite_hash_idx").on(t.inviteHash).where(sql`${t.inviteHash} is not null`),
+  ],
 );
 export const affiliateCommissions = pgTable(
   "affiliate_commissions",

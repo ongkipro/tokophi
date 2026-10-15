@@ -6,7 +6,7 @@ import { systemDomainFor } from "@/lib/data/domain";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac-policy";
 import { affiliateContactView } from "@/lib/affiliate-mask";
-import { affiliateLinkSecret } from "@tokophi/lib/affiliate-link";
+import { accountAppUrl } from "@/lib/account-url";
 
 // Seller panel → Affiliate (Task 9.4, specs/AFFILIATE_SPEC.md). Every read runs under the tenant
 // context (RLS) AND filters on `storeId` explicitly — the WHERE is the rule, the policy is the net.
@@ -26,6 +26,8 @@ export type AffiliateRow = {
   contactMasked: boolean;
   status: AffiliateStatus;
   note: string | null;
+  /** Bound to a TokoΦ Account (0117) — the affiliate sees this store's commissions there. */
+  linked: boolean;
   createdAt: string;
   orders: number;
   owedIdr: number; // siap dibayar
@@ -51,8 +53,8 @@ export type CommissionRow = {
 export type AffiliateProgram = {
   /** `<slug>.tokophi.id` — the base of every share link and of the public `/affiliate` form. */
   storeHost: string;
-  /** F-A18: dashboard links can be minted (AFFILIATE_LINK_SECRET set) AND this viewer may mint them. */
-  dashboardLinks: boolean;
+  /** "Undang ke akun" can be offered: the account app's URL is configured AND this viewer may write. */
+  invites: boolean;
   settings: { enabled: boolean; rateBps: number; holdDays: number };
   affiliates: AffiliateRow[];
   commissions: CommissionRow[];
@@ -94,6 +96,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
         bankHolder: schema.affiliates.bankHolder,
         status: schema.affiliates.status,
         note: schema.affiliates.note,
+        linked: sql<boolean>`${schema.affiliates.accountId} is not null`,
         createdAt: schema.affiliates.createdAt,
         orders: sql<number>`count(${c.id}) filter (where ${c.status} <> 'batal')`.mapWith(Number),
         owedIdr: sql<number>`coalesce(sum(${c.commissionIdr}) filter (where ${ready}), 0)`.mapWith(Number),
@@ -149,7 +152,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
     const iso = (d: Date | null) => (d ? d.toISOString() : null);
     return {
       storeHost: systemDomainFor(store?.slug ?? ""),
-      dashboardLinks: fullContact && affiliateLinkSecret() !== null,
+      invites: fullContact && accountAppUrl() !== null,
       settings: { enabled: s?.enabled ?? false, rateBps: s?.rateBps ?? 1000, holdDays: s?.holdDays ?? 3 },
       affiliates: affiliates.map((a) => ({
         id: a.id,
@@ -158,6 +161,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
         ...affiliateContactView(a, fullContact),
         status: a.status,
         note: a.note,
+        linked: a.linked,
         createdAt: a.createdAt.toISOString(),
         orders: a.orders,
         owedIdr: a.owedIdr,

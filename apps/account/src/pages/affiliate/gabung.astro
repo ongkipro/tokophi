@@ -1,0 +1,69 @@
+---
+// Apply to ONE store's programme as a signed-in account (F-A15). The merchant still approves it;
+// the application lands as `menunggu` on that store's own list, linked to this account.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { nameError, normalizeName, normalizePhone } from "@tokophi/lib/validate";
+import { joinProgramme, joinableStore, type JoinResult } from "../../data/affiliate";
+import { signInUrl } from "../../lib/nav";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const slug = (Astro.url.searchParams.get("toko") ?? "").trim().toLowerCase();
+const store = await joinableStore(db, slug);
+
+const MESSAGES: Record<Exclude<JoinResult, "created">, string> = {
+  member: "Akun ini sudah terdaftar di program toko ini.",
+  phone_taken: "Nomor ini sudah terdaftar sebagai affiliate di toko ini (lewat formulir). Minta seller mengirim undangan ke akun Anda.",
+  closed: "Program affiliate toko ini tidak sedang dibuka.",
+  rate_limited: "Terlalu banyak pendaftaran dalam satu jam. Coba lagi nanti.",
+  failed: "Pendaftaran gagal. Coba lagi.",
+};
+let error: string | null = null;
+const v = { name: account.name ?? "", phone: "", bankName: "", bankAccount: "", bankHolder: "", note: "" };
+if (Astro.request.method === "POST" && store) {
+  const f = await Astro.request.formData();
+  for (const k of Object.keys(v) as (keyof typeof v)[]) v[k] = String(f.get(k) ?? "").trim().slice(0, 200);
+  const phone = normalizePhone(v.phone);
+  const nameErr = nameError(v.name);
+  if (nameErr) error = nameErr;
+  else if (!phone) error = "Nomor WhatsApp tidak valid.";
+  else {
+    const r = await joinProgramme(db, account.id, slug, {
+      name: normalizeName(v.name),
+      phone,
+      bankName: v.bankName || null,
+      bankAccount: v.bankAccount || null,
+      bankHolder: v.bankHolder || null,
+      note: v.note || null,
+    });
+    if (r === "created") return Astro.redirect("/affiliate?daftar=1", 303);
+    error = MESSAGES[r];
+  }
+}
+---
+<Layout title="Gabung program affiliate">
+  <p><a href="/affiliate">← Affiliate</a></p>
+  {!store ? (
+    <>
+      <h1>Toko tidak ditemukan</h1>
+      <p class="card muted">Tidak ada toko dengan alamat itu yang sedang membuka program affiliate.</p>
+    </>
+  ) : (
+    <>
+      <h1>Gabung affiliate {store.name}</h1>
+      <p class="lede">Seller akan meninjau pendaftaran Anda. Setelah disetujui, kode dan link Anda muncul di Akun TokoΦ.</p>
+      {error && <p class="alert bad" role="alert">{error}</p>}
+      <form class="card stack" method="post">
+        <label>Nama<input name="name" required value={v.name} autocomplete="name" /></label>
+        <label>Nomor WhatsApp<input name="phone" required inputmode="tel" value={v.phone} autocomplete="tel" /></label>
+        <label>Di mana Anda akan promosi? <span class="hint">mis. Instagram @nama, grup WhatsApp, TikTok</span>
+          <input name="note" value={v.note} /></label>
+        <label>Bank <span class="hint">opsional — untuk pembayaran komisi oleh toko</span><input name="bankName" value={v.bankName} /></label>
+        <label>Nomor rekening<input name="bankAccount" inputmode="numeric" value={v.bankAccount} /></label>
+        <label>Atas nama<input name="bankHolder" value={v.bankHolder} /></label>
+        <button class="btn primary" type="submit">Kirim pendaftaran</button>
+      </form>
+    </>
+  )}
+</Layout>

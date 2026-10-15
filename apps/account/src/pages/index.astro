@@ -1,0 +1,39 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myAffiliateStores } from "../data/affiliate";
+import { signInUrl } from "../lib/nav";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const stores = await myAffiliateStores(db, account.id);
+const ready = stores.reduce((s, x) => s + x.readyIdr, 0);
+---
+<Layout title="Beranda">
+  <h1>Halo, {account.name ?? account.email}</h1>
+  <p class="lede">Satu akun untuk semua toko TokoΦ.</p>
+
+  <section class="card" aria-labelledby="aff-h">
+    <div class="row">
+      <h2 id="aff-h" style="margin:0">Affiliate</h2>
+      <a href="/affiliate">Buka</a>
+    </div>
+    {stores.length === 0 ? (
+      <p class="muted">Anda belum jadi affiliate toko mana pun. Gabung ke program toko, atau buka undangan dari seller.</p>
+    ) : (
+      <p class="muted">
+        {stores.length} toko · siap dibayar <span class="num">{IDR(ready)}</span>
+      </p>
+    )}
+  </section>
+
+  <section class="card" aria-labelledby="ord-h">
+    <h2 id="ord-h" style="margin:0">Pesanan</h2>
+    <p class="muted">Menyimpan pesanan dari halaman sukses checkout ke akun ini sedang dibangun. Belum ada pesanan yang bisa tampil di sini.</p>
+  </section>
+
+  <form method="post" action="/keluar">
+    <button class="btn" type="submit">Keluar</button>
+  </form>
+</Layout>

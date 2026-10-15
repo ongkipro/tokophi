@@ -1,0 +1,75 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myAffiliateDetail } from "../../data/affiliate";
+import { signInUrl, storefrontOrigin } from "../../lib/nav";
+import { STATE_LABEL, STATUS_LABEL, dateId } from "../../lib/affiliate-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const d = await myAffiliateDetail(db, account.id, Astro.params.id ?? "");
+if (!d) return new Response(null, { status: 404 });
+const share = `${storefrontOrigin(d.storeSlug)}/?ref=${d.code}`;
+---
+<Layout title={d.storeName}>
+  <p><a href="/affiliate">← Semua toko</a></p>
+  <h1>{d.storeName}</h1>
+  <p><span class={`pill ${STATUS_LABEL[d.status].tone}`}>{STATUS_LABEL[d.status].text}</span></p>
+  {d.status === "menunggu" && <p class="alert warn">Seller belum menyetujui pendaftaran Anda. Kode dan link baru menghasilkan komisi setelah disetujui.</p>}
+  {(d.status === "ditolak" || d.status === "nonaktif") && <p class="alert bad">Program di toko ini tidak aktif untuk Anda. Pesanan baru tidak menghasilkan komisi.</p>}
+
+  <section class="card">
+    <div class="muted">Kode Anda</div>
+    <div class="mono" style="font-size:1.25rem;font-weight:700">{d.code}</div>
+    <label style="margin-top:0.75rem">Link untuk dibagikan
+      <div class="share">
+        <input readonly value={share} id="share" aria-describedby="share-hint" />
+        <button class="btn" type="button" data-copy="share">Salin</button>
+      </div>
+      <span class="hint" id="share-hint">Pembeli yang membuka link ini (30 hari) atau mengetik kode Anda di checkout tercatat untuk Anda.</span>
+    </label>
+  </section>
+
+  <div class="stats" role="group" aria-label="Komisi di toko ini">
+    <div class="stat"><div class="k">Siap dibayar</div><div class="v num">{IDR(d.readyIdr)}</div></div>
+    <div class="stat"><div class="k">Masih ditahan</div><div class="v num">{IDR(d.heldIdr)}</div></div>
+    <div class="stat"><div class="k">Sudah dibayar</div><div class="v num">{IDR(d.paidIdr)}</div></div>
+  </div>
+
+  <h2>Riwayat komisi</h2>
+  {d.commissions.length === 0 ? (
+    <p class="card muted">Belum ada pesanan lewat kode atau link Anda.</p>
+  ) : (
+    <ul class="plain card">
+      {d.commissions.map((c) => (
+        <li>
+          <div class="row">
+            <span class="mono">{c.orderNumber}</span>
+            <strong class="num">{IDR(c.commissionIdr)}</strong>
+          </div>
+          <div class="row muted">
+            <span>{dateId(c.placedAt)} · belanja {IDR(c.baseIdr)}{c.rateNote ? ` · ${c.rateNote}` : ""}</span>
+            <span class={`pill ${STATE_LABEL[c.state].tone}`}>
+              {STATE_LABEL[c.state].text}{c.state === "ditahan" && c.eligibleAt ? ` s.d. ${dateId(c.eligibleAt)}` : ""}
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )}
+  <p class="muted">Komisi dibayar langsung oleh {d.storeName} setelah pesanan selesai dan lewat masa tahan. Pertanyaan soal pembayaran: hubungi toko.</p>
+</Layout>
+<script>
+  document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const input = document.getElementById(b.dataset.copy!) as HTMLInputElement;
+      try {
+        await navigator.clipboard.writeText(input.value);
+        b.textContent = "Disalin";
+      } catch {
+        input.select();
+      }
+    });
+  });
+</script>

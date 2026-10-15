@@ -1075,20 +1075,17 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 
 ### Task 9.13: Interim Affiliate Dashboard by Signed Link
 - **Requirement:** `F-A18`
-- **Risk Level:** R2 — a bearer link to one affiliate's commission figures.
-- **Allowed Paths:** `packages/lib/src/affiliate-link{,.test}.ts`, `apps/admin/lib/actions/affiliates.ts`, `apps/admin/lib/data/affiliates.ts`, `apps/admin/app/(admin)/affiliate/**`, `apps/storefront/src/pages/affiliate/saya.astro`, `apps/storefront/src/data/affiliate.ts`, `apps/storefront/src/layouts/Layout.astro`, `apps/admin/lib/env-health.ts`, `docker-compose.coolify.yml`
-- **Accepted Invariants:** token binds affiliate + store; secret < 32 chars = off; page re-checks `aktif` and the Host's store; no buyer personal data; no third-party pixels on the page; staff cannot mint.
-- **Depends On:** Task 9.4
-- **Done when:** `affiliate-link.test.ts` passes (tampered, expired, other store, short secret); in a browser the owner copies RINA10's link and it opens at 390px with Rina's commissions and 0 page errors; tampered and missing tokens 404; a staff session has no copy action.
-- **Status:** `[x]` **DONE 2026-10-15** — see BUILD-LOG. Superseded by Task 9.11 once the buyer account ships.
+- **Status:** `SUPERSEDED` **2026-10-15 by Task 9.11** — built and browser-checked the same day (BUILD-LOG), then removed on `feat/accounts` before any merge when the owner asked for an affiliate account "seperti akun user … banyak toko bukan personal". Removed: `packages/lib/src/affiliate-link{,.test}.ts` + export, the storefront `/affiliate/saya` page and its data function, the layout `pixels` switch, the admin "Salin link dashboard" action, `AFFILIATE_LINK_SECRET` (env-health, compose).
 
-### Task 9.11: Affiliate Self-View Through the Buyer Account — Phase 2
-- **Requirement:** `F-A15`
-- **Risk Level:** R3 — cross-store identity link, personal financial data.
-- **Allowed Paths:** decided with the buyer-account plan (`specs/docs/TOKOPHI_ACCOUNT_SPEC.md`).
-- **Depends On:** Task 9.4; buyer account sign-in (root Stage 10)
-- **Done when:** a verified account confirms the link to its affiliate record and sees only that affiliate's commissions per store; a different account sees none (negative test).
-- **Status:** `[ ]` **BLOCKED — OD-A3 and the buyer account.**
+### Task 9.11: Cross-Store Affiliate Account (TokoΦ Account, phase 1)
+- **Requirement:** `F-A15` (+ account spec `ACC-14`)
+- **Tracing:** owner 2026-10-15 — *"akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal"*.
+- **Risk Level:** R3 — cross-store identity link, affiliates' financial figures, a bearer invitation in a URL.
+- **Allowed Paths:** `packages/db/drizzle/0117_tokophi_account.sql` + journal, `packages/db/src/schema.ts`, `packages/lib/src/account-invite{,.test}.ts`, `apps/account/**`, `apps/admin/lib/{account-url.ts,actions/affiliates.ts,data/affiliates.ts,affiliate-invite.test.ts,env-health.ts}`, `apps/admin/app/(admin)/affiliate/affiliate-client.tsx`, `apps/storefront/src/pages/affiliate.astro`, `apps/storefront/astro.config.mjs`, docs.
+- **Accepted Invariants:** one `affiliates` row per store per account (unique `(store_id, account_id)`); every `apps/account` read carries `account_id = <me>`; a row is bound to an account only by applying while signed in or by the seller's single-use 7-day invitation (sha256 stored, cleared on accept, one conditional UPDATE) — never by email/phone; account tables have RLS with no policy (owner path only); dev sign-in refuses production builds.
+- **Depends On:** Task 9.4
+- **Done when:** `apps/account/src/data/account-data.test.ts` (isolation across accounts and stores, join, rate limit, phone non-takeover, invitation single-use / expiry / already-linked / already-member) and `apps/admin/lib/affiliate-invite.test.ts` (staff refused, owner mints, account accepts once) pass on a throwaway DB; in Chrome a dev-signed-in account sees two stores at 390 and 1280 px with 0 page errors, another account gets 404 on its row, the seller's invitation binds once and is refused on reuse.
+- **Status:** `[x]` **DONE 2026-10-15** on `feat/accounts` — see BUILD-LOG. Real Google sign-in not driven (OD-7 redirect URI); production (compose service, Traefik, DNS) not built — OD-2/OD-5.
 
 ### Task 9.12: Affiliate Notifications — Phase 2
 - **Requirement:** `F-A16`
@@ -1118,19 +1115,19 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 - **Done when:** a unit test builds the authorize URL (exact params) and rejects an id_token with the wrong audience/issuer using a locally signed JWKS; `tsc -p apps/admin` 0 and the admin suite green — the Seller Google login path is byte-for-byte the same URL as before.
 - **Status:** `[x]` **DONE 2026-10-15** — `packages/lib/src/google-oauth.ts` (+ `newOAuthState` / `stateMatches`, `verifyIdToken` with injectable keys); admin start/callback/login/daftar import it, `apps/admin/lib/google.ts` deleted. `google-oauth.test.ts` 5/5 (exact authorize URL as before, per-app redirect variable, state, local-JWKS verify: wrong aud/iss/key/missing sub, `email_verified` only as boolean true). The lost `import "server-only"` is replaced by `test/google-oauth-server-only.test.ts` (no `"use client"` file may import it; mutation-proved red). Not driven against real Google.
 
-### Task 10.2: Buyer Account Schema — One Idempotent Migration (phase 1 tables)
+### Task 10.2: Buyer Account Schema — Idempotent Migrations (phase 1 tables)
 - **Requirement:** `ACC-10 (constraints: ACC-3, ACC-6…ACC-8, ACC-11, ACC-12)`
-- **Target Files:** `packages/db/drizzle/<next>_buyer_account.sql` + journal, `packages/db/src/schema.ts`, `specs/docs/SCHEMA.md`, `schema-indexes.test.ts`
-- **Change:** `buyer_accounts`, `buyer_sessions`, `buyer_store_links`, `buyer_order_claims` (unique `order_id`), `buyer_addresses` per spec §17.9 — hand-written and idempotent (AGENTS.md); RLS policies on the two tables with `store_id`. `buyer_otp_challenges` is **not** in this migration (phase 2).
-- **Done when:** migration applies twice on a branch DB (`tokophi_buyer`), `verify-migrations` ✓, `verify-rls` counts both new store-scoped tables, doc counts updated.
-- **Status:** `[ ]` **BLOCKED** on `0116` reaching `main`.
+- **Target Files:** `packages/db/drizzle/0117_tokophi_account.sql` (+ a later migration for links/claims/addresses) + journal, `packages/db/src/schema.ts`, `specs/docs/SCHEMA.md`, `schema-indexes.test.ts`
+- **Change:** `buyer_accounts`, `buyer_sessions` (**done in 0117**, RLS on with no policy — owner path only); `buyer_store_links`, `buyer_order_claims` (unique `order_id`), `buyer_addresses` per spec §17.9 still to come, with RLS policies on the two tables that carry `store_id`. `buyer_otp_challenges` is phase 2.
+- **Done when:** each migration applies twice on a scratch DB, `verify-migrations` ✓, `verify-rls` green, doc counts updated.
+- **Status:** `[~]` **0117 DONE 2026-10-15** (`feat/accounts`; applied twice on a scratch copy, verify-rls green, doc counts 88/118). Links/claims/addresses not started.
 
 ### Task 10.3: `apps/account` Scaffold, Google Sign-in and Sign-out
 - **Requirement:** `ACC-10`
-- **Target Files:** `apps/account/**`, root `package.json` scripts, `docker-compose.yml` (dev only)
-- **Change:** Astro SSR app per D-1; `/masuk` → Google (shared helper, account redirect URI, `state` cookie) → callback finds/creates `buyer_accounts` by `sub` → `buyer_sessions` row + `tphi_account` cookie (D-5); sign-out revokes the row. Feature-flagged: no Google env ⇒ no button, no crash.
-- **Done when:** a real-Postgres test drives callback success (twice → one account, two sessions) and every refusal of ACC-10 (state mismatch, `error`, unverified email, failed exchange → no row, no cookie); a browser run signs in with a localhost Google test client at 390 and 1280 px with 0 console errors.
-- **Status:** `[ ]` — needs 10.2, 10.12, owner OD-2 and OD-7 (a localhost redirect URI on a Google client).
+- **Target Files:** `apps/account/**`
+- **Change:** Astro SSR app per D-1 (dev port 4329); `/masuk` → Google (shared helper, `ACCOUNT_GOOGLE_REDIRECT_URI`, `state` cookie) → callback finds/creates `buyer_accounts` by `sub` → `buyer_sessions` row + `tphi_account` cookie (D-5); sign-out revokes the row; LOCAL dev sign-in (`dev:<email>`, refused in production builds). Feature-flagged: no Google env ⇒ no button, no crash.
+- **Done when:** a browser run signs in with a localhost Google test client at 390 and 1280 px with 0 console errors; the dev sign-in path is refused in a production build (unit-tested).
+- **Status:** `[~]` **2026-10-15** — app, middleware (the row decides every request), dev sign-in, Google start/callback, sign-out built; dev sign-in + sign-out driven in Chrome. **Not done:** a real Google sign-in (owner OD-7: add the account callback to the existing client); production surface (OD-2/OD-5).
 
 ### Task 10.13: Claim Token — Issued by the Order API, Verified by the Account
 - **Requirement:** `ACC-13`
@@ -1141,10 +1138,10 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 
 ### Task 10.4: Sessions List and "Keluar dari Perangkat Lain"
 - **Requirement:** `ACC-3`
-- **Target Files:** `apps/account/src/pages/akun/**`, its data module + test
-- **Change:** list the buyer's live sessions; revoke-others in one `update … where buyer_id = $1 and id <> $2`.
-- **Done when:** test with two sessions: after revoke-others the second cookie is signed out on its next request, the first still works.
-- **Status:** `[ ]`
+- **Target Files:** `apps/account/src/pages/sesi.astro`, `apps/account/src/data/account.ts` + test
+- **Change:** list the account's live sessions; revoke-others in one `update … where buyer_id = $1 and id <> $2`.
+- **Done when:** test with two sessions: after revoke-others the second session row is dead, the first still loads.
+- **Status:** `[x]` **DONE 2026-10-15** — `apps/account/src/data/account-data.test.ts`.
 
 ### Task 10.5: Claim an Order with the Token and Link the Store (with Consent)
 - **Requirement:** `ACC-11`
@@ -1202,9 +1199,6 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 - **Done when:** real-Postgres tests for ACC-1/ACC-2 acceptance and the ACC-5 negative case (store C with the same phone and no link stays hidden); one real OTP delivered through the chosen provider's test credentials.
 - **Status:** `[ ]` **BLOCKED** on Task 8.38.
 
-### Task 10.15: Phase 3 — Affiliate Signs In with the Buyer Account
+### Task 10.15: Affiliate Signs In with the Account
 - **Requirement:** `ACC-14`
-- **Target Files:** migration (`store_affiliates.buyer_id`), Seller `/affiliate` (issue invitation), `apps/account/src/pages/komisi/**`, tests
-- **Change:** on approval the seller can share a one-use invitation link; accepting it binds the affiliate to the account; "Komisi" lists that affiliate's commissions for that store only.
-- **Done when:** test: binding via a valid invitation shows store A's commissions only; another affiliate's invitation or an already-bound one creates nothing; no binding by email/phone match.
-- **Status:** `[ ]` **BLOCKED** on Stage 9 (`feat/store-affiliate`) reaching `main` and owner OD-3.
+- **Status:** `[x]` **DONE 2026-10-15 as part of Task 9.11** (promoted from phase 3 to phase 1 by the owner's cross-store affiliate account decision).

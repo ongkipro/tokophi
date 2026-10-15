@@ -12,6 +12,11 @@ import { clientIp, rateLimit } from "../lib/chat";
 const store = Astro.locals.store;
 if (!(await storeAffiliateEnabled(store.id))) return new Response(null, { status: 404, statusText: "Not Found" }); // F-A1
 
+// F-A15: one TokoΦ Account can be an affiliate of many shops. Offered only when the account app is
+// configured (ACCOUNT_APP_URL); the plain form below stays for people without an account.
+const accountBase = (process.env.ACCOUNT_APP_URL ?? "").trim().replace(/\/+$/, "");
+const accountJoin = /^https?:\/\/[^/\s]+$/.test(accountBase) ? `${accountBase}/affiliate/gabung?toko=${encodeURIComponent(store.slug)}` : null;
+
 const clip = (v: FormDataEntryValue | null, n: number) => String(v ?? "").trim().slice(0, n);
 let outcome: "form" | "ok" | "exists" = "form";
 let error = "";
@@ -78,6 +83,11 @@ const input =
         <h2 class="font-display text-xl font-semibold text-ink">Nomor ini sudah terdaftar</h2>
         <p class="mt-2 text-sm text-muted">Pendaftaran dengan nomor WhatsApp ini sudah kami terima. Tim {store.name} akan menghubungi Anda.</p>
       </div>
+    )}
+    {outcome === "form" && accountJoin && (
+      <p class="mb-4 rounded-xl border border-line bg-white p-4 text-sm text-ink">
+        Punya Akun TokoΦ? <a class="font-semibold underline" href={accountJoin}>Daftar lewat akun</a> — satu akun untuk jadi affiliate di banyak toko, dan komisi Anda bisa dilihat kapan saja.
+      </p>
     )}
     {outcome === "form" && (
       <form method="post" class="flex flex-col gap-4">

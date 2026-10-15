@@ -1,0 +1,46 @@
+---
+// Accept a seller's invitation (ACC-14): the ONLY way an existing store affiliate is bound to an
+// account. The token lives in this URL, so the page loads no third-party script and sends no Referer
+// (middleware). Sign-in first, then a confirmation screen naming the store — never a silent bind.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { acceptInvite, previewInvite } from "../../data/affiliate";
+import { signInUrl } from "../../lib/nav";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+let token = Astro.url.searchParams.get("t") ?? "";
+let error: string | null = null;
+if (Astro.request.method === "POST") {
+  token = String((await Astro.request.formData()).get("t") ?? "");
+  const r = await acceptInvite(db, account.id, token);
+  if (r.ok) return Astro.redirect(`/affiliate/${r.affiliateId}`, 303);
+  error = r.reason === "member"
+    ? "Akun ini sudah terhubung dengan affiliate lain di toko ini."
+    : "Undangan ini tidak berlaku lagi (sudah dipakai, kedaluwarsa, atau dibatalkan). Minta seller mengirim undangan baru.";
+}
+const invite = error ? null : await previewInvite(db, token);
+---
+<Layout title="Undangan affiliate">
+  {error && <p class="alert bad" role="alert">{error}</p>}
+  {!error && !invite && (
+    <>
+      <h1>Undangan tidak berlaku</h1>
+      <p class="card muted">Link ini sudah dipakai, kedaluwarsa, atau dibatalkan. Minta seller mengirim undangan baru.</p>
+    </>
+  )}
+  {invite && (
+    <>
+      <h1>Hubungkan ke Akun TokoΦ</h1>
+      <p class="lede"><strong>{invite.storeName}</strong> mengundang affiliate <strong>{invite.affiliateName}</strong> (kode <span class="mono">{invite.code}</span>) ke akun Anda.</p>
+      <div class="card">
+        <p style="margin-top:0">Setelah dihubungkan, komisi kode ini di {invite.storeName} tampil di akun <strong>{account.email}</strong>. Toko tidak mendapat akses ke akun Anda.</p>
+        <form method="post">
+          <input type="hidden" name="t" value={token} />
+          <button class="btn primary block" type="submit">Hubungkan</button>
+        </form>
+      </div>
+      <p class="muted">Bukan Anda? <a href="/affiliate">Batal</a></p>
+    </>
+  )}
+</Layout>

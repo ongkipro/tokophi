@@ -1,14 +1,14 @@
 "use server";
 import { schema } from "@tokophi/db";
 import { clampBps, normalizeAffiliateCode, suggestAffiliateCode } from "@tokophi/lib/affiliate";
-import { affiliateLinkSecret, issueAffiliateLink } from "@tokophi/lib/affiliate-link";
+import { INVITE_TTL_DAYS, newInvite } from "@tokophi/lib/account-invite";
+import { accountAppUrl } from "@/lib/account-url";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 import { normalizePhone } from "@tokophi/lib/validate";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
-import { systemDomainFor } from "@/lib/data/domain";
 
 // Seller panel → Affiliate writes (Task 9.4). Every action: capability first, tenant transaction,
 // explicit `store_id` predicate, and a returned `{ ok, error }` (a thrown Error is masked in prod).
@@ -127,21 +127,31 @@ export async function setProductAffiliateRate(productId: string, ratePct: number
   return { ok: true };
 }
 
-/** F-A18: the affiliate's private dashboard link (interim until buyer-account sign-in, F-A15). Owner/
- *  admin/advertiser only — staff never mints one. Active affiliates only: the page re-checks `aktif`,
- *  so deactivating an affiliate kills every link already sent. */
-export async function affiliateDashboardLink(id: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+/**
+ * F-A15 / ACC-14: invite an ACTIVE, not-yet-linked affiliate to bind this store's row to their TokoΦ
+ * Account. The ONLY binding path for an existing row — never an email/phone match. Owner/admin/
+ * advertiser only (staff never mints one). Single use and 7 days: only the token's sha256 is stored,
+ * and minting again replaces the previous link (the old one stops working).
+ */
+export async function inviteAffiliateToAccount(id: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const { storeId } = await requireCapability("affiliates:write");
-  const secret = affiliateLinkSecret();
-  if (!secret) return { ok: false, error: "Link dashboard affiliate belum diaktifkan di server." };
-  const [row] = await withTenant(storeId, (db) =>
+  const base = accountAppUrl();
+  if (!base) return { ok: false, error: "Akun TokoΦ belum diaktifkan di server." };
+  const inv = newInvite();
+  const rows = await withTenant(storeId, (db) =>
     db
-      .select({ id: schema.affiliates.id, slug: schema.stores.slug })
-      .from(schema.affiliates)
-      .innerJoin(schema.stores, eq(schema.stores.id, schema.affiliates.storeId))
-      .where(and(eq(schema.affiliates.id, id), eq(schema.affiliates.storeId, storeId), eq(schema.affiliates.status, "aktif")))
-      .limit(1),
+      .update(schema.affiliates)
+      .set({ inviteHash: inv.hash, inviteExpiresAt: sql`now() + make_interval(days => ${INVITE_TTL_DAYS})` })
+      .where(
+        and(
+          eq(schema.affiliates.id, id),
+          eq(schema.affiliates.storeId, storeId),
+          eq(schema.affiliates.status, "aktif"),
+          isNull(schema.affiliates.accountId),
+        ),
+      )
+      .returning({ id: schema.affiliates.id }),
   );
-  if (!row) return { ok: false, error: "Hanya affiliate aktif yang punya link dashboard." };
-  return { ok: true, url: `https://${systemDomainFor(row.slug)}/affiliate/saya?t=${issueAffiliateLink(row.id, storeId, secret)}` };
+  if (!rows.length) return { ok: false, error: "Hanya affiliate aktif yang belum terhubung ke akun yang bisa diundang." };
+  return { ok: true, url: `${base}/affiliate/undangan?t=${inv.token}` };
 }

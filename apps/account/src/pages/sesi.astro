@@ -1,0 +1,36 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { listSessions, revokeOtherSessions } from "../data/account";
+import { signInUrl } from "../lib/nav";
+
+const account = Astro.locals.account;
+const current = Astro.locals.sessionId;
+if (!account || !current) return Astro.redirect(signInUrl(Astro.url));
+let notice: string | null = null;
+if (Astro.request.method === "POST") {
+  const n = await revokeOtherSessions(db, account.id, current);
+  notice = n ? `${n} perangkat lain telah dikeluarkan.` : "Tidak ada perangkat lain yang masuk.";
+}
+const sessions = await listSessions(db, account.id);
+const when = (d: Date) => d.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" });
+---
+<Layout title="Keamanan">
+  <h1>Perangkat yang masuk</h1>
+  <p class="lede">Akun: {account.email}</p>
+  {notice && <p class="alert ok" role="status">{notice}</p>}
+  <ul class="plain card">
+    {sessions.map((s) => (
+      <li>
+        <div class="row">
+          <span>{s.userAgent ? s.userAgent.slice(0, 60) : "Perangkat tidak dikenal"}</span>
+          {s.id === current && <span class="pill ok">Perangkat ini</span>}
+        </div>
+        <span class="muted">Terakhir aktif {when(s.lastSeenAt)}</span>
+      </li>
+    ))}
+  </ul>
+  <form method="post">
+    <button class="btn" type="submit">Keluar dari perangkat lain</button>
+  </form>
+</Layout>

@@ -602,7 +602,7 @@ consent screen naming the shop → order appears in "Pesanan".
 - G-1: a buyer can reach an order they placed from any TokoΦ shop after closing the success page, without contacting the seller.
 - G-2: no merchant can see another merchant's buyers or orders through the account (0 cross-tenant reads in the negative sweep).
 - G-3: phase 1 ships locally with zero dependency on a WhatsApp/SMS provider.
-- G-4: a store affiliate can sign in with the same account to see their commissions (phase 3).
+- G-4: a store affiliate signs in with the same account and sees every store they promote, each store's commissions apart (**phase 1 since 2026-10-15**).
 
 **Success measure** (read 30 days after a production launch, which is still undecided — OD-5):
 share of orders claimed into an account; baseline 0 % (no account exists), target set by the owner
@@ -626,7 +626,7 @@ email sending of any kind (the platform has no email provider either).
 | Unlink a store | 1 | ACC-8 |
 | Phone OTP sign-in / add phone to an account | 2 (blocked on Task 8.38) | ACC-1, ACC-2 |
 | Full history of a linked store for a phone-verified buyer | 2 | ACC-5 |
-| Affiliate sees own commissions with the same account | 3 (blocked on Stage 9 merge + OD-3) | ACC-14 |
+| **Affiliate area — one account, many stores** (apply while signed in, accept a seller invitation, every store's code/link/commissions) | **1 — built 2026-10-15** (owner: "akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal") | ACC-14, AFFILIATE_SPEC `F-A15` |
 
 ### 17.7 Requirements
 
@@ -683,7 +683,13 @@ IDs `ACC-*`, EARS, MoSCoW. **Rev-1 rows keep their IDs**; changed ones are marke
 | `buyer_order_claims` | `order_id` **unique**, `buyer_id`, `store_id`, `claimed_at` | Single claimant (D-3); RLS as above. |
 | `buyer_addresses` | `id`, `buyer_id`, `label`, `recipient`, `phone`, `address`, `district_id` (KiriminAja), `kelurahan`, `postal_code`, `is_primary` | Max 10 in the action; one primary via partial unique index. |
 | `buyer_otp_challenges` | `id`, `phone`, `code_hash`, `expires_at`, `attempts`, `consumed_at`, `sent_at` | **Phase 2 migration**, not in the first one. |
-| affiliate binding | `store_affiliates.buyer_id` nullable (table from `0116`) | **Phase 3**, after Stage 9 merges and OD-3. |
+| affiliate binding | **Built in `0117`:** `affiliates.account_id` (→ `buyer_accounts`, nullable, unique with `store_id`), `affiliates.invite_hash` (sha256, partial unique), `affiliates.invite_expires_at` | **Phase 1** (2026-10-15). Binding only by applying while signed in or by the seller's single-use invitation — never email/phone. |
+
+**As built 2026-10-15 (`0117_tokophi_account`, branch `feat/accounts`):** `buyer_accounts` and
+`buyer_sessions` exactly as above, with **RLS enabled and no policy** (the `impersonation_grants` /
+`rate_limit_counters` shape — `tokophi_app` sees zero rows; `apps/account` uses the owner connection
+with an explicit `buyer_id` predicate), plus the affiliate binding row. `buyer_store_links`,
+`buyer_order_claims` and `buyer_addresses` are **not** in `0117`; they come with Tasks 10.5–10.8.
 
 ### 17.10 Messaging dependency
 
@@ -722,7 +728,8 @@ when that task is done.
 |---|---|---|
 | OD-1 | Messaging provider (WhatsApp Business API vs SMS vendor), sender identity, budget, fallback — **now Task 8.38**. | Phase 2. |
 | OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed). | Task 10.3. |
-| OD-3 | ✅ **Answered 2026-10-15 (owner: "oke boleh"): YES** — affiliates sign in with the buyer account via a seller-issued invitation (ACC-14). | Phase 3 (still after Stage 9 merges). |
+| OD-3 | ✅ **Answered 2026-10-15 (owner: "oke boleh"): YES**, then the same day **widened** ("akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal"): the affiliate area is **phase 1** of this app — one account, many stores; existing rows bound by seller invitation (ACC-14), new ones by applying while signed in. | — (built on `feat/accounts`) |
+| OD-8 | Should the account app list stores with an open affiliate programme (a directory)? | **Open — default no** in phase 1 (AFFILIATE_SPEC OD-A6). |
 | OD-4 | ~~Proof for claiming an order~~ — **answered by D-3** (signed order-specific token, single claimant). **Validity CLOSED 2026-10-15** — owner delegated ("rekomendasimu kau sesuaikan"): **30 days**. It covers delivery plus the complaint window, keeps a leaked link short-lived, and an order missed after 30 days is still reachable in phase 2 by verified-phone claim (ACC-5). | — |
 | OD-5 | ✅ **Answered 2026-10-15 (owner: "local development dulu sampai final"):** local development only until the feature is final — no push, no PR, no production. When it ships is decided then. | Deploy only. |
 | OD-6 | Privacy review (`PRIVACY-COMPLIANCE.md` is a stub): consent text, retention, deletion, UU PDP. | Production only. |
