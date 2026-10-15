@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { randomBytes } from "node:crypto";
-import { OAUTH_STATE_COOKIE, authorizeUrl, googleConfig } from "@/lib/google";
+import { OAUTH_STATE_COOKIE, authorizeUrl, googleConfig, newOAuthState } from "@tokophi/lib/google-oauth";
 
 // Kick off the Google OAuth code flow. `mode` (login|daftar) rides along in the state cookie:
 //   • daftar → an unknown email auto-provisions a store (same one-txn path as the Daftar form)
@@ -11,8 +10,7 @@ export async function GET(req: NextRequest) {
   const cfg = googleConfig();
   if (!cfg) return NextResponse.redirect(new URL("/login", req.url)); // feature-flagged off
   const mode = req.nextUrl.searchParams.get("mode") === "daftar" ? "daftar" : "login";
-  const nonce = randomBytes(16).toString("hex");
-  const state = `${mode}.${nonce}`;
+  const state = newOAuthState(mode);
 
   const res = NextResponse.redirect(authorizeUrl(cfg, state));
   res.cookies.set(OAUTH_STATE_COOKIE, state, {

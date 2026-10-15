@@ -234,10 +234,10 @@ Phase 1 needs no messaging provider (Google sign-in + order claim token); phase 
 | ACC-7 | ≤ 10 saved addresses with KiriminAja district id, one primary; edits never touch an order snapshot. | Task 10.8 | PLANNED |
 | ACC-8 | Unlinking revokes the link and writes nothing store-owned. | Task 10.9 | PLANNED |
 | ACC-9 | ~~Success-page account link~~ — SUPERSEDED by ACC-13 (rev 2). | — | SUPERSEDED |
-| ACC-10 | Google sign-in (state cookie, id_token verified, `email_verified`) finds/creates `buyer_accounts` by Google `sub` and starts a session; any failure creates nothing. | Task 10.12 / 10.3 | PLANNED |
+| ACC-10 | Google sign-in (state cookie, id_token verified, `email_verified`) finds/creates `buyer_accounts` by Google `sub` and starts a session; any failure creates nothing. | Task 10.12 ✅ (shared sign-in core, 2026-10-15) / 10.3 | PLANNED |
 | ACC-11 | A signed-in buyer with a valid claim token + consent records the order claim and creates/re-activates the store link; tampered/expired/already-claimed-by-another/declined creates nothing, one message. | Task 10.5 | PLANNED |
 | ACC-12 | **Phase 1 hub:** exactly the claimed orders of active links, allowlisted projection; unclaimed orders are not-found. | Task 10.6 / 10.11 | PLANNED |
-| ACC-13 | The order API returns a 30-day signed claim token for the order; the success page offers "Simpan ke Akun TokoΦ" with it; guest checkout and existing response fields unchanged. | Task 10.13 / 10.10 | PLANNED |
+| ACC-13 | The order API returns a 30-day signed claim token for the order; the success page offers "Simpan ke Akun TokoΦ" with it; guest checkout and existing response fields unchanged. | Task 10.13 ✅ (token issued + verified, 2026-10-15) / 10.10 | PLANNED |
 | ACC-14 | **Phase 3.** A seller-issued affiliate invitation binds an approved store affiliate to the buyer account, which then shows that affiliate's commissions for that store only. | Task 10.15 | PLANNED |
 
 ### 2.12 Platform messaging channel (owner-gated)

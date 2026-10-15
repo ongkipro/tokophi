@@ -113,7 +113,7 @@ describe("the promo-AI feature is honestly off when the key is absent", () => {
   it("the key is read at call time and never leaves the server", () => {
     const src = codeOfFile("apps/admin/lib/promo-ai.ts");
     // Module-scope reads get baked in at build time, when the env is empty — the same trap
-    // `lib/google.ts` carries a comment about.
+    // `@tokophi/lib/google-oauth` carries a comment about.
     expect(src).toMatch(/server-only/);
     // The value goes into one header and nowhere else: not a URL, not a log line, not a return.
     expect(src).not.toMatch(/console\s*\.\s*(log|error|warn)\s*\(\s*[^)]*(ANTHROPIC_API_KEY|\bkey\b)/);

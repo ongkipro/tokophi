@@ -4462,3 +4462,12 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Tasks:** root `TASKS.md` Stage 10 re-phased (10.3 → Google sign-in, 10.5 → token claim, 10.6 → claimed orders only, 10.10 → token link; new 10.12 Google lift, 10.13 claim token, 10.14 phase 2, 10.15 phase 3); new **Task 8.38** platform messaging channel, blocked on the owner (provider, verification, sender, templates — marked UNVERIFIED).
 - **Facts checked:** Google OAuth redirect URI must exactly match a registered one, HTTPS except localhost, no raw IP hosts (developers.google.com/identity/protocols/oauth2/web-server, 2026-10-15); `/checkout/sukses` renders the order from `localStorage`, `/thanks` from its query; no order-access token exists on `main`.
 - **Not done:** no feature code, no migration (waits for `0116`).
+
+### [2026-10-15 15:30 UTC] — ACCOUNT · owner answers OD-3/5/7; Tasks 10.12 (shared Google sign-in) and 10.13 (claim token) built
+- **Executor:** Main Session fork (Claude Code), worktree `tokophi-buyer-account`, branch `feat/buyer-account` (local only — OD-5). Owner: "1. oke boleh … 6. pakai client yang sudah ada … 8. local development dulu sampai final".
+- **Decisions recorded** (`TOKOPHI_ACCOUNT_SPEC.md` §17.13): OD-3 yes (affiliate via seller invitation, phase 3); OD-5 local until final; OD-7 reuse the existing Google client — owner adds `http://localhost:4329/auth/google/callback` to its redirect URIs. OD-2 host and the 30-day token validity stay open.
+- **10.12:** `packages/lib/src/google-oauth.ts` (+ test 5/5), admin auth routes/pages re-pointed, `apps/admin/lib/google.ts` deleted; authorize URL byte-identical (pinned by test); `server-only` replaced by `test/google-oauth-server-only.test.ts` (mutation-proved).
+- **10.13:** `packages/lib/src/claim-token.ts` (+ test 6/6); `/api/public/order` returns `claimToken` on the two success answers only, never on 409/502/503; route test extended (7/7, mutation-proved).
+- **Verified:** `TEST_DB_REQUIRED=1 vitest run` on throwaway `tokophi_buyer_account_test` → 196 files, 1713/1713; `tsc -p apps/admin` 0, `tsc -p packages/lib` 0; admin lint 0 errors (14 warnings, pre-existing); page map unchanged.
+- **Not verified / not done:** no real Google sign-in (no account app yet, owner step pending); `.env.example` `ACCOUNT_CLAIM_SECRET` line not added (file behind the secret-read guard); 10.13 needs an independent review (order route).
+

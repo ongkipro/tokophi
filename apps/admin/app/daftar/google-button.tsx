@@ -2,7 +2,7 @@
 import { Button } from "@tokophi/ui/button";
 
 // "Masuk dengan Google" — a plain link into the OAuth start route (no client-side SDK).
-// Rendered only when the server says Google auth is configured (see lib/google.ts).
+// Rendered only when the server says Google auth is configured (see @tokophi/lib/google-oauth).
 export function GoogleButton({ mode, label }: { mode: "login" | "daftar"; label: string }) {
   return (
     <Button

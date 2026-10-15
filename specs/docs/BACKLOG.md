@@ -237,7 +237,7 @@ the point: **hand-fixing the instances you found is not a strategy.**
       accident two files away in the storefront's owner-connection read). **The rule is now in AGENTS.md**,
       with the full 11-table list. `e61df25` patched the instances it found; the class had seven.
 - [x] **`jwtVerify` algorithm pins — FIXED `cae0deb`** on `apps/super-admin/middleware.ts:24` and
-      `apps/storefront/src/lib/chat.ts:63`. `apps/admin/lib/google.ts` is left unpinned deliberately
+      `apps/storefront/src/lib/chat.ts:63`. `apps/admin/lib/google.ts` (now `packages/lib/src/google-oauth.ts`) is left unpinned deliberately
       (remote JWKS, asymmetric, issuer+audience constrained — pinning RS256 would turn a Google key
       rotation into a silent total login outage).
 - [x] **`shipping.ts` raw `orders.status` writes — HOLE CLOSED `d07aa1e`, DOOR STILL THERE.**
