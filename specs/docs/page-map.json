@@ -238,6 +238,21 @@
         },
         {
           "url": "/crm",
+          "kind": "layout",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/crm/layout.tsx",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "layout"
+        },
+        {
+          "url": "/crm",
           "kind": "page",
           "methods": [],
           "file": "apps/admin/app/(admin)/crm/page.tsx",

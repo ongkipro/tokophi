@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-15 14:00 UTC] — ADMIN · CRM hidden in production (dev keeps it)
+Executor: Main Session (Claude Code). Branch `feat/hide-crm-prod` (worktree `tokophi-hide-crm`), from origin/main. Owner: "crm di seller public hide aja dulu … sambil kita develop local".
+- **Change:** `CRM_ENABLED = process.env.NODE_ENV !== "production"` in `apps/admin/lib/nav.ts`; the CRM nav group (Follow-up WA, Pipeline, Template) is only added when true; new `apps/admin/app/(admin)/crm/layout.tsx` calls `notFound()` otherwise, so typed URLs 404 too. Hidden rather than "segera hadir", following the repo's rule that a nav row opening onto nothing is worse than none (`nav.ts` Pesanan note). Server actions in `lib/actions/crm.ts` untouched (tenant-gated). Page map regenerated; `SYSTEM_MAP.md` §4.1 and `CODE_MAP.md` CRM rows marked dev-only.
+- **Verified:** nav module evaluated under both modes — development: CRM present, 17 items; production: absent, 16 items. `tsc -p apps/admin` 0; admin lint 0 errors (14 warnings); `vitest run apps/admin test` 1462 passed, 231 DB suites skipped.
+- **Not verified:** the production `/crm` 404 was not driven in a browser (needs a production build plus a seller session).
+
 ### [2026-10-14 10:45 UTC] — LANDING · Panduan links, /kontak + 404 copy, share image, fact-row length
 Executor: Main Session (Claude Code). Branch `feat/landing-content-r7` (worktree `tokophi-landing`), from main 232a24fb. Owner: "kebutuhan isi, ui ux, style, dan lain-lain lanjut dulu baru sempurnakan".
 - **Wayfinding:** `PANDUAN_URL` (`apps/landing/src/lib/navigation.ts`, env `PUBLIC_PANDUAN_URL`, default https://panduan.tokophi.com) linked from the footer (Informasi → "Panduan seller"), /kontak, /cara-kerja (→ /mulai/) and the 404 (secondary action, replacing "Kontak").

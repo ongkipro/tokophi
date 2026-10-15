@@ -50,14 +50,14 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 3 | 19 |
+| Seller (merchant panel) | 56 | 4 | 19 |
 | Super Admin (platform control plane) | 12 | 2 | 1 |
 | Storefront (multi-tenant shopper site) | 18 | — | 10 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 3 layouts · 19 API routes
+56 pages · 4 layouts · 19 API routes
 
 ### Pages
 
@@ -74,6 +74,7 @@
 | `/blog/baru` | New article. | page | `apps/admin/app/(admin)/blog/baru/page.tsx` | — | `articles` | — | — | — | ✓ | — |
 | `/blog` | 'Blog' — article list. | page | `apps/admin/app/(admin)/blog/page.tsx` | `blog-client.tsx` | `articles` | `articles` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/crm/followup` | 'Follow-up' — due follow-ups, mark done → `followups.status`. | page | `apps/admin/app/(admin)/crm/followup/page.tsx` | `followup-client.tsx` | `crm` | `crm` | — | — | ✓ | — |
+| `/crm` | layout | layout | `apps/admin/app/(admin)/crm/layout.tsx` | — | — | — | — | — |  | — |
 | `/crm` | 'CRM' landing — redirects/overview of pipeline, follow-ups, templates. | page | `apps/admin/app/(admin)/crm/page.tsx` | — | `crm` `store` | — | `session` | — |  | — |
 | `/crm/pipeline` | 'Pipeline' — leads by stage (drag/drop). | page | `apps/admin/app/(admin)/crm/pipeline/page.tsx` | `pipeline-client.tsx` | `crm` | `crm` | — | — | ✓ | — |
 | `/crm/template` | 'Template' — WhatsApp message templates used by CRM and abandoned-cart recovery. | page | `apps/admin/app/(admin)/crm/template/page.tsx` | `template-client.tsx` | `crm` | `crm` | — | — | ✓ | — |

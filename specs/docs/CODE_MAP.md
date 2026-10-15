@@ -69,7 +69,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 | Produk › Inventori/Kategori/Pembelian | `/produk/inventori`,`/kategori`,`/pembelian` | inventory, collections, purchases | `inventory.ts`, `collections.ts`, `purchases.ts` |
 | Pesanan | `/pesanan`(+`/[id]`) | orders | `orders.ts` |
 | Pelanggan | `/pelanggan`(+`/[id]`,`/segmen`,`/ulasan`,**`/keranjang`**) | customers (guest vs registered), segments, reviews, **checkout** | `customers.ts`, `segments.ts`, **`checkout.ts`** |
-| CRM | `/crm`(+`/followup`,`/pipeline`,`/template`) | crm | `crm.ts` |
+| CRM (**dev only** — hidden + 404 in production via `CRM_ENABLED`, `lib/nav.ts`) | `/crm`(+`/followup`,`/pipeline`,`/template`) | crm | `crm.ts` |
 | Diskon | `/diskon`(+`/baru`,`/[id]`) | discounts | `discounts.ts` |
 | Analitik / Pemasaran | `/analitik`, `/pemasaran` | `analytics.ts`, `marketing.ts`, **`tracking.ts`** (`getTrackingStatus` ungated / `getTrackingConfig` + `getTrackingHealth` gated on `integrations:write`), **`feed.ts`** (`getFeedStatus` — the Katalog Iklan card) | **`tracking.ts`** (save pixel/CAPI config, test connection, clear token, switch `catalog_id_scheme`) |
 | Toko Online | `/halaman`,`/blog`,`/navigasi`,**`/files`**,`/tema` | pages, articles, menus, **media**, theme | `pages.ts`,`articles.ts`,`menus.ts`,**`media.ts`**,`theme.ts` |
