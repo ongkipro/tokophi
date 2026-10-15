@@ -111,7 +111,7 @@ export async function onOrderStatusForAffiliate(
     await tx
       .update(schema.affiliateCommissions)
       .set({
-        eligibleAt: sql`now() + make_interval(days => coalesce((select affiliate_hold_days from store_settings where store_id = ${args.storeId}), 7))`,
+        eligibleAt: sql`now() + make_interval(days => coalesce((select affiliate_hold_days from store_settings where store_id = ${args.storeId}), 3))`,
       })
       .where(and(where, eq(schema.affiliateCommissions.status, "pending")));
   }

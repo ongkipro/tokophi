@@ -225,16 +225,16 @@ The normative statement, verification method, and current status for each identi
 |---|---|---|---|
 | F-A1 | Programme off ⇒ no `/affiliate` page, no applications, no attribution. | `affiliate-attribution.test.ts` (no commission when off); storefront 404 in `BUILD-LOG.md` 2026-10-15 | MET |
 | F-A2 | Public application on the storefront creates a `menunggu` affiliate for the Host's store; honeypot, 5/hour/IP. | browser check in `BUILD-LOG.md` 2026-10-15 (Task 9.5) | MET |
-| F-A3 | `affiliates:write` approves / rejects / deactivates / adds affiliates, store-scoped. | Task 9.4 browser check | **PARTIAL** — built (`apps/admin/lib/actions/affiliates.ts`), not driven in a browser (local seller login). |
+| F-A3 | `affiliates:write` approves / rejects / deactivates / adds affiliates, store-scoped. | Task 9.4 browser check (`BUILD-LOG.md` 2026-10-15) | **PARTIAL** — approve driven in Chrome as owner, and a `staff` session gets no write controls and its server action is refused (`ForbiddenError`); reject / deactivate / "Tambah affiliate" not driven. |
 | F-A4 | Typed code beats a captured `?ref` (30 days, last click); only `aktif` affiliates of that store attribute. | `affiliate-attribution.test.ts` | MET |
 | F-A5 | Unknown / inactive code or self-referral (same phone) ⇒ order normal, no commission. | `affiliate-attribution.test.ts` | MET |
 | F-A6 | Commission frozen at order time in the order txn: Σ line × (goods proceeds / subtotal) × rate, floored once. | `packages/lib/src/affiliate.test.ts`; `affiliate-attribution.test.ts` | MET |
-| F-A7 | `batal`/`retur` voids an unpaid commission; `selesai` sets `eligible_at = now + hold days`; ready is derived. | `affiliate-attribution.test.ts` | MET |
-| F-A8 | Mark paid only when ready; sets `dibayar` + `paid_at`. Platform never moves affiliate money. | Task 9.4 browser check | **PARTIAL** — single guarded UPDATE in `markCommissionPaid`; refusal not yet exercised by a test or browser. |
-| F-A9 | Per-product `products.affiliate_rate_bps` overrides the store default; `0` = none; clamped 0–100 %. | `packages/lib/src/affiliate.test.ts` | **PARTIAL** — calculation tested; Seller override UI not driven. |
+| F-A7 | `batal`/`retur` voids an unpaid commission; `selesai` (delivered) sets `eligible_at = now + hold days` (default 3, owner 2026-10-15); ready is derived. | `affiliate-attribution.test.ts` | MET |
+| F-A8 | Mark paid only when ready; sets `dibayar` + `paid_at`. Platform never moves affiliate money. | `BUILD-LOG.md` 2026-10-15 (Chrome, Task 9.4) | MET — ready commission marked paid as owner; the server action refused a not-ready commission ("belum siap dibayar") and a `staff` session. |
+| F-A9 | Per-product `products.affiliate_rate_bps` overrides the store default; `0` = none; clamped 0–100 %. | `packages/lib/src/affiliate.test.ts`; `BUILD-LOG.md` 2026-10-15 (Chrome) | MET — calculation tested; a 15 % product override saved through the Seller UI and shown to staff read-only. |
 | F-A10 | `affiliates` / `affiliate_commissions` carry `store_id` + RLS; seller reads/writes via `withTenant`. | `npm run verify-rls -w @tokophi/db`; `affiliate-attribution.test.ts` (other store's code never attributes) | MET |
 | F-A11 | `affiliates:write` exports the store's commissions as CSV; nothing from another store. | Task 9.8 | PLANNED |
-| F-A12 | Without `affiliates:write`, the Seller panel masks affiliate bank account and phone (last 4) and hides `wa.me`. | Task 9.7 | PLANNED |
+| F-A12 | Without `affiliates:write`, the Seller panel masks affiliate bank account and phone (last 4) and email, and hides `wa.me`. | `apps/admin/lib/affiliate-mask.test.ts`; Chrome staff session 2026-10-15 (BUILD-LOG) | MET |
 | F-A13 | Landing-page funnel (`/lp`, OrderFunnel) sends typed code / captured ref exactly like checkout. | Task 9.6 | PLANNED |
 | F-A14 | `retur` after `dibayar` keeps the row paid and flags it for the merchant. | Task 9.10 | BLOCKED — owner decision OD-A1 |
 | F-A15 | A verified buyer account linked (with consent) to an `aktif` affiliate sees that affiliate's commissions. | Task 9.11 | BLOCKED — OD-A3 + buyer account (Stage 10) |

@@ -3,6 +3,9 @@ import { schema } from "@tokophi/db";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
 import { systemDomainFor } from "@/lib/data/domain";
+import { getSession } from "@/lib/auth";
+import { can } from "@/lib/rbac-policy";
+import { affiliateContactView } from "@/lib/affiliate-mask";
 
 // Seller panel → Affiliate (Task 9.4, specs/AFFILIATE_SPEC.md). Every read runs under the tenant
 // context (RLS) AND filters on `storeId` explicitly — the WHERE is the rule, the policy is the net.
@@ -18,6 +21,8 @@ export type AffiliateRow = {
   phone: string;
   email: string | null;
   bank: string | null;
+  /** True when phone/email/bank above are masked for this viewer (F-A12) — no WhatsApp link then. */
+  contactMasked: boolean;
   status: AffiliateStatus;
   note: string | null;
   createdAt: string;
@@ -53,6 +58,8 @@ export type AffiliateProgram = {
 };
 
 export async function getAffiliateProgram(): Promise<AffiliateProgram> {
+  const session = await getSession();
+  const fullContact = !!session && can(session.role, "affiliates:write");
   return withCurrentTenant(async (db, storeId) => {
     const [s] = await db
       .select({
@@ -139,14 +146,12 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
     const iso = (d: Date | null) => (d ? d.toISOString() : null);
     return {
       storeHost: systemDomainFor(store?.slug ?? ""),
-      settings: { enabled: s?.enabled ?? false, rateBps: s?.rateBps ?? 1000, holdDays: s?.holdDays ?? 7 },
+      settings: { enabled: s?.enabled ?? false, rateBps: s?.rateBps ?? 1000, holdDays: s?.holdDays ?? 3 },
       affiliates: affiliates.map((a) => ({
         id: a.id,
         code: a.code,
         name: a.name,
-        phone: a.phone,
-        email: a.email,
-        bank: a.bankName ? [a.bankName, a.bankAccount, a.bankHolder && `a.n. ${a.bankHolder}`].filter(Boolean).join(" · ") : null,
+        ...affiliateContactView(a, fullContact),
         status: a.status,
         note: a.note,
         createdAt: a.createdAt.toISOString(),

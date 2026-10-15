@@ -235,21 +235,23 @@ function AffiliateTable({ program }: { program: AffiliateProgram }) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      nativeButton={false}
-                      aria-label={`WhatsApp ${a.name}`}
-                      render={
-                        <a
-                          href={waLink(a.phone, `Halo ${a.name}, kode affiliate Anda: ${a.code}\nLink: ${link}`)}
-                          target="_blank"
-                          rel="noreferrer"
-                        />
-                      }
-                    >
-                      <MessageCircle />
-                    </Button>
+                    {!a.contactMasked && (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        nativeButton={false}
+                        aria-label={`WhatsApp ${a.name}`}
+                        render={
+                          <a
+                            href={waLink(a.phone, `Halo ${a.name}, kode affiliate Anda: ${a.code}\nLink: ${link}`)}
+                            target="_blank"
+                            rel="noreferrer"
+                          />
+                        }
+                      >
+                        <MessageCircle />
+                      </Button>
+                    )}
                     {canWrite && a.status !== "aktif" && a.status !== "ditolak" && (
                       <Button size="sm" disabled={pending} onClick={() => run(() => setAffiliateStatus(a.id, "aktif"), "Affiliate disetujui.")}>
                         Setujui
@@ -309,9 +311,9 @@ function SettingsCard({ program }: { program: AffiliateProgram }) {
           <p className="text-xs text-muted-foreground">Dari nilai produk setelah diskon — tanpa ongkir dan biaya admin.</p>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="aff-hold">Masa retur sebelum komisi bisa dibayar (hari)</Label>
+          <Label htmlFor="aff-hold">Masa tunggu setelah barang diterima (hari)</Label>
           <Input id="aff-hold" className="max-w-40 tabular-nums" inputMode="numeric" value={hold} onChange={(e) => setHold(e.target.value)} disabled={!canWrite} />
-          <p className="text-xs text-muted-foreground">Dihitung sejak pesanan selesai. Pesanan batal/retur tidak menghasilkan komisi.</p>
+          <p className="text-xs text-muted-foreground">Komisi siap dibayar sekian hari setelah pesanan selesai (barang diterima). Standar 3 hari. Pesanan batal/retur tidak menghasilkan komisi.</p>
         </div>
       </CardContent>
       {canWrite && (

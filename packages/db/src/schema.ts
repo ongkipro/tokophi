@@ -1847,7 +1847,7 @@ export const storeSettings = pgTable("store_settings", {
   // commission is never a float. Hold days = the return window before a commission is payable.
   affiliateEnabled: boolean().notNull().default(false),
   affiliateRateBps: integer().notNull().default(1000),
-  affiliateHoldDays: integer().notNull().default(7),
+  affiliateHoldDays: integer().notNull().default(3),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

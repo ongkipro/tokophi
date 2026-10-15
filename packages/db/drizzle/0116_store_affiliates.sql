@@ -22,7 +22,7 @@ exception when duplicate_object then null; end $$;--> statement-breakpoint
 
 alter table "store_settings" add column if not exists "affiliate_enabled" boolean default false not null;--> statement-breakpoint
 alter table "store_settings" add column if not exists "affiliate_rate_bps" integer default 1000 not null;--> statement-breakpoint
-alter table "store_settings" add column if not exists "affiliate_hold_days" integer default 7 not null;--> statement-breakpoint
+alter table "store_settings" add column if not exists "affiliate_hold_days" integer default 3 not null;--> statement-breakpoint
 alter table "products" add column if not exists "affiliate_rate_bps" integer;--> statement-breakpoint
 
 create table if not exists "affiliates" (

@@ -49,7 +49,7 @@ async function fixture(tx: Db, opts: { enabled?: boolean } = {}) {
   );
   const storeId = store.id as string;
   await tx.execute(sql`insert into store_settings (store_id, affiliate_enabled, affiliate_rate_bps, affiliate_hold_days)
-                       values (${storeId}, ${opts.enabled ?? true}, 1000, 7)`);
+                       values (${storeId}, ${opts.enabled ?? true}, 1000, 3)`);
   const [p1] = await rows(tx, sql`insert into products (store_id, title, handle, number) values (${storeId}, 'A', 'a', 1) returning id`);
   const [p2] = await rows(
     tx,
@@ -170,7 +170,7 @@ suite("commission lifecycle through applyOrderStatusChange (F-A7)", () => {
     return { f, orderId, commissionId: row!.id };
   }
   const commission = async (tx: Db, id: string) =>
-    (await rows(tx, sql`select status, eligible_at > now() + interval '6 days 23 hours' as "inWindow", eligible_at as "eligibleAt" from affiliate_commissions where id = ${id}`))[0];
+    (await rows(tx, sql`select status, eligible_at between now() + interval '2 days 23 hours' and now() + interval '3 days 1 hour' as "inWindow", eligible_at as "eligibleAt" from affiliate_commissions where id = ${id}`))[0];
 
   it("batal and retur void the commission", async () => {
     await inTxn(async (tx) => {
@@ -183,7 +183,7 @@ suite("commission lifecycle through applyOrderStatusChange (F-A7)", () => {
     });
   });
 
-  it("selesai starts the hold window (now + 7 days) and keeps it pending", async () => {
+  it("selesai (delivered) starts the hold window (now + 3 days, H+3) and keeps it pending", async () => {
     await inTxn(async (tx) => {
       const c = await withCommission(tx, "dikirim");
       await applyOrderStatusChange(tx, { storeId: c.f.storeId, order: { id: c.orderId, status: "dikirim" }, status: "selesai" });

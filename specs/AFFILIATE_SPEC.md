@@ -139,7 +139,7 @@ PRD). TokoΦ therefore never computes or withholds tax; it gives the merchant a 
   commission to `batal`; when it moves to `selesai`, it shall set `eligible_at = now + hold days`
   (store setting, default 7). A `pending` commission is "siap dibayar" once `eligible_at <= now()`.
   - Acceptance: Given a pending commission, When the order is set `retur`, Then the commission is
-    `batal`; When another order is set `selesai` with 7 hold days, Then `eligible_at` is 7 days later.
+    `batal`; When another order is set `selesai` with 3 hold days (the default), Then `eligible_at` is 3 days later.
 - **F-A8** (Must, event) When the merchant marks a ready commission paid, the system shall set
   `dibayar` + `paid_at`; it shall refuse a commission that is not ready.
   - Acceptance: Given a pending commission with `eligible_at` in the future, When "Tandai dibayar" is
@@ -158,8 +158,10 @@ PRD). TokoΦ therefore never computes or withholds tax; it gives the merchant a 
   - Acceptance: Given store A with 3 commissions and store B with 1, When A's owner exports, Then the
     file has 3 data rows and every row is A's; a `staff` user gets no export.
 - **F-A12** (Should, state) While the signed-in user lacks `affiliates:write`, the Seller panel shall
-  show an affiliate's bank account and phone masked to the last 4 digits and no `wa.me` link.
-  (Today every store role can read `/affiliate` in full — gap found 2026-10-15.)
+  show an affiliate's bank account and phone masked to the last 4 digits, the email as `x•••@domain`,
+  and no `wa.me` link. Masking happens in the data layer (`apps/admin/lib/affiliate-mask.ts`, called
+  by `getAffiliateProgram`), so the full value never reaches the RSC payload. Built 2026-10-15
+  (gap found the same day: every store role could read `/affiliate` in full).
   - Acceptance: Given a `staff` session, When `/affiliate` renders, Then no full bank account or phone
     number appears in the HTML.
 - **F-A13** (Must, event) When an order is placed through a store landing page (`/lp`, OrderFunnel),
@@ -215,15 +217,22 @@ account spec.
 **Retention.** Affiliate personal data (phone, email, bank) lives until the merchant erases it
 (`F-A17`); commission rows are the merchant's financial record and are never deleted by the app.
 
-## 10. Open questions and owner decisions
+## 10. Owner decisions (answered 2026-10-15) and open questions
+
+Owner answers, 2026-10-15: OD-A3 **yes**; OD-A2 commission becomes payable **3 days after the goods
+are delivered** (`selesai` + 3 — "H+3"), default **10 %**, both seller-configurable; OD-A4 left to us
+→ the recommended default; OD-A5 **manual only**; OD-A1 not changed → the recommended default stands.
+For the seller's own money the owner restated "dana bisa ditarik H+2 setelah barang dikirim" — that is
+the platform ledger (`platform_payout.release_on`, `FINANCE.md`), not this spec; it is recorded for the
+finance owner and changes nothing here.
 
 | ID | Question | Recommended default | Owner | Blocks |
 |---|---|---|---|---|
-| OD-A1 | A `retur` after `dibayar`: flag only, or record a claw-back the merchant deducts from the next payment? | Flag only (`F-A14`); TokoΦ never moves the money, so it cannot claw it back | Owner | Task 9.10 |
-| OD-A2 | Defaults: 10 % rate, 7 hold days (0–90 allowed). | Keep; 7 days covers the usual return window after delivery | Owner | Release |
-| OD-A3 | May an affiliate sign in with the TokoΦ buyer account to see commissions? (Same question as the account spec's OD-3.) | **Yes** — one identity per person, no second login (`F-A15`) | Owner | Task 9.11 |
-| OD-A4 | Tax: export only (`F-A11`), or also a tax note on the export? | Export only + a one-line note that withholding is the merchant's | Owner | Task 9.8 |
-| OD-A5 | Erasure (`F-A17`): manual only, or automatic after N days for `ditolak`? | Manual only in v1.1 | Owner | Task 9.9 |
+| OD-A1 | A `retur` after `dibayar`: flag only, or record a claw-back the merchant deducts from the next payment? | **Decided (default stands): flag only** (`F-A14`); TokoΦ never moves the money, so it cannot claw it back. Paying only at delivery + 3 days already shrinks the window. | Owner | Task 9.10 |
+| OD-A2 | Defaults: rate and hold days (0–90 allowed). | **Decided 2026-10-15: 10 %, 3 days after delivery (H+3)**, seller can change both (store default + per-product rate) | Owner | — |
+| OD-A3 | May an affiliate sign in with the TokoΦ buyer account to see commissions? (Same question as the account spec's OD-3.) | **Decided 2026-10-15: yes** — one identity per person, no second login (`F-A15`); still waits for Stage 10 | Owner | Task 9.11 |
+| OD-A4 | Tax: export only (`F-A11`), or also a tax note on the export? | **Decided 2026-10-15 (owner delegated): CSV export + a one-line note that withholding is the merchant's duty.** The PPh 21 reference in §3 stays marked as a secondary source. | Owner | — |
+| OD-A5 | Erasure (`F-A17`): manual only, or automatic after N days for `ditolak`? | **Decided 2026-10-15: manual only** | Owner | — |
 
 ## 11. Risks and abuse
 
@@ -233,7 +242,7 @@ account spec.
 | Cookie stuffing / ref overwrite | Anyone can open `?ref=` to take last-click credit | Only approved `aktif` affiliates of that store attribute; typed code wins over the ref; the 30-day window is client-side only (accepted: the ref is a selector, not a credential). |
 | Refund abuse | Commission paid, then the order is returned | Payable only after `selesai` + hold days (`F-A7`, built); paid-then-returned is flagged (`F-A14`, OD-A1). |
 | Application spam | Bots fill `/affiliate` | Honeypot + 5/hour/IP (built); limiter is in-process (NF-6). Programme off by default. |
-| Personal data exposure | Bank accounts and phones visible to every store role | Masking (`F-A12`) and erasure (`F-A17`), planned. |
+| Personal data exposure | Bank accounts and phones visible to every store role | Masking (`F-A12`) **built 2026-10-15**; erasure (`F-A17`) planned. |
 | Money correctness | Rounding, discounts, overrides | Integer basis points, one floor at the end, frozen at order time (`F-A6`, unit + DB tests). |
 
 ## 12. Technical decisions (ADR-lite)
@@ -247,15 +256,20 @@ account spec.
   rewrite history. **Consequence:** rate changes apply to new orders only.
 - **Decision:** phase-2 self-view reuses the buyer account. **Why:** one identity per person; the
   account spec already owns phone verification and consent. **Consequence:** `F-A15` waits for Stage 10.
+- **Decision (2026-10-15):** default hold 3 days, counted from `selesai` (delivered). **Why:** owner
+  rule "komisi setelah barang terkirim + H+3". **Consequence:** `0116` (unmerged) defaults
+  `affiliate_hold_days` to 3; the code fallback and the settings copy say the same.
+- **Decision (2026-10-15):** personal-data masking is a data-layer transform keyed on
+  `affiliates:write`, not a UI flag. **Why:** hiding it in the client would still ship the digits.
 
 ## 13. Milestones and verification status
 
 - [x] **v1 built** (`F-A1`–`F-A10`, Tasks 9.1–9.5): migration `0116`; `affiliate.test.ts` 10/10 and
   `affiliate-attribution.test.ts` 8/8 on a throwaway DB; `verify-rls` 56/57; storefront browser check
   of `/affiliate`, the rate limit, `?ref=` capture and the checkout field (BUILD-LOG 2026-10-15).
-  **Not yet driven:** the Seller `/affiliate` screen (Task 9.4, blocked on a local seller login) and a
-  real order POST carrying `refCode`/`affiliateCode`.
-- [ ] **v1.1:** `F-A13` landing funnel (9.6), `F-A12` masking (9.7), `F-A11` export (9.8), `F-A17`
+  Seller `/affiliate` driven in Chrome 2026-10-15 as owner and staff (Task 9.4). **Not yet driven:**
+  a real order POST carrying `refCode`/`affiliateCode`.
+- [ ] **v1.1:** `F-A13` landing funnel (9.6), ~~`F-A12` masking (9.7)~~ done 2026-10-15, `F-A11` export (9.8), `F-A17`
   erasure (9.9), `F-A14` after OD-A1 (9.10).
 - [ ] **Phase 2:** `F-A15` self-view via buyer account (9.11), `F-A16` notifications (9.12) — both
   blocked on other work.
