@@ -73,7 +73,7 @@ describe("what an order page shows about returns, by status (ACC-16, RR-10)", ()
     expect(complaintLink({ ...base, status: "selesai", storeWhatsapp: null })).toBeNull();
   });
   it("the window sentence appears only when declared and only once goods are on their way", () => {
-    expect(returnLineFor({ status: "selesai", returnWindowDays: 7 })).toBe("Toko ini menerima pengajuan retur selama 7 hari setelah barang diterima.");
+    expect(returnLineFor({ status: "selesai", returnWindowDays: 7 })).toBe("Toko ini menerima pengajuan retur selama 7 hari kerja setelah barang diterima.");
     expect(returnLineFor({ status: "dikirim", returnWindowDays: 14 })).toContain("14 hari");
     expect(returnLineFor({ status: "selesai", returnWindowDays: null })).toBeNull();
     expect(returnLineFor({ status: "diproses", returnWindowDays: 7 })).toBeNull();

@@ -57,3 +57,39 @@ Reading: the market convention is **status tabs by next action** (belum bayar �
 | Whether a "no returns" clause is void (klausula baku, Pasal 18) — **not established** | N | — |
 
 Reading for the product (not legal advice): (a) a store's declared window is *store policy*, while a buyer's claim about goods that do not match what was sold does not obviously depend on any number the store writes — so the complaint button must **not** be gated by the window; (b) marketplaces ask for photo/video, so the hand-off should prompt the buyer to prepare it, without promising what the store will do; (c) the screen must not cite a legal basis until a lawyer confirms the PP and the statute text (spec OD-6).
+
+## 8. Primary sources read, 2026-10-19 (grade A — the official text itself)
+
+The two statutes below were downloaded from the official portals and read as text (not through a summary).
+Quotations are short; the articles are public legal text. **Interpretation of how they apply to TokoΦ stores
+and to TokoΦ itself is a legal question and is not made here** (spec §20.5).
+
+**PP 80/2019 on trade through electronic systems** — body text, `peraturan.go.id/files/pp80-2019bt.pdf`
+(Lembaran Negara 2019 No. 222), with its Penjelasan (TLN 6420, `pp80-2019pjl.pdf`):
+- **Pasal 27 (1):** "Pelaku Usaha wajib menyediakan layanan pengaduan bagi Konsumen." **(2):** the complaint service
+  covers at least: address and contact number; the complaint procedure; the follow-up mechanism; competent staff;
+  and **the time period for resolving a complaint**.
+- **Pasal 66:** an e-commerce operator (PPMSE) that arranges delivery must give accurate, timely information on the
+  delivery period and status to the consumer, periodically; a mismatch that causes a dispute must be resolved by it.
+- **Pasal 69 (1):** merchants and PPMSE "wajib memberikan jangka waktu **paling sedikit 2 (dua) hari kerja** untuk
+  penukaran Barang dan/atau Jasa, atau pembatalan pembelian, terhitung sejak Barang dan/atau Jasa diterima oleh
+  Konsumen." **(2)** the grounds: the goods sent are wrong or do not match; the actual delivery period does not match;
+  hidden defect; goods damaged; goods expired. **(3)** the consumer may be charged only the cost of shipping the goods
+  back. **(4)** shipping cost may be charged to the consumer if the consumer's own carelessness contributed.
+- **Pasal 71:** every PPMSE that receives payment "wajib memiliki atau menyediakan mekanisme yang dapat memastikan
+  pengembalian dana Konsumen apabila terjadi pembatalan pembelian" (the Penjelasan gives an escrow account as an example).
+- **Pasal 72:** disputes may go to court or other dispute mechanisms, including online dispute resolution; a consumer
+  can sue a domestic business through the consumer dispute body (BPSK) or in the court where the consumer is based.
+
+**UU 8/1999 on Consumer Protection** — `peraturan.bpk.go.id/Download/33784/UU Nomor 8 Tahun 1999.pdf`:
+- **Pasal 4 (h):** the consumer's right to "kompensasi, ganti rugi dan/atau penggantian, apabila barang dan/atau jasa yang
+  diterima tidak sesuai dengan perjanjian atau tidak sebagaimana mestinya." **Pasal 7 (g)** is the matching duty of the business.
+- **Pasal 18 (1)(b), (c):** a business is forbidden to put a standard clause (klausula baku) in a document or agreement that
+  states it may refuse the return of goods bought, or refuse the return of money paid. **(3):** such a clause is "batal demi hukum".
+
+What this changes in the product (decided in spec §19.1 R9–R12, §20): a declared return window is in **hari kerja** and
+**cannot be below 2** (migration 0120); a store without a complaint contact cannot offer the buyer a complaint route
+(Pasal 27); the window figure must not be used to refuse non-conforming goods; the platform's own duties as a payment-receiving
+operator (Pasal 71) and delivery-status duty (Pasal 66) are flagged for review, not asserted.
+
+Still **not** read: PP 33/2026 (UU PDP implementing regulation; the official text was not located) and the PP 20/2026 tax change.

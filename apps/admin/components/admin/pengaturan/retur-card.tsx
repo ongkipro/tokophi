@@ -37,11 +37,11 @@ export function ReturCard() {
       <CardHeader>
         <CardTitle>Kebijakan retur</CardTitle>
         <CardDescription>
-          Berapa hari setelah barang diterima toko Anda menerima pengajuan retur. Angka ini ditampilkan ke pembeli di akun TokoΦ mereka pada pesanan yang sudah dikirim.
+          Berapa hari kerja setelah barang diterima toko Anda menerima pengajuan retur. Angka ini ditampilkan ke pembeli di akun TokoΦ mereka pada pesanan yang sudah dikirim.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
-        <Label htmlFor="retur-hari">Jendela retur (hari)</Label>
+        <Label htmlFor="retur-hari">Jendela retur (hari kerja)</Label>
         <Input
           id="retur-hari"
           className="max-w-40 tabular-nums"
@@ -52,7 +52,7 @@ export function ReturCard() {
           disabled={!canWrite || !loaded}
         />
         <p className="text-xs text-muted-foreground">
-          1–90 hari. Kosongkan bila toko tidak menjanjikan jendela retur: pembeli tidak akan melihat keterangan retur. Pastikan angka ini sesuai kebijakan toko Anda, karena pembeli akan membacanya sebagai janji.
+          2–90 hari kerja (PP 80/2019 Pasal 69 ayat 1 menetapkan batas paling sedikit 2 hari kerja sejak barang diterima). Kosongkan bila toko tidak menjanjikan jendela retur: pembeli tidak akan melihat keterangan retur. Pastikan angka ini sesuai kebijakan toko Anda, karena pembeli akan membacanya sebagai janji. Tombol pengajuan retur/komplain di akun pembeli hanya muncul bila toko memiliki nomor WhatsApp di Profil Toko.
         </p>
       </CardContent>
       {canWrite && (

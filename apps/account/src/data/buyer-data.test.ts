@@ -152,10 +152,10 @@ suite("store return window on the order detail (Task 10.22)", () => {
       expect((await ord.myOrder(tx, me, b1.number))?.returnWindowDays).toBeNull(); // A's 7 does not leak to B
     });
   });
-  it("the database refuses a window outside 1-90", async () => {
+  it("the database refuses a window outside 2-90 (the 2-working-day floor)", async () => {
     await inTxn(async (tx) => {
       const A = await store(tx);
-      for (const bad of [0, -1, 91]) {
+      for (const bad of [0, 1, -1, 91]) {
         await expect(tx.transaction(async (t) => { await t.execute(sql`insert into store_settings (store_id, return_window_days) values (${A.id}, ${bad})`); })).rejects.toThrow();
       }
     });
