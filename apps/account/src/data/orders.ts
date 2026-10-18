@@ -217,6 +217,8 @@ export type OrderLine = { title: string; qty: number; priceIdr: number; totalIdr
 export type OrderDetail = Omit<HubOrder, "firstLine" | "thumb" | "lineCount" | "payment"> & {
   storeOrigin: string;
   storeWhatsapp: string | null;
+  /** The store's declared return window in days, or null when it has not declared one. */
+  returnWindowDays: number | null;
   subtotalIdr: number;
   discountIdr: number;
   shippingIdr: number;
@@ -248,6 +250,7 @@ export async function myOrder(db: Db, buyerId: string, number: string): Promise<
       storeName: st.name,
       storeSlug: st.slug,
       storeWhatsapp: st.whatsapp,
+      returnWindowDays: schema.storeSettings.returnWindowDays,
       recipient: o.shipRecipient,
       phone: o.shipPhone,
       address: o.shipAddress,
@@ -260,6 +263,7 @@ export async function myOrder(db: Db, buyerId: string, number: string): Promise<
     .innerJoin(ln, and(eq(ln.buyerId, cl.buyerId), eq(ln.storeId, cl.storeId)))
     .innerJoin(o, and(eq(o.id, cl.orderId), eq(o.storeId, cl.storeId)))
     .innerJoin(st, eq(st.id, o.storeId))
+    .leftJoin(schema.storeSettings, eq(schema.storeSettings.storeId, o.storeId))
     .where(and(mine(buyerId), eq(o.number, number)))
     .limit(1);
   if (!r) return null;
@@ -297,6 +301,7 @@ export async function myOrder(db: Db, buyerId: string, number: string): Promise<
     items: lines.reduce((s, l) => s + l.qty, 0),
     storeOrigin: origin,
     storeWhatsapp: r.storeWhatsapp?.trim() || null,
+    returnWindowDays: r.returnWindowDays ?? null,
     subtotalIdr: r.subtotalIdr,
     discountIdr: r.discountIdr,
     shippingIdr: r.shippingIdr,

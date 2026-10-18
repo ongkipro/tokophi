@@ -625,6 +625,7 @@ email sending of any kind (the platform has no email provider either).
 | Saved addresses | 1 | ACC-7 |
 | Unlink a store | 1 | ACC-8 |
 | Close the account (self-service, irreversible) | 1 — built 2026-10-19 | ACC-15 |
+| Store return window shown on the order (stage 1 of OD-9) | 1 — built 2026-10-19 | ACC-16 |
 | Phone OTP sign-in / add phone to an account | 2 (blocked on Task 8.38) | ACC-1, ACC-2 |
 | Full history of a linked store for a phone-verified buyer | 2 | ACC-5 |
 | **Affiliate area — one account, many stores** (apply while signed in, accept a seller invitation, every store's code/link/commissions) | **1 — built 2026-10-15** (owner: "akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal") | ACC-14, AFFILIATE_SPEC `F-A15` |
@@ -662,6 +663,9 @@ IDs `ACC-*`, EARS, MoSCoW. **Rev-1 rows keep their IDs**; changed ones are marke
 
 - **ACC-15** (Must, phase 1, event) When the signed-in buyer confirms "Tutup akun", the system shall revoke every session, delete the account's saved addresses and order claims, revoke every store link, detach the account from its affiliate records, blank name/email/phone and replace the Google identity with an inert marker, and leave every store-owned row unchanged; while any of the account's programmes still owes it a ready or held commission it shall refuse and name those stores.
   - Acceptance: Given an account with a link, a claim, an address, an affiliate record and two sessions, When it closes, Then status is `closed`, no session row is unrevoked, no link is active, no claim or address remains, the order row is byte-identical, the affiliate row survives with no account, a second close is refused, and signing in with the same Google identity creates a different, empty account; Given an unpaid commission, When it tries to close, Then nothing changes and the refusal names the store.
+
+- **ACC-16** (Should, phase 1, state) Where the store has declared a return window (`store_settings.return_window_days`, 1–90), the order detail of an order that is on its way or delivered shall state it as "N hari setelah barang diterima"; where the store has declared none it shall say nothing about returns.
+  - Acceptance: Given store A with 7 and store B with no setting, When the buyer opens a delivered order of each, Then A's page states 7 days and B's page states nothing; an in-flight-but-unshipped order states nothing; no date is shown because the data holds no arrival date; the value is never read from `affiliate_hold_days`.
 
 
 ### 17.8 Technical decisions (ADR-lite)
@@ -733,7 +737,7 @@ when that task is done.
 | OD-1 | Messaging provider (WhatsApp Business API vs SMS vendor), sender identity, budget, fallback — **now Task 8.38**. | Phase 2. |
 | OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed). | Task 10.3. |
 | OD-3 | ✅ **Answered 2026-10-15 (owner: "oke boleh"): YES**, then the same day **widened** ("akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal"): the affiliate area is **phase 1** of this app — one account, many stores; existing rows bound by seller invitation (ACC-14), new ones by applying while signed in. | — (built on `feat/accounts`) |
-| OD-9 | Return / complaint path: does the buyer account show a store-defined return window and a way to open a complaint, as the marketplaces do (Shopee: 2/7/15 days by store tier)? Needs a store setting and an order event; today the order page says only "hubungi toko". See §19. | A return-request task. |
+| OD-9 | ✅ **Answered 2026-10-19 (owner: "ya" to the recommendation):** a per-store, optional return window with no default — shown to the buyer (stage 1, **built**, ACC-16), then a "minta retur / komplain" hand-off to the store's WhatsApp (stage 2, Task 10.23). No return-status tracking: that needs events and an approval flow, a separate task. Not `affiliate_hold_days` (a commission hold). | Stage 2 only. |
 | OD-10 | Store-side withholding on affiliate commission (PPh, NPWP collection) — stores pay affiliates directly, so the duty is theirs, not the platform's. Owner + tax adviser; **no screen may say the platform deducts tax**. See §19. | Any commission-payout copy or flow. |
 | OD-11 | Affiliate click tracking (the marketplaces show clicks → orders → commission). There is no click data; a storefront change, not an account-app one. | A "Klik" column. |
 | OD-8 | Should the account app list stores with an open affiliate programme (a directory)? | **Open — default no** in phase 1 (AFFILIATE_SPEC OD-A6). |
@@ -916,7 +920,7 @@ and for sign-in preference **nothing was found**. A decision below that rests on
 | # | Finding (grade) | Decision |
 |---|---|---|
 | R1 | Marketplaces tab orders by the buyer's next action (belum bayar → perlu dikirim → dikirim → selesai → batal/pengembalian) and give a tracking entry on the order (A/B). | **Already matched** (§6 Orders list, status-first detail). No change. |
-| R2 | Shopee completes orders by the system ~2 days after arrival and states a short, tiered return window (A for the windows, B for the 2026 change). | **Deferred — OD-9.** We have no return event and no store-defined window; inventing "7 hari" would be a claim with no data behind it. The order page keeps "hubungi toko". |
+| R2 | Shopee completes orders by the system ~2 days after arrival and states a short, tiered return window (A for the windows, B for the 2026 change). | **Stage 1 built (OD-9, ACC-16):** each store may declare its own window; the buyer sees it only when declared. No default, no invented "7 hari", no computed date (we hold no arrival date). Stage 2 (WhatsApp hand-off) is Task 10.23. |
 | R3 | E-wallet ~60% of purchases, QRIS fastest-growing, COD ~40% and declining, 51% abandon when their method is missing (B/C, Xendit-only, n=1,000). | **No account change.** The order page already shows method, status, fees and "bayar ke kurir"; method availability is a checkout concern. |
 | R4 | No evidence on phone/WhatsApp OTP vs Google (N; vendor claims only). | **Phase order unchanged** (Google now, phone OTP phase 2 on Task 8.38). The preference is an experiment to run, never a sentence to publish. |
 | R5 | UU PDP gives withdrawal, stop and deletion rights; PP 33/2026 (reported, text unread) wants consent that is specific, separate from T&C, and informed beforehand (B). | Claim consent already satisfies the reported shape (separate unticked checkbox, scope listed above it, per-store withdrawal). **Gap closed: ACC-15 "Tutup akun".** Legal confirmation against the PP text stays OD-6. |

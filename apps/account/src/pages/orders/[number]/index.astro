@@ -9,6 +9,7 @@ import { db } from "@tokophi/db";
 import { IDR, waLink } from "@tokophi/lib/format";
 import { isUnpaid, myOrder } from "../../../data/orders";
 import { signInUrl } from "../../../lib/nav";
+import { returnWindowLine } from "@tokophi/lib/return-window";
 import { PAYMENT_METHOD, PAYMENT_STATUS, courierName, phone, statusOf, whenLong } from "../../../lib/order-view";
 
 const account = Astro.locals.account;
@@ -39,6 +40,8 @@ const courier = courierName(order.courier);
 const shipFirst = !unpaid && (order.status === "diproses" || order.status === "dikirim");
 // A delivered order is reopened for what was bought, so Produk leads.
 const productFirst = order.status === "selesai";
+// Only once goods are on their way or delivered, and only if the store declared a window.
+const returnLine = order.status === "dikirim" || order.status === "selesai" ? returnWindowLine(order.returnWindowDays) : null;
 const payHost = pay?.url ? new URL(pay.url).hostname : null;
 ---
 <Layout title={`${s.label} · ${order.number}`} active="pesanan" back={{ href: "/orders", label: "Kembali ke pesanan" }}>
@@ -179,6 +182,7 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
       <section class="section-card" aria-labelledby="help-h">
         <h2 id="help-h">Butuh bantuan?</h2>
         <p>Pertanyaan tentang barang, pengiriman, atau pengembalian dijawab oleh {order.storeName}. Sebutkan nomor pesanan <span class="num">{order.number}</span>.</p>
+        {returnLine && <p class="field-help">{returnLine}</p>}
         <div class="card-links">
           {wa && <a class="button secondary" href={wa} rel="noopener noreferrer" target="_blank">WhatsApp {order.storeName}</a>}
           <a class="button secondary" href={order.storeOrigin} rel="noopener noreferrer">Kunjungi toko</a>

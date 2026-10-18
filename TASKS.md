@@ -1234,6 +1234,20 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 - **Done when:** the spec carries §19 with a decision per finding and OD-9…OD-11 for what the data cannot yet support; `verify:doc-authority` and `verify:traceability` pass.
 - **Status:** `[x]` **DONE 2026-10-19.** Open owner decisions: OD-9 (return/complaint window), OD-10 (store-side tax on commission), OD-11 (affiliate clicks), OD-6 (privacy/retention review, includes confirming PP 33/2026 against its text).
 
+### Task 10.22: Store Return Window — Setting and Buyer Display (OD-9 stage 1)
+- **Requirement:** `ACC-16`
+- **Target Files:** `packages/db/drizzle/0119_store_return_window.sql` (+ journal), `packages/db/src/schema.ts`, `packages/lib/src/return-window.ts` (+ test), `apps/admin/lib/actions/retur.ts`, `apps/admin/components/admin/pengaturan/retur-card.tsx`, `apps/admin/app/(admin)/pengaturan/page.tsx`, `apps/account/src/data/orders.ts`, `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** nullable `store_settings.return_window_days` (check 1–90, idempotent migration, applied to branch DBs only); a "Kebijakan retur" card in Seller Pengaturan → Pengiriman; the order detail states "selama N hari setelah barang diterima" for shipped/delivered orders when declared, nothing otherwise.
+- **Done when:** helper test (normalise, 90 cap, null ⇒ nothing); real-Postgres test: null by default, each store's own value, no leak across stores, the database refuses 0/-1/91; the three mutations (join not bound to the store, projection dropped, no cap) go red; doc counts 120 / 0119.
+- **Status:** `[x]` **DONE 2026-10-19** — account side proved live (set 7 ⇒ line on a delivered order, none on an in-flight one, gone after reverting to NULL). **Not proved:** the Seller card was type-checked and linted but **not driven in a browser** (no Seller session in this environment); its save mirrors `setCodEnabled`.
+
+### Task 10.23: Return / Complaint Hand-off to the Store (OD-9 stage 2)
+- **Requirement:** `ACC-16`
+- **Target Files:** `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** an "Ajukan retur / komplain" button that opens the store's WhatsApp with a prefilled message (order number, store). No ticket system and no return status.
+- **Done when:** the button exists only when the store has a WhatsApp number; the message names the order; browser-checked.
+- **Status:** `[ ]`
+
 ### Task 10.14: Phase 2 — Phone OTP Sign-in, Add Phone, Full Linked-Store History
 - **Requirement:** `ACC-1 (constraints: ACC-2, ACC-5)`
 - **Target Files:** migration `<next>_buyer_otp.sql` (`buyer_otp_challenges`), `apps/account/src/pages/masuk/**`, `apps/account/src/pages/akun/**`, tests

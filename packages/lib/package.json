@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./format": "./src/format.ts",
     "./area-search": "./src/area-search.ts",
+    "./return-window": "./src/return-window.ts",
     "./kiriminaja": "./src/kiriminaja.ts",
     "./kiriminaja-tracking": "./src/kiriminaja-tracking.ts",
     "./autolaris": "./src/autolaris.ts",

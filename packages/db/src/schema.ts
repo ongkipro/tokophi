@@ -1945,6 +1945,8 @@ export const storeSettings = pgTable("store_settings", {
   // Which SERVICES may carry it is not a merchant choice — KiriminAja reports a per-service `cod`
   // flag (see kaServices()), and the platform narrows that further. See ADR/BACKLOG.
   codEnabled: boolean().notNull().default(false),
+  /** Days after receipt the store accepts a return request (1–90, check in 0119). NULL = not declared. */
+  returnWindowDays: integer(),
   // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),
