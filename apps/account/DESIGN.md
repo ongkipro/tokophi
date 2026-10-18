@@ -281,6 +281,8 @@ flex column with `align-items: center`; it now stretches and its heading and lea
 (`design/renders/390_kosong_.png`, `design/renders/1440_kosong_.png`). This last change is not re-reviewed.
 Open reviewer findings are listed in `BUILD-LOG.md` (2026-10-18) and `design/review.md`.
 
+Revision after the market review (2026-10-19, spec §19; after the review cap, so none of this is reviewed): Beranda no longer repeats the strip's order and "Bantuan" is "Pintasan" (`design/renders/1440_.png`); a delivered order leads with Produk, "Bukti pesanan" is its primary action and the step list is one line (`design/renders/1440_orders_PHI-713020233OA7.png`); Akun gained "Tutup akun" (`design/renders/390_account.png`, `design/renders/1440_account.png`).
+
 Remaining trade-offs: the bottom bar appears mid-page in full-page phone captures (it is `position:
 fixed`; on a device it stays at the bottom). Seed product images are served from the production
 storefront host (public assets; no personal data).

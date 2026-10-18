@@ -32,11 +32,13 @@ const STEPS: [string, string][] = [
   ["selesai", "Pesanan selesai"],
 ];
 const stepAt = STEPS.findIndex(([k]) => k === order.status);
-// A delivered order has nothing left to do: its last step is done, not "current".
+// A delivered order has nothing left to track: no step list, one line.
 const finished = order.status === "selesai";
 const courier = courierName(order.courier);
 // An in-flight order is opened for its shipping progress; payment leads only while unpaid.
 const shipFirst = !unpaid && (order.status === "diproses" || order.status === "dikirim");
+// A delivered order is reopened for what was bought, so Produk leads.
+const productFirst = order.status === "selesai";
 const payHost = pay?.url ? new URL(pay.url).hostname : null;
 ---
 <Layout title={`${s.label} · ${order.number}`} active="pesanan" back={{ href: "/orders", label: "Kembali ke pesanan" }}>
@@ -63,10 +65,10 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
             <a class="button primary" href="#pengiriman">Lihat pengiriman</a>
             <button class="button secondary" type="button" data-copy="awb" hidden>Salin resi</button>
           </>
-        ) : wa ? (
+        ) : productFirst || !wa ? null : (
           <a class="button primary" href={wa} rel="noopener noreferrer" target="_blank">Hubungi {order.storeName}</a>
-        ) : null}
-        <a class="button secondary" href={`${base}/receipt`}>Bukti pesanan</a>
+        )}
+        <a class={`button ${productFirst ? "primary" : "secondary"}`} href={`${base}/receipt`}>Bukti pesanan</a>
       </div>
     </section>
 
@@ -77,7 +79,7 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
       <a href={`${base}/receipt`}>Bukti pesanan</a>
     </nav>
 
-    <div class={`stack order-main-col${shipFirst ? " ship-first" : ""}`}>
+    <div class={`stack order-main-col${shipFirst ? " ship-first" : ""}${productFirst ? " product-first" : ""}`}>
       <section class="section-card" id="pembayaran" aria-labelledby="pay-h">
         <h2 id="pay-h">Pembayaran</h2>
         {!pay ? (
@@ -124,12 +126,14 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
             </dd>
           </div>
         </dl>
-        {stepAt >= 0 ? (
+        {finished ? (
+          <p class="field-help">Pesanan ini sudah selesai.</p>
+        ) : stepAt >= 0 ? (
           <ol class="timeline" aria-label="Perjalanan pesanan">
             {STEPS.map(([, label], i) => (
-              <li class={`timeline-row ${i < stepAt || (finished && i === stepAt) ? "done-step" : i === stepAt ? "current-step" : "pending-step"}`} aria-current={i === stepAt && !finished ? "step" : undefined}>
+              <li class={`timeline-row ${i < stepAt ? "done-step" : i === stepAt ? "current-step" : "pending-step"}`} aria-current={i === stepAt ? "step" : undefined}>
                 <span class="timeline-dot" aria-hidden="true"></span>
-                <div><strong>{label}</strong><span class={i < stepAt || finished ? "sr-only" : undefined}>{i < stepAt || finished ? "Selesai" : i === stepAt ? "Saat ini" : "Berikutnya"}</span></div>
+                <div><strong>{label}</strong><span class={i < stepAt ? "sr-only" : undefined}>{i < stepAt ? "Selesai" : i === stepAt ? "Saat ini" : "Berikutnya"}</span></div>
               </li>
             ))}
           </ol>

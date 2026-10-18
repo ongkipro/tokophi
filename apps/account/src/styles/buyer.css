@@ -347,3 +347,6 @@ html { background: var(--background); }
 .state-card:has(.howto) { align-items: stretch; }
 .state-card:has(.howto) :is(h2, p) { text-align: left; }
 .state-card:has(.howto) .howto { margin-inline: 0; }
+
+/* Review round 12: a delivered order leads with what was bought. */
+.order-main-col.product-first #produk { order: -1; }

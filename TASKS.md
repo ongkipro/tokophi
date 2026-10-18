@@ -1097,7 +1097,7 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 
 ## Stage 10: TokoΦ Account — Buyer Account (phased)
 
-Spec/PRD: `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §17 **rev 2** (requirements `ACC-1`…`ACC-14`, decisions D-1…D-5, owner questions OD-1…OD-7). **Phase 1 needs no messaging provider** (Google sign-in + order claim token); phase 2 = phone OTP after Task 8.38; phase 3 = affiliate binding after Stage 9 merges. Built locally only; production is Task 5.8. ⚠️ **No migration until `feat/store-affiliate` (`0116`) is on `main`** — the buyer migration takes the next number after it, re-checked against `origin/main`'s journal at the time.
+Spec/PRD: `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §17 **rev 2** (requirements `ACC-1`…`ACC-15`, decisions D-1…D-5, owner questions OD-1…OD-7). **Phase 1 needs no messaging provider** (Google sign-in + order claim token); phase 2 = phone OTP after Task 8.38; phase 3 = affiliate binding after Stage 9 merges. Built locally only; production is Task 5.8. ⚠️ **No migration until `feat/store-affiliate` (`0116`) is on `main`** — the buyer migration takes the next number after it, re-checked against `origin/main`'s journal at the time.
 
 Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 → 10.7 → 10.8 → 10.4 → 10.9 → 10.10 → 10.11.
 
@@ -1219,6 +1219,20 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 - **Change:** a committed Playwright sweep of every route against `astro build`; design-gate with independent review.
 - **Done when:** `astro check` 0, account tests green, build + sweep green, `design-gate.py apps/account` exit 0.
 - **Status:** `[~]` **2026-10-18** — done: `astro check` 0 errors, account + db tests 188/188 on the branch DB, `astro build` OK, committed `scripts/check-ui.mjs` PASS (18 routes × 7 viewports + negative sweep) against the dev server. **NOT done: `design-gate.py apps/account` exits 1 on `review` only** — the independent visual review ran 5 more rounds after the owner cleared the log (2026-10-18), all REVISE with shrinking, mostly subjective findings (open list: `apps/account/design/review.md`); cap reached, owner decides whether to clear the log again. The sweep ran against the dev server, not the production build; the built server was not driven.
+
+### Task 10.20: Close the Account (ACC-15)
+- **Requirement:** `ACC-15`
+- **Target Files:** `apps/account/src/data/account.ts` (`closeAccount`), `apps/account/src/data/account-data.test.ts`, `apps/account/src/pages/account/index.astro`, `apps/account/src/pages/masuk.astro`
+- **Change:** self-service "Tutup akun" with an explicit confirm step; refused while a programme owes the account a ready or held commission; the Google `sub` becomes an inert `closed:<id>` marker (the identity check constraint needs one identity column), so the same Google identity later starts a new account.
+- **Done when:** real-Postgres test: sessions revoked (row, not just unusable), links revoked, claims and addresses gone, the order row byte-identical, affiliate row detached and kept, second close refused, same identity ⇒ a different account, another account untouched; unpaid commission ⇒ refused and nothing changes. Mutations (no owed check, sessions kept, claims kept, addresses kept, affiliate not detached) each go red.
+- **Status:** `[x]` **DONE 2026-10-19** — 2 tests, 5 mutations red; live: closing a throw-away account signs it out and shows the sign-in notice; the demo account with unpaid commission is refused. **Not covered:** deletion of backups or store-side copies (OD-6, spec §19.3).
+
+### Task 10.21: Market Review — Content and Spec Pass
+- **Requirement:** spec §19 (constraints: ACC-12, ACC-14, ACC-15)
+- **Target Files:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` (§17.6, §17.13, §18.5, §18.6, §19), `specs/docs/tasks/2026-10-19-account-market-research.md`, `apps/account/src/pages/index.astro`, `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** research the Indonesian market (evidence-graded), record what it changes and what it does not (R1–R8), and apply the content fixes it supports: no repeated order on Beranda, "Pintasan", finished-order detail leads with Produk and "Bukti pesanan".
+- **Done when:** the spec carries §19 with a decision per finding and OD-9…OD-11 for what the data cannot yet support; `verify:doc-authority` and `verify:traceability` pass.
+- **Status:** `[x]` **DONE 2026-10-19.** Open owner decisions: OD-9 (return/complaint window), OD-10 (store-side tax on commission), OD-11 (affiliate clicks), OD-6 (privacy/retention review, includes confirming PP 33/2026 against its text).
 
 ### Task 10.14: Phase 2 — Phone OTP Sign-in, Add Phone, Full Linked-Store History
 - **Requirement:** `ACC-1 (constraints: ACC-2, ACC-5)`

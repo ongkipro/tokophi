@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-18 17:43 UTC] — ACCOUNT · Tasks 10.20–10.21: market research, spec pass, account closure (ACC-15)
+Executor: Main Session (Claude Code). Branch `feat/accounts` (worktree `tokophi-accounts`), local only, uncommitted since commit `7c401ac8`. Owner: "riset dulu berdasarkan market indonesia baru sempurnakan doc nya dan lanjutkan development".
+- **Research:** evidence-graded note `specs/docs/tasks/2026-10-19-account-market-research.md` (Shopee/Tokopedia order status and return windows, Xendit 2026 payment report, UU PDP / PP 33/2026 consent, Shopee/TikTok affiliate payout and tax). Weak spots recorded, not smoothed over: nothing found on phone-OTP vs Google preference; PP 33/2026 text not read (page 403, summary only); no current marketplace payout schedule or tax rate verified; Tokopedia help page timed out.
+- **Spec:** `TOKOPHI_ACCOUNT_SPEC.md` §19 (R1–R8, one decision each), ACC-15, OD-9 (return/complaint window), OD-10 (store-side tax on commission), OD-11 (affiliate clicks), §17.6/§18.5/§18.6 updated; `REQUIREMENTS.md` ACC-15 MET; `TASKS.md` 10.20, 10.21.
+- **Built:** `closeAccount` + "Tutup akun" on `/account` + sign-in notice. Found by its own test: `buyer_accounts_identity_check` forbids NULL on both identity columns, so the Google `sub` becomes `closed:<id>`. Content pass: no repeated order on Beranda, "Pintasan", finished order leads with Produk and "Bukti pesanan", one-line completed state.
+- **Verified:** `vitest run apps/account packages/db` 26 files / 190 tests on `tokophi_accounts`; closure mutations (no owed check, sessions kept, claims kept, addresses kept, affiliate not detached) each red, restored green — the first sessions mutation was green and the test was strengthened to read the session row; `astro check` 0 errors; `check-ui.mjs` PASS (18 routes × 7 viewports) against the Tailscale dev origin; live: a throw-away account closes and is signed out, the demo account with unpaid commission is refused and stays signed in.
+- **NOT done / unchanged:** `design-gate.py` still FAILS on `review` (cap reached; today's edits are not reviewed). Deleting backups and store-side copies is not part of closure (OD-6). No return/complaint path, no click data, no tax text (by decision, §19).
+- **Side effects:** a closed test account `close-demo@demo.local` exists on the branch DB only; my curl/capture/sweep sessions were revoked. The dev server was restarted on the Tailscale IP (PID in the session scratchpad).
+
 ### [2026-10-18 16:52 UTC] — ACCOUNT · Tasks 10.16–10.19: prototype UI port, status close-out, design gate NOT passed
 Executor: Main Session (Claude Code, resumed after an interrupted session). Branch `feat/accounts` (worktree `tokophi-accounts`), local only, uncommitted. Owner: "lanjutkan" → "ya lanjutkan dan sempurnakan".
 - **Found on resume:** the shell and every buyer/affiliate screen already existed uncommitted from the 2026-10-16 session; TASKS 10.16–10.18 still read `[~]`/`[ ]`; the review round-5 fixes were written but never re-rendered or re-reviewed. Statuses now match disk.

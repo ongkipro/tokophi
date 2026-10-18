@@ -624,6 +624,7 @@ email sending of any kind (the platform has no email provider either).
 | "Toko" — linked stores with a way back | 1 | ACC-6 |
 | Saved addresses | 1 | ACC-7 |
 | Unlink a store | 1 | ACC-8 |
+| Close the account (self-service, irreversible) | 1 — built 2026-10-19 | ACC-15 |
 | Phone OTP sign-in / add phone to an account | 2 (blocked on Task 8.38) | ACC-1, ACC-2 |
 | Full history of a linked store for a phone-verified buyer | 2 | ACC-5 |
 | **Affiliate area — one account, many stores** (apply while signed in, accept a seller invitation, every store's code/link/commissions) | **1 — built 2026-10-15** (owner: "akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal") | ACC-14, AFFILIATE_SPEC `F-A15` |
@@ -658,6 +659,9 @@ IDs `ACC-*`, EARS, MoSCoW. **Rev-1 rows keep their IDs**; changed ones are marke
   - Acceptance: Given a guest order, When the success page renders, Then the link carries a token that verifies for that order id only and expires after 30 days; with the account origin env unset the page renders exactly as before; the order API's existing fields are byte-identical.
 - **ACC-14** (Should, phase 3, event) Where the store affiliate programme exists, when a signed-in buyer opens an affiliate invitation link issued by the seller on approval and accepts it, the system shall bind that affiliate record to the buyer account and show that affiliate's commissions for that store only.
   - Acceptance: Given an approved affiliate in store A, When the buyer accepts A's invitation, Then the account shows A's commissions for that affiliate and nothing from store B; an invitation for another affiliate or an already-bound one creates nothing. Matching by email or phone alone binds nothing.
+
+- **ACC-15** (Must, phase 1, event) When the signed-in buyer confirms "Tutup akun", the system shall revoke every session, delete the account's saved addresses and order claims, revoke every store link, detach the account from its affiliate records, blank name/email/phone and replace the Google identity with an inert marker, and leave every store-owned row unchanged; while any of the account's programmes still owes it a ready or held commission it shall refuse and name those stores.
+  - Acceptance: Given an account with a link, a claim, an address, an affiliate record and two sessions, When it closes, Then status is `closed`, no session row is unrevoked, no link is active, no claim or address remains, the order row is byte-identical, the affiliate row survives with no account, a second close is refused, and signing in with the same Google identity creates a different, empty account; Given an unpaid commission, When it tries to close, Then nothing changes and the refusal names the store.
 
 
 ### 17.8 Technical decisions (ADR-lite)
@@ -729,6 +733,9 @@ when that task is done.
 | OD-1 | Messaging provider (WhatsApp Business API vs SMS vendor), sender identity, budget, fallback — **now Task 8.38**. | Phase 2. |
 | OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed). | Task 10.3. |
 | OD-3 | ✅ **Answered 2026-10-15 (owner: "oke boleh"): YES**, then the same day **widened** ("akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal"): the affiliate area is **phase 1** of this app — one account, many stores; existing rows bound by seller invitation (ACC-14), new ones by applying while signed in. | — (built on `feat/accounts`) |
+| OD-9 | Return / complaint path: does the buyer account show a store-defined return window and a way to open a complaint, as the marketplaces do (Shopee: 2/7/15 days by store tier)? Needs a store setting and an order event; today the order page says only "hubungi toko". See §19. | A return-request task. |
+| OD-10 | Store-side withholding on affiliate commission (PPh, NPWP collection) — stores pay affiliates directly, so the duty is theirs, not the platform's. Owner + tax adviser; **no screen may say the platform deducts tax**. See §19. | Any commission-payout copy or flow. |
+| OD-11 | Affiliate click tracking (the marketplaces show clicks → orders → commission). There is no click data; a storefront change, not an account-app one. | A "Klik" column. |
 | OD-8 | Should the account app list stores with an open affiliate programme (a directory)? | **Open — default no** in phase 1 (AFFILIATE_SPEC OD-A6). |
 | OD-4 | ~~Proof for claiming an order~~ — **answered by D-3** (signed order-specific token, single claimant). **Validity CLOSED 2026-10-15** — owner delegated ("rekomendasimu kau sesuaikan"): **30 days**. It covers delivery plus the complaint window, keeps a leaked link short-lived, and an order missed after 30 days is still reachable in phase 2 by verified-phone claim (ACC-5). | — |
 | OD-5 | ✅ **Answered 2026-10-15 (owner: "local development dulu sampai final"):** local development only until the feature is final — no push, no PR, no production. When it ships is decided then. | Deploy only. |
@@ -878,7 +885,8 @@ values kept, success notice as `role="status"`, confirm dialogs for destructive 
 | Payment simulation, QR image | §12: QR fixtures never become fake images; no payment action in phase 1 | — |
 | Tracking timeline / events | No shipment-event table | shipping events task |
 | COD trust status | Gate 13 | gate 13 |
-| "Minta salinan data", "Ajukan penutupan akun" | Needs operator capability + privacy review | OD-6 |
+| "Minta salinan data" | Needs operator capability + privacy review | OD-6 |
+| "Ajukan penutupan akun" | **Built as self-service "Tutup akun" (ACC-15, 2026-10-19)** — no operator intake needed; retention of backups and store-side copies still needs the privacy review | OD-6 (retention only) |
 | Guest checkout demo, merchant projection sketch | Belong to the storefront / Seller apps | — |
 | Prototype banner "Mode Uji Coba Lokal" | The app runs on real rows; a dev-only footer note replaces it | — |
 
@@ -892,3 +900,47 @@ values kept, success notice as `role="status"`, confirm dialogs for destructive 
 - `astro check` 0 errors, account tests green on the branch DB, `astro build` succeeds, and the
   committed `apps/account/scripts/check-ui.mjs` drives the routes against the build.
 - design-taste gate (`design-gate.py apps/account`) exits 0 with an independent visual review.
+- ACC-15: the closure test above (real Postgres; five mutations proved red) and the live refusal for an
+  account with unpaid commission.
+
+## 19. Market research and content review (2026-10-19)
+
+Owner direction: research the Indonesian market before perfecting content, UX and this document.
+Method, sources and **evidence grades** are in
+[`tasks/2026-10-19-account-market-research.md`](tasks/2026-10-19-account-market-research.md). The grade
+matters: several findings rest on press or vendor pages, none was verified inside a marketplace app,
+and for sign-in preference **nothing was found**. A decision below that rests on a weak grade says so.
+
+### 19.1 What the research changes
+
+| # | Finding (grade) | Decision |
+|---|---|---|
+| R1 | Marketplaces tab orders by the buyer's next action (belum bayar → perlu dikirim → dikirim → selesai → batal/pengembalian) and give a tracking entry on the order (A/B). | **Already matched** (§6 Orders list, status-first detail). No change. |
+| R2 | Shopee completes orders by the system ~2 days after arrival and states a short, tiered return window (A for the windows, B for the 2026 change). | **Deferred — OD-9.** We have no return event and no store-defined window; inventing "7 hari" would be a claim with no data behind it. The order page keeps "hubungi toko". |
+| R3 | E-wallet ~60% of purchases, QRIS fastest-growing, COD ~40% and declining, 51% abandon when their method is missing (B/C, Xendit-only, n=1,000). | **No account change.** The order page already shows method, status, fees and "bayar ke kurir"; method availability is a checkout concern. |
+| R4 | No evidence on phone/WhatsApp OTP vs Google (N; vendor claims only). | **Phase order unchanged** (Google now, phone OTP phase 2 on Task 8.38). The preference is an experiment to run, never a sentence to publish. |
+| R5 | UU PDP gives withdrawal, stop and deletion rights; PP 33/2026 (reported, text unread) wants consent that is specific, separate from T&C, and informed beforehand (B). | Claim consent already satisfies the reported shape (separate unticked checkbox, scope listed above it, per-store withdrawal). **Gap closed: ACC-15 "Tutup akun".** Legal confirmation against the PP text stays OD-6. |
+| R6 | Affiliate commission is shown as estimate → validated → paid; only completed, unreturned orders count (C). | **Vocabulary kept** (Siap dibayar / Ditahan / Dibayar, H+N hold). It is the same model under different words. |
+| R7 | Marketplaces withhold tax on affiliate payout and collect a 16-digit NPWP (B for the principle; current rates unverified). | **TokoΦ stores pay directly, so no platform withholding exists.** No screen may imply it; the store-side duty is OD-10. |
+| R8 | Marketplace affiliate dashboards show clicks (C). | **Not built — OD-11.** There is no click data; a column would be invented. |
+
+### 19.2 Content review of the built screens — what changed
+
+- **Beranda:** the order shown in the status strip is no longer repeated in "Pesanan terbaru"; the
+  column called "Bantuan" held settings shortcuts, so it is "Pintasan". The count tile for saved
+  addresses was dropped earlier (rounds 6–7).
+- **Order detail:** a delivered order has nothing to track, so the four-step list (derived from status,
+  with no times) is one line; its primary action is "Bukti pesanan" and Produk leads, because that is why
+  a buyer reopens a finished order. The "Hubungi toko" button is not duplicated at the top of a finished
+  order; contact stays in "Butuh bantuan?". An in-flight order still leads with Pengiriman.
+- **Akun:** "Tutup akun" (ACC-15) with a plain statement of what goes and what stays, a refusal that names
+  the store when commission is still owed, and a sign-in notice afterwards.
+- **Left as is, on purpose:** the Belanja/Affiliate switch on every phone page (the accepted prototype
+  carries it); "Beli lagi" without a price (the account has no price projection and must not show a stale
+  one); two scrolling chip rows on Komisi.
+
+### 19.3 What closure does not do
+
+It does not delete backups or store-side copies of the buyer's data (names and phones a store holds on its
+own customer and affiliate rows). Those follow each store's retention and the privacy review (OD-6). The
+product copy says exactly that: store records "tidak berubah dan tetap menjadi catatan toko".

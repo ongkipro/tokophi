@@ -23,7 +23,6 @@ const unpaid = orders.filter(isUnpaid);
 const shipped = orders.filter((o) => o.status === "dikirim" && o.awb);
 const active = orders.filter((o) => o.status === "baru" || o.status === "diproses" || o.status === "dikirim");
 const ready = affStores.reduce((s, x) => s + x.readyIdr, 0);
-const recent = orders.slice(0, 3);
 // The store name under a "Beli lagi" product only helps when the products come from different stores.
 const multiStore = new Set(again.map((g) => g.storeName)).size > 1;
 const name = account.name?.trim() || null;
@@ -33,6 +32,9 @@ const firstShip = shipped[0];
 // A quiet status strip when nothing needs doing but an order is still moving (no pay/ship card above).
 const firstActive = !firstPay && !firstShip ? active[0] : undefined;
 const activeStatus = firstActive ? statusOf(firstActive) : null;
+// The strip already carries one order; the list below does not repeat it.
+const stripOrder = firstPay ?? firstShip ?? firstActive;
+const recent = orders.filter((o) => o !== stripOrder).slice(0, 3);
 ---
 <Layout title="Beranda" active="beranda">
   <header class="page-header">
@@ -115,7 +117,9 @@ const activeStatus = firstActive ? statusOf(firstActive) : null;
           <h2 id="recent-h">Pesanan terbaru</h2>
           {orders.length > 0 && <a href="/orders" class="link-button">Lihat semua ({orders.length})</a>}
         </div>
-        {recent.length === 0 ? (
+        {orders.length > 0 && recent.length === 0 ? (
+          <p class="field-help">Pesanan Anda yang lain akan tampil di sini. Pesanan di atas sudah yang terbaru.</p>
+        ) : recent.length === 0 ? (
           <section class="state-card" role="status">
             <h2>Simpan pesanan pertama</h2>
             <p>Pesanan muncul di sini setelah Anda menyimpannya ke akun:</p>
@@ -148,7 +152,7 @@ const activeStatus = firstActive ? statusOf(firstActive) : null;
 
     <div class="stack">
       <section class="dashboard-section" aria-labelledby="help-h">
-        <div class="section-heading"><h2 id="help-h">Bantuan</h2></div>
+        <div class="section-heading"><h2 id="help-h">Pintasan</h2></div>
         <div class="service-menu-card">
           <details class="service-menu-details">
             <summary class="service-menu-item">
