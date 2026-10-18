@@ -1073,6 +1073,14 @@ mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`;
 - **Escalation Conditions:** OD-A1 chooses a claw-back record → new migration, re-plan.
 - **Status:** `[ ]` **BLOCKED — owner decision OD-A1.**
 
+### Task 9.14: Affiliate Commission Paid from the Seller's Balance After True Delivery
+- **Requirement:** `F-A7`
+- **Tracing:** changes F-A7 (payable only after delivery + hold) per [ADR 0018](specs/decisions/0018-affiliate-commission-paid-from-seller-balance.md) (recorded in `DECISIONS.md`); owner 2026-10-19 — *"dana affiliate bisa di cairkan setelah barang benar2 terkirim dan memotong saldo seller"*.
+- **Risk Level:** R4 — moves money, widens custodian liability, may make the platform a tax-withholding party.
+- **Change (proposed, ADR 0018 §3):** record the source of `selesai` (courier vs seller) on the transition; only a courier-written one starts the hold; at `eligible_at` one seller ledger debit per commission (partial unique index); the affiliate requests a payout through the seller-payout path; "Tandai dibayar" retired or re-meant; account "Dibayar" = paid by the platform.
+- **Done when:** ADR 0018 is *accepted* (Q1–Q8 answered, tax adviser on Q5), then: real-Postgres tests (one debit per commission, no debit before delivery + hold, `retur` before the debit writes none), `FINANCE.md` money map gains the row, `AFFILIATE_SPEC.md` §12 superseded.
+- **Status:** `[ ]` **BLOCKED** — ADR 0018 is *proposed*; the tax answer (Q5) does not exist and `selesai` carries no source marker (Q2). Nothing is implemented; the built rule (merchant pays outside TokoΦ) still runs.
+
 ### Task 9.13: Interim Affiliate Dashboard by Signed Link
 - **Requirement:** `F-A18`
 - **Status:** `SUPERSEDED` **2026-10-15 by Task 9.11** — built and browser-checked the same day (BUILD-LOG), then removed on `feat/accounts` before any merge when the owner asked for an affiliate account "seperti akun user … banyak toko bukan personal". Removed: `packages/lib/src/affiliate-link{,.test}.ts` + export, the storefront `/affiliate/saya` page and its data function, the layout `pixels` switch, the admin "Salin link dashboard" action, `AFFILIATE_LINK_SECRET` (env-health, compose).
@@ -1225,7 +1233,7 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 - **Target Files:** `apps/account/src/data/account.ts` (`closeAccount`), `apps/account/src/data/account-data.test.ts`, `apps/account/src/pages/account/index.astro`, `apps/account/src/pages/masuk.astro`
 - **Change:** self-service "Tutup akun" with an explicit confirm step; refused while a programme owes the account a ready or held commission; the Google `sub` becomes an inert `closed:<id>` marker (the identity check constraint needs one identity column), so the same Google identity later starts a new account.
 - **Done when:** real-Postgres test: sessions revoked (row, not just unusable), links revoked, claims and addresses gone, the order row byte-identical, affiliate row detached and kept, second close refused, same identity ⇒ a different account, another account untouched; unpaid commission ⇒ refused and nothing changes. Mutations (no owed check, sessions kept, claims kept, addresses kept, affiliate not detached) each go red.
-- **Status:** `[x]` **DONE 2026-10-19** — 2 tests, 5 mutations red; live: closing a throw-away account signs it out and shows the sign-in notice; the demo account with unpaid commission is refused. **Not covered:** deletion of backups or store-side copies (OD-6, spec §19.3).
+- **Status:** `[x]` **DONE 2026-10-19, hardened the same day after an independent review** — closure now also deactivates the account's `aktif`/`menunggu` affiliate rows (attribution only credits `aktif`, so a detached live code would have kept accruing), blanks session device strings, takes the account-row lock (shared by claim, address, join and invitation acceptance so racing writes are refused), and checks what is owed under that lock. Tests across `account-data`, `buyer-data`, `addresses`; mutations (no owed check, sessions kept, claims kept, addresses kept, affiliate not detached or not deactivated, device string kept, claim/address/join guards removed) each red. Live: a throw-away account closes and is signed out; the demo account with unpaid commission is refused. **Not covered:** deletion of backups or store-side copies (OD-6, spec §19.3); the Astro POST handler itself (cookie delete / redirect) is checked by HTTP, not by a test.
 
 ### Task 10.21: Market Review — Content and Spec Pass
 - **Requirement:** spec §19 (constraints: ACC-12, ACC-14, ACC-15)
@@ -1239,14 +1247,14 @@ Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 
 - **Target Files:** `packages/db/drizzle/0119_store_return_window.sql` (+ journal), `packages/db/src/schema.ts`, `packages/lib/src/return-window.ts` (+ test), `apps/admin/lib/actions/retur.ts`, `apps/admin/components/admin/pengaturan/retur-card.tsx`, `apps/admin/app/(admin)/pengaturan/page.tsx`, `apps/account/src/data/orders.ts`, `apps/account/src/pages/orders/[number]/index.astro`
 - **Change:** nullable `store_settings.return_window_days` (check 1–90, idempotent migration, applied to branch DBs only); a "Kebijakan retur" card in Seller Pengaturan → Pengiriman; the order detail states "selama N hari setelah barang diterima" for shipped/delivered orders when declared, nothing otherwise.
 - **Done when:** helper test (normalise, 90 cap, null ⇒ nothing); real-Postgres test: null by default, each store's own value, no leak across stores, the database refuses 0/-1/91; the three mutations (join not bound to the store, projection dropped, no cap) go red; doc counts 120 / 0119.
-- **Status:** `[x]` **DONE 2026-10-19** — account side proved live (set 7 ⇒ line on a delivered order, none on an in-flight one, gone after reverting to NULL). **Not proved:** the Seller card was type-checked and linted but **not driven in a browser** (no Seller session in this environment); its save mirrors `setCodEnabled`.
+- **Status:** `[x]` **DONE 2026-10-19; parser hardened the same day** — `normalizeReturnWindow` stripped non-digits, so "7,5" became 75 days and "1.000" became 1; it is now `parseReturnWindow`, strict, and the Seller sees an error instead of a guessed promise. Account side proved live (set 7 ⇒ line on a delivered order, none on an in-flight one, gone after reverting to NULL); the status gates are pure functions with tests. **No test for `saveReturnWindow` itself** (session + capability path). **Not proved:** the Seller card was type-checked and linted but **not driven in a browser** (no Seller session in this environment); its save mirrors `setCodEnabled`.
 
 ### Task 10.23: Return / Complaint Hand-off to the Store (OD-9 stage 2)
 - **Requirement:** `ACC-16`
 - **Target Files:** `apps/account/src/pages/orders/[number]/index.astro`
 - **Change:** an "Ajukan retur / komplain" button that opens the store's WhatsApp with a prefilled message (order number, store). No ticket system and no return status.
 - **Done when:** the button exists only when the store has a WhatsApp number; the message names the order; browser-checked.
-- **Status:** `[ ]`
+- **Status:** `[x]` **DONE 2026-10-19** — shown for `dikirim`/`selesai` orders **whose store has a WhatsApp number**, whatever window the store declared (RR-10, a Main Session rule the owner has not confirmed yet), absent for in-process orders; on a delivered order the button sits in the summary card (it was at the page bottom, ~2100 px down on a phone); helper tests (names store + order, prompts proof, promises nothing, wa.me encoding). Checked by HTTP against the live dev server, **not in a browser or on a phone**; the WhatsApp chat itself was not opened.
 
 ### Task 10.14: Phase 2 — Phone OTP Sign-in, Add Phone, Full Linked-Store History
 - **Requirement:** `ACC-1 (constraints: ACC-2, ACC-5)`

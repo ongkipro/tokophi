@@ -11,6 +11,14 @@
 > disagree, code wins — fix this file. Revised 2026-10-15 against the branch code (owner: "prd baru
 > sekalian affiliate dan user akun kau buat dan sempurnakan, untuk wa dan sms nanti aja masuk task").
 
+
+> **⚠️ Payout rule under change — owner direction 2026-10-19, NOT yet implemented.** *"dana affiliate bisa
+> di cairkan setelah barang benar2 terkirim dan memotong saldo seller."* Everything below that says the
+> merchant pays outside TokoΦ, that TokoΦ never moves affiliate money, or that tax is the merchant's
+> describes the code **as built on 2026-10-15** and will be superseded by
+> [ADR 0018](decisions/0018-affiliate-commission-paid-from-seller-balance.md) once that ADR is accepted
+> (its open questions Q1–Q8 are listed there). Until then the built behaviour above is what runs.
+
 ## 1. Overview
 
 Each merchant can run its own affiliate programme: people promote the store with a personal link or
@@ -262,6 +270,7 @@ finance owner and changes nothing here.
 | ID | Question | Recommended default | Owner | Blocks |
 |---|---|---|---|---|
 | OD-A1 | A `retur` after `dibayar`: flag only, or record a claw-back the merchant deducts from the next payment? | **Decided (default stands): flag only** (`F-A14`); TokoΦ never moves the money, so it cannot claw it back. Paying only at delivery + 3 days already shrinks the window. | Owner | Task 9.10 |
+| OD-A5 | **Owner direction 2026-10-19:** pay affiliates from the seller's balance after true delivery (replaces "merchant pays outside TokoΦ"). Mechanics Q1–Q8 undecided; tax answer required first. | **Proposed** — [ADR 0018](decisions/0018-affiliate-commission-paid-from-seller-balance.md) | Owner + tax adviser | Any payout code |
 | OD-A2 | Defaults: rate and hold days (0–90 allowed). | **Decided 2026-10-15: 10 %, 3 days after delivery (H+3)**, seller can change both (store default + per-product rate) | Owner | — |
 | OD-A3 | May an affiliate sign in with the TokoΦ buyer account to see commissions? (Same question as the account spec's OD-3.) | **Decided 2026-10-15: yes** — one identity per person, no second login (`F-A15`); still waits for Stage 10 | Owner | Task 9.11 |
 | OD-A4 | Tax: export only (`F-A11`), or also a tax note on the export? | **Decided 2026-10-15 (owner delegated): CSV export + a one-line note that withholding is the merchant's duty.** The PPh 21 reference in §3 stays marked as a secondary source. | Owner | — |

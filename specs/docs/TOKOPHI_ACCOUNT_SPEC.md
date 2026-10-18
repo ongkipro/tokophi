@@ -661,8 +661,8 @@ IDs `ACC-*`, EARS, MoSCoW. **Rev-1 rows keep their IDs**; changed ones are marke
 - **ACC-14** (Should, phase 3, event) Where the store affiliate programme exists, when a signed-in buyer opens an affiliate invitation link issued by the seller on approval and accepts it, the system shall bind that affiliate record to the buyer account and show that affiliate's commissions for that store only.
   - Acceptance: Given an approved affiliate in store A, When the buyer accepts A's invitation, Then the account shows A's commissions for that affiliate and nothing from store B; an invitation for another affiliate or an already-bound one creates nothing. Matching by email or phone alone binds nothing.
 
-- **ACC-15** (Must, phase 1, event) When the signed-in buyer confirms "Tutup akun", the system shall revoke every session, delete the account's saved addresses and order claims, revoke every store link, detach the account from its affiliate records, blank name/email/phone and replace the Google identity with an inert marker, and leave every store-owned row unchanged; while any of the account's programmes still owes it a ready or held commission it shall refuse and name those stores.
-  - Acceptance: Given an account with a link, a claim, an address, an affiliate record and two sessions, When it closes, Then status is `closed`, no session row is unrevoked, no link is active, no claim or address remains, the order row is byte-identical, the affiliate row survives with no account, a second close is refused, and signing in with the same Google identity creates a different, empty account; Given an unpaid commission, When it tries to close, Then nothing changes and the refusal names the store.
+- **ACC-15** (Must, phase 1, event) When the signed-in buyer confirms "Tutup akun", the system shall revoke every session, delete the account's saved addresses and order claims, revoke every store link, detach the account from its affiliate records and set those still `aktif` or `menunggu` to `nonaktif` (so no commission can accrue to a record nobody can reach), blank name/email/phone and device strings and replace the Google identity with an inert marker, and leave orders, customers, payments and the ledger unchanged; while any of the account's programmes still owes it a ready or held commission it shall refuse and name those stores, writing nothing. Writes that race a closure are serialised on the account row and refused once it is closed.
+  - Acceptance: Given an account with a link, a claim, an address, an affiliate record and two sessions, When it closes, Then status is `closed`, no session row is unrevoked or keeps a device string, no link is active, no claim or address remains, the order row is byte-identical, an `aktif` affiliate row survives detached and `nonaktif` while a `ditolak` one keeps its status, a second close is refused, and signing in with the same Google identity creates a different, empty account; Given a held and a ready commission in two programmes, When it tries to close, Then nothing changes and the refusal names both stores; Given a closed account, When a claim, an address save, a join or an invitation acceptance is attempted, Then each is refused and writes nothing.
 
 - **ACC-16** (Should, phase 1, state) Where the store has declared a return window (`store_settings.return_window_days`, 1–90), the order detail of an order that is on its way or delivered shall state it as "N hari setelah barang diterima"; where the store has declared none it shall say nothing about returns.
   - Acceptance: Given store A with 7 and store B with no setting, When the buyer opens a delivered order of each, Then A's page states 7 days and B's page states nothing; an in-flight-but-unshipped order states nothing; no date is shown because the data holds no arrival date; the value is never read from `affiliate_hold_days`.
@@ -738,7 +738,7 @@ when that task is done.
 | OD-2 | Host: new `apps/account` at `account.tokophi.com` (proposed). | Task 10.3. |
 | OD-3 | ✅ **Answered 2026-10-15 (owner: "oke boleh"): YES**, then the same day **widened** ("akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal"): the affiliate area is **phase 1** of this app — one account, many stores; existing rows bound by seller invitation (ACC-14), new ones by applying while signed in. | — (built on `feat/accounts`) |
 | OD-9 | ✅ **Answered 2026-10-19 (owner: "ya" to the recommendation):** a per-store, optional return window with no default — shown to the buyer (stage 1, **built**, ACC-16), then a "minta retur / komplain" hand-off to the store's WhatsApp (stage 2, Task 10.23). No return-status tracking: that needs events and an approval flow, a separate task. Not `affiliate_hold_days` (a commission hold). | Stage 2 only. |
-| OD-10 | Store-side withholding on affiliate commission (PPh, NPWP collection) — stores pay affiliates directly, so the duty is theirs, not the platform's. Owner + tax adviser; **no screen may say the platform deducts tax**. See §19. | Any commission-payout copy or flow. |
+| OD-10 | Withholding on affiliate commission (PPh, NPWP collection). As built, stores pay affiliates directly (the duty is theirs); under DEC-015 / ADR 0018 the platform pays from the seller's balance, so the platform may be the withholding party. Owner + tax adviser; **no screen may say the platform deducts tax**. See §19, ADR 0018 Q5. | **Blocks ADR 0018** and any commission-payout copy or flow. |
 | OD-11 | Affiliate click tracking (the marketplaces show clicks → orders → commission). There is no click data; a storefront change, not an account-app one. | A "Klik" column. |
 | OD-8 | Should the account app list stores with an open affiliate programme (a directory)? | **Open — default no** in phase 1 (AFFILIATE_SPEC OD-A6). |
 | OD-4 | ~~Proof for claiming an order~~ — **answered by D-3** (signed order-specific token, single claimant). **Validity CLOSED 2026-10-15** — owner delegated ("rekomendasimu kau sesuaikan"): **30 days**. It covers delivery plus the complaint window, keeps a leaked link short-lived, and an order missed after 30 days is still reachable in phase 2 by verified-phone claim (ACC-5). | — |
@@ -925,7 +925,7 @@ and for sign-in preference **nothing was found**. A decision below that rests on
 | R4 | No evidence on phone/WhatsApp OTP vs Google (N; vendor claims only). | **Phase order unchanged** (Google now, phone OTP phase 2 on Task 8.38). The preference is an experiment to run, never a sentence to publish. |
 | R5 | UU PDP gives withdrawal, stop and deletion rights; PP 33/2026 (reported, text unread) wants consent that is specific, separate from T&C, and informed beforehand (B). | Claim consent already satisfies the reported shape (separate unticked checkbox, scope listed above it, per-store withdrawal). **Gap closed: ACC-15 "Tutup akun".** Legal confirmation against the PP text stays OD-6. |
 | R6 | Affiliate commission is shown as estimate → validated → paid; only completed, unreturned orders count (C). | **Vocabulary kept** (Siap dibayar / Ditahan / Dibayar, H+N hold). It is the same model under different words. |
-| R7 | Marketplaces withhold tax on affiliate payout and collect a 16-digit NPWP (B for the principle; current rates unverified). | **TokoΦ stores pay directly, so no platform withholding exists.** No screen may imply it; the store-side duty is OD-10. |
+| R7 | Marketplaces withhold tax on affiliate payout and collect a 16-digit NPWP (B for the principle; current rates unverified). | **As built, stores pay directly, so no platform withholding exists — but the owner's 2026-10-19 direction (DEC-015, ADR 0018) moves payment to the platform, which may make the platform the withholding party.** OD-10 is therefore **blocking** for that change, not deferred. No screen may imply the platform deducts tax until it is answered. |
 | R8 | Marketplace affiliate dashboards show clicks (C). | **Not built — OD-11.** There is no click data; a column would be invented. |
 
 ### 19.2 Content review of the built screens — what changed
@@ -939,6 +939,7 @@ and for sign-in preference **nothing was found**. A decision below that rests on
   order; contact stays in "Butuh bantuan?". An in-flight order still leads with Pengiriman.
 - **Akun:** "Tutup akun" (ACC-15) with a plain statement of what goes and what stays, a refusal that names
   the store when commission is still owed, and a sign-in notice afterwards.
+- **Return / complaint hand-off (Task 10.23):** shipped and delivered orders with a store WhatsApp number get "Ajukan retur / komplain", which opens the store's chat with an editable message naming the order and prompting photo/video proof. It is not gated by the store's window (RR-10) and states no legal basis.
 - **Left as is, on purpose:** the Belanja/Affiliate switch on every phone page (the accepted prototype
   carries it); "Beli lagi" without a price (the account has no price projection and must not show a stale
   one); two scrolling chip rows on Komisi.
@@ -948,3 +949,62 @@ and for sign-in preference **nothing was found**. A decision below that rests on
 It does not delete backups or store-side copies of the buyer's data (names and phones a store holds on its
 own customer and affiliate rows). Those follow each store's retention and the privacy review (OD-6). The
 product copy says exactly that: store records "tidak berubah dan tetap menjadi catatan toko".
+
+## 20. Rules register — for future reference and legal review (2026-10-19)
+
+Owner direction: record every rule in md for later reference or legal. This register is the single list of
+**product rules** for the TokoΦ Account (buyer + affiliate) and where each comes from. It states what was
+decided, by whom, what enforces it, and what is **not** legally confirmed. **It is not legal advice**, and a
+rule's presence here does not mean it is lawful — only that it is the product's rule. Each row has one owner
+elsewhere (the requirement, ADR or task named); change the rule there, then here.
+
+Status: **built** = enforced in code with a test; **decided** = owner ruling, not (fully) built; **proposed** =
+drafted by Main Session from research, owner has not confirmed.
+
+### 20.1 Identity, consent, data
+
+| ID | Rule | Source | Status | Enforced by / evidence | Legal note |
+|---|---|---|---|---|---|
+| RR-1 | A store's order reaches an account **only** through a signed, order-specific claim token plus the buyer's consent — never by matching email or phone. One claimant per order. | D-3, ACC-11/13 | built | `apps/account/src/data/orders.ts` `claimOrder`; `buyer-data.test.ts` | — |
+| RR-2 | The claim token is valid **30 days**. | OD-4, owner delegated 2026-10-15 ("rekomendasimu kau sesuaikan") | built | `packages/lib/src/claim-token.ts`, `claim-token.test.ts` | — |
+| RR-3 | **One account serves buying and affiliating across many stores**; each store's data stays apart. | DEC-016, owner 2026-10-15 | built | `apps/account`; negative sweeps in `check-ui.mjs` | — |
+| RR-4 | A store sees only its own orders; the account never shows another store's data; **unlinking changes no store-owned row**. | ACC-8, ACC-12 | built | `buyer-data.test.ts` (row byte-identical) | — |
+| RR-5 | Consent is a **separate, un-ticked** checkbox, with the scope listed above it, versioned (`CONSENT_VERSION`), withdrawable per store ("Putuskan"). | §9; R5 | built | `/klaim`; `buyer-data.test.ts` | Matches the *reported* shape of PP 33/2026 (specific, not bundled with T&C, informed first). **PP text not read — lawyer to confirm.** |
+| RR-6 | **Account closure is self-service and irreversible**: sessions revoked and device strings blanked, addresses and claims deleted, links revoked, affiliate records detached **and deactivated**, identity blanked; orders, customers, payments and the ledger untouched; refused while a programme owes the account money; writes racing it are serialised and refused. | ACC-15 | built | `closeAccount`; `account-data.test.ts` (5 mutations red) | Device strings on the session rows are blanked. **Known consequence:** the store keeps its affiliate record (name, phone, bank details it was given) as `nonaktif`; applying to the same store again with the same phone is refused as already registered, so a returning affiliate needs a fresh seller invitation. **Kept deliberately:** the consent record (`buyer_store_links`: consent version and time, status `revoked`) as evidence of what was agreed. Does **not** delete backups or store-side copies (names/phones a store holds). Retention = OD-6. UU PDP deletion-right fit **unconfirmed**. |
+| RR-7 | Sign-in is Google (phase 1); phone OTP is phase 2. **No statement about which Indonesians prefer** is published. | §17.6; R4 | built / decided | — | No evidence either way (research §3). |
+
+### 20.2 Orders and returns
+
+| ID | Rule | Source | Status | Enforced by / evidence | Legal note |
+|---|---|---|---|---|---|
+| RR-8 | A **store's return window is the store's own, optional, with no default**, 1–90 days, shown to the buyer only when declared, worded "N hari setelah barang diterima". No date is computed (no arrival date in the data). It is **never** read from `affiliate_hold_days`. | DEC-017, ACC-16 | built | migration `0119`; `buyer-data.test.ts`; `return-window.test.ts` | A store's window is store policy. Consumer rights on non-conforming goods (UU 8/1999 Pasal 4 h, 7 g, secondary sources) are **not** shown to depend on it. Klausula baku (Pasal 18) **not established**. |
+| RR-9 | A store that declared nothing causes the buyer to be told **nothing** about returns — never an invented "7 hari". | DEC-017 | built | `returnWindowLine` test | — |
+| RR-10 | The buyer's **complaint / return hand-off is available for any shipped or delivered order whose store has a WhatsApp number on file, whatever window the store declared or did not declare** (a store without one gets "Kunjungi toko" only), and the screen **states no legal basis**. | Research §7 (Main Session) | **built, owner to confirm the rule** (Task 10.23) | `returnRequestMessage` test; live: shown on a delivered order whose store declared no window, absent on an in-process one | PP 80/2019 articles on exchange / cancellation / dispute **not read**. |
+| RR-11 | A finished order has nothing to track, so no step list is shown; no timestamps are invented. | §19.2 | built | `orders/[number]/index.astro` | — |
+
+### 20.3 Affiliate money
+
+| ID | Rule | Source | Status | Enforced by / evidence | Legal note |
+|---|---|---|---|---|---|
+| RR-12 | A commission is **frozen at order time**, becomes payable only after the order is `selesai` **plus the store's hold days** (default 3), and a returned/cancelled order cancels it. "Siap dibayar" is derived, not stored. | AFFILIATE_SPEC F-A6/F-A7, OD-A2 (owner 2026-10-15) | built | `apps/admin/lib/affiliate-attribution.ts` + `.test.ts` (frozen rate, attribution); `apps/account/src/data/affiliate-data.test.ts` (siap / ditahan / dibayar totals per account) | — |
+| RR-13 | **As built: the merchant pays the affiliate outside TokoΦ**; "Tandai dibayar" is a record, not a transfer; TokoΦ writes no ledger or payout row for commissions. | AFFILIATE_SPEC §12 | built — **to be superseded by RR-14** | `apps/admin/lib/actions/affiliates.ts` | The merchant is the paying party; tax duty is theirs (AFFILIATE_SPEC §3). |
+| RR-14 | **Owner direction: affiliate funds are releasable only after the goods have truly been delivered, and are funded by debiting the seller's balance.** | DEC-015, ADR 0018 (owner 2026-10-19, verbatim) | **decided as direction; NOT implemented** | — (ADR 0018 §5 Q1–Q8 open; `selesai` is written by courier tracking **and** by the seller, with no source recorded) | Widens custodian liability; **tax/withholding duty may move to the platform; NPWP requirement unknown — tax adviser before any payout (OD-10)**. |
+| RR-15 | **No screen may say or imply that the platform deducts or withholds tax** on a commission until OD-10 is answered. | §19 R7 | decided | review checklist | — |
+| RR-16 | **No invented figures:** no click counts, no "estimated commission", no payout schedule, no seller balance shown to an affiliate. | §19 R8, ADR 0018 Q8 | decided | review checklist | — |
+
+### 20.4 Process rules
+
+| ID | Rule | Source | Status | Where |
+|---|---|---|---|---|
+| RR-17 | TokoΦ Account is **local development only** until the owner says it ships; no push, PR or production. | DEC-018, OD-5 | decided | `DECISIONS.md` |
+| RR-18 | A claim made in a doc must be **true when written**; a research claim carries its evidence grade; weak evidence is stated as weak. | owner direction "pastikan kamu sudah riset" | decided | `tasks/2026-10-19-account-market-research.md` |
+| RR-19 | The design gate (`design-gate.py apps/account`) must exit 0 before the UI counts as accepted; today it **fails on `review`** (5 rounds, cap). | design-taste skill | **open** | `BUILD-LOG.md` 2026-10-18 |
+
+### 20.5 What is not legally confirmed (read before launch)
+
+1. The text of **PP 33/2026** (UU PDP implementing regulation) — only a press summary was read.
+2. The **articles of PP 80/2019** on exchange, cancellation and dispute handling — only a summary was read.
+3. Whether a **"no returns" clause** is void (UU 8/1999 Pasal 18, klausula baku) — not established.
+4. **Tax on affiliate commission**: who withholds, at what rate, whether NPWP is mandatory, and the effect of PP 20/2026 — not verified.
+5. **Retention and deletion** of backups and store-side copies after account closure (OD-6).
+6. Whether the platform paying affiliates from the seller's balance changes its **custodian / payment-service status** — not assessed.
