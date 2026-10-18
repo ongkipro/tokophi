@@ -66,6 +66,62 @@ async function commission(tx: Db, storeId: string, affiliateId: string, amount: 
 }
 const account = (tx: Db, email: string) => acct.upsertAccountBySub(tx, { sub: `dev:${email}`, email, name: email });
 
+suite("account closure (ACC-15)", () => {
+  it("closes MY account: sessions, links, claims, addresses and identity go; store rows are untouched", async () => {
+    await inTxn(async (tx) => {
+      const A = (await account(tx, "close-a@demo.local"))!;
+      const B = (await account(tx, "close-b@demo.local"))!;
+      const s = await store(tx);
+      const [o] = await rows(tx, sql`insert into orders (store_id, number, status, subtotal_idr) values (${s.id}, ${"CL-" + ++seq}, 'selesai', 100000) returning id`);
+      const before = (await rows(tx, sql`select row_to_json(o)::text as j from orders o where id = ${o.id}`))[0].j;
+      await tx.execute(sql`insert into buyer_store_links (buyer_id, store_id, status, consent_version) values (${A}, ${s.id}, 'active', 'v1'), (${B}, ${s.id}, 'active', 'v1')`);
+      await tx.execute(sql`insert into buyer_order_claims (order_id, buyer_id, store_id) values (${o.id}, ${A}, ${s.id})`);
+      await tx.execute(sql`insert into kiriminaja_areas (id, district_name, city_type, city_name, province_name) values (987654, 'Dist', 'Kota', 'City', 'Prov') on conflict do nothing`);
+      await tx.execute(sql`insert into buyer_addresses (buyer_id, recipient, phone, address, district_id, postal_code) values (${A}, 'A', '6281200000999', 'Jl Test 12', 987654, '12345')`);
+      const aff1 = await affiliate(tx, s.id, { code: "CLOSEA", accountId: A });
+      const sess = await acct.createSession(tx, A, "ua");
+      const other = await acct.createSession(tx, B, "ua");
+
+      expect(await acct.closeAccount(tx, A)).toEqual({ ok: true });
+
+      expect(await acct.loadSession(tx, sess)).toBeNull();
+      // The session ROW is revoked, not merely unusable because the account is closed.
+      expect((await rows(tx, sql`select count(*)::int n from buyer_sessions where buyer_id = ${A} and revoked_at is null`))[0].n).toBe(0);
+      expect(await acct.loadSession(tx, other)).not.toBeNull(); // B is untouched
+      const [acc] = await rows(tx, sql`select status, google_sub, email, name, phone from buyer_accounts where id = ${A}`);
+      expect(acc).toEqual({ status: "closed", google_sub: `closed:${A}`, email: null, name: null, phone: null });
+      expect((await rows(tx, sql`select count(*)::int n from buyer_store_links where buyer_id = ${A} and status = 'active'`))[0].n).toBe(0);
+      expect((await rows(tx, sql`select count(*)::int n from buyer_store_links where buyer_id = ${B} and status = 'active'`))[0].n).toBe(1);
+      expect((await rows(tx, sql`select count(*)::int n from buyer_order_claims where buyer_id = ${A}`))[0].n).toBe(0);
+      expect((await rows(tx, sql`select count(*)::int n from buyer_addresses where buyer_id = ${A}`))[0].n).toBe(0);
+      // Store-owned rows: the order is byte-identical and the affiliate record survives, detached.
+      expect((await rows(tx, sql`select row_to_json(o)::text as j from orders o where id = ${o.id}`))[0].j).toBe(before);
+      expect((await rows(tx, sql`select account_id from affiliates where id = ${aff1}`))[0].account_id).toBeNull();
+      // Nothing reactivates it: closing twice, and the same Google identity gets a NEW account.
+      expect(await acct.closeAccount(tx, A)).toEqual({ ok: false, reason: "not_active" });
+      const again = await account(tx, "close-a@demo.local");
+      expect(again).not.toBe(A);
+    });
+  });
+
+  it("is refused while a programme still owes the account money — and then nothing changes", async () => {
+    await inTxn(async (tx) => {
+      const A = (await account(tx, "owed@demo.local"))!;
+      const s = await store(tx);
+      const a1 = await affiliate(tx, s.id, { code: "OWED", accountId: A });
+      await commission(tx, s.id, a1, 12_000, "pending", "future"); // ditahan
+      const sess = await acct.createSession(tx, A, "ua");
+      const r = await acct.closeAccount(tx, A);
+      expect(r.ok).toBe(false);
+      expect(r).toMatchObject({ reason: "unpaid_commission" });
+      expect(await acct.loadSession(tx, sess)).not.toBeNull();
+      // Once the store has paid it, closure goes through.
+      await tx.execute(sql`update affiliate_commissions set status = 'dibayar' where affiliate_id = ${a1}`);
+      expect(await acct.closeAccount(tx, A)).toEqual({ ok: true });
+    });
+  });
+});
+
 suite("accounts and sessions", () => {
   it("one row per sub, ever; the name is not overwritten by a later sign-in", async () => {
     await inTxn(async (tx) => {

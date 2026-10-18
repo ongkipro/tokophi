@@ -27,6 +27,7 @@ const purpose = next.startsWith("/klaim")
     : null;
 const code = Astro.url.searchParams.get("e") ?? "";
 const error = ERRORS[code] ?? null;
+const closed = Astro.url.searchParams.has("ditutup");
 const check = '<path d="M20 6 9 17l-5-5"/>';
 ---
 <Layout title="Masuk">
@@ -52,6 +53,7 @@ const check = '<path d="M20 6 9 17l-5-5"/>';
     </div>
 
     <div class="login-card">
+      {closed && <p class="privacy-note notice-ok" role="status">Akun Anda sudah ditutup. Data pesanan di tiap toko tidak berubah.</p>}
       {purpose && <p class="login-purpose">{purpose}</p>}
       {error && <p class="login-error" role="alert" id="signin-error">{error}</p>}
 

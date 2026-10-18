@@ -2,15 +2,17 @@
 // "Akun" — Profil & keamanan (spec §18.4 G). Shared by both workspaces. Everything here is about
 // the person, not a store: the display name (editable), the Google email (read-only), the devices
 // signed in (ACC-3), theme, and summaries that link to Toko, Alamat and the affiliate area.
-// Left out on purpose (§18.5): phone change, notification preferences, data copy / account closure.
+// "Tutup akun" (ACC-15) closes the account for good. Left out on purpose (§18.5): phone change,
+// notification preferences, data copy.
 // No JavaScript needed except the theme control, which is purely a browser preference.
 import Layout from "../../layouts/Layout.astro";
 import { db } from "@tokophi/db";
-import { listSessions, NAME_MAX, renameAccount, revokeOneSession, revokeOtherSessions } from "../../data/account";
+import { closeAccount, listSessions, NAME_MAX, renameAccount, revokeOneSession, revokeOtherSessions } from "../../data/account";
 import { myAddresses } from "../../data/addresses";
 import { myAffiliateStores } from "../../data/affiliate";
 import { myStores } from "../../data/orders";
 import { signInUrl } from "../../lib/nav";
+import { ACCOUNT_COOKIE } from "../../lib/session";
 import { whenTime } from "../../lib/order-view";
 
 const account = Astro.locals.account;
@@ -18,6 +20,7 @@ const current = Astro.locals.sessionId;
 if (!account || !current) return Astro.redirect(signInUrl(Astro.url));
 
 let nameError: string | null = null;
+let closeError: string | null = null;
 let nameValue = account.name ?? "";
 if (Astro.request.method === "POST") {
   const f = await Astro.request.formData();
@@ -30,6 +33,16 @@ if (Astro.request.method === "POST") {
   } else if (action === "revoke") {
     const ok = await revokeOneSession(db, account.id, current, f.get("id"));
     return Astro.redirect(`/account?${ok ? "ok=keluar1" : "gagal=sesi"}#keamanan`, 303);
+  } else if (action === "tutup") {
+    const r = await closeAccount(db, account.id);
+    if (r.ok) {
+      Astro.cookies.delete(ACCOUNT_COOKIE, { path: "/" });
+      return Astro.redirect("/masuk?ditutup=1", 303);
+    }
+    closeError =
+      r.reason === "unpaid_commission"
+        ? `Akun belum bisa ditutup: masih ada komisi yang belum dibayar dari ${(r.stores ?? []).join(", ")}. Minta toko menyelesaikan pembayarannya lebih dulu, lalu coba lagi.`
+        : "Akun ini sudah tidak aktif.";
   } else if (action === "revoke-others") {
     const n = await revokeOtherSessions(db, account.id, current);
     return Astro.redirect(`/account?ok=keluar&n=${n}#keamanan`, 303);
@@ -217,7 +230,24 @@ const me = sessions.find((s) => s.id === current);
         </div>
         <p class="field-help" id="theme-note">Tema mengikuti pengaturan perangkat Anda.</p>
       </section>
-
+      <section class="section-card" aria-labelledby="h-tutup">
+        <h2 id="h-tutup">Tutup akun</h2>
+        <p>
+          Menutup akun menghapus login, perangkat, alamat tersimpan, dan daftar pesanan yang Anda simpan di sini. Pesanan,
+          pembayaran, dan data pelanggan di tiap toko tidak berubah dan tetap menjadi catatan toko. Program affiliate Anda
+          tetap tercatat di tokonya, hanya tidak lagi terhubung ke akun ini.
+        </p>
+        <p class="field-help">Penutupan tidak bisa dibatalkan. Masuk lagi dengan akun Google yang sama membuat akun baru yang kosong.</p>
+        {closeError && <p class="field-error" role="alert">{closeError}</p>}
+        <details class="confirm-details" open={closeError ? true : undefined}>
+          <summary class="link-danger">Tutup akun saya</summary>
+          <form method="post" class="confirm-body">
+            <input type="hidden" name="do" value="tutup" />
+            <p>Yakin menutup akun <strong>{account.email}</strong>? Ini tidak bisa dibatalkan.</p>
+            <button class="button danger" type="submit">Ya, tutup akun</button>
+          </form>
+        </details>
+      </section>
     </div>
   </div>
 </Layout>

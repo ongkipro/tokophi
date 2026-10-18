@@ -5,6 +5,7 @@ import type { db as DbClient } from "@tokophi/db";
 import * as schema from "@tokophi/db/schema";
 import { isUuid } from "@tokophi/lib/uuid";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { myAffiliateStores } from "./affiliate";
 
 export type Db = typeof DbClient;
 export type Account = { id: string; name: string | null; email: string | null };
@@ -132,4 +133,44 @@ export async function listSessions(db: Db, buyerId: string) {
       ),
     )
     .orderBy(desc(schema.buyerSessions.lastSeenAt));
+}
+
+export type CloseResult = { ok: true } | { ok: false; reason: "unpaid_commission" | "not_active"; stores?: string[] };
+
+/**
+ * "Tutup akun" (ACC-15, UU PDP right to stop processing / delete). Credentials, sessions and the
+ * account's own convenience data go; every store-owned row (orders, customers, payments, ledger,
+ * the affiliate record itself) is left exactly as it was — a link or claim is only a pointer.
+ * Refused while a programme still owes the account money: closing would orphan a commission the
+ * buyer can no longer see, so the store has to settle it first.
+ * lazy: the unpaid check reads before the transaction, so a commission that turns ready in the gap
+ * is detached with the rest; the store's own ledger still holds it. Upgrade: re-read inside.
+ */
+export async function closeAccount(db: Db, buyerId: string): Promise<CloseResult> {
+  const owed = (await myAffiliateStores(db, buyerId)).filter((m) => m.readyIdr + m.heldIdr > 0);
+  if (owed.length) return { ok: false, reason: "unpaid_commission", stores: owed.map((m) => m.storeName) };
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ status: schema.buyerAccounts.status })
+      .from(schema.buyerAccounts)
+      .where(eq(schema.buyerAccounts.id, buyerId))
+      .for("update");
+    if (row?.status !== "active") return { ok: false, reason: "not_active" } as const;
+    await tx.update(schema.buyerSessions).set({ revokedAt: sql`now()` }).where(and(eq(schema.buyerSessions.buyerId, buyerId), isNull(schema.buyerSessions.revokedAt)));
+    await tx.delete(schema.buyerAddresses).where(eq(schema.buyerAddresses.buyerId, buyerId));
+    await tx.delete(schema.buyerOrderClaims).where(eq(schema.buyerOrderClaims.buyerId, buyerId));
+    await tx
+      .update(schema.buyerStoreLinks)
+      .set({ status: "revoked", revokedAt: sql`now()` })
+      .where(and(eq(schema.buyerStoreLinks.buyerId, buyerId), eq(schema.buyerStoreLinks.status, "active")));
+    await tx.update(schema.affiliates).set({ accountId: null }).where(eq(schema.affiliates.accountId, buyerId));
+    // The real sub is freed so the same Google account starts a NEW account later; nothing reactivates
+    // this one. `buyer_accounts_identity_check` needs one identity column set, so the sub becomes an
+    // inert marker (unique, holds no personal data) instead of NULL.
+    await tx
+      .update(schema.buyerAccounts)
+      .set({ status: "closed", googleSub: sql`'closed:' || ${schema.buyerAccounts.id}`, email: null, phone: null, phoneVerifiedAt: null, name: null })
+      .where(eq(schema.buyerAccounts.id, buyerId));
+    return { ok: true } as const;
+  });
 }
