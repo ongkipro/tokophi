@@ -121,6 +121,20 @@ suite("claim an order (Task 10.5, ACC-11)", () => {
   });
 });
 
+suite("a closed account claims nothing", () => {
+  it("claimOrder is refused after closure: no claim, no link", async () => {
+    await inTxn(async (tx) => {
+      const me = await account(tx, "claim-gone@demo.local");
+      const s = await store(tx);
+      const o = await order(tx, s.id);
+      expect(await acct.closeAccount(tx, me)).toEqual({ ok: true });
+      expect(await ord.claimOrder(tx, me, token(o.id), "yes")).toEqual({ ok: false });
+      expect(await count(tx, sql`select count(*) n from buyer_order_claims where buyer_id = ${me}`)).toBe(0);
+      expect(await count(tx, sql`select count(*) n from buyer_store_links where buyer_id = ${me}`)).toBe(0);
+    });
+  });
+});
+
 suite("store return window on the order detail (Task 10.22)", () => {
   it("null until the store declares one; each store's own value; never another store's", async () => {
     await inTxn(async (tx) => {

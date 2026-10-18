@@ -66,6 +66,19 @@ async function three(tx: Db, me: string) {
 const primaryOf = async (tx: Db, me: string) =>
   (await rows(tx, sql`select id from buyer_addresses where buyer_id = ${me} and is_primary`)).map((r) => r.id);
 
+suite("a closed account saves no address", () => {
+  it("saveAddress is refused after closure and leaves no row", async () => {
+    await inTxn(async (tx) => {
+      const me = await account(tx, "addr-gone@demo.local");
+      const dist = await district(tx);
+      expect(await acct.closeAccount(tx, me)).toEqual({ ok: true });
+      const r = await addr.saveAddress(tx, me, input(dist, "Rumah"));
+      expect(r.ok).toBe(false);
+      expect((await rows(tx, sql`select count(*)::int n from buyer_addresses where buyer_id = ${me}`))[0].n).toBe(0);
+    });
+  });
+});
+
 suite("deleting the primary — the confirm dialog's promise", () => {
   it("the next primary is the first non-primary row of the list, also when updated_at ties (one txn ⇒ one now())", async () => {
     await inTxn(async (tx) => {

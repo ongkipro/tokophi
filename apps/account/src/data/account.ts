@@ -4,7 +4,8 @@
 import type { db as DbClient } from "@tokophi/db";
 import * as schema from "@tokophi/db/schema";
 import { isUuid } from "@tokophi/lib/uuid";
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { lockActiveAccount } from "./account-lock";
 import { myAffiliateStores } from "./affiliate";
 
 export type Db = typeof DbClient;
@@ -138,31 +139,37 @@ export async function listSessions(db: Db, buyerId: string) {
 export type CloseResult = { ok: true } | { ok: false; reason: "unpaid_commission" | "not_active"; stores?: string[] };
 
 /**
- * "Tutup akun" (ACC-15, UU PDP right to stop processing / delete). Credentials, sessions and the
- * account's own convenience data go; every store-owned row (orders, customers, payments, ledger,
- * the affiliate record itself) is left exactly as it was — a link or claim is only a pointer.
- * Refused while a programme still owes the account money: closing would orphan a commission the
- * buyer can no longer see, so the store has to settle it first.
- * lazy: the unpaid check reads before the transaction, so a commission that turns ready in the gap
- * is detached with the rest; the store's own ledger still holds it. Upgrade: re-read inside.
+ * "Tutup akun" (ACC-15, UU PDP right to stop processing / delete). Credentials, sessions (rows kept,
+ * device strings blanked) and the account's own convenience data go. Orders, customers, payments and the
+ * ledger are never touched. The account's affiliate records stay on the store's list but are detached AND
+ * set `nonaktif`: a live code that nobody can see or collect must not keep accruing commission.
+ * Refused, with nothing written, while a programme still owes the account money — closing would orphan a
+ * commission the buyer can no longer see, so the store has to settle it first.
+ * The account row is locked first (`lockActiveAccount`), so a write racing the closure is serialised with
+ * it; the owed check runs under that lock. lazy: a commission that turns ready between that read and the
+ * commit (readiness is derived from the clock) is not caught; the store's ledger still holds it.
  */
 export async function closeAccount(db: Db, buyerId: string): Promise<CloseResult> {
-  const owed = (await myAffiliateStores(db, buyerId)).filter((m) => m.readyIdr + m.heldIdr > 0);
-  if (owed.length) return { ok: false, reason: "unpaid_commission", stores: owed.map((m) => m.storeName) };
   return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ status: schema.buyerAccounts.status })
-      .from(schema.buyerAccounts)
-      .where(eq(schema.buyerAccounts.id, buyerId))
-      .for("update");
-    if (row?.status !== "active") return { ok: false, reason: "not_active" } as const;
-    await tx.update(schema.buyerSessions).set({ revokedAt: sql`now()` }).where(and(eq(schema.buyerSessions.buyerId, buyerId), isNull(schema.buyerSessions.revokedAt)));
+    if (!(await lockActiveAccount(tx as unknown as Db, buyerId))) return { ok: false, reason: "not_active" } as const;
+    const owed = (await myAffiliateStores(tx as unknown as Db, buyerId)).filter((m) => m.readyIdr + m.heldIdr > 0);
+    if (owed.length) return { ok: false, reason: "unpaid_commission", stores: owed.map((m) => m.storeName) } as const;
+    // Every session row, not only the live ones: the device string (`user_agent`) is personal enough to blank.
+    await tx.update(schema.buyerSessions).set({ revokedAt: sql`coalesce(${schema.buyerSessions.revokedAt}, now())`, userAgent: null }).where(eq(schema.buyerSessions.buyerId, buyerId));
     await tx.delete(schema.buyerAddresses).where(eq(schema.buyerAddresses.buyerId, buyerId));
     await tx.delete(schema.buyerOrderClaims).where(eq(schema.buyerOrderClaims.buyerId, buyerId));
     await tx
       .update(schema.buyerStoreLinks)
       .set({ status: "revoked", revokedAt: sql`now()` })
       .where(and(eq(schema.buyerStoreLinks.buyerId, buyerId), eq(schema.buyerStoreLinks.status, "active")));
+    // Stop attribution first (it only ever credits `aktif` rows), say why on the store's own record, then detach.
+    await tx
+      .update(schema.affiliates)
+      .set({
+        status: "nonaktif",
+        note: sql`case when coalesce(${schema.affiliates.note}, '') = '' then 'Akun TokoΦ affiliate ditutup' else ${schema.affiliates.note} || ' · Akun TokoΦ affiliate ditutup' end`,
+      })
+      .where(and(eq(schema.affiliates.accountId, buyerId), inArray(schema.affiliates.status, ["aktif", "menunggu"])));
     await tx.update(schema.affiliates).set({ accountId: null }).where(eq(schema.affiliates.accountId, buyerId));
     // The real sub is freed so the same Google account starts a NEW account later; nothing reactivates
     // this one. `buyer_accounts_identity_check` needs one identity column set, so the sub becomes an

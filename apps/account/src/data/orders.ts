@@ -10,6 +10,7 @@
 // Order data leaves through an explicit allowlist (spec §3 "Order projection"): no notes, tags, fees,
 // ledger, provider ids, or anything about another customer.
 import * as schema from "@tokophi/db/schema";
+import { lockActiveAccount } from "./account-lock";
 import { claimSecret, verifyClaimToken } from "@tokophi/lib/claim-token";
 import { likeContains } from "@tokophi/lib/like";
 import { isUuid } from "@tokophi/lib/uuid";
@@ -64,6 +65,7 @@ export async function claimOrder(db: Db, buyerId: string, token: unknown, consen
   const orderId = tokenOrder(token, nowMs);
   if (!orderId) return { ok: false };
   return db.transaction(async (tx) => {
+    if (!(await lockActiveAccount(tx as unknown as Db, buyerId))) return { ok: false } as const;
     const [order] = await tx
       .select({ id: o.id, number: o.number, storeId: o.storeId, customerId: o.customerId })
       .from(o)

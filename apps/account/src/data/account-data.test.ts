@@ -79,14 +79,20 @@ suite("account closure (ACC-15)", () => {
       await tx.execute(sql`insert into kiriminaja_areas (id, district_name, city_type, city_name, province_name) values (987654, 'Dist', 'Kota', 'City', 'Prov') on conflict do nothing`);
       await tx.execute(sql`insert into buyer_addresses (buyer_id, recipient, phone, address, district_id, postal_code) values (${A}, 'A', '6281200000999', 'Jl Test 12', 987654, '12345')`);
       const aff1 = await affiliate(tx, s.id, { code: "CLOSEA", accountId: A });
+      const s2 = await store(tx);
+      const aff2 = await affiliate(tx, s2.id, { code: "CLOSEB", accountId: A, status: "ditolak" });
       const sess = await acct.createSession(tx, A, "ua");
+      const sess2 = await acct.createSession(tx, A, "ua-2");
       const other = await acct.createSession(tx, B, "ua");
 
       expect(await acct.closeAccount(tx, A)).toEqual({ ok: true });
 
       expect(await acct.loadSession(tx, sess)).toBeNull();
+      expect(await acct.loadSession(tx, sess2)).toBeNull();
       // The session ROW is revoked, not merely unusable because the account is closed.
       expect((await rows(tx, sql`select count(*)::int n from buyer_sessions where buyer_id = ${A} and revoked_at is null`))[0].n).toBe(0);
+      expect((await rows(tx, sql`select count(*)::int n from buyer_sessions where buyer_id = ${A} and user_agent is not null`))[0].n).toBe(0); // device strings blanked
+      expect((await rows(tx, sql`select count(*)::int n from buyer_sessions where buyer_id = ${B} and user_agent is not null`))[0].n).toBe(1); // B's untouched
       expect(await acct.loadSession(tx, other)).not.toBeNull(); // B is untouched
       const [acc] = await rows(tx, sql`select status, google_sub, email, name, phone from buyer_accounts where id = ${A}`);
       expect(acc).toEqual({ status: "closed", google_sub: `closed:${A}`, email: null, name: null, phone: null });
@@ -96,10 +102,17 @@ suite("account closure (ACC-15)", () => {
       expect((await rows(tx, sql`select count(*)::int n from buyer_addresses where buyer_id = ${A}`))[0].n).toBe(0);
       // Store-owned rows: the order is byte-identical and the affiliate record survives, detached.
       expect((await rows(tx, sql`select row_to_json(o)::text as j from orders o where id = ${o.id}`))[0].j).toBe(before);
-      expect((await rows(tx, sql`select account_id from affiliates where id = ${aff1}`))[0].account_id).toBeNull();
+      const [af1] = await rows(tx, sql`select account_id, status, note from affiliates where id = ${aff1}`);
+      expect(af1.account_id).toBeNull();
+      // Detached AND deactivated: attribution only ever credits `aktif` rows, so no commission can accrue to nobody.
+      expect(af1.status).toBe("nonaktif");
+      expect(String(af1.note)).toContain("ditutup");
+      expect((await rows(tx, sql`select status, account_id from affiliates where id = ${aff2}`))[0]).toEqual({ status: "ditolak", account_id: null }); // a refused row keeps its status
+      expect((await rows(tx, sql`select count(*)::int n from affiliates where id = ${aff1} and status = 'aktif'`))[0].n).toBe(0);
       // Nothing reactivates it: closing twice, and the same Google identity gets a NEW account.
       expect(await acct.closeAccount(tx, A)).toEqual({ ok: false, reason: "not_active" });
       const again = await account(tx, "close-a@demo.local");
+      expect(typeof again).toBe("string");
       expect(again).not.toBe(A);
     });
   });
@@ -110,14 +123,36 @@ suite("account closure (ACC-15)", () => {
       const s = await store(tx);
       const a1 = await affiliate(tx, s.id, { code: "OWED", accountId: A });
       await commission(tx, s.id, a1, 12_000, "pending", "future"); // ditahan
+      const a2 = await affiliate(tx, (await store(tx)).id, { code: "OWED2", accountId: A });
+      await commission(tx, (await rows(tx, sql`select store_id from affiliates where id = ${a2}`))[0].store_id as string, a2, 3_000, "pending", "past"); // siap
       const sess = await acct.createSession(tx, A, "ua");
       const r = await acct.closeAccount(tx, A);
       expect(r.ok).toBe(false);
       expect(r).toMatchObject({ reason: "unpaid_commission" });
+      expect((r as { stores?: string[] }).stores).toHaveLength(2); // both the held and the ready programme are named
       expect(await acct.loadSession(tx, sess)).not.toBeNull();
+      expect((await rows(tx, sql`select status, email from buyer_accounts where id = ${A}`))[0]).toEqual({ status: "active", email: "owed@demo.local" });
+      expect((await rows(tx, sql`select count(*)::int n from affiliates where account_id = ${A} and status = 'aktif'`))[0].n).toBe(2); // nothing deactivated
       // Once the store has paid it, closure goes through.
-      await tx.execute(sql`update affiliate_commissions set status = 'dibayar' where affiliate_id = ${a1}`);
+      await tx.execute(sql`update affiliate_commissions set status = 'dibayar' where affiliate_id in (${a1}, ${a2})`);
       expect(await acct.closeAccount(tx, A)).toEqual({ ok: true });
+    });
+  });
+});
+
+suite("a closed account cannot be written to", () => {
+  it("join, accept-invitation and address saves are refused once closed; the closure leaves no new rows behind", async () => {
+    await inTxn(async (tx) => {
+      const A = (await account(tx, "gone@demo.local"))!;
+      const s = await store(tx);
+      expect(await acct.closeAccount(tx, A)).toEqual({ ok: true });
+      expect(await aff.joinProgramme(tx, A, s.slug, { name: "Gone", phone: "6281299900011", bankName: null, bankAccount: null, bankHolder: null, note: null })).toBe("failed");
+      const row = await affiliate(tx, s.id, { code: "GONEINV" });
+      const inv = newInvite();
+      await tx.execute(sql`update affiliates set invite_hash = ${inv.hash}, invite_expires_at = now() + interval '7 days' where id = ${row}`);
+      expect(await aff.acceptInvite(tx, A, inv.token)).toEqual({ ok: false, reason: "invalid" });
+      expect((await rows(tx, sql`select account_id, invite_hash is not null as live from affiliates where id = ${row}`))[0]).toEqual({ account_id: null, live: true }); // invitation untouched
+      expect((await rows(tx, sql`select count(*)::int n from affiliates where account_id = ${A}`))[0].n).toBe(0);
     });
   });
 });

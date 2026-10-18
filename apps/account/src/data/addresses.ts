@@ -3,6 +3,7 @@
 // `ship_*` snapshot, so nothing here ever writes a store-owned row. Owner connection — every
 // statement carries `buyer_id = <me>`.
 import * as schema from "@tokophi/db/schema";
+import { lockActiveAccount } from "./account-lock";
 import { areaById, type Area } from "@tokophi/lib/area-search";
 import { isUuid } from "@tokophi/lib/uuid";
 import {
@@ -82,7 +83,7 @@ export async function saveAddress(db: Db, buyerId: string, input: AddressInput, 
   };
   return db.transaction(async (tx) => {
     // Serialise this account's address writes on its own row, so two tabs cannot both pass the cap.
-    await tx.execute(sql`select 1 from buyer_accounts where id = ${buyerId} for update`);
+    if (!(await lockActiveAccount(tx as unknown as Db, buyerId))) return { ok: false, errors: { form: "Akun ini sudah tidak aktif." } } as const;
     if (id !== undefined) {
       if (!isId(id)) return { ok: false, errors: { form: "Alamat tidak ditemukan." } } as const;
       const [row] = await tx

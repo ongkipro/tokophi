@@ -6,6 +6,7 @@
 // so EVERY query here carries `account_id = <me>` (and `store_id` from the affiliate row itself on
 // every child read). An account never sees another account's rows, and no buyer data is selected.
 import * as schema from "@tokophi/db/schema";
+import { lockActiveAccount } from "./account-lock";
 import { hashInvite } from "@tokophi/lib/account-invite";
 import { suggestAffiliateCode } from "@tokophi/lib/affiliate";
 import { BUMP_SQL } from "@tokophi/lib/rate-limit-store";
@@ -40,7 +41,7 @@ export type MyStore = {
   code: string;
   status: "menunggu" | "aktif" | "ditolak" | "nonaktif";
   orders: number;
-  /** The store's own return window after delivery (`store_settings.affiliate_hold_days`, H+3 default). */
+  /** The commission hold after delivery (`store_settings.affiliate_hold_days`, H+3 default) — NOT the store's declared return window to buyers (`return_window_days`, spec RR-8). */
   holdDays: number;
   /** The store's default rate in basis points (`store_settings.affiliate_rate_bps`); products may differ. Null = no settings row. */
   rateBps: number | null;
@@ -245,7 +246,7 @@ export async function joinProgramme(db: Db, accountId: string, slug: string, inp
   }
   if (attempts > JOIN_LIMIT_PER_HOUR) return "rate_limited";
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select 1 from buyer_accounts where id = ${accountId} for update`);
+    if (!(await lockActiveAccount(tx as unknown as Db, accountId))) return "failed";
     const [mine] = await tx
       .select({ id: a.id })
       .from(a)
@@ -309,19 +310,24 @@ export type AcceptResult = { ok: true; affiliateId: string } | { ok: false; reas
 export async function acceptInvite(db: Db, accountId: string, token: unknown): Promise<AcceptResult> {
   const hash = hashInvite(token);
   if (!hash) return { ok: false, reason: "invalid" };
-  const rows = await db
-    .update(a)
-    .set({ accountId, inviteHash: null, inviteExpiresAt: null })
-    .where(
-      and(
-        eq(a.inviteHash, hash),
-        isNull(a.accountId),
-        gt(a.inviteExpiresAt, sql`now()`),
-        eq(a.status, "aktif"),
-        sql`not exists (select 1 from affiliates x where x.store_id = ${a.storeId} and x.account_id = ${accountId})`,
-      ),
-    )
-    .returning({ id: a.id });
+  const rows = await db.transaction(async (tx) => {
+    // A closed account cannot be bound to a seller's invitation (same lock the closure takes).
+    if (!(await lockActiveAccount(tx as unknown as Db, accountId))) return null;
+    return tx
+      .update(a)
+      .set({ accountId, inviteHash: null, inviteExpiresAt: null })
+      .where(
+        and(
+          eq(a.inviteHash, hash),
+          isNull(a.accountId),
+          gt(a.inviteExpiresAt, sql`now()`),
+          eq(a.status, "aktif"),
+          sql`not exists (select 1 from affiliates x where x.store_id = ${a.storeId} and x.account_id = ${accountId})`,
+        ),
+      )
+      .returning({ id: a.id });
+  });
+  if (rows === null) return { ok: false, reason: "invalid" };
   if (rows.length) return { ok: true, affiliateId: rows[0].id };
   // Nothing written. Only to word the message: is it because this account is already in that store?
   const [owned] = await db
