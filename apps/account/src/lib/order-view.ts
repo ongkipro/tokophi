@@ -1,5 +1,7 @@
 // Buyer-facing words for order facts (the hub, the detail page, the receipt). Plain Indonesian, never
 // the Seller's internal vocabulary. Badge classes are the prototype's (`prototype.css` .badge.*).
+import { waLink } from "@tokophi/lib/format";
+import { returnWindowLine } from "@tokophi/lib/return-window";
 import { STATUS_TABS, isUnpaid, type OrderFilter, type StatusTab } from "../data/orders";
 
 export const ORDER_STATUS: Record<string, { label: string; badge: string }> = {
@@ -33,6 +35,24 @@ export const PAYMENT_STATUS: Record<string, string> = {
 };
 
 const COURIER: Record<string, string> = { jne: "JNE", jnt: "J&T", sicepat: "SiCepat", spx: "SPX", anteraja: "AnterAja", pos: "POS Indonesia", ninja: "Ninja Xpress", idexpress: "ID Express", lion: "Lion Parcel", sap: "SAP" };
+/** The WhatsApp text that opens a return / complaint chat. The buyer can edit it before sending; it names
+ *  the order and prompts the proof marketplaces ask for, and promises nothing on the store's behalf. */
+export const returnRequestMessage = (storeName: string, orderNumber: string) =>
+  `Halo ${storeName}, saya ingin mengajukan retur/komplain untuk pesanan ${orderNumber}.\nMasalahnya: \nFoto/video barangnya akan saya lampirkan di chat ini.`;
+
+/** Goods are on their way or delivered: the only states where a return or complaint can start. */
+export const isOnItsWay = (status: string) => status === "dikirim" || status === "selesai";
+
+/** The complaint hand-off link (RR-10): any order on its way or delivered, whatever window the store
+ *  declared, but only when the store has a WhatsApp number on file. */
+export function complaintLink(o: { status: string; storeWhatsapp: string | null; storeName: string; number: string }): string | null {
+  return isOnItsWay(o.status) && o.storeWhatsapp ? waLink(o.storeWhatsapp, returnRequestMessage(o.storeName, o.number)) : null;
+}
+
+/** The store's declared return window as one sentence (ACC-16): only once goods are on their way, and only if declared. */
+export const returnLineFor = (o: { status: string; returnWindowDays: number | null }): string | null =>
+  isOnItsWay(o.status) ? returnWindowLine(o.returnWindowDays) : null;
+
 export const courierName = (c: string | null) => (c ? (COURIER[c.toLowerCase()] ?? c.toUpperCase()) : null);
 
 /** The order's next fact, as the hub card's link label and where it leads. */

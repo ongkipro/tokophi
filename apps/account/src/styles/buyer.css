@@ -350,3 +350,7 @@ html { background: var(--background); }
 
 /* Review round 12: a delivered order leads with what was bought. */
 .order-main-col.product-first #produk { order: -1; }
+
+/* Review round 13: the complaint hint sits under the summary buttons (one wrapper, so the summary's own flex layout is untouched). */
+.order-actions { min-width: 0; }
+.order-actions .overview-hint { margin: 8px 0 0; }

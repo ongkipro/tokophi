@@ -9,8 +9,7 @@ import { db } from "@tokophi/db";
 import { IDR, waLink } from "@tokophi/lib/format";
 import { isUnpaid, myOrder } from "../../../data/orders";
 import { signInUrl } from "../../../lib/nav";
-import { returnWindowLine } from "@tokophi/lib/return-window";
-import { PAYMENT_METHOD, PAYMENT_STATUS, courierName, phone, statusOf, whenLong } from "../../../lib/order-view";
+import { PAYMENT_METHOD, PAYMENT_STATUS, complaintLink, courierName, phone, returnLineFor, statusOf, whenLong } from "../../../lib/order-view";
 
 const account = Astro.locals.account;
 if (!account) return Astro.redirect(signInUrl(Astro.url));
@@ -41,7 +40,12 @@ const shipFirst = !unpaid && (order.status === "diproses" || order.status === "d
 // A delivered order is reopened for what was bought, so Produk leads.
 const productFirst = order.status === "selesai";
 // Only once goods are on their way or delivered, and only if the store declared a window.
-const returnLine = order.status === "dikirim" || order.status === "selesai" ? returnWindowLine(order.returnWindowDays) : null;
+// Complaint hand-off (RR-10): for any order on its way or delivered, whatever window the store declared.
+const complaintWa = complaintLink(order);
+const returnLine = returnLineFor(order);
+const chips: [string, string][] = [["pembayaran", "Pembayaran"], ["pengiriman", "Pengiriman"], ["produk", "Produk"]];
+if (productFirst) chips.unshift(...chips.splice(2, 1));
+else if (shipFirst) chips.unshift(...chips.splice(1, 1));
 const payHost = pay?.url ? new URL(pay.url).hostname : null;
 ---
 <Layout title={`${s.label} · ${order.number}`} active="pesanan" back={{ href: "/orders", label: "Kembali ke pesanan" }}>
@@ -60,6 +64,7 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
         <span>Total pesanan</span>
         <strong class="overview-total num">{IDR(order.totalIdr)}</strong>
       </div>
+      <div class="order-actions">
       <div class="order-next">
         {unpaid ? (
           <a class="button primary" href="#pembayaran">Selesaikan pembayaran</a>
@@ -72,13 +77,15 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
           <a class="button primary" href={wa} rel="noopener noreferrer" target="_blank">Hubungi {order.storeName}</a>
         )}
         <a class={`button ${productFirst ? "primary" : "secondary"}`} href={`${base}/receipt`}>Bukti pesanan</a>
+        {productFirst && complaintWa && <a class="button secondary" href={complaintWa} rel="noopener noreferrer" target="_blank">Ajukan retur / komplain</a>}
+      </div>
+      {productFirst && complaintWa && <p class="field-help overview-hint">Ada barang yang bermasalah? Siapkan foto atau video barangnya dan lampirkan di chat WhatsApp toko.</p>}
       </div>
     </section>
 
     <nav class="order-links detail-chips" aria-label="Rincian pesanan">
-      <a href="#pembayaran">Pembayaran</a>
-      <a href="#pengiriman">Pengiriman</a>
-      <a href="#produk">Produk</a>
+      {/* Same order as the sections below. */}
+      {chips.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
       <a href={`${base}/receipt`}>Bukti pesanan</a>
     </nav>
 
@@ -183,8 +190,10 @@ const payHost = pay?.url ? new URL(pay.url).hostname : null;
         <h2 id="help-h">Butuh bantuan?</h2>
         <p>Pertanyaan tentang barang, pengiriman, atau pengembalian dijawab oleh {order.storeName}. Sebutkan nomor pesanan <span class="num">{order.number}</span>.</p>
         {returnLine && <p class="field-help">{returnLine}</p>}
+        {complaintWa && !productFirst && <p class="field-help">Ada barang yang bermasalah? Siapkan foto atau video barangnya dan lampirkan di chat WhatsApp toko.</p>}
         <div class="card-links">
-          {wa && <a class="button secondary" href={wa} rel="noopener noreferrer" target="_blank">WhatsApp {order.storeName}</a>}
+          {complaintWa && !productFirst && <a class="button primary" href={complaintWa} rel="noopener noreferrer" target="_blank">Ajukan retur / komplain</a>}
+          {wa && !complaintWa && <a class="button secondary" href={wa} rel="noopener noreferrer" target="_blank">WhatsApp {order.storeName}</a>}
           <a class="button secondary" href={order.storeOrigin} rel="noopener noreferrer">Kunjungi toko</a>
         </div>
       </section>

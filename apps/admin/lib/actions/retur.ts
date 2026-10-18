@@ -1,7 +1,7 @@
 "use server";
 import { schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
-import { normalizeReturnWindow } from "@tokophi/lib/return-window";
+import { parseReturnWindow } from "@tokophi/lib/return-window";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
 import { getSession } from "@/lib/auth";
@@ -24,7 +24,10 @@ export async function getReturnWindow(): Promise<number | null> {
 
 export async function saveReturnWindow(input: { days: string | number | null }): Promise<{ ok: boolean; days: number | null; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
-  const days = normalizeReturnWindow(input.days);
+  const parsed = parseReturnWindow(input.days);
+  // Refused, never guessed: buyers read this number as the store's promise.
+  if (!parsed.ok) return { ok: false, days: null, error: parsed.error };
+  const days = parsed.days;
   await withTenant(storeId, (db) =>
     db
       .insert(schema.storeSettings)
