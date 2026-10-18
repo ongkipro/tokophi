@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { devSignInAllowed, devSubject } from "./dev-signin";
 import { readAccountSession, signAccountSession } from "./session";
+import { areaTerm } from "../data/addresses";
 
 const KEY = new TextEncoder().encode("k".repeat(40));
 const SID = "3f1e2d4c-5b6a-4789-8abc-def012345678";
@@ -27,5 +28,15 @@ describe("account session cookie", () => {
     expect(await readAccountSession(t.slice(0, -2) + (t.endsWith("A") ? "BB" : "AA"), KEY)).toBeNull();
     expect(await readAccountSession("nope", KEY)).toBeNull();
     expect(await readAccountSession(undefined, KEY)).toBeNull();
+  });
+});
+
+describe("areaTerm — the kecamatan search drops a typed Kota/Kabupaten prefix", () => {
+  it("strips the prefix the reference table keeps in its own column", () => {
+    expect(areaTerm("Kota Yogyakarta")).toBe("Yogyakarta");
+    expect(areaTerm("  kab. Bantul ")).toBe("Bantul");
+    expect(areaTerm("Kabupaten Sleman")).toBe("Sleman");
+    expect(areaTerm("Kecamatan Sewon")).toBe("Sewon");
+    expect(areaTerm("Kotabaru")).toBe("Kotabaru");
   });
 });

@@ -1,39 +1,208 @@
 ---
+// Beranda (spec §18.4 A): what needs doing now, then where things stand. Every card and tile is a
+// real row — an action card exists only when its job exists; "Komisi siap" only for an affiliate.
 import Layout from "../layouts/Layout.astro";
+import CopyScript from "../components/CopyScript.astro";
+import ProductThumb from "../components/ProductThumb.astro";
 import { db } from "@tokophi/db";
 import { IDR } from "@tokophi/lib/format";
 import { myAffiliateStores } from "../data/affiliate";
+import { buyAgain, isUnpaid, myOrders, myStores } from "../data/orders";
 import { signInUrl } from "../lib/nav";
+import { PAYMENT_METHOD, courierName, nextStep, statusOf, when } from "../lib/order-view";
 
 const account = Astro.locals.account;
 if (!account) return Astro.redirect(signInUrl(Astro.url));
-const stores = await myAffiliateStores(db, account.id);
-const ready = stores.reduce((s, x) => s + x.readyIdr, 0);
+const [affStores, orders, stores, again] = await Promise.all([
+  myAffiliateStores(db, account.id),
+  myOrders(db, account.id),
+  myStores(db, account.id),
+  buyAgain(db, account.id),
+]);
+const unpaid = orders.filter(isUnpaid);
+const shipped = orders.filter((o) => o.status === "dikirim" && o.awb);
+const active = orders.filter((o) => o.status === "baru" || o.status === "diproses" || o.status === "dikirim");
+const ready = affStores.reduce((s, x) => s + x.readyIdr, 0);
+const recent = orders.slice(0, 3);
+// The store name under a "Beli lagi" product only helps when the products come from different stores.
+const multiStore = new Set(again.map((g) => g.storeName)).size > 1;
+const name = account.name?.trim() || null;
+const orderHref = (n: string) => `/orders/${encodeURIComponent(n)}`;
+const firstPay = unpaid[0];
+const firstShip = shipped[0];
+// A quiet status strip when nothing needs doing but an order is still moving (no pay/ship card above).
+const firstActive = !firstPay && !firstShip ? active[0] : undefined;
+const activeStatus = firstActive ? statusOf(firstActive) : null;
 ---
-<Layout title="Beranda">
-  <h1>Halo, {account.name ?? account.email}</h1>
-  <p class="lede">Satu akun untuk semua toko TokoΦ.</p>
-
-  <section class="card" aria-labelledby="aff-h">
-    <div class="row">
-      <h2 id="aff-h" style="margin:0">Affiliate</h2>
-      <a href="/affiliate">Buka</a>
+<Layout title="Beranda" active="beranda">
+  <header class="page-header">
+    <div>
+      <h1>{name ? `Halo, ${name}` : "Halo"}</h1>
+      <p class="lead">Pesanan, pengiriman, dan toko tempat Anda berbelanja, dalam satu akun.</p>
     </div>
-    {stores.length === 0 ? (
-      <p class="muted">Anda belum jadi affiliate toko mana pun. Gabung ke program toko, atau buka undangan dari seller.</p>
-    ) : (
-      <p class="muted">
-        {stores.length} toko · siap dibayar <span class="num">{IDR(ready)}</span>
-      </p>
+  </header>
+
+  {firstPay && (
+    <section class="action-hub-card job-card job-pay" aria-labelledby="job-pay">
+      <div class="job-body">
+        <div class="job-meta"><span class="badge warning">Perlu tindakan</span></div>
+        <h2 id="job-pay">{unpaid.length === 1 ? "1 pesanan menunggu pembayaran" : `${unpaid.length} pesanan menunggu pembayaran`}</h2>
+        <p>
+          <strong>{firstPay.storeName}</strong> · <span class="num">{firstPay.number}</span> · <strong class="num">{IDR(firstPay.totalIdr)}</strong>
+          {firstPay.payment && <> via {PAYMENT_METHOD[firstPay.payment.method] ?? firstPay.payment.method}</>}
+        </p>
+      </div>
+      <div class="job-actions">
+        <a class="button primary" href={`${orderHref(firstPay.number)}#pembayaran`}>Selesaikan pembayaran</a>
+      </div>
+    </section>
+  )}
+
+  {firstShip && (
+    <section class="active-shipment-card job-card job-ship" aria-labelledby="job-ship">
+      <div class="job-body">
+        <div class="job-meta">
+          <span class="badge shipped">Sedang dikirim</span>
+          <span>{courierName(firstShip.courier)} · Resi <strong class="num" id="home-awb">{firstShip.awb}</strong></span>
+        </div>
+        <h2 id="job-ship">Paket dari {firstShip.storeName} sedang dikirim</h2>
+        <p>Pesanan <span class="num">{firstShip.number}</span>. Lacak dengan nomor resi di situs kurir.</p>
+      </div>
+      <div class="job-actions">
+        <a class="button primary" href={`${orderHref(firstShip.number)}#pengiriman`}>Lihat pengiriman</a>
+        <button class="button secondary" type="button" data-copy="home-awb" hidden>Salin resi</button>
+      </div>
+    </section>
+  )}
+
+  {firstActive && activeStatus && (
+    <section class="job-card job-ship" aria-labelledby="job-active">
+      <div class="job-body">
+        <div class="job-meta"><span class={`badge ${activeStatus.badge}`}>{activeStatus.label}</span></div>
+        <h2 id="job-active">Pesanan dari {firstActive.storeName} sedang diproses</h2>
+        <p>Pesanan <span class="num">{firstActive.number}</span> · <strong class="num">{IDR(firstActive.totalIdr)}</strong>. Resi muncul setelah kurir menjemput paket.</p>
+      </div>
+      <div class="job-actions">
+        <a class="button primary" href={orderHref(firstActive.number)}>Lihat pesanan</a>
+      </div>
+    </section>
+  )}
+
+  <div class="dashboard-stats-grid">
+    <a href="/orders?status=aktif" class="dashboard-stat-card">
+      <span class="stat-k">Pesanan aktif</span>
+      <strong class="stat-v num">{active.length}</strong>
+      <span class="stat-hint">{orders.length} pesanan tersimpan</span>
+    </a>
+    <a href="/stores" class="dashboard-stat-card">
+      <span class="stat-k">Toko terhubung</span>
+      <strong class="stat-v num">{stores.length}</strong>
+      <span class="stat-hint">Lihat toko</span>
+    </a>
+    {affStores.length > 0 && (
+      <a href="/affiliate" class="dashboard-stat-card stat-feature">
+        <span class="stat-k">Komisi siap dibayar</span>
+        <strong class="stat-v num">{IDR(ready)}</strong>
+        <span class="stat-hint">{affStores.length} program affiliate</span>
+      </a>
     )}
-  </section>
+  </div>
 
-  <section class="card" aria-labelledby="ord-h">
-    <h2 id="ord-h" style="margin:0">Pesanan</h2>
-    <p class="muted">Menyimpan pesanan dari halaman sukses checkout ke akun ini sedang dibangun. Belum ada pesanan yang bisa tampil di sini.</p>
-  </section>
+  <div class="detail-grid buyer-grid home-grid">
+    <div class="stack">
+      <section class="dashboard-section" aria-labelledby="recent-h">
+        <div class="section-heading">
+          <h2 id="recent-h">Pesanan terbaru</h2>
+          {orders.length > 0 && <a href="/orders" class="link-button">Lihat semua ({orders.length})</a>}
+        </div>
+        {recent.length === 0 ? (
+          <section class="state-card" role="status">
+            <h2>Simpan pesanan pertama</h2>
+            <p>Pesanan muncul di sini setelah Anda menyimpannya ke akun:</p>
+            <ol class="howto">
+              <li>Belanja dan checkout di toko TokoΦ seperti biasa, tanpa perlu akun.</li>
+              <li>Di halaman sukses, ketuk <strong>“Simpan ke Akun TokoΦ”</strong>.</li>
+              <li>Masuk dengan akun ini, lalu setujui toko tersebut ditampilkan di sini.</li>
+            </ol>
+          </section>
+        ) : (
+          <div class="order-list">
+            {recent.map((o) => {
+              const s = statusOf(o);
+              const next = nextStep(o);
+              return (
+                <a class="order-card" href={next.href} aria-label={`Buka pesanan ${o.number} dari ${o.storeName}`}>
+                  <ProductThumb src={o.thumb} />
+                  <span class="order-main">
+                    <span class="order-topline"><strong>{o.storeName}</strong><span class={`badge ${s.badge}`}>{s.label}</span></span>
+                    <span class="order-meta">{when(o.placedAt)} · {o.firstLine ?? "Pesanan"}{o.lineCount > 1 && ` +${o.lineCount - 1} produk`}</span>
+                  </span>
+                  <span class="order-total"><strong class="num">{IDR(o.totalIdr)}</strong><span>{next.label}</span></span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
 
-  <form method="post" action="/keluar">
-    <button class="btn" type="submit">Keluar</button>
-  </form>
+    <div class="stack">
+      <section class="dashboard-section" aria-labelledby="help-h">
+        <div class="section-heading"><h2 id="help-h">Bantuan</h2></div>
+        <div class="service-menu-card">
+          <details class="service-menu-details">
+            <summary class="service-menu-item">
+              <span class="service-menu-label">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                Simpan pesanan lain ke akun
+              </span>
+              <svg class="service-menu-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </summary>
+            <p class="service-menu-body">
+              Setiap pesanan punya tautan simpan sendiri di halaman sukses checkout toko, berlaku 30 hari. Buka tautan itu
+              saat masuk dengan akun ini. Tautan hilang? Hubungi toko dengan nomor pesanan Anda.
+            </p>
+          </details>
+          <a href="/addresses" class="service-menu-item">
+            <span class="service-menu-label">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              Tambah atau ubah alamat pengiriman
+            </span>
+            <svg class="service-menu-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a href="/account" class="service-menu-item">
+            <span class="service-menu-label">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              Keluar dari perangkat lain & keamanan
+            </span>
+            <svg class="service-menu-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+      {again.length > 0 && (
+        <section class="dashboard-section" aria-labelledby="again-h">
+          <div class="section-heading">
+            <h2 id="again-h">Beli lagi</h2>
+            <span class="section-note">Harga terbaru di toko</span>
+          </div>
+          <ul class="buy-again-list" role="list">
+            {again.map((g) => (
+              <li>
+                <a class="buy-again-row" href={g.url} rel="noopener noreferrer" aria-label={`${g.title}${multiStore ? ` dari ${g.storeName}` : ""} — buka di toko`}>
+                  <ProductThumb src={g.thumb} />
+                  <span class="buy-again-text">
+                    <strong>{g.title}</strong>
+                    {multiStore && <small>{g.storeName}</small>}
+                  </span>
+                  <svg class="service-menu-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  </div>
+  <CopyScript />
 </Layout>
+

@@ -102,6 +102,10 @@ const INDEX_CENSUS: Record<string, Census> = {
   affiliates_account_idx: "drizzle",
   affiliates_invite_hash_idx: "drizzle",
   buyer_sessions_buyer_idx: "drizzle",
+  buyer_store_links_store_idx: "drizzle",
+  buyer_order_claims_buyer_idx: "drizzle",
+  buyer_addresses_buyer_idx: "drizzle",
+  buyer_addresses_one_primary: "drizzle",
   affiliate_commissions_store_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.

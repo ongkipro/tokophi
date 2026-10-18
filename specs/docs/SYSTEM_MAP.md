@@ -409,24 +409,41 @@ These two are the storefront's only API routes. (Its only other write is the `/a
 
 ## 6b. `apps/account` — TokoΦ Account (added 2026-10-15, branch `feat/accounts`, **local only**)
 
-The fifth surface: one origin for every shop's buyers and affiliates (account spec §17, AFFILIATE_SPEC
+The fifth surface: one origin for every shop's buyers and affiliates (account spec §17–§18, AFFILIATE_SPEC
 `F-A15`). Astro SSR (`@astrojs/node` standalone), dev port **4329**, proposed `account.tokophi.com`
 (OD-2) — **no compose service, Traefik router or DNS yet**. **NOT tenant-resolved**: the account is
 cross-tenant, so there is no Host → store step. Owner DB connection; every read carries an explicit
-`buyer_id` / `affiliates.account_id` predicate (`src/data/*.ts`), held by
-`account-data.test.ts`; the two account tables have RLS on with **no policy**, so `tokophi_app` reads
-nothing from them.
+`buyer_id` / `affiliates.account_id` predicate (`src/data/*.ts`), and buyer reads reach store rows only
+through a claim **and** an `active` link (`orders.ts` `mine()`), held by `buyer-data.test.ts`,
+`account-data.test.ts`, `addresses.test.ts`, `affiliate-data.test.ts` and the committed browser sweep
+`scripts/check-ui.mjs` (negative: another account → 404). The account tables have RLS on with **no
+policy** (`tokophi_app` reads nothing); `buyer_store_links` / `buyer_order_claims` carry `tenant_isolation`
+for merchant-side reads.
+
+**UI (spec §18, 2026-10-16):** the accepted prototype's Seller-aligned shell (`src/styles/prototype.css`
+verbatim + `global.css` adaptations, Geist self-hosted) — full-bleed: sticky 256 px sidebar, sticky
+topbar, content capped at 1120 px; 5-item bottom bar on phones. Two workspaces in one shell, chosen by
+path: **Belanja** (`/`, `/orders`, `/stores`, `/addresses`, `/account`) and **Affiliate** (`/affiliate/**`);
+the Belanja/Affiliate switch shows only for accounts with an `affiliates` row. Every page works without
+JavaScript. Design record and render evidence: `apps/account/DESIGN.md`.
 
 | Route | Reads / writes |
 |---|---|
 | every request (`src/middleware.ts`) | cookie `tphi_account` (jose JWT, aud `tokophi-account`, carries a `buyer_sessions.id`) → the **row** decides (revoked / > 30 days / account not `active` ⇒ signed out, cookie cleared); sets `no-store`, `no-referrer`, `noindex`, `DENY` framing |
-| `/masuk`, `POST /masuk/dev` | Google button when `GOOGLE_CLIENT_ID/SECRET` + `ACCOUNT_GOOGLE_REDIRECT_URI` are set; **dev sign-in** (`dev:<email>` subject, no password) only when not a production build — UPSERT `buyer_accounts` by `google_sub`, INSERT `buyer_sessions` |
-| `/auth/google/{start,callback}` | `@tokophi/lib/google-oauth` (same flow as Seller); `state` cookie; `email_verified` required |
-| `POST /keluar`, `/sesi` | revoke own session; list live sessions; "Keluar dari perangkat lain" (ACC-3) |
-| `/affiliate`, `/affiliate/[id]` | `affiliates` (where `account_id` = me) ⋈ `stores` ⟕ `affiliate_commissions` ⋈ `orders` (number, `placed_at` only) — totals ditahan / siap / dibayar per store; another account's id ⇒ 404 |
-| `/affiliate/gabung?toko=` | store must exist, not be locked (`suspended_at`), programme on → INSERT `affiliates` (`menunggu`, `account_id` = me); 5/h/account (DB count); same phone already in that store ⇒ refused, never taken over |
-| `/affiliate/undangan?t=` | preview, then ONE conditional UPDATE binds `affiliates.account_id` and clears `invite_hash` (aktif, unlinked, unexpired, account not already in that store) |
-| `/` | home; the buyer order area is a stated placeholder (claim flow is Tasks 10.5–10.10) |
+| `/masuk`, `POST /masuk/dev` | Google button when `GOOGLE_CLIENT_ID/SECRET` + `ACCOUNT_GOOGLE_REDIRECT_URI` are set; **dev sign-in** (`dev:<email>`) only outside a production build. `next` passes `safeNext` (same-origin after URL parsing). Signing in over a live session revokes it first |
+| `/auth/google/{start,callback}` | `@tokophi/lib/google-oauth`; `state` cookie; `email_verified` required → UPSERT `buyer_accounts`, INSERT `buyer_sessions` |
+| `/` Beranda | `myOrders` (recent + active), `myStores`, `countMyAddresses`, `buyAgain` (products of my `selesai` orders still active), `myAffiliateStores` (ready commission tile only for affiliates) |
+| `/orders?q=&toko=&status=` | `myOrders` filters in SQL on top of `mine()`; `q` LIKE-escaped; status tab allowlisted |
+| `/orders/{PHI}`, `/orders/{PHI}/receipt` | `myOrder`: allowlisted projection; payment = method/status/amount/fee/total, VA number and https URL only while `menunggu`, never QR or provider ids; thumbnails only https on the store or Seller-upload origin |
+| `/stores`, `/stores/{slug}`, `POST` unlink | `myStores`, `myStore` (active link of mine, else 404); unlink = `buyer_store_links.status = 'revoked'` only |
+| `/klaim?t=` | `previewClaim` / `claimOrder`: HMAC token (D-3), consent `"yes"`, INSERT `buyer_order_claims` (unique `order_id`), UPSERT `buyer_store_links` (consent time kept unless re-linking or new wording) |
+| `/addresses`, `/addresses/edit`, `/addresses/wilayah` | `buyer_addresses` (max 10 under `for update`, one primary, successor named on delete); district search `@tokophi/lib/area-search` |
+| `/account` | rename (`buyer_accounts.name`, 1–80), `listSessions`, `revokeOneSession` (mine, not current), `revokeOtherSessions` (ACC-3), sign-out `POST /keluar`; theme Terang/Gelap/Sistem (`localStorage tphi_theme`) |
+| `/affiliate`, `/affiliate/program`, `/affiliate/{id}` | `myAffiliateStores` / `myAffiliateDetail` (`account_id` = me; another account's id ⇒ 404); share link `?ref=` encoded; payout account masked, read-only |
+| `/affiliate/komisi?store=&state=` | `myCommissions` — one ledger across my programmes, state derived in SQL, latest 200 + totals |
+| `/affiliate/gabung?toko=` | store must exist, not be locked, programme on → INSERT `affiliates` (`menunggu`, `account_id` = me); **5 attempts/h/account** counted before the phone lookup (`rate_limit_counters`, key `acc-join:<id>`), serialised per account; same phone in that store ⇒ refused, never taken over |
+| `/affiliate/undangan?t=` | preview, then ONE conditional UPDATE binds `affiliates.account_id` and clears `invite_hash` |
+| storefront `/checkout/sukses` | "Simpan ke Akun TokoΦ" box only when `ACCOUNT_APP_URL` is https (http in dev) and THIS tab holds the claim token (`sessionStorage.lastOrderClaim`, never `localStorage`) for this order number |
 
 ## 7. `apps/landing`
 

@@ -1,2 +1,5 @@
 .astro/
 dist/
+design/refs/
+design/renders/
+design/review-slices/

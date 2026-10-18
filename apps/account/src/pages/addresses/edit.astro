@@ -1,0 +1,194 @@
+---
+// Add (no ?id) or edit (?id=<mine>) a saved address (ACC-7). The prototype's address dialog, as a
+// page: labels above, help under, errors inline next to the field, every typed value kept. Works
+// without JavaScript: "Cari" posts the form back with the kecamatan matches as radio choices. With JS
+// the same matches appear while typing (from /addresses/wilayah). For the location only the district
+// id is trusted and saved — it is what an ongkir quote and a booking are made against.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { areaById, searchAreas, type Area } from "@tokophi/lib/area-search";
+import { areaTerm, myAddress, saveAddress, type AddressErrors } from "../../data/addresses";
+import { signInUrl } from "../../lib/nav";
+import { phone } from "../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const id = Astro.url.searchParams.get("id") ?? undefined;
+const existing = id ? await myAddress(db, account.id, id) : null;
+// Someone else's id answers exactly like an unknown one.
+const missing = !!id && !existing;
+if (missing) Astro.response.status = 404;
+
+const v = {
+  label: existing?.label ?? "",
+  recipient: existing?.recipient ?? account.name ?? "",
+  phone: existing ? phone(existing.phone) : "",
+  address: existing?.address ?? "",
+  kelurahan: existing?.kelurahan ?? "",
+  postalCode: existing?.postalCode ?? "",
+  districtId: existing?.area ? String(existing.area.id) : "",
+  q: "",
+};
+let errors: AddressErrors = {};
+let matches: Area[] = [];
+let searched = false;
+if (!missing && Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  for (const k of Object.keys(v) as (keyof typeof v)[]) v[k] = String(f.get(k) ?? "").slice(0, 400);
+  // A radio picked from the server-rendered matches (no-JS path) wins over the remembered one.
+  const pick = String(f.get("districtPick") ?? "");
+  if (pick) v.districtId = pick;
+  if (f.get("do") === "cari") {
+    searched = true;
+    const term = areaTerm(v.q);
+    matches = term.length >= 3 ? await searchAreas(db, term, 8) : [];
+    if (!matches.length) errors.districtId = "Kecamatan tidak ditemukan. Ketik minimal 3 huruf nama kecamatan atau kota.";
+  } else {
+    const r = await saveAddress(db, account.id, v, id);
+    if (r.ok) return Astro.redirect("/addresses?ok=disimpan", 303);
+    errors = r.errors;
+  }
+}
+const chosen = v.districtId ? await areaById(db, Number(v.districtId)) : null;
+const err = (k: keyof AddressErrors) => errors[k];
+const fieldErrors = Object.keys(errors).filter((k) => k !== "form").length;
+const title = existing ? "Ubah alamat" : "Tambah alamat";
+const aria = (k: keyof AddressErrors, help?: string) => ({
+  "aria-invalid": err(k) ? ("true" as const) : undefined,
+  "aria-describedby": [help, err(k) ? `e-${k}` : null].filter(Boolean).join(" ") || undefined,
+});
+---
+<Layout title={missing ? "Alamat tidak ditemukan" : title} active="alamat" back={{ href: "/addresses", label: "Alamat" }}>
+  {missing ? (
+    <section class="state-card">
+      <h1>Alamat tidak ditemukan</h1>
+      <p>Alamat ini tidak ada di akun Anda. Mungkin sudah dihapus.</p>
+      <a class="button secondary" href="/addresses">Lihat alamat tersimpan</a>
+    </section>
+  ) : (
+    <>
+      <header class="page-header">
+        <div>
+          <h1>{title}</h1>
+          <p class="lead">Kota dan provinsi mengikuti kecamatan yang Anda pilih. Pesanan yang sudah dibuat tidak ikut berubah.</p>
+        </div>
+      </header>
+      {err("form") && <p class="acc-notice bad" role="alert">{err("form")}</p>}
+      {!err("form") && fieldErrors > 0 && <p class="acc-notice bad" role="alert">Periksa lagi {fieldErrors} kolom yang ditandai.</p>}
+
+      <section class="section-card acc-form-card">
+        <form class="local-form" method="post" novalidate>
+          {/* Enter in any text field = save, never "Cari": the first submit button is the implicit one. */}
+          <button type="submit" name="do" value="simpan" class="sr-only" tabindex="-1" aria-hidden="true">Simpan</button>
+
+          <label class="form-field">
+            <span>Label alamat <span class="opt">(opsional)</span></span>
+            <input name="label" maxlength="30" value={v.label} placeholder="Rumah, Kantor" aria-describedby="h-label" />
+            <span class="field-help" id="h-label">Nama singkat agar mudah dikenali.</span>
+          </label>
+
+          <label class="form-field">
+            Nama penerima
+            <input name="recipient" required maxlength="80" autocomplete="name" value={v.recipient} {...aria("recipient")} />
+            {err("recipient") && <span class="login-error" id="e-recipient">{err("recipient")}</span>}
+          </label>
+
+          <label class="form-field">
+            Nomor HP penerima
+            <input name="phone" type="tel" required inputmode="tel" autocomplete="tel" value={v.phone} placeholder="0812 3456 7890" {...aria("phone", "h-phone")} />
+            <span class="field-help" id="h-phone">Nomor WhatsApp aktif untuk dihubungi kurir.</span>
+            {err("phone") && <span class="login-error" id="e-phone">{err("phone")}</span>}
+          </label>
+
+          <fieldset class="acc-district" id="picker">
+            <legend>Kecamatan</legend>
+            <input type="hidden" name="districtId" id="districtId" value={v.districtId} />
+            <p class="acc-chosen" id="chosen" hidden={!chosen}>
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+              <span id="chosen-text">{chosen?.text}</span>
+            </p>
+            <div class="acc-search">
+              <input name="q" id="q" value={v.q} placeholder={chosen ? "Ganti kecamatan…" : "Nama kecamatan atau kota"} autocomplete="off" aria-label={chosen ? "Cari kecamatan lain" : "Cari kecamatan"} aria-controls="matches" {...aria("districtId", "h-district")} />
+              <button class="button secondary" name="do" value="cari" formnovalidate>Cari</button>
+            </div>
+            <span class="field-help" id="h-district">Ketik minimal 3 huruf, lalu pilih dari daftar.</span>
+            {err("districtId") && <span class="login-error" id="e-districtId">{err("districtId")}</span>}
+            <div id="matches" class="acc-matches" role="radiogroup" aria-label="Hasil kecamatan">{searched && matches.length > 0 && matches.map((m) => (
+              <label class="radio-label"><input type="radio" name="districtPick" value={m.id} /> <span>{m.text}</span></label>
+            ))}</div>
+          </fieldset>
+
+          <label class="form-field">
+            Alamat lengkap
+            <textarea name="address" rows="3" required maxlength="300" autocomplete="street-address" {...aria("address", "h-address")}>{v.address}</textarea>
+            <span class="field-help" id="h-address">Nama jalan, nomor rumah, RT/RW, dan patokan.</span>
+            {err("address") && <span class="login-error" id="e-address">{err("address")}</span>}
+          </label>
+
+          <div class="acc-two">
+            <label class="form-field">
+              <span>Kelurahan <span class="opt">(opsional)</span></span>
+              <input name="kelurahan" maxlength="80" value={v.kelurahan} />
+            </label>
+            <label class="form-field">
+              <span>Kode pos <span class="opt">(wajib)</span></span>
+              <input name="postalCode" required inputmode="numeric" maxlength="5" autocomplete="postal-code" value={v.postalCode} class="acc-num" {...aria("postalCode")} />
+              {err("postalCode") && <span class="login-error" id="e-postalCode">{err("postalCode")}</span>}
+            </label>
+          </div>
+
+          <div class="acc-actions">
+            <a class="button secondary" href="/addresses">Batal</a>
+            <button class="button primary" type="submit" name="do" value="simpan">Simpan alamat</button>
+          </div>
+        </form>
+      </section>
+    </>
+  )}
+</Layout>
+
+<script is:inline>
+  // Progressive enhancement: matches while typing. The radios it renders are the same shape the
+  // server renders for "Cari", so the POST is identical either way.
+  (function () {
+    var q = document.getElementById("q");
+    var box = document.getElementById("matches");
+    var hidden = document.getElementById("districtId");
+    var chosen = document.getElementById("chosen");
+    var chosenText = document.getElementById("chosen-text");
+    if (!q || !box || !hidden) return;
+    var timer = 0, seq = 0;
+    q.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+    q.addEventListener("input", function () {
+      clearTimeout(timer);
+      var term = q.value.trim();
+      if (term.length < 3) { box.textContent = ""; return; }
+      timer = setTimeout(function () {
+        var mine = ++seq;
+        fetch("/addresses/wilayah?q=" + encodeURIComponent(term), { headers: { accept: "application/json" } })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (list) {
+            if (mine !== seq) return;
+            box.textContent = "";
+            if (!list.length) {
+              var p = document.createElement("p"); p.className = "muted"; p.textContent = "Tidak ditemukan. Coba nama kota.";
+              box.appendChild(p); return;
+            }
+            list.forEach(function (a) {
+              var l = document.createElement("label"); l.className = "radio-label";
+              var i = document.createElement("input"); i.type = "radio"; i.name = "districtPick"; i.value = String(a.id);
+              var s = document.createElement("span"); s.textContent = a.text;
+              i.addEventListener("change", function () {
+                hidden.value = String(a.id);
+                chosenText.textContent = a.text; chosen.hidden = false;
+                box.textContent = ""; q.value = ""; q.placeholder = "Ganti kecamatan…";
+                q.focus();
+              });
+              l.appendChild(i); l.appendChild(document.createTextNode(" ")); l.appendChild(s); box.appendChild(l);
+            });
+          })
+          .catch(function () {});
+      }, 250);
+    });
+  })();
+</script>

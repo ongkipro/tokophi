@@ -100,6 +100,60 @@ suite("accounts and sessions", () => {
       expect(await acct.loadSession(tx, s)).not.toBeNull();
     });
   });
+
+  it("Keluarkan one device: only MY other session — never another account's, never the current one", async () => {
+    await inTxn(async (tx) => {
+      const me = (await account(tx, "one@demo.local"))!;
+      const other = (await account(tx, "one-other@demo.local"))!;
+      const cur = await acct.createSession(tx, me, "ua-current");
+      const phone = await acct.createSession(tx, me, "ua-phone");
+      const theirs = await acct.createSession(tx, other, "ua-theirs");
+      const theirCur = await acct.createSession(tx, other, "ua-their-current");
+
+      // Another account's session id, posted from MY session ⇒ nothing happens.
+      expect(await acct.revokeOneSession(tx, me, cur, theirs)).toBe(false);
+      expect(await acct.loadSession(tx, theirs)).not.toBeNull();
+      // Even "their current" passed as mine-to-keep cannot widen the predicate to their row.
+      expect(await acct.revokeOneSession(tx, me, theirCur, theirs)).toBe(false);
+      expect(await acct.loadSession(tx, theirs)).not.toBeNull();
+      // The current session is not revocable here (that is "Keluar dari akun").
+      expect(await acct.revokeOneSession(tx, me, cur, cur)).toBe(false);
+      expect(await acct.loadSession(tx, cur)).not.toBeNull();
+      // Garbage ids are refused before Postgres sees them (no 22P02 → 500).
+      expect(await acct.revokeOneSession(tx, me, cur, "not-a-uuid")).toBe(false);
+      expect(await acct.revokeOneSession(tx, me, cur, null)).toBe(false);
+
+      expect(await acct.revokeOneSession(tx, me, cur, phone)).toBe(true);
+      expect(await acct.loadSession(tx, phone)).toBeNull();
+      expect(await acct.loadSession(tx, cur)).not.toBeNull();
+      expect(await acct.revokeOneSession(tx, me, cur, phone)).toBe(false); // already revoked
+      expect((await acct.listSessions(tx, me)).map((s) => s.id)).toEqual([cur]);
+    });
+  });
+
+  it("rename: trimmed, 1–80 characters, MY row only", async () => {
+    await inTxn(async (tx) => {
+      const me = (await account(tx, "name@demo.local"))!;
+      const other = (await account(tx, "name-other@demo.local"))!;
+      const nameOf = async (id: string) => (await rows(tx, sql`select name from buyer_accounts where id = ${id}`))[0].name;
+
+      expect(await acct.renameAccount(tx, me, "  Sari \n  Dewi\t ")).toEqual({ ok: true, name: "Sari Dewi" });
+      expect(await nameOf(me)).toBe("Sari Dewi");
+      expect(await nameOf(other)).toBe("name-other@demo.local");
+
+      expect((await acct.renameAccount(tx, me, "   ")).ok).toBe(false);
+      expect((await acct.renameAccount(tx, me, undefined)).ok).toBe(false);
+      expect((await acct.renameAccount(tx, me, "x".repeat(81))).ok).toBe(false);
+      expect((await acct.renameAccount(tx, me, "x".repeat(80))).ok).toBe(true);
+      expect(await nameOf(me)).toBe("x".repeat(80));
+      // A refused rename writes nothing.
+      await acct.renameAccount(tx, me, "");
+      expect(await nameOf(me)).toBe("x".repeat(80));
+      // A later sign-in keeps the chosen name (upsert coalesces).
+      await acct.upsertAccountBySub(tx, { sub: "dev:name@demo.local", email: "name@demo.local", name: "From Google" });
+      expect(await nameOf(me)).toBe("x".repeat(80));
+    });
+  });
 });
 
 suite("affiliate area — one account, many stores, nobody else's", () => {

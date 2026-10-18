@@ -1,0 +1,13 @@
+---
+// Not found — also what every "not mine" record answers (another account's order, store or programme
+// is indistinguishable from an unknown one). Rendered inside the shell when signed in.
+import Layout from "../layouts/Layout.astro";
+const home = Astro.url.pathname.startsWith("/affiliate") ? "/affiliate" : "/";
+---
+<Layout title="Tidak ditemukan">
+  <section class="section-card state-card" style="max-width:560px">
+    <h1>Halaman tidak ditemukan</h1>
+    <p class="lead">Alamatnya salah, atau data ini bukan milik akun yang sedang masuk.</p>
+    <p><a class="button primary" href={Astro.locals.account ? home : "/masuk"}>{Astro.locals.account ? "Kembali ke beranda" : "Masuk"}</a></p>
+  </section>
+</Layout>

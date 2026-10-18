@@ -1,0 +1,79 @@
+---
+// Save an order to the account (ACC-11, Task 10.5). The link comes from the store's checkout success
+// page and carries the claim token (D-3) — so, like an invitation, this page loads no third-party
+// script and sends no Referer (middleware). Sign-in first; then a consent screen naming the store and
+// what is shared. Every refusal reads the same, whatever the reason. The path is a contract with the
+// storefront's success page: it stays `/klaim`.
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { claimOrder, previewClaim } from "../data/orders";
+import { signInUrl } from "../lib/nav";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+let token = Astro.url.searchParams.get("t") ?? "";
+let refused = false;
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  token = String(f.get("t") ?? "");
+  const r = await claimOrder(db, account.id, token, f.get("consent"));
+  if (r.ok) return Astro.redirect(`/orders/${encodeURIComponent(r.orderNumber)}?disimpan=1`, 303);
+  refused = true;
+}
+const preview = await previewClaim(db, account.id, token);
+---
+<Layout title="Simpan pesanan" back={{ href: "/orders", label: "Pesanan" }}>
+  <div class="claim-wrap">
+    {preview.state === "invalid" && (
+      <section class="section-card dialog-card" role="status">
+        <h1 class="claim-title">Tautan ini tidak bisa dipakai</h1>
+        <p class="dialog-lead">
+          Tautan simpan pesanan berlaku 30 hari dan hanya untuk satu akun. Tautan ini sudah kedaluwarsa, sudah dipakai
+          akun lain, atau tidak lengkap.
+        </p>
+        <div class="consent-box muted-box">
+          <strong>Kalau ini pesanan Anda</strong>
+          <p>Buka lagi tautan dari halaman sukses checkout di perangkat yang sama, atau hubungi toko dengan nomor pesanannya.</p>
+        </div>
+        <div class="claim-actions">
+          <a class="button secondary" href="/orders">Lihat pesanan saya</a>
+        </div>
+      </section>
+    )}
+    {preview.state === "mine" && (
+      <section class="section-card dialog-card" role="status">
+        <h1 class="claim-title">Pesanan sudah tersimpan</h1>
+        <p class="dialog-lead">Pesanan <span class="num">{preview.orderNumber}</span> dari {preview.storeName} sudah ada di akun ini.</p>
+        <div class="claim-actions">
+          <a class="button primary" href={`/orders/${encodeURIComponent(preview.orderNumber)}`}>Buka pesanan</a>
+        </div>
+      </section>
+    )}
+    {preview.state === "ready" && (
+      <form class="section-card dialog-card" method="post">
+        <h1 class="claim-title">Simpan pesanan {preview.storeName}</h1>
+        <p class="dialog-lead">Nomor pesanan <span class="num">{preview.orderNumber}</span> akan disimpan ke akun <strong>{account.email}</strong>.</p>
+        <div class="consent-box">
+          <strong>Yang akan terjadi</strong>
+          <ul>
+            <li>Status, isi, dan pengiriman pesanan ini tampil di akun Anda.</li>
+            <li>Pesanan lain dari {preview.storeName} yang Anda simpan nanti ikut tampil di sini.</li>
+            <li>Kalau sebelumnya Anda pernah memutus {preview.storeName}, pesanan yang dulu Anda simpan dari toko ini akan tampil lagi.</li>
+            <li>{preview.storeName} <strong>tidak</strong> mendapat akses ke akun, alamat tersimpan, atau pesanan Anda di toko lain.</li>
+            <li>Anda bisa memutus toko ini kapan saja dari menu Toko.</li>
+          </ul>
+        </div>
+        <input type="hidden" name="t" value={token} />
+        <label class="check-row">
+          <input type="checkbox" name="consent" value="yes" required aria-describedby={refused ? "consent-err" : undefined} aria-invalid={refused ? "true" : undefined} />
+          <span>Saya setuju pesanan dari {preview.storeName} ditampilkan di akun ini.</span>
+        </label>
+        {refused && <p class="field-error" id="consent-err" role="alert">Centang persetujuan di atas untuk menyimpan pesanan ini.</p>}
+        <div class="claim-actions">
+          <button class="button primary" type="submit">Simpan pesanan</button>
+          <a class="button ghost" href="/">Bukan pesanan saya</a>
+        </div>
+      </form>
+    )}
+  </div>
+</Layout>

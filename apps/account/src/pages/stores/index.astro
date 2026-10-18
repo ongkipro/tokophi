@@ -1,0 +1,59 @@
+---
+// Toko (spec §18.4 E, ACC-6): stores this account is actively linked to, most recent purchase first.
+// Derived only from claimed orders — never a phone match or a browsing event. Unlink lives on the
+// store's profile, behind a confirmation.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { myOrders, myStores } from "../../data/orders";
+import { signInUrl } from "../../lib/nav";
+import { initials, when } from "../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const [stores, orders] = await Promise.all([myStores(db, account.id), myOrders(db, account.id)]);
+// The newest order per store (myOrders is newest first) gives each card its last-purchase context.
+const latest = new Map<string, (typeof orders)[number]>();
+for (const o of orders) if (!latest.has(o.storeSlug)) latest.set(o.storeSlug, o);
+const unlinked = Astro.url.searchParams.has("diputus");
+---
+<Layout title="Toko" active="toko">
+  <header class="page-header">
+    <div>
+      <h1>Toko tempat Anda berbelanja</h1>
+      <p class="lead">Temukan kembali toko dari pesanan yang Anda simpan.</p>
+    </div>
+  </header>
+  {unlinked && <p class="privacy-note notice-ok" role="status">Toko diputus. Pesanannya tidak lagi tampil di akun ini; data di toko tidak berubah.</p>}
+
+  {stores.length === 0 ? (
+    <section class="state-card" role="status">
+      <h2>Belum ada toko terhubung</h2>
+      <p>Toko muncul di sini saat Anda menyimpan pesanan pertama darinya lewat tautan di halaman sukses checkout.</p>
+    </section>
+  ) : (
+    <div class="store-history-grid">
+      {stores.map((s) => {
+        const o = latest.get(s.slug);
+        return (
+          <article class="store-history-card">
+            <div class="store-history-heading">
+              <span class="store-mark store-history-mark" aria-hidden="true">{initials(s.name)}</span>
+              <div>
+                <h2>{s.name}</h2>
+                <span>{s.orders} pesanan tersimpan</span>
+              </div>
+            </div>
+            {o && (
+              <div class="store-order-context">
+                <strong>Pesanan terakhir · {when(o.placedAt)}</strong>
+                <p>{o.firstLine ?? "Pesanan"}{o.lineCount > 1 && ` dan ${o.lineCount - 1} lainnya`}</p>
+                <p class="store-order-reference num">{o.number}</p>
+              </div>
+            )}
+            <a href={`/stores/${encodeURIComponent(s.slug)}`} class="button secondary full-width store-return-link">Lihat toko<span class="sr-only"> {s.name}</span></a>
+          </article>
+        );
+      })}
+    </div>
+  )}
+</Layout>

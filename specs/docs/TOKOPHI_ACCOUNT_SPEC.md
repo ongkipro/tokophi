@@ -742,3 +742,153 @@ schema (after `0116`) → 10.3 sign-in → 10.13 claim token → 10.5 claim + li
 → 10.8 addresses → 10.4 sessions → 10.9 unlink → 10.10 success-page offer → 10.11 browser +
 tenant-negative sweep. Phase 2 = 10.14 (after Task 8.38). Phase 3 = 10.15 (after Stage 9 + OD-3).
 Close each phase in `specs/docs/STATUS.md`.
+
+## 18. UI/UX completion — port the accepted prototype, one shell for buyer and affiliate (2026-10-16)
+
+> **Owner direction 2026-10-16:** *"pakai itu aja kita sempurnakan … kebutuhan di dalamnya di
+> lengkapi dan sempurnakan termasuk kebutuhan affiliate ini secara ui ux bisa sama dengan user akun
+> namun isi dan navigasi beda"*. "Itu" is the local prototype (`prototypes/tokophi-account`, §12, §16,
+> served at `:4187`). The phase-1 app built on 2026-10-15 used its own simpler design; this section
+> replaces that design with the prototype's and completes every screen that real data can back.
+> Visual decisions, composition contract and render evidence live in `apps/account/DESIGN.md`.
+
+### 18.1 Principle — the prototype is the visual contract, the database is the content contract
+
+1. **Look and structure come from the prototype**: Seller-aligned tokens (`prototypes/tokophi-account/DESIGN.md`),
+   Geist, 256 px sidebar, 64 px topbar, centred content capped at 1120 px, mobile bottom navigation,
+   status-first order detail, card anatomy without nested boxes.
+2. **Content comes only from real rows.** A prototype element whose data or action has no backend
+   in phase 1 is **left out**, not mocked: no fake buttons, counts, vouchers, notifications or
+   payment simulation (spec §1 non-goals, §17.5 non-goals). Each omission is listed in §18.5 with
+   the task that would unlock it.
+3. **Every page works without JavaScript** (server-rendered Astro forms and links). Client script
+   is allowed only for progressive conveniences: copy-to-clipboard, theme toggle, district search
+   suggestions, dialog focus.
+4. **No new migration.** Everything below reads tables that exist on `feat/accounts`
+   (`0117`, `0118`, the store's order/payment/product rows).
+
+### 18.2 Two workspaces, one shell
+
+One account, two jobs. Both use the same shell, tokens and components; the **sidebar header carries
+a workspace switch** ("Belanja" / "Affiliate"), and the navigation, the home page and the mobile
+bottom bar change with it. The switch is a pair of links (no client state); the workspace is derived
+from the path (`/affiliate/**` = Affiliate, everything else = Belanja). "Akun" is shared.
+
+| | Belanja (buyer) | Affiliate |
+|---|---|---|
+| Home | `/` Beranda | `/affiliate` Ringkasan |
+| Nav | Beranda · Pesanan · Toko · Alamat · Akun | Ringkasan · Komisi · Program · Gabung · Akun |
+| Mobile bar | same five | same five |
+| Sidebar identity | name + email, "Akun pembeli" | name + email, "Affiliate · N toko" |
+| Empty first-run | "Simpan pesanan pertama" (how the claim link works) | "Gabung program toko" (store address form) |
+
+The workspace switch is shown only when it leads somewhere useful: a buyer with no affiliate row sees
+"Affiliate" as a quiet entry in Akun ("Jadi affiliate toko"), not as a permanent second workspace.
+
+### 18.3 Routes
+
+Buyer routes follow §6 (clean English paths). Entry links that **other apps already emit** keep their
+path, because they are contracts with the storefront and the Seller dashboard: `/klaim` (success
+page), `/affiliate/undangan` (seller invitation), `/masuk` (sign-in). The 2026-10-15 Indonesian
+buyer paths (`/pesanan`, `/toko`, `/alamat`, `/akun`, `/sesi`) were never published and are gone
+(no redirects; removed 2026-10-16 after the audit).
+
+| Path | Screen | Data |
+|---|---|---|
+| `/masuk` | Sign-in (prototype `login-shell`: context column + card) | Google; local dev sign-in only in dev |
+| `/` | Beranda | §18.4 A |
+| `/orders` | Pesanan — search, store filter, status tabs (URL-addressable `?q=&toko=&status=`) | `myOrders` + filters |
+| `/orders/{PHI}` | Status-first detail | `myOrder` |
+| `/orders/{PHI}/receipt` | Bukti pesanan (printable, `PHI-…` identity, never `INV-…`) | `myOrder` |
+| `/stores`, `/stores/{slug}` | Toko + connected-store profile | `myStores` + recent orders of that store |
+| `/addresses`, `/addresses/edit` | Alamat | `addresses.ts` |
+| `/account` | Profil & keamanan | account, sessions, linked stores |
+| `/klaim` | Consent screen | `previewClaim` / `claimOrder` |
+| `/affiliate` | Ringkasan | `myAffiliateStores` |
+| `/affiliate/komisi` | Cross-store commission ledger, filter by store and state | new read, §18.4 F |
+| `/affiliate/program`, `/affiliate/{id}` | Programmes and one programme | `myAffiliateDetail` |
+| `/affiliate/gabung`, `/affiliate/undangan` | Join, accept invitation | existing |
+
+### 18.4 Screen contracts as built
+
+**A. Beranda (buyer).** `Halo, {name}` (no emoji, no eyebrow). One **action card per real job**,
+most urgent first, only when it exists: prepaid order with `payments.status = 'menunggu'` → "Selesaikan
+pembayaran" (opens the order's payment section); order `dikirim` with an AWB → "Paket sedang dikirim"
++ copy AWB. Stat tiles (2×2 on phones): Pesanan aktif, Toko terhubung, Alamat tersimpan, and — only
+for an affiliate — Komisi siap dibayar. "Pesanan terbaru" (3, with the first line item's product
+photo when `product_media` has one, else a neutral package icon). "Beli lagi": up to 3 distinct
+products from delivered orders that still exist and are active in that store, linking to the
+storefront product page — no price promise (the storefront decides the current price).
+"Bantuan": claim another order, manage addresses, sign out other devices.
+
+**B. Pesanan.** Search (order number or line title), store select, status tabs Semua · Belum bayar ·
+Aktif (`baru`/`diproses`/`dikirim`) · Selesai · Dibatalkan/Retur. Each card: product photo, store,
+status badge, date, first line + "+N produk", total, and the **next fact** as a link label
+("Selesaikan pembayaran", "Lacak: JNE JP…", "Lihat bukti pesanan"). Result count. Distinct empty
+states: no orders at all (how to save one) vs. no match (clear filters).
+
+**C. Order detail.** Heading = human status ("Menunggu pembayaran", "Dalam pengiriman" …); meta line
+store · `PHI-…` · date. Summary card: total, status badge, primary action by state (pay → payment
+section; shipped → copy AWB; otherwise "Hubungi {toko}" WhatsApp when the store has a number) and
+secondary "Bukti pesanan". Sections (anchors, not JS tabs): **Pembayaran** (method, status, amount,
+fee, total; for an unpaid VA the account number with copy, for e-wallet the provider `url` as
+"Lanjutkan di …"; a QR string is never drawn as an image — the buyer is sent to the store's
+`/checkout/sukses` equivalent only if one exists, else told to pay via the VA/URL shown); **Pengiriman**
+(courier, AWB with copy, progress steps; no fabricated events, map or ETA); **Produk** (photo, title
+incl. variant, qty × price); **Dikirim ke** (snapshot + "Perubahan alamat tersimpan tidak mengubah
+alamat pesanan ini."); **Rincian total** (subtotal, ongkir, pajak, diskon, payment fee remainder,
+total).
+
+**D. Bukti pesanan.** One printable page: store, `PHI-…`, dates, lines, totals, payment, ship-to.
+`@media print` hides the shell.
+
+**E. Toko / connected-store profile.** List ordered by last purchase: store initial avatar, name,
+order count, last order date, "Lihat toko" (profile) . Profile: relationship context (first/last
+order, count), recent orders of that store, privacy note, **Kunjungi toko** (the canonical origin,
+one external handoff), **Putuskan** behind a confirm dialog explaining the consequence (§ACC-8).
+
+**F. Affiliate Ringkasan / Komisi / Program.** Ringkasan: three totals across stores (Siap dibayar,
+Masih ditahan, Sudah dibayar) with a one-line explanation of the H+3 hold; per-programme rows (store,
+status badge, code, orders, ready amount); a "Bagikan" shortcut per active programme. Komisi: one
+ledger across every programme of the account — date, store, `PHI-…`, base, commission, state badge
+(belum selesai / ditahan s.d. {date} / siap / dibayar {date} / batal), filters by store and state,
+query carries `account_id = me` exactly as `myAffiliateDetail` does. Program detail: code, share link
+with copy, status banner (menunggu/ditolak/nonaktif), that store's totals and ledger, the bank account
+**masked** (`•••• 1234`, read-only — changing a payout account stays with the seller, because an
+affiliate-editable payout account is a fraud path), and "Pertanyaan pembayaran: hubungi toko".
+Gabung: store address → store card → form (existing `joinProgramme`). Undangan: consent card.
+
+**G. Akun.** Informasi pribadi (name editable — `buyer_accounts.name`; email from Google read-only);
+Keamanan dan perangkat (`buyer_sessions`: this device, others with last activity, "Keluarkan" per
+device and "Keluar dari perangkat lain" — ACC-3; "Keluar dari akun"); Toko terhubung summary with link
+to Toko; Alamat summary; Affiliate entry. Theme: Terang / Gelap / Sistem.
+
+**H. States everywhere.** Empty, not-found (404 page in the shell), form error next to the field with
+values kept, success notice as `role="status"`, confirm dialogs for destructive actions (native
+`<dialog>` with a no-JS `<details>` fallback is acceptable).
+
+### 18.5 Prototype elements deliberately left out (no backend in phase 1)
+
+| Prototype element | Why out | Unlocks with |
+|---|---|---|
+| Phone + OTP sign-in, "Ubah nomor HP", "Nomor lama tidak bisa diakses" | No messaging provider | Task 8.38 → 10.14 |
+| Notification bell / `/notifications`, notification preferences | No delivery channel, no central contract (§6) | Task 8.38 + a notification task |
+| Voucher cards, "Voucher tersedia" tile | Non-goal §5I; no bounded voucher projection | separate task |
+| Help/complaint requests, return requests | No operator intake | phase 2 runbook |
+| Payment simulation, QR image | §12: QR fixtures never become fake images; no payment action in phase 1 | — |
+| Tracking timeline / events | No shipment-event table | shipping events task |
+| COD trust status | Gate 13 | gate 13 |
+| "Minta salinan data", "Ajukan penutupan akun" | Needs operator capability + privacy review | OD-6 |
+| Guest checkout demo, merchant projection sketch | Belong to the storefront / Seller apps | — |
+| Prototype banner "Mode Uji Coba Lokal" | The app runs on real rows; a dev-only footer note replaces it | — |
+
+### 18.6 Acceptance (Task 10.16–10.19)
+
+- Every route above renders at 390 and 1280 px, light and dark, with no horizontal overflow and no
+  console error; keyboard reaches every control with a visible focus ring; touch targets ≥ 44 px on
+  phones.
+- Buyer negative sweep unchanged (another account → 404 on any order, store profile or receipt);
+  affiliate negative sweep: another account's programme id or ledger row → 404/absent.
+- `astro check` 0 errors, account tests green on the branch DB, `astro build` succeeds, and the
+  committed `apps/account/scripts/check-ui.mjs` drives the routes against the build.
+- design-taste gate (`design-gate.py apps/account`) exits 0 with an independent visual review.

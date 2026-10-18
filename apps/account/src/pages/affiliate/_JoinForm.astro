@@ -1,0 +1,32 @@
+---
+// Step 1 of joining (spec §18.4 F "Gabung"): the store's address. A plain GET, so it works without JS.
+// No store directory (AFFILIATE_SPEC OD-A6): the affiliate brings the address.
+import { storefrontOrigin } from "../../lib/nav";
+
+interface Props {
+  value?: string;
+  error?: string | null;
+}
+const { value = "", error = null } = Astro.props;
+const example = storefrontOrigin("namatoko").replace(/^https:\/\//, "");
+---
+<form class="local-form aff-join" method="get" action="/affiliate/gabung" novalidate>
+  <label class="form-field" for="toko">Alamat toko</label>
+  <p class="field-help aff-help" id="toko-help">Nama toko dari alamatnya ({example}). Link toko lengkap juga bisa.</p>
+  <div class="aff-join-row">
+    <input
+      id="toko"
+      name="toko"
+      required
+      value={value}
+      autocapitalize="none"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="namatoko"
+      aria-describedby={error ? "toko-help toko-err" : "toko-help"}
+      aria-invalid={error ? "true" : undefined}
+    />
+    <button class="button primary" type="submit">Lanjut</button>
+  </div>
+  {error && <p class="aff-error" id="toko-err">{error}</p>}
+</form>

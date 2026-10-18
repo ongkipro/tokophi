@@ -6,7 +6,7 @@ import { devSignInAllowed, devSubject } from "../../lib/dev-signin";
 import { safeNext } from "../../lib/nav";
 import { startSession } from "../../lib/signin";
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => {
   if (!devSignInAllowed()) return new Response("Not found", { status: 404 });
   const form = await request.formData();
   const next = safeNext(String(form.get("next") ?? ""));
@@ -15,6 +15,6 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const email = sub.slice(4);
   const id = await upsertAccountBySub(db, { sub, email, name: email.split("@")[0] });
   if (!id) return redirect("/masuk?e=akun", 303);
-  await startSession(cookies, id, request.headers.get("user-agent"));
+  await startSession(cookies, locals, id, request.headers.get("user-agent"));
   return redirect(next, 303);
 };

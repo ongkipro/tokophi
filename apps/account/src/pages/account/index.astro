@@ -1,0 +1,259 @@
+---
+// "Akun" — Profil & keamanan (spec §18.4 G). Shared by both workspaces. Everything here is about
+// the person, not a store: the display name (editable), the Google email (read-only), the devices
+// signed in (ACC-3), theme, and summaries that link to Toko, Alamat and the affiliate area.
+// Left out on purpose (§18.5): phone change, notification preferences, data copy / account closure.
+// No JavaScript needed except the theme control, which is purely a browser preference.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { listSessions, NAME_MAX, renameAccount, revokeOneSession, revokeOtherSessions } from "../../data/account";
+import { myAddresses } from "../../data/addresses";
+import { myAffiliateStores } from "../../data/affiliate";
+import { myStores } from "../../data/orders";
+import { signInUrl } from "../../lib/nav";
+import { whenTime } from "../../lib/order-view";
+
+const account = Astro.locals.account;
+const current = Astro.locals.sessionId;
+if (!account || !current) return Astro.redirect(signInUrl(Astro.url));
+
+let nameError: string | null = null;
+let nameValue = account.name ?? "";
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  const action = f.get("do");
+  if (action === "nama") {
+    const r = await renameAccount(db, account.id, f.get("name"));
+    if (r.ok) return Astro.redirect("/account?ok=nama", 303);
+    nameError = r.error;
+    nameValue = String(f.get("name") ?? "").slice(0, 200);
+  } else if (action === "revoke") {
+    const ok = await revokeOneSession(db, account.id, current, f.get("id"));
+    return Astro.redirect(`/account?${ok ? "ok=keluar1" : "gagal=sesi"}#keamanan`, 303);
+  } else if (action === "revoke-others") {
+    const n = await revokeOtherSessions(db, account.id, current);
+    return Astro.redirect(`/account?ok=keluar&n=${n}#keamanan`, 303);
+  }
+}
+
+const [sessions, addresses, stores, programmes] = await Promise.all([
+  listSessions(db, account.id),
+  myAddresses(db, account.id),
+  myStores(db, account.id),
+  myAffiliateStores(db, account.id),
+]);
+const others = sessions.filter((s) => s.id !== current); // newest activity first
+// A long tail of old devices hides the buttons below it; "Keluar dari perangkat lain" covers the rest.
+const SHOWN = 5;
+const primary = addresses.find((a) => a.isPrimary);
+const editing = nameError !== null || Astro.url.searchParams.get("ubah") === "nama";
+
+const ok = Astro.url.searchParams.get("ok");
+const n = Number(Astro.url.searchParams.get("n") ?? 0) || 0;
+const notice =
+  ok === "nama" ? "Nama disimpan."
+  : ok === "keluar1" ? "Perangkat itu sudah dikeluarkan."
+  : ok === "keluar" ? (n ? `${n} perangkat lain sudah dikeluarkan.` : "Tidak ada perangkat lain yang masuk.")
+  : null;
+const sessionGone = Astro.url.searchParams.get("gagal") === "sesi";
+
+/** "Chrome · Android" from a user agent — enough to recognise a device, never the raw string. */
+function device(ua: string | null): string {
+  if (!ua) return "Perangkat tidak dikenal";
+  const browser =
+    /Edg\//.test(ua) ? "Edge"
+    : /OPR\/|Opera/.test(ua) ? "Opera"
+    : /SamsungBrowser/.test(ua) ? "Samsung Internet"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : /(Headless)?Chrome\/|CriOS/.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari"
+    : "Browser";
+  const os =
+    /Android/.test(ua) ? "Android"
+    : /iPhone|iPad|iPod/.test(ua) ? "iOS"
+    : /Windows/.test(ua) ? "Windows"
+    : /Mac OS X|Macintosh/.test(ua) ? "macOS"
+    : /CrOS/.test(ua) ? "ChromeOS"
+    : /Linux/.test(ua) ? "Linux"
+    : null;
+  return os ? `${browser} · ${os}` : browser;
+}
+const me = sessions.find((s) => s.id === current);
+---
+<Layout title="Akun" active="akun">
+  <header class="page-header">
+    <div>
+      <h1>Profil &amp; keamanan</h1>
+      <p class="lead">Kelola nama, perangkat yang masuk, dan tampilan akun Anda.</p>
+    </div>
+  </header>
+
+  {notice && (
+    <p class="acc-notice" role="status">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+      {notice}
+    </p>
+  )}
+  {sessionGone && <p class="acc-notice bad" role="alert">Perangkat itu sudah tidak masuk ke akun ini.</p>}
+
+  <div class="profile-grid">
+    <div class="stack">
+      <section class="section-card" id="profil" aria-labelledby="h-profil">
+        <div class="section-heading">
+          <h2 id="h-profil">Informasi pribadi</h2>
+          {!editing && <a class="link-button" href="/account?ubah=nama#profil">Ubah nama</a>}
+        </div>
+        {editing ? (
+          <form class="local-form" method="post" action="/account#profil" novalidate>
+            <label class="form-field">
+              Nama
+              <input name="name" value={nameValue} required maxlength={NAME_MAX} autocomplete="name" autofocus
+                aria-invalid={nameError ? "true" : undefined} aria-describedby={nameError ? "e-name h-name" : "h-name"} />
+              <span class="field-help" id="h-name">Nama ini tampil di akun Anda dan sebagai isian awal penerima alamat.</span>
+              {nameError && <span class="login-error" id="e-name">{nameError}</span>}
+            </label>
+            <div class="form-field">
+              Email
+              <p class="acc-identity">{account.email ?? "—"} <small>Dari akun Google, tidak bisa diubah di sini.</small></p>
+            </div>
+            <div class="acc-actions">
+              <a class="button secondary" href="/account#profil">Batal</a>
+              <button class="button primary" type="submit" name="do" value="nama">Simpan nama</button>
+            </div>
+          </form>
+        ) : (
+          <p class="acc-identity">
+            <strong>{account.name ?? "Belum ada nama"}</strong><br />
+            {account.email ?? "—"}
+            <small>Email dari akun Google</small>
+          </p>
+        )}
+      </section>
+
+      <section class="section-card" id="keamanan" aria-labelledby="h-keamanan">
+        <h2 id="h-keamanan">Keamanan dan perangkat</h2>
+        <p class="field-help">Perangkat yang saat ini masuk ke akun Anda.</p>
+        <div class="request-row">
+          <div>
+            <strong>Perangkat ini</strong>
+            <p>{device(me?.userAgent ?? null)}</p>
+          </div>
+          <span class="badge connected">Aktif</span>
+        </div>
+        {others.length > 0 ? (
+          <>
+            <div class="request-row">
+              <div>
+                <strong>{others.length} perangkat lain</strong>
+                <p>Terakhir aktif {whenTime(others[0].lastSeenAt)}</p>
+              </div>
+              <form method="post" action="/account#keamanan">
+                <button class="link-button" name="do" value="revoke-others" data-action="revoke">Keluar dari semua perangkat lain</button>
+              </form>
+            </div>
+            <details class="acc-devices" open={ok === "keluar1" || undefined}>
+              <summary>
+                Lihat perangkat
+                <svg class="acc-chev" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
+              {others.slice(0, SHOWN).map((s) => (
+                <div class="request-row">
+                  <div>
+                    <strong>{device(s.userAgent)}</strong>
+                    <p>Terakhir aktif {whenTime(s.lastSeenAt)}</p>
+                  </div>
+                  <form method="post" action="/account#keamanan">
+                    <input type="hidden" name="id" value={s.id} />
+                    <button class="link-button" name="do" value="revoke" data-action="revoke">Keluarkan<span class="sr-only"> {device(s.userAgent)}, terakhir aktif {whenTime(s.lastSeenAt)}</span></button>
+                  </form>
+                </div>
+              ))}
+              {others.length > SHOWN && (
+                <p class="field-help">{others.length - SHOWN} perangkat lain yang lebih lama tidak ditampilkan. "Keluar dari semua perangkat lain" mengeluarkan semuanya.</p>
+              )}
+            </details>
+          </>
+        ) : (
+          <p class="field-help" role="status">Tidak ada perangkat lain yang masuk.</p>
+        )}
+        <form method="post" action="/keluar">
+          <button class="button acc-signout" type="submit">Keluar dari akun</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="section-card" aria-labelledby="h-terhubung">
+        <h2 id="h-terhubung">Terhubung</h2>
+        <div class="connection-row">
+          <div>
+            <span>Toko</span>
+            <strong>{stores.length ? `${stores.length} toko dari pesanan yang Anda simpan` : "Belum ada toko"}</strong>
+          </div>
+          <a class="link-button" href="/stores">Lihat toko</a>
+        </div>
+        <div class="connection-row">
+          <div>
+            <span>Alamat</span>
+            <strong>{addresses.length ? `${addresses.length} alamat${primary ? ` · utama: ${primary.label ?? primary.recipient}` : ""}` : "Belum ada alamat"}</strong>
+          </div>
+          <a class="link-button" href="/addresses">{addresses.length ? "Kelola" : "Tambah alamat"}</a>
+        </div>
+        <div class="connection-row">
+          <div>
+            <span>Affiliate</span>
+            <strong>{programmes.length ? `Terdaftar di ${programmes.length} toko` : "Belum ikut program affiliate"}</strong>
+          </div>
+          <a class="link-button" href={programmes.length ? "/affiliate" : "/affiliate/gabung"}>{programmes.length ? "Buka Affiliate" : "Jadi affiliate toko"}</a>
+        </div>
+        <p class="field-help acc-foot">Setiap toko hanya melihat pesanannya sendiri, bukan akun atau toko lain Anda.</p>
+      </section>
+      <section class="section-card" aria-labelledby="h-tampilan">
+        <h2 id="h-tampilan">Tampilan</h2>
+        <div class="filter-row acc-theme" id="theme-pick" role="group" aria-label="Tema" hidden>
+          <button class="filter" type="button" data-theme="light" aria-pressed="false">Terang</button>
+          <button class="filter" type="button" data-theme="dark" aria-pressed="false">Gelap</button>
+          <button class="filter" type="button" data-theme="system" aria-pressed="false">Sistem</button>
+        </div>
+        <p class="field-help" id="theme-note">Tema mengikuti pengaturan perangkat Anda.</p>
+      </section>
+
+    </div>
+  </div>
+</Layout>
+
+<script is:inline>
+  // Theme: a browser preference only (localStorage `tphi_theme`), the same key the Layout's
+  // pre-paint script and topbar toggle use. Without JavaScript the control stays hidden and the
+  // note says the system setting applies.
+  (function () {
+    var box = document.getElementById("theme-pick");
+    var note = document.getElementById("theme-note");
+    if (!box) return;
+    var mq = matchMedia("(prefers-color-scheme: dark)");
+    function stored() { try { return localStorage.getItem("tphi_theme"); } catch (e) { return null; } }
+    function apply(choice) {
+      try {
+        if (choice === "system") localStorage.removeItem("tphi_theme");
+        else localStorage.setItem("tphi_theme", choice);
+      } catch (e) {}
+      var dark = choice === "dark" || (choice === "system" && mq.matches);
+      document.documentElement.classList.toggle("dark", dark);
+      sync();
+    }
+    function sync() {
+      var t = stored();
+      var cur = t === "light" || t === "dark" ? t : "system";
+      box.querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.theme === cur)); });
+      note.textContent = cur === "system" ? "Mengikuti pengaturan perangkat Anda." : "Disimpan di browser ini saja.";
+    }
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-theme]");
+      if (b) apply(b.dataset.theme);
+    });
+    // The topbar toggle writes the same key; keep this control honest when it is used.
+    document.getElementById("theme-toggle")?.addEventListener("click", function () { setTimeout(sync, 0); });
+    box.hidden = false;
+    sync();
+  })();
+</script>

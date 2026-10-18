@@ -1,0 +1,108 @@
+---
+// Pesanan (spec §18.4 B, ACC-12): only orders saved to this account, from stores still linked. Search,
+// store and status are GET parameters, so a filtered list is a link that can be shared, bookmarked
+// and reached with the Back button; the filtering itself happens in SQL, ANDed onto `mine()`.
+import Layout from "../../layouts/Layout.astro";
+import ProductThumb from "../../components/ProductThumb.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myOrders, myStores, type StatusTab } from "../../data/orders";
+import { signInUrl } from "../../lib/nav";
+import { nextStep, parseOrderFilter, statusOf, when } from "../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const f = parseOrderFilter(Astro.url.searchParams);
+const [orders, stores, any] = await Promise.all([
+  myOrders(db, account.id, f),
+  myStores(db, account.id),
+  // "No orders at all" and "no match" are different states with different help.
+  f.q || f.toko || f.status !== "semua" ? myOrders(db, account.id, {}, 1).then((r) => r.length > 0) : Promise.resolve(null),
+]);
+const hasAny = any ?? orders.length > 0;
+const filtered = !!(f.q || f.toko || f.status !== "semua");
+const TABS: [StatusTab, string][] = [
+  ["semua", "Semua"],
+  ["belum-bayar", "Belum bayar"],
+  ["aktif", "Aktif"],
+  ["selesai", "Selesai"],
+  ["batal", "Dibatalkan/Retur"],
+];
+/** A tab link keeps the other filters. */
+const tabHref = (status: StatusTab) => {
+  const p = new URLSearchParams();
+  if (f.q) p.set("q", f.q);
+  if (f.toko) p.set("toko", f.toko);
+  if (status !== "semua") p.set("status", status);
+  const s = p.toString();
+  return s ? `/orders?${s}` : "/orders";
+};
+---
+<Layout title="Pesanan" active="pesanan">
+  <header class="page-header">
+    <div>
+      <h1>Pesanan Anda</h1>
+      <p class="lead">Pesanan dari semua toko yang Anda simpan ke akun ini.</p>
+    </div>
+  </header>
+
+  {!hasAny ? (
+    <section class="state-card" role="status">
+      <h2>Belum ada pesanan tersimpan</h2>
+      <p>Setelah checkout di toko TokoΦ, ketuk <strong>“Simpan ke Akun TokoΦ”</strong> di halaman sukses, lalu setujui di akun ini. Pesanannya akan muncul di sini.</p>
+    </section>
+  ) : (
+    <>
+      <form class="search-toolbar" method="get" action="/orders" role="search">
+        <label><span class="toolbar-label">Cari pesanan</span>
+          <input name="q" type="search" value={f.q} placeholder="Nomor / produk" maxlength="100" autocomplete="off" />
+        </label>
+        <label><span class="toolbar-label">Toko</span>
+          <select name="toko">
+            <option value="">Semua toko</option>
+            {stores.map((s) => <option value={s.slug} selected={f.toko === s.slug}>{s.name}</option>)}
+          </select>
+        </label>
+        {f.status !== "semua" && <input type="hidden" name="status" value={f.status} />}
+        <button class="button secondary" type="submit">
+          <svg class="toolbar-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          <span class="toolbar-submit-text">Cari</span>
+        </button>
+      </form>
+
+      <nav class="filter-row buyer-tabs" aria-label="Status pesanan">
+        {TABS.map(([value, label]) => (
+          <a class={`filter${value === f.status ? " is-active" : ""}`} href={tabHref(value)} aria-current={value === f.status ? "page" : undefined}>{label}</a>
+        ))}
+      </nav>
+
+      <p class="result-count" role="status">{orders.length} pesanan ditemukan</p>
+
+      {orders.length === 0 ? (
+        <section class="state-card">
+          <h2>Tidak ada pesanan yang cocok</h2>
+          <p>Coba nomor pesanan atau nama produk lain, atau pilih toko dan status yang berbeda.</p>
+          {filtered && <a class="button secondary" href="/orders">Hapus filter</a>}
+        </section>
+      ) : (
+        <div class="order-list">
+          {orders.map((o) => {
+            const s = statusOf(o);
+            const next = nextStep(o);
+            return (
+              <a class="order-card" href={next.href} aria-label={`Buka pesanan ${o.number} dari ${o.storeName}`}>
+                <ProductThumb src={o.thumb} lazy />
+                <span class="order-main">
+                  <span class="order-topline"><strong>{o.storeName}</strong><span class={`badge ${s.badge}`}>{s.label}</span></span>
+                  <span class="order-meta">{when(o.placedAt)} · <span class="num">{o.number}</span></span>
+                  <span class="order-meta">{o.firstLine ?? "Pesanan"}{o.lineCount > 1 && ` +${o.lineCount - 1} produk`}</span>
+                </span>
+                <span class="order-total"><strong class="num">{IDR(o.totalIdr)}</strong><span>{next.label}</span></span>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </>
+  )}
+</Layout>

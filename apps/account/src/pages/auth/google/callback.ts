@@ -5,7 +5,7 @@ import { upsertAccountBySub } from "../../../data/account";
 import { safeNext } from "../../../lib/nav";
 import { startSession } from "../../../lib/signin";
 
-export const GET: APIRoute = async ({ url, cookies, request, redirect }) => {
+export const GET: APIRoute = async ({ url, cookies, request, redirect, locals }) => {
   const cfg = googleConfig("ACCOUNT_GOOGLE_REDIRECT_URI");
   if (!cfg) return redirect("/masuk", 302);
   const cookieState = cookies.get(OAUTH_STATE_COOKIE)?.value;
@@ -19,6 +19,6 @@ export const GET: APIRoute = async ({ url, cookies, request, redirect }) => {
   if (!profile || !profile.emailVerified) return redirect("/masuk?e=google_gagal", 302);
   const id = await upsertAccountBySub(db, { sub: profile.sub, email: profile.email, name: profile.name || null });
   if (!id) return redirect("/masuk?e=akun", 302);
-  await startSession(cookies, id, request.headers.get("user-agent"));
+  await startSession(cookies, locals, id, request.headers.get("user-agent"));
   return redirect(next, 302);
 };

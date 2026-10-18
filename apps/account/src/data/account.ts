@@ -3,6 +3,7 @@
 // Functions take `db` so the real-Postgres tests can run them inside a rolled-back transaction.
 import type { db as DbClient } from "@tokophi/db";
 import * as schema from "@tokophi/db/schema";
+import { isUuid } from "@tokophi/lib/uuid";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 
 export type Db = typeof DbClient;
@@ -76,6 +77,42 @@ export async function revokeOtherSessions(db: Db, buyerId: string, keepSessionId
     .where(and(eq(schema.buyerSessions.buyerId, buyerId), ne(schema.buyerSessions.id, keepSessionId), isNull(schema.buyerSessions.revokedAt)))
     .returning({ id: schema.buyerSessions.id });
   return rows.length;
+}
+
+/** "Keluarkan" on ONE other device. Mine only, never the session making the request (that is
+ *  "Keluar dari akun"); a foreign, current, unknown or already-revoked id changes nothing ⇒ false. */
+export async function revokeOneSession(db: Db, buyerId: string, currentSessionId: string, targetId: unknown): Promise<boolean> {
+  if (typeof targetId !== "string" || !isUuid(targetId) || targetId === currentSessionId) return false;
+  const rows = await db
+    .update(schema.buyerSessions)
+    .set({ revokedAt: sql`now()` })
+    .where(
+      and(
+        eq(schema.buyerSessions.id, targetId),
+        eq(schema.buyerSessions.buyerId, buyerId),
+        ne(schema.buyerSessions.id, currentSessionId),
+        isNull(schema.buyerSessions.revokedAt),
+      ),
+    )
+    .returning({ id: schema.buyerSessions.id });
+  return rows.length === 1;
+}
+
+export const NAME_MAX = 80;
+export type RenameResult = { ok: true; name: string } | { ok: false; error: string };
+
+/** "Informasi pribadi": the display name only — whitespace collapsed, 1–80 characters. The email
+ *  comes from Google and is not editable here. */
+export async function renameAccount(db: Db, buyerId: string, raw: unknown): Promise<RenameResult> {
+  const name = typeof raw === "string" ? raw.replace(/[\s\p{Cc}]+/gu, " ").trim() : "";
+  if (!name) return { ok: false, error: "Nama wajib diisi." };
+  if ([...name].length > NAME_MAX) return { ok: false, error: `Nama maksimal ${NAME_MAX} karakter.` };
+  const rows = await db
+    .update(schema.buyerAccounts)
+    .set({ name })
+    .where(eq(schema.buyerAccounts.id, buyerId))
+    .returning({ id: schema.buyerAccounts.id });
+  return rows.length ? { ok: true, name } : { ok: false, error: "Akun tidak ditemukan." };
 }
 
 export async function listSessions(db: Db, buyerId: string) {

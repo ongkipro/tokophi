@@ -1,0 +1,91 @@
+---
+// Bukti pesanan (spec §18.4 D, §6 "Order transaction surfaces"): one printable page under the order's
+// own `PHI-…` number — never an `INV-…` (that namespace is the platform's subscription billing).
+// Same allowlisted projection and the same 404 as the detail page; `@media print` drops the shell.
+import Layout from "../../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myOrder } from "../../../data/orders";
+import { signInUrl } from "../../../lib/nav";
+import { ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, courierName, phone, whenTime } from "../../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const order = await myOrder(db, account.id, Astro.params.number ?? "");
+if (!order) return new Response(null, { status: 404 });
+const base = `/orders/${encodeURIComponent(order.number)}`;
+const pay = order.payment;
+const cod = pay?.method === "cod";
+const otherFeesIdr = order.totalIdr - (order.subtotalIdr - order.discountIdr + order.shippingIdr + order.taxIdr);
+const shipLine = [order.ship.address, order.ship.kelurahan, order.ship.city, order.ship.province, order.ship.postcode].filter(Boolean).join(", ");
+const courier = courierName(order.courier);
+const printedAt = whenTime(new Date());
+---
+<Layout title={`Bukti pesanan ${order.number}`} active="pesanan" back={{ href: base, label: "Kembali ke pesanan" }}>
+  <header class="page-header">
+    <div>
+      <h1>Bukti pesanan</h1>
+      <p class="lead">{order.storeName} · <span class="num">{order.number}</span></p>
+    </div>
+    <button class="button secondary receipt-print" type="button" id="print" hidden>Cetak atau simpan PDF</button>
+  </header>
+
+  <article class="section-card receipt-view" aria-label={`Bukti pesanan ${order.number}`}>
+    <div class="receipt-head">
+      <div>
+        <strong class="receipt-store">{order.storeName}</strong>
+        <span>Bukti pesanan · Akun TokoΦ</span>
+      </div>
+      <strong class="receipt-number num">{order.number}</strong>
+    </div>
+
+    <dl class="transaction-refs refs-plain">
+      <div><dt>Nomor pesanan</dt><dd>{order.number}</dd></div>
+      <div><dt>Tanggal pesanan</dt><dd>{whenTime(order.placedAt)}</dd></div>
+      <div><dt>Status pesanan</dt><dd>{ORDER_STATUS[order.status]?.label ?? order.status}</dd></div>
+      {pay && <div><dt>Metode pembayaran</dt><dd>{PAYMENT_METHOD[pay.method] ?? pay.method}{pay.channel && !cod ? ` · ${pay.channel.toUpperCase()}` : ""}</dd></div>}
+      {pay && <div><dt>Status pembayaran</dt><dd>{cod && pay.status === "menunggu" ? "Dibayar ke kurir saat paket tiba" : (PAYMENT_STATUS[pay.status] ?? pay.status)}</dd></div>}
+      {courier && <div><dt>Pengiriman</dt><dd>{courier}{order.serviceType && !/^\d+$/.test(order.serviceType) ? ` ${order.serviceType}` : ""}{order.awb ? ` · ${order.awb}` : ""}</dd></div>}
+    </dl>
+
+    <h2>Produk</h2>
+    {order.lines.map((l) => (
+      <div class="line-item">
+        <div><strong>{l.title}</strong><small class="num">{l.qty} × {IDR(l.priceIdr)}</small></div>
+        <strong class="num">{IDR(l.totalIdr)}</strong>
+      </div>
+    ))}
+
+    <div class="receipt-totals">
+      <div class="summary-row"><span>Subtotal</span><strong class="num">{IDR(order.subtotalIdr)}</strong></div>
+      {order.discountIdr > 0 && <div class="summary-row"><span>Diskon</span><strong class="num">−{IDR(order.discountIdr)}</strong></div>}
+      <div class="summary-row"><span>Ongkir{courier ? ` (${courier})` : ""}</span><strong class="num">{IDR(order.shippingIdr)}</strong></div>
+      {order.taxIdr > 0 && <div class="summary-row"><span>Pajak</span><strong class="num">{IDR(order.taxIdr)}</strong></div>}
+      {otherFeesIdr > 0 && <div class="summary-row"><span>{cod ? "Biaya COD" : "Biaya pembayaran"}</span><strong class="num">{IDR(otherFeesIdr)}</strong></div>}
+      <div class="summary-row total"><span>Total</span><strong class="num">{IDR(order.totalIdr)}</strong></div>
+    </div>
+
+    {(order.ship.recipient || shipLine) && (
+      <>
+        <h2>Dikirim ke</h2>
+        <p>
+          <strong>{order.ship.recipient}</strong>{order.ship.phone && <> · <span class="num">{phone(order.ship.phone)}</span></>}
+          <br />{shipLine}
+        </p>
+      </>
+    )}
+
+    <p class="field-help receipt-foot">
+      Dicetak {printedAt} dari Akun TokoΦ. Bukti ini merangkum pesanan yang tercatat di {order.storeName}; bukan faktur pajak.
+    </p>
+  </article>
+</Layout>
+
+<script>
+  // Printing needs script; without it the browser's own Print menu does the same job.
+  const b = document.getElementById("print") as HTMLButtonElement | null;
+  if (b) {
+    b.hidden = false;
+    b.addEventListener("click", () => window.print());
+  }
+</script>

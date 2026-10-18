@@ -1,78 +1,90 @@
-:root {
-  color-scheme: light dark;
-  --bg: #f7f7f8;
-  --card: #ffffff;
-  --ink: #18181b;
-  --muted: #5f5f69;
-  --line: #e4e4e7;
-  --primary: #4f46e5;
-  --primary-ink: #ffffff;
-  --ok: #047857;
-  --ok-bg: #ecfdf5;
-  --warn: #92400e;
-  --warn-bg: #fffbeb;
-  --bad: #b91c1c;
-  --bad-bg: #fef2f2;
-  --radius: 14px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+/* Account app styles (spec §18). The visual system is the accepted prototype, ported verbatim in
+   prototype.css; this file only adapts it to a multi-page server-rendered app (links instead of
+   SPA buttons) and adds the few pieces the prototype did not need. */
+@import "./prototype.css";
+/* Per-area additions — each file owned by one track; prototype classes first. @import must precede rules. */
+@import "./buyer.css";
+@import "./account.css";
+@import "./affiliate.css";
+
+/* SPA buttons became real links: same look, no underline. */
+a.nav-item, a.button, a.avatar-button, .mobile-nav a, .workspace-switch a { text-decoration: none; }
+a.avatar-button { display: inline-flex; }
+.mobile-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+
+.skip-link {
+  position: absolute; left: 12px; top: -48px; z-index: 100;
+  padding: 8px 12px; border-radius: var(--radius-md);
+  background: var(--foreground); color: var(--background); font-size: 14px; font-weight: 500;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f0f12;
-    --card: #18181c;
-    --ink: #f4f4f5;
-    --muted: #a1a1aa;
-    --line: #2e2e35;
-    --primary: #818cf8;
-    --primary-ink: #0f0f12;
-    --ok: #6ee7b7;
-    --ok-bg: #062e22;
-    --warn: #fcd34d;
-    --warn-bg: #3a2a07;
-    --bad: #fca5a5;
-    --bad-bg: #3b0d0d;
+.skip-link:focus { top: 12px; }
+
+/* Workspace switch: Belanja / Affiliate — a segmented pair of links, shown only to affiliates. */
+.workspace-switch {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+  margin: 6px 12px 0; padding: 3px;
+  background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.workspace-switch a {
+  display: flex; align-items: center; justify-content: center; min-height: 32px;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 13px; font-weight: 500; color: var(--muted-foreground);
+}
+.workspace-switch a:hover { color: var(--foreground); }
+.workspace-switch a[aria-current="page"] { background: var(--background); color: var(--foreground); box-shadow: var(--shadow-xs); }
+.workspace-switch.mobile-only { display: none; margin: 0 0 16px; }
+@media (max-width: 1023px) {
+  .workspace-switch.mobile-only { display: grid; }
+  .workspace-switch.mobile-only a { min-height: 40px; }
+}
+.sidebar-note a { color: var(--primary); font-weight: 500; }
+
+/* Dev-only sign-in on /masuk (never rendered in a production build). */
+.dev-signin { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); }
+
+/* Dark: secondary buttons sat darker than the card they are on and read as holes (review 2026-10-16). */
+.dark .button.secondary { background: color-mix(in oklab, var(--foreground) 10%, var(--card)); border-color: color-mix(in oklab, var(--foreground) 16%, var(--card)); }
+.dark .button.secondary:hover { background: color-mix(in oklab, var(--foreground) 16%, var(--card)); }
+/* The identity card now carries the email: long addresses ellipsize instead of widening the sidebar. */
+.identity-card > div { min-width: 0; }
+.identity-card > div > span, .identity-card > div > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Dark indigo: the prototype kept the light-mode indigo in dark, measured 2.90:1 on the card (fails
+   AA). Lighter indigo for text/links/rings, dark ink on filled indigo buttons (the shadcn dark pattern). */
+.dark {
+  --primary: oklch(0.68 0.17 277);
+  --primary-foreground: oklch(0.145 0 0);
+  --ring: oklch(0.68 0.17 277);
+}
+
+/* Desktop shell, full-bleed (owner 2026-10-16: no gap beside the sidebar; header continues across):
+   the prototype centred a 1200 px box, leaving empty bands left of the sidebar and right of the
+   topbar on wide screens. Sidebar pinned to the left edge at full height, sticky topbar across the
+   rest, content centred in the area beside the sidebar and capped at 1120 px (prototype README). */
+@media (min-width: 1024px) {
+  /* The sidebar column is painted by the shell, so it reaches the bottom of any page length while the
+     sidebar itself stays sticky at viewport height. */
+  .app-shell {
+    max-width: none; margin: 0; width: 100%; min-height: 100vh;
+    background: linear-gradient(to right, var(--card) 255px, var(--border) 255px 256px, transparent 256px);
   }
+  .sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; align-self: start;
+  }
+  /* Topbar spans the full width, but its content lines up with the 1120 px content column below. */
+  .topbar { position: sticky; top: 0; z-index: 50; padding-inline: max(24px, calc((100% - 1120px) / 2 + 24px)); }
+  .content { max-width: 1120px; justify-self: center; }
 }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.5; }
-a { color: var(--primary); }
-.wrap { max-width: 44rem; margin: 0 auto; padding: 0 1rem 3rem; }
-header.top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; }
-header.top .brand { font-weight: 700; text-decoration: none; color: var(--ink); }
-header.top nav { display: flex; gap: 1rem; font-size: 0.95rem; }
-h1 { font-size: 1.5rem; line-height: 1.25; margin: 0.5rem 0 0.25rem; }
-h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-.lede { color: var(--muted); margin: 0 0 1rem; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; margin: 0.75rem 0; }
-.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
-.stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem; }
-.stat .k { color: var(--muted); font-size: 0.8rem; }
-.stat .v { font-weight: 700; font-variant-numeric: tabular-nums; }
-.row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }
-.muted { color: var(--muted); font-size: 0.9rem; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pill { display: inline-block; border-radius: 999px; padding: 0.05rem 0.6rem; font-size: 0.8rem; background: var(--line); }
-.pill.ok { background: var(--ok-bg); color: var(--ok); }
-.pill.warn { background: var(--warn-bg); color: var(--warn); }
-.pill.bad { background: var(--bad-bg); color: var(--bad); }
-.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; padding: 0 1.1rem; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
-.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
-.btn.block { width: 100%; }
-form.stack { display: grid; gap: 0.75rem; }
-label { display: grid; gap: 0.25rem; font-weight: 600; font-size: 0.95rem; }
-label .hint { font-weight: 400; color: var(--muted); font-size: 0.85rem; }
-input, textarea { font: inherit; padding: 0.65rem 0.75rem; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); width: 100%; }
-input:focus-visible, textarea:focus-visible, .btn:focus-visible, a:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-.alert { border-radius: 10px; padding: 0.75rem 1rem; margin: 0.75rem 0; }
-.alert.bad { background: var(--bad-bg); color: var(--bad); }
-.alert.ok { background: var(--ok-bg); color: var(--ok); }
-.alert.warn { background: var(--warn-bg); color: var(--warn); }
-.share { display: flex; gap: 0.5rem; }
-.share input { min-width: 0; }
-ul.plain { list-style: none; padding: 0; margin: 0; }
-ul.plain li + li { border-top: 1px solid var(--line); }
-ul.plain li { padding: 0.75rem 0; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-@media (max-width: 30rem) { .stats { grid-template-columns: 1fr; } }
+
+/* Every order card is a standalone bordered card; an older prototype rule (list rows) still removed
+   the LAST card's bottom border, so the final card of each stack looked clipped (review round 4). */
+.order-card:last-child { border-bottom: 1px solid var(--border); }
+/* Dark: avatar initials on the tinted muted identity card measured 4.34:1 — a lighter indigo ink. */
+.dark .identity-card .avatar-large, .dark .avatar-button { color: oklch(0.8 0.11 277); }
+/* `--destructive-foreground` was referenced (prototype.css) but never defined, so text on a filled red
+   inherited the body ink. White on light red 4.56:1, dark ink on dark-mode red 6.84:1. */
+:root { --destructive-foreground: oklch(0.985 0 0); }
+.dark { --destructive-foreground: oklch(0.145 0 0); }
+/* The wordmark is the only brand carrier in the chrome: one step larger than the prototype's 15 px. */
+.sidebar-brand strong { font-size: 18px; }
+.sidebar-brand small { font-size: 12px; }

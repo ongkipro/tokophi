@@ -1,0 +1,96 @@
+---
+// Connected-store profile (spec §18.4 E, §6): relationship context from MY claimed orders only, the one
+// external handoff ("Kunjungi toko"), and unlink (ACC-8) behind a confirmation. A store I am not
+// actively linked to — unknown, another buyer's, or one I unlinked — is the same 404.
+import Layout from "../../layouts/Layout.astro";
+import ProductThumb from "../../components/ProductThumb.astro";
+import { db } from "@tokophi/db";
+import { IDR, waLink } from "@tokophi/lib/format";
+import { myOrders, myStore, unlinkStore } from "../../data/orders";
+import { signInUrl } from "../../lib/nav";
+import { initials, statusOf, whenLong } from "../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const store = await myStore(db, account.id, Astro.params.slug);
+if (!store) return new Response(null, { status: 404 });
+if (Astro.request.method === "POST") {
+  // The store comes from the URL + my active link above, never from the form.
+  await unlinkStore(db, account.id, store.storeId);
+  return Astro.redirect("/stores?diputus=1", 303);
+}
+const orders = await myOrders(db, account.id, { toko: store.slug }, 5);
+const wa = store.whatsapp ? waLink(store.whatsapp) : null;
+---
+<Layout title={store.name} active="toko" back={{ href: "/stores", label: "Kembali ke Toko" }}>
+  <div class="store-profile-hero">
+    <span class="store-mark" aria-hidden="true">{initials(store.name)}</span>
+    <div class="store-profile-hero-text">
+      <h1>{store.name}</h1>
+      <span>Terhubung sejak {whenLong(store.linkedAt)}</span>
+    </div>
+    <a href={store.origin} rel="noopener noreferrer" class="button primary">Kunjungi toko</a>
+  </div>
+
+  <div class="detail-grid buyer-grid">
+    <section class="store-orders-section" aria-labelledby="orders-h">
+      <h2 class="store-orders-heading" id="orders-h">Pesanan Anda di sini</h2>
+      {orders.length === 0 ? (
+        <p>Belum ada pesanan tersimpan dari toko ini.</p>
+      ) : (
+        <div class="store-order-list">
+          {orders.map((o) => {
+            const s = statusOf(o);
+            return (
+              <a href={`/orders/${encodeURIComponent(o.number)}`} class="store-order-row-link">
+                <article class="store-order-row">
+                  <div class="store-order-row-header">
+                    <div class="store-order-row-meta">
+                      <strong>{whenLong(o.placedAt)}</strong>
+                      <span class="num">{o.number}</span>
+                    </div>
+                    <span class={`badge ${s.badge}`}>{s.label}</span>
+                  </div>
+                  <div class="store-order-row-body">
+                    <ProductThumb src={o.thumb} large />
+                    <div class="store-order-row-summary">
+                      <strong class="store-order-row-title">{o.firstLine ?? "Pesanan"}</strong>
+                      <span class="store-order-row-qty">{o.items} barang</span>
+                      {o.lineCount > 1 && <span class="store-order-row-more">+ {o.lineCount - 1} produk lainnya</span>}
+                    </div>
+                    <div class="store-order-row-total">
+                      <span>Total belanja</span>
+                      <strong class="num">{IDR(o.totalIdr)}</strong>
+                    </div>
+                  </div>
+                </article>
+              </a>
+            );
+          })}
+        </div>
+      )}
+      {store.orders > orders.length && <a class="link-button" href={`/orders?toko=${encodeURIComponent(store.slug)}`}>Semua {store.orders} pesanan dari toko ini →</a>}
+    </section>
+
+    <div class="stack">
+      <section class="section-card" aria-labelledby="rel-h">
+        <h2 id="rel-h">Riwayat dengan toko ini</h2>
+        <dl class="transaction-refs refs-plain">
+          <div><dt>Pesanan tersimpan</dt><dd>{store.orders}</dd></div>
+          {store.firstOrderAt && <div><dt>Pesanan pertama</dt><dd>{whenLong(store.firstOrderAt)}</dd></div>}
+          {store.lastOrderAt && <div><dt>Pesanan terakhir</dt><dd>{whenLong(store.lastOrderAt)}</dd></div>}
+        </dl>
+        {wa && <a class="button secondary" href={wa} rel="noopener noreferrer" target="_blank">WhatsApp {store.name}</a>}
+        <p class="store-privacy">{store.name} hanya melihat pesanan yang Anda buat di tokonya. Akun ini, alamat tersimpan, dan pesanan dari toko lain tidak dibagikan.</p>
+      </section>
+
+      <details class="confirm-details unlink-row">
+        <summary class="link-danger">Putuskan {store.name}</summary>
+        <form method="post" class="confirm-body">
+          <p>Pesanan dari {store.name} tidak lagi tampil di akun ini; data di toko tidak berubah. Menyimpan pesanan berikutnya menghubungkannya lagi. Yakin memutus <strong>{store.name}</strong>? {store.orders} pesanan akan hilang dari akun ini.</p>
+          <button class="button danger" type="submit">Ya, putuskan</button>
+        </form>
+      </details>
+    </div>
+  </div>
+</Layout>

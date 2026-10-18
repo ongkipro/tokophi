@@ -1754,6 +1754,75 @@ export const buyerSessions = pgTable(
   },
   (t) => [index("buyer_sessions_buyer_idx").on(t.buyerId)],
 );
+// ── TokoΦ Account buyer half (0118, §17.9, Tasks 10.5–10.9) ─────────────────────────────────────────
+// A claim (one claimant per order) + the store link it consents to are the ONLY bridge from an
+// account to a store's orders — never an email/phone match. Both carry store_id ⇒ tenant RLS policy.
+export const buyerStoreLinks = pgTable(
+  "buyer_store_links",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    customerId: uuid().references(() => customers.id),
+    /** active | revoked (check constraint in 0118). */
+    status: text().notNull().default("active"),
+    consentVersion: text().notNull(),
+    consentedAt: createdAt(),
+    revokedAt: ts(),
+    /** token (phase 1) | phone (phase 2). */
+    claimMethod: text().notNull().default("token"),
+    createdAt: createdAt(),
+  },
+  (t) => [unique("buyer_store_links_buyer_id_store_id_unique").on(t.buyerId, t.storeId), index("buyer_store_links_store_idx").on(t.storeId)],
+);
+export const buyerOrderClaims = pgTable(
+  "buyer_order_claims",
+  {
+    id: pk(),
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    claimedAt: createdAt(),
+  },
+  (t) => [index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId)],
+);
+export const buyerAddresses = pgTable(
+  "buyer_addresses",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    label: text(),
+    recipient: text().notNull(),
+    phone: text().notNull(),
+    address: text().notNull(),
+    /** KiriminAja district id — the same currency as `orders.ship_district_id`. */
+    districtId: integer()
+      .notNull()
+      .references((): AnyPgColumn => kiriminajaAreas.id),
+    kelurahan: text(),
+    postalCode: text().notNull(),
+    isPrimary: boolean().notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [
+    index("buyer_addresses_buyer_idx").on(t.buyerId),
+    uniqueIndex("buyer_addresses_one_primary").on(t.buyerId).where(sql`${t.isPrimary}`),
+  ],
+);
 
 export const affiliates = pgTable(
   "affiliates",

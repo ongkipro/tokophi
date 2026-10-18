@@ -1,35 +1,49 @@
 ---
 // Apply to ONE store's programme as a signed-in account (F-A15). The merchant still approves it;
 // the application lands as `menunggu` on that store's own list, linked to this account.
+// Two steps on one URL, both plain forms: store address (GET ?toko=) → application (POST).
 import Layout from "../../layouts/Layout.astro";
 import { db } from "@tokophi/db";
 import { nameError, normalizeName, normalizePhone } from "@tokophi/lib/validate";
-import { joinProgramme, joinableStore, type JoinResult } from "../../data/affiliate";
-import { signInUrl } from "../../lib/nav";
+import { joinProgramme, joinableStore, myAffiliateStores, type JoinResult } from "../../data/affiliate";
+import { signInUrl, storefrontOrigin } from "../../lib/nav";
+import { initials } from "../../lib/affiliate-view";
+import JoinForm from "./_JoinForm.astro";
 
 const account = Astro.locals.account;
 if (!account) return Astro.redirect(signInUrl(Astro.url));
-const slug = (Astro.url.searchParams.get("toko") ?? "").trim().toLowerCase();
-const store = await joinableStore(db, slug);
+const raw = (Astro.url.searchParams.get("toko") ?? "").trim();
+// Normalise generously: `batiknusantara`, `batiknusantara.tokophi.id` and a pasted
+// `https://batiknusantara.tokophi.id/produk/…` all mean the same store.
+const slug = raw
+  .toLowerCase()
+  .replace(/^[a-z]+:\/\//, "")
+  .split(/[/?#]/)[0]!
+  .split(".")[0]!;
+const store = slug ? await joinableStore(db, slug) : null;
+// Already in this store's programme: say so before the form, not after a submit.
+const mine = store ? (await myAffiliateStores(db, account.id)).find((s) => s.storeSlug === store.slug) ?? null : null;
+const lookupError = !raw
+  ? Astro.url.searchParams.has("toko") ? "Isi alamat toko dulu." : null
+  : store ? null : "Tidak ada toko dengan alamat itu yang sedang membuka program affiliate. Periksa ejaannya, atau tanyakan ke seller.";
 
-const MESSAGES: Record<Exclude<JoinResult, "created">, string> = {
+const FORM_MESSAGES: Record<Exclude<JoinResult, "created" | "phone_taken">, string> = {
   member: "Akun ini sudah terdaftar di program toko ini.",
-  phone_taken: "Nomor ini sudah terdaftar sebagai affiliate di toko ini (lewat formulir). Minta seller mengirim undangan ke akun Anda.",
   closed: "Program affiliate toko ini tidak sedang dibuka.",
   rate_limited: "Terlalu banyak pendaftaran dalam satu jam. Coba lagi nanti.",
   failed: "Pendaftaran gagal. Coba lagi.",
 };
-let error: string | null = null;
+const err: { name?: string; phone?: string; form?: string } = {};
 const v = { name: account.name ?? "", phone: "", bankName: "", bankAccount: "", bankHolder: "", note: "" };
-if (Astro.request.method === "POST" && store) {
+if (Astro.request.method === "POST" && store && !mine) {
   const f = await Astro.request.formData();
   for (const k of Object.keys(v) as (keyof typeof v)[]) v[k] = String(f.get(k) ?? "").trim().slice(0, 200);
   const phone = normalizePhone(v.phone);
   const nameErr = nameError(v.name);
-  if (nameErr) error = nameErr;
-  else if (!phone) error = "Nomor WhatsApp tidak valid.";
-  else {
-    const r = await joinProgramme(db, account.id, slug, {
+  if (nameErr) err.name = nameErr;
+  if (!phone) err.phone = "Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890.";
+  if (!nameErr && phone) {
+    const r = await joinProgramme(db, account.id, store.slug, {
       name: normalizeName(v.name),
       phone,
       bankName: v.bankName || null,
@@ -38,32 +52,100 @@ if (Astro.request.method === "POST" && store) {
       note: v.note || null,
     });
     if (r === "created") return Astro.redirect("/affiliate?daftar=1", 303);
-    error = MESSAGES[r];
+    if (r === "phone_taken")
+      err.phone = "Nomor ini sudah terdaftar sebagai affiliate di toko ini (lewat formulir). Minta seller mengirim undangan ke akun Anda.";
+    else err.form = FORM_MESSAGES[r];
   }
 }
+const describedBy = (id: string, hint?: string) => [hint, err[id as keyof typeof err] ? `${id}-err` : null].filter(Boolean).join(" ") || undefined;
 ---
-<Layout title="Gabung program affiliate">
-  <p><a href="/affiliate">← Affiliate</a></p>
+<Layout title="Gabung program affiliate" active="gabung">
   {!store ? (
     <>
-      <h1>Toko tidak ditemukan</h1>
-      <p class="card muted">Tidak ada toko dengan alamat itu yang sedang membuka program affiliate.</p>
+      <header class="page-header">
+        <div>
+          <h1>Gabung program toko</h1>
+          <p class="lead">Daftar ke program affiliate sebuah toko TokoΦ. Seller meninjau pendaftaran Anda; setelah disetujui, kode dan link Anda muncul di Ringkasan.</p>
+        </div>
+      </header>
+      <div class="aff-narrow stack">
+        <section class="section-card">
+          <h2>Pilih toko</h2>
+          <JoinForm value={raw} error={lookupError} />
+        </section>
+        <section class="section-card">
+          <h2>Diundang seller?</h2>
+          <p>Jika seller mengirim <strong>link undangan</strong>, cukup buka link itu saat masuk dengan akun ini. Tidak perlu mendaftar lagi di sini.</p>
+          <a class="button secondary" href="/affiliate/undangan">Lihat undangan saya</a>
+        </section>
+      </div>
     </>
   ) : (
     <>
-      <h1>Gabung affiliate {store.name}</h1>
-      <p class="lede">Seller akan meninjau pendaftaran Anda. Setelah disetujui, kode dan link Anda muncul di Akun TokoΦ.</p>
-      {error && <p class="alert bad" role="alert">{error}</p>}
-      <form class="card stack" method="post">
-        <label>Nama<input name="name" required value={v.name} autocomplete="name" /></label>
-        <label>Nomor WhatsApp<input name="phone" required inputmode="tel" value={v.phone} autocomplete="tel" /></label>
-        <label>Di mana Anda akan promosi? <span class="hint">mis. Instagram @nama, grup WhatsApp, TikTok</span>
-          <input name="note" value={v.note} /></label>
-        <label>Bank <span class="hint">opsional — untuk pembayaran komisi oleh toko</span><input name="bankName" value={v.bankName} /></label>
-        <label>Nomor rekening<input name="bankAccount" inputmode="numeric" value={v.bankAccount} /></label>
-        <label>Atas nama<input name="bankHolder" value={v.bankHolder} /></label>
-        <button class="btn primary" type="submit">Kirim pendaftaran</button>
-      </form>
+      <header class="page-header">
+        <div>
+          <h1>Gabung affiliate {store.name}</h1>
+          <p class="lead">Seller akan meninjau pendaftaran Anda. Setelah disetujui, kode dan link Anda muncul di Ringkasan.</p>
+        </div>
+      </header>
+      <div class="aff-narrow stack">
+        <section class="section-card aff-store-card">
+          <span class="store-mark" aria-hidden="true">{initials(store.name)}</span>
+          <div>
+            <strong>{store.name}</strong>
+            <span>{storefrontOrigin(store.slug).replace(/^https:\/\//, "")}</span>
+          </div>
+          <a class="link-button" href="/affiliate/gabung">Ganti toko</a>
+        </section>
+
+        {mine ? (
+          <section class="state-card">
+            <h2>Anda sudah terdaftar di program ini</h2>
+            <p>Kode Anda di {store.name}: <span class="aff-code">{mine.code}</span>.</p>
+            <a class="button primary" href={`/affiliate/${mine.affiliateId}`}>Buka program</a>
+          </section>
+        ) : (
+        <form class="section-card local-form" method="post" novalidate>
+          <h2>Data pendaftaran</h2>
+          {err.form && <p class="aff-alert" role="alert">{err.form}</p>}
+          <div class="form-field">
+            <label for="name">Nama</label>
+            <input id="name" name="name" required value={v.name} autocomplete="name" aria-invalid={err.name ? "true" : undefined} aria-describedby={describedBy("name")} />
+            {err.name && <p class="aff-error" id="name-err">{err.name}</p>}
+          </div>
+          <div class="form-field">
+            <label for="phone">Nomor WhatsApp</label>
+            <input id="phone" name="phone" required inputmode="tel" value={v.phone} autocomplete="tel" aria-invalid={err.phone ? "true" : undefined} aria-describedby={describedBy("phone", "phone-help")} />
+            <p class="field-help aff-help" id="phone-help">Seller menghubungi Anda lewat nomor ini.</p>
+            {err.phone && <p class="aff-error" id="phone-err">{err.phone}</p>}
+          </div>
+          <div class="form-field">
+            <label for="note">Di mana Anda akan promosi? <span class="aff-optional">opsional</span></label>
+            <input id="note" name="note" value={v.note} aria-describedby="note-help" />
+            <p class="field-help aff-help" id="note-help">Mis. Instagram @nama, grup WhatsApp, TikTok.</p>
+          </div>
+          <fieldset class="aff-fieldset">
+            <legend>Rekening untuk komisi <span class="aff-optional">opsional</span></legend>
+            <p class="field-help aff-help">Komisi dibayar langsung oleh toko. Setelah terdaftar, perubahan rekening lewat seller.</p>
+            <div class="form-field">
+              <label for="bankName">Bank</label>
+              <input id="bankName" name="bankName" value={v.bankName} />
+            </div>
+            <div class="form-field">
+              <label for="bankAccount">Nomor rekening</label>
+              <input id="bankAccount" name="bankAccount" inputmode="numeric" value={v.bankAccount} autocomplete="off" />
+            </div>
+            <div class="form-field">
+              <label for="bankHolder">Atas nama</label>
+              <input id="bankHolder" name="bankHolder" value={v.bankHolder} />
+            </div>
+          </fieldset>
+          <div class="dialog-actions">
+            <button class="button primary" type="submit">Kirim pendaftaran</button>
+          </div>
+        </form>
+        )}
+      </div>
     </>
   )}
 </Layout>

@@ -2849,6 +2849,12 @@ const RECOVER = recovered && {
           // identifiers the server-side Conversions API sends — that is what stops one sale being
           // counted twice, and what makes the ids match the merchant's product feed.
           if (res.tracking) order.tracking = res.tracking;
+          // TokoΦ Account claim token (Task 10.13) — the success page turns it into "Simpan ke Akun".
+          // Kept in THIS TAB only (sessionStorage), never in `lastOrder` (localStorage): on a shared
+          // device the next visitor must not find a live token that claims this buyer's order.
+          if (typeof res.claimToken === "string") {
+            try { sessionStorage.setItem("lastOrderClaim", JSON.stringify({ number: res.orderNumber, token: res.claimToken })); } catch (e) {}
+          }
           finish();
         })
         .catch(function () { fail("Gagal terhubung ke server."); });

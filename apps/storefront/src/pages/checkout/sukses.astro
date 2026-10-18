@@ -8,6 +8,16 @@ import { UPLOAD_WIDTHS } from "../../data/catalog";
 const store = Astro.locals.store;
 // The shop's own CS WhatsApp (migration 0049), or no button at all — never a platform number.
 const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
+// TokoΦ Account (Task 10.10, ACC-13): offered only when the account app is configured AND the order
+// API returned a claim token for THIS order (the script fills the link). Otherwise nothing renders.
+let accountClaim: string | null = null;
+try {
+  const u = new URL((process.env.ACCOUNT_APP_URL ?? "").trim());
+  // The link carries a claim token: https only, plain http just for local development.
+  if (u.protocol === "https:" || (u.protocol === "http:" && !import.meta.env.PROD)) accountClaim = `${u.origin}/klaim`;
+} catch {
+  // unset or not a URL ⇒ the offer simply does not render
+}
 ---
 
 <CheckoutLayout title="Pesanan Berhasil" description={`Terima kasih telah berbelanja di ${store.name}.`}>
@@ -48,6 +58,18 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
         <button type="button" id="copy-order-number" data-copy="order" class="rounded-full border border-[var(--co-line)] px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-[var(--co-panel)]">Salin</button>
       </div>
     </div>
+
+    {accountClaim && (
+      <div id="save-to-account" data-claim={accountClaim} class="mt-4 hidden">
+        <div class="rounded-lg border border-[var(--co-line)] bg-white p-4 text-left sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <div>
+          <p class="text-sm font-semibold text-ink">Simpan ke Akun TokoΦ</p>
+          <p class="mt-0.5 text-sm text-[var(--co-muted)]">Pantau status dan resi pesanan ini dari satu akun, kapan saja.</p>
+        </div>
+        <a id="save-to-account-link" href="#" rel="noopener noreferrer" class="mt-3 inline-flex w-full shrink-0 items-center justify-center rounded-lg border border-[var(--co-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--co-accent)] transition-colors hover:bg-[var(--co-accent-weak)] sm:mt-0 sm:w-auto">Simpan pesanan</a>
+        </div>
+      </div>
+    )}
 
     {/* Payment instruction (VA / QRIS / e-wallet) */}
     <div id="pay-instruction" class="mt-6 hidden"></div>
@@ -248,6 +270,16 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
       var copyNum = document.getElementById("copy-order-number");
       if (copyNum) copyNum.setAttribute("data-copy-value", order.number);
       wireCopy(numRow);
+    }
+
+    // "Simpan ke Akun TokoΦ" — only with a claim token the order API issued for this order.
+    var saveBox = document.getElementById("save-to-account");
+    var saveLink = document.getElementById("save-to-account-link");
+    var claim = null;
+    try { claim = JSON.parse(sessionStorage.getItem("lastOrderClaim") || "null"); } catch (e) { claim = null; }
+    if (saveBox && saveLink && claim && claim.number === order.number && typeof claim.token === "string" && claim.token) {
+      saveLink.setAttribute("href", saveBox.getAttribute("data-claim") + "?t=" + encodeURIComponent(claim.token));
+      saveBox.classList.remove("hidden");
     }
 
     var rows = order.items

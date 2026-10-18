@@ -1,6 +1,14 @@
-/** A post-sign-in destination: a path on THIS origin only (no `//host`, no scheme) — never an open redirect. */
+/** A post-sign-in destination: a path on THIS origin only — never an open redirect. Resolved the way
+ *  the browser will resolve `Location` (the URL parser drops tabs/newlines, so "/\t/evil" is "//evil"),
+ *  and only a same-origin result survives, re-serialised. */
 export function safeNext(raw: string | null | undefined): string {
-  return typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\") && raw.length < 300 ? raw : "/";
+  if (typeof raw !== "string" || !raw.startsWith("/") || raw.length >= 300) return "/";
+  try {
+    const u = new URL(raw, "http://self.invalid");
+    return u.origin === "http://self.invalid" ? u.pathname + u.search + u.hash : "/";
+  } catch {
+    return "/";
+  }
 }
 
 /** Redirect to sign-in, remembering where the visitor was going. */
