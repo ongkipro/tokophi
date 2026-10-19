@@ -1,7 +1,6 @@
 # ADR 0018 — Affiliate commission is paid by the platform out of the seller's balance, after delivery
 
-**Status:** **proposed** — the principle is the owner's direction (2026-10-19); the mechanics in §5 are
-not decided yet. Nothing in this ADR is implemented. Move to *accepted* only when §5 Q1–Q8 are answered.
+**Status:** **proposed** — the principle is the owner's direction (2026-10-19). On 2026-10-19 the owner adopted the recommendations in §5 (DEC-019), which **answers Q1, Q3, Q6, Q7, Q8 and the first half of Q2**; **Q5 (tax) is open and blocks acceptance**, and two sub-points (Q2: what happens to a seller-marked `selesai`; Q4: who bears the transfer fee) are open. Nothing in this ADR is implemented. Move to *accepted* only when Q5 and those sub-points are answered.
 **Date:** 2026-10-19
 **Deciders:** the owner (Paduka Ongki). Drafted by Main Session (Claude Code).
 **Supersedes (once accepted):** the "merchant pays affiliates outside TokoΦ" decision in
@@ -108,18 +107,18 @@ screens ("Dibayar" would mean *paid by the platform*), Super Admin payouts, `AFF
   - **`retur` after payment becomes reversible only if we hold the money**; once paid out, it is a receivable.
 - **Neutral:** `affiliate_commissions` keeps `pending → dibayar | batal`; "siap dibayar" stays derived.
 
-## 5. Open questions (the owner decides; each has a recommendation)
+## 5. Questions and answers (owner adopted the recommendations on 2026-10-19 — DEC-019; status per row)
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | Debit the seller **when payable** (B) or **when the affiliate withdraws** (C)? | **B.** The affiliate must never see "siap dibayar" for money that is not there. |
-| Q2 | What is "truly delivered"? And what about orders with no courier booking, or a seller-marked `selesai`? | Courier-written `selesai` only (source recorded). A seller-marked `selesai`, or an order with no courier booking, is either never payable or payable only after an audited review plus a longer hold — the owner decides which. |
-| Q3 | If the seller's available balance is short at `eligible_at`? | Debit anyway into a negative balance that blocks the seller's own payouts until covered, and say so on the seller's screen. Alternative: hold the commission unpayable. |
-| Q4 | Minimum payout, transfer fee, who bears the fee? | Reuse the platform payout minimum; no fee on commissions; decide the transfer-fee bearer explicitly. |
-| Q5 | Tax: does the platform withhold/report for affiliates, and is NPWP required before payout? | **Do not ship payouts before a tax adviser answers.** Until then no screen may say the platform deducts tax. |
-| Q6 | A return after the commission is paid out? | Record a receivable against the affiliate's future commissions; never silently claw back bank money. |
-| Q7 | What happens to commissions already `pending`/`siap` under the old rule when this ships? | Honour them under the old rule until paid or cancelled; the new rule applies to commissions created after the cut-over. |
-| Q8 | Is the affiliate shown the seller's balance or the reason a payout is waiting? | No seller balance, ever; show only the commission's own state and the next date. |
+| Q1 | Debit the seller **when payable** (B) or **when the affiliate withdraws** (C)? | **ANSWERED (2026-10-19): when payable.** **B.** The affiliate must never see "siap dibayar" for money that is not there. |
+| Q2 | What is "truly delivered"? And what about orders with no courier booking, or a seller-marked `selesai`? | **HALF ANSWERED:** courier-written `selesai` only. **OPEN:** whether a seller-marked or courier-less order is never payable or payable after an audited review plus a longer hold. Courier-written `selesai` only (source recorded). A seller-marked `selesai`, or an order with no courier booking, is either never payable or payable only after an audited review plus a longer hold — the owner decides which. |
+| Q3 | If the seller's available balance is short at `eligible_at`? | **ANSWERED (2026-10-19): debit anyway; negative balance blocks the seller's own payouts.** Debit anyway into a negative balance that blocks the seller's own payouts until covered, and say so on the seller's screen. Alternative: hold the commission unpayable. |
+| Q4 | Minimum payout, transfer fee, who bears the fee? | **PARTLY ANSWERED:** reuse the platform payout minimum, no fee on commissions. **OPEN:** who bears the bank-transfer fee. Reuse the platform payout minimum; no fee on commissions; decide the transfer-fee bearer explicitly. |
+| Q5 | Tax: does the platform withhold/report for affiliates, and is NPWP required before payout? | **OPEN — blocks acceptance.** Needs a tax adviser (brief: `specs/docs/tasks/2026-10-19-adviser-brief-tax-and-legal.md`). **Do not ship payouts before a tax adviser answers.** Until then no screen may say the platform deducts tax. |
+| Q6 | A return after the commission is paid out? | **ANSWERED (2026-10-19): receivable against future commissions.** Record a receivable against the affiliate's future commissions; never silently claw back bank money. |
+| Q7 | What happens to commissions already `pending`/`siap` under the old rule when this ships? | **ANSWERED (2026-10-19): old commissions keep the old rule until paid or cancelled.** Honour them under the old rule until paid or cancelled; the new rule applies to commissions created after the cut-over. |
+| Q8 | Is the affiliate shown the seller's balance or the reason a payout is waiting? | **ANSWERED (2026-10-19): never show the seller's balance.** No seller balance, ever; show only the commission's own state and the next date. |
 
 ## 6. Confirmation (to be written with the implementation)
 
