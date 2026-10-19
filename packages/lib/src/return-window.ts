@@ -6,32 +6,17 @@
 // cancelling a purchase, counted from receipt. So a declared window is in HARI KERJA and is at least 2; a
 // declared 1 would promise less than the regulation's floor. (Whether the floor applies to a given store is a
 // legal question — see spec §20.5 — but the product must never let a store publish a number below it.)
+import { parseWorkingDays, type WorkingDaysParse } from "./working-days";
+
 export const RETURN_WINDOW_MIN_DAYS = 2;
 export const RETURN_WINDOW_MAX_DAYS = 90;
 
-export type ReturnWindowParse = { ok: true; days: number | null } | { ok: false; error: string };
+export type ReturnWindowParse = WorkingDaysParse;
 
 const INVALID = `Isi angka bulat ${RETURN_WINDOW_MIN_DAYS}–${RETURN_WINDOW_MAX_DAYS} (hari kerja), atau kosongkan bila toko tidak menjanjikan jendela retur.`;
 
-/**
- * Form input → a stored value. Strict on purpose: this number is read by buyers as a promise, so anything
- * ambiguous is refused instead of guessed. "7,5" and "1.000" (Indonesian decimal / thousands separators)
- * used to collapse to 75 and 1 when non-digits were stripped; now they are errors the merchant sees.
- * Empty means "not declared" (null). A whole number of working days 2–90, optionally followed by "hari"
- * or "hari kerja", is accepted.
- */
-export function parseReturnWindow(v: unknown): ReturnWindowParse {
-  if (v === null || v === undefined || (typeof v === "string" && v.trim() === "")) return { ok: true, days: null };
-  let n: number;
-  if (typeof v === "number") n = v;
-  else if (typeof v === "string") {
-    const m = /^\s*(\d{1,3})\s*(?:hari(?:\s+kerja)?)?\s*$/i.exec(v);
-    if (!m) return { ok: false, error: INVALID };
-    n = Number(m[1]);
-  } else return { ok: false, error: INVALID };
-  if (!Number.isInteger(n) || n < RETURN_WINDOW_MIN_DAYS || n > RETURN_WINDOW_MAX_DAYS) return { ok: false, error: INVALID };
-  return { ok: true, days: n };
-}
+/** Form input → a stored value: working days 2–90 (the floor is PP 80/2019 Pasal 69(1)), or null = not declared. */
+export const parseReturnWindow = (v: unknown): ReturnWindowParse => parseWorkingDays(v, RETURN_WINDOW_MIN_DAYS, RETURN_WINDOW_MAX_DAYS, INVALID);
 
 /** What a buyer reads. The window starts at receipt; we hold no arrival date, so no date is computed. */
 export function returnWindowLine(days: number | null | undefined): string | null {

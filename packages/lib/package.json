@@ -8,6 +8,8 @@
     "./format": "./src/format.ts",
     "./area-search": "./src/area-search.ts",
     "./return-window": "./src/return-window.ts",
+    "./working-days": "./src/working-days.ts",
+    "./complaint-service": "./src/complaint-service.ts",
     "./kiriminaja": "./src/kiriminaja.ts",
     "./kiriminaja-tracking": "./src/kiriminaja-tracking.ts",
     "./autolaris": "./src/autolaris.ts",

@@ -1947,6 +1947,8 @@ export const storeSettings = pgTable("store_settings", {
   codEnabled: boolean().notNull().default(false),
   /** Working days after receipt the store accepts a return request (2–90, check in 0119/0120; floor = PP 80/2019 Pasal 69(1)). NULL = not declared. */
   returnWindowDays: integer(),
+  /** Working days within which the store commits to resolve a complaint (1–60, check in 0121; PP 80/2019 Pasal 27(2)(e)). NULL = not declared. */
+  complaintResolutionDays: integer(),
   // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),
