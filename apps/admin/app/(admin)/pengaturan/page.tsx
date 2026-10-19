@@ -35,6 +35,7 @@ import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 import { ReturCard } from "@/components/admin/pengaturan/retur-card"
+import { PengaduanCard } from "@/components/admin/pengaturan/pengaduan-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -207,6 +208,7 @@ export default function Page() {
             <div className="grid max-w-3xl gap-6">
               <JasaKirimCard />
               <ReturCard />
+              <PengaduanCard />
             </div>
           )}
 
