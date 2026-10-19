@@ -221,6 +221,8 @@ export type OrderDetail = Omit<HubOrder, "firstLine" | "thumb" | "lineCount" | "
   storeWhatsapp: string | null;
   /** The store's declared return window in days, or null when it has not declared one. */
   returnWindowDays: number | null;
+  /** Working days the store committed to resolve a complaint in, or null when it has not declared one. */
+  complaintResolutionDays: number | null;
   subtotalIdr: number;
   discountIdr: number;
   shippingIdr: number;
@@ -253,6 +255,7 @@ export async function myOrder(db: Db, buyerId: string, number: string): Promise<
       storeSlug: st.slug,
       storeWhatsapp: st.whatsapp,
       returnWindowDays: schema.storeSettings.returnWindowDays,
+      complaintResolutionDays: schema.storeSettings.complaintResolutionDays,
       recipient: o.shipRecipient,
       phone: o.shipPhone,
       address: o.shipAddress,
@@ -304,6 +307,7 @@ export async function myOrder(db: Db, buyerId: string, number: string): Promise<
     storeOrigin: origin,
     storeWhatsapp: r.storeWhatsapp?.trim() || null,
     returnWindowDays: r.returnWindowDays ?? null,
+    complaintResolutionDays: r.complaintResolutionDays ?? null,
     subtotalIdr: r.subtotalIdr,
     discountIdr: r.discountIdr,
     shippingIdr: r.shippingIdr,

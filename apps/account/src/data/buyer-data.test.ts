@@ -162,6 +162,33 @@ suite("store return window on the order detail (Task 10.22)", () => {
   });
 });
 
+suite("store complaint-resolution period on the order detail (Task 10.25, ACC-17)", () => {
+  it("null until declared; each store's own value; never another store's", async () => {
+    await inTxn(async (tx) => {
+      const me = await account(tx, "pengaduan@demo.local");
+      const A = await store(tx);
+      const B = await store(tx);
+      const a1 = await order(tx, A.id);
+      const b1 = await order(tx, B.id);
+      await ord.claimOrder(tx, me, token(a1.id), "yes");
+      await ord.claimOrder(tx, me, token(b1.id), "yes");
+      expect((await ord.myOrder(tx, me, a1.number))?.complaintResolutionDays).toBeNull();
+      await tx.execute(sql`insert into store_settings (store_id, complaint_resolution_days) values (${A.id}, 3)`);
+      await tx.execute(sql`insert into store_settings (store_id) values (${B.id})`);
+      expect((await ord.myOrder(tx, me, a1.number))?.complaintResolutionDays).toBe(3);
+      expect((await ord.myOrder(tx, me, b1.number))?.complaintResolutionDays).toBeNull(); // A's 3 does not leak to B
+    });
+  });
+  it("the database refuses a period outside 1-60", async () => {
+    await inTxn(async (tx) => {
+      const A = await store(tx);
+      for (const bad of [0, -1, 61]) {
+        await expect(tx.transaction(async (t) => { await t.execute(sql`insert into store_settings (store_id, complaint_resolution_days) values (${A.id}, ${bad})`); })).rejects.toThrow();
+      }
+    });
+  });
+});
+
 suite("order hub, stores, unlink (Tasks 10.6 / 10.7 / 10.9)", () => {
   it("exactly my claimed orders with an active link; foreign/unclaimed by number ⇒ not found; unlink drops the store and writes nothing store-owned", async () => {
     await inTxn(async (tx) => {
@@ -183,7 +210,7 @@ suite("order hub, stores, unlink (Tasks 10.6 / 10.7 / 10.9)", () => {
       expect(d?.lines).toEqual([{ title: "Kemeja Batik", qty: 2, priceIdr: 50000, totalIdr: 100000, thumb: null }]);
       // The allowlist: nothing outside the projection leaves the data layer.
       expect(Object.keys(d!).sort()).toEqual(
-        ["number", "placedAt", "status", "totalIdr", "storeName", "storeSlug", "items", "storeOrigin", "storeWhatsapp", "returnWindowDays", "subtotalIdr", "discountIdr", "shippingIdr", "taxIdr", "courier", "serviceType", "awb", "payment", "ship", "lines"].sort(),
+        ["number", "placedAt", "status", "totalIdr", "storeName", "storeSlug", "items", "storeOrigin", "storeWhatsapp", "returnWindowDays", "complaintResolutionDays", "subtotalIdr", "discountIdr", "shippingIdr", "taxIdr", "courier", "serviceType", "awb", "payment", "ship", "lines"].sort(),
       );
 
       // Another account sees none of it, by list or by number.

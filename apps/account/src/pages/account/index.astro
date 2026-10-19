@@ -193,6 +193,15 @@ const me = sessions.find((s) => s.id === current);
           <button class="button acc-signout" type="submit">Keluar dari akun</button>
         </form>
       </section>
+      <section class="section-card" aria-labelledby="h-tampilan">
+        <h2 id="h-tampilan">Tampilan</h2>
+        <div class="filter-row acc-theme" id="theme-pick" role="group" aria-label="Tema" hidden>
+          <button class="filter" type="button" data-theme="light" aria-pressed="false">Terang</button>
+          <button class="filter" type="button" data-theme="dark" aria-pressed="false">Gelap</button>
+          <button class="filter" type="button" data-theme="system" aria-pressed="false">Sistem</button>
+        </div>
+        <p class="field-help" id="theme-note">Tema mengikuti pengaturan perangkat Anda.</p>
+      </section>
     </div>
 
     <div class="stack">
@@ -221,23 +230,10 @@ const me = sessions.find((s) => s.id === current);
         </div>
         <p class="field-help acc-foot">Setiap toko hanya melihat pesanannya sendiri, bukan akun atau toko lain Anda.</p>
       </section>
-      <section class="section-card" aria-labelledby="h-tampilan">
-        <h2 id="h-tampilan">Tampilan</h2>
-        <div class="filter-row acc-theme" id="theme-pick" role="group" aria-label="Tema" hidden>
-          <button class="filter" type="button" data-theme="light" aria-pressed="false">Terang</button>
-          <button class="filter" type="button" data-theme="dark" aria-pressed="false">Gelap</button>
-          <button class="filter" type="button" data-theme="system" aria-pressed="false">Sistem</button>
-        </div>
-        <p class="field-help" id="theme-note">Tema mengikuti pengaturan perangkat Anda.</p>
-      </section>
       <section class="section-card" aria-labelledby="h-tutup">
         <h2 id="h-tutup">Tutup akun</h2>
-        <p>
-          Menutup akun menghapus login, perangkat, alamat tersimpan, dan daftar pesanan yang Anda simpan di sini. Pesanan,
-          pembayaran, dan data pelanggan di tiap toko tidak berubah dan tetap menjadi catatan toko. Program affiliate Anda
-          tetap tercatat di tokonya sebagai nonaktif dan tidak lagi terhubung ke akun ini; untuk ikut lagi, minta undangan
-          baru dari toko.
-        </p>
+        <p class="close-line"><strong>Dihapus:</strong> login, perangkat, alamat tersimpan, dan daftar pesanan yang Anda simpan di sini.</p>
+        <p class="close-line"><strong>Tetap:</strong> pesanan, pembayaran, dan data pelanggan di tiap toko (catatan toko). Program affiliate Anda tetap tercatat di tokonya sebagai nonaktif; untuk ikut lagi, minta undangan baru dari toko.</p>
         <p class="field-help">Penutupan tidak bisa dibatalkan. Masuk lagi dengan akun Google yang sama membuat akun baru yang kosong.</p>
         {closeError && <p class="field-error" role="alert">{closeError}</p>}
         <details class="confirm-details" open={closeError ? true : undefined}>

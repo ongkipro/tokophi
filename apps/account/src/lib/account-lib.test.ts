@@ -3,7 +3,7 @@ import { devSignInAllowed, devSubject } from "./dev-signin";
 import { readAccountSession, signAccountSession } from "./session";
 import { waLink } from "@tokophi/lib/format";
 import { areaTerm } from "../data/addresses";
-import { complaintLink, isOnItsWay, returnLineFor, returnRequestMessage } from "./order-view";
+import { complaintLink, complaintPeriodFor, isOnItsWay, returnLineFor, returnRequestMessage } from "./order-view";
 
 const KEY = new TextEncoder().encode("k".repeat(40));
 const SID = "3f1e2d4c-5b6a-4789-8abc-def012345678";
@@ -77,5 +77,15 @@ describe("what an order page shows about returns, by status (ACC-16, RR-10)", ()
     expect(returnLineFor({ status: "dikirim", returnWindowDays: 14 })).toContain("14 hari");
     expect(returnLineFor({ status: "selesai", returnWindowDays: null })).toBeNull();
     expect(returnLineFor({ status: "diproses", returnWindowDays: 7 })).toBeNull();
+  });
+});
+
+describe("the store's complaint-resolution period on an order page (ACC-17)", () => {
+  it("shows the store's own figure once goods are on their way, and nothing when undeclared", () => {
+    expect(complaintPeriodFor({ status: "selesai", complaintResolutionDays: 3 })).toBe("Jangka waktu penyelesaian komplain yang ditetapkan toko: 3 hari kerja.");
+    expect(complaintPeriodFor({ status: "dikirim", complaintResolutionDays: 5 })).toContain("5 hari kerja");
+    expect(complaintPeriodFor({ status: "selesai", complaintResolutionDays: null })).toBeNull();
+    expect(complaintPeriodFor({ status: "diproses", complaintResolutionDays: 3 })).toBeNull();
+    expect(complaintPeriodFor({ status: "baru", complaintResolutionDays: 3 })).toBeNull();
   });
 });

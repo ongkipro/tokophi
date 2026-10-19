@@ -237,3 +237,10 @@ a.filter { text-decoration: none; }
   .aff-detail-cue { display: none; }
 }
 
+
+/* A share link is data: on a phone it wraps instead of cutting off the part that identifies the affiliate.
+   (Lives here, after the base .aff-link rules: an earlier copy in buyer.css lost the cascade.) */
+@media (max-width: 640px) {
+  .aff-link { white-space: normal; }
+  .aff-link-pretty { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+}

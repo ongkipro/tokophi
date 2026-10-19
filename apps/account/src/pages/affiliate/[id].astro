@@ -109,7 +109,7 @@ const tiles = d
       <section class="section-card aff-d-bank">
         <h2>Rekening pembayaran</h2>
         {d.payout.account || d.payout.bankName ? (
-          <dl class="transaction-refs aff-refs">
+          <dl class="transaction-refs refs-plain aff-refs">
             <div><dt>Bank</dt><dd>{d.payout.bankName ?? "—"}</dd></div>
             <div><dt>Nomor rekening</dt><dd>{d.payout.account ?? "—"}</dd></div>
             <div><dt>Atas nama</dt><dd>{d.payout.holder ?? "—"}</dd></div>

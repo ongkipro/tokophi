@@ -1,6 +1,7 @@
 // Buyer-facing words for order facts (the hub, the detail page, the receipt). Plain Indonesian, never
 // the Seller's internal vocabulary. Badge classes are the prototype's (`prototype.css` .badge.*).
 import { waLink } from "@tokophi/lib/format";
+import { complaintLine } from "@tokophi/lib/complaint-service";
 import { returnWindowLine } from "@tokophi/lib/return-window";
 import { STATUS_TABS, isUnpaid, type OrderFilter, type StatusTab } from "../data/orders";
 
@@ -53,13 +54,17 @@ export function complaintLink(o: { status: string; storeWhatsapp: string | null;
 export const returnLineFor = (o: { status: string; returnWindowDays: number | null }): string | null =>
   isOnItsWay(o.status) ? returnWindowLine(o.returnWindowDays) : null;
 
+/** The store's declared complaint-resolution period as one sentence (ACC-17): only once goods are on their way. */
+export const complaintPeriodFor = (o: { status: string; complaintResolutionDays: number | null }): string | null =>
+  isOnItsWay(o.status) ? complaintLine(o.complaintResolutionDays) : null;
+
 export const courierName = (c: string | null) => (c ? (COURIER[c.toLowerCase()] ?? c.toUpperCase()) : null);
 
 /** The order's next fact, as the hub card's link label and where it leads. */
 export function nextStep(x: { number: string; status: string; courier: string | null; awb: string | null; payment: { method: string; status: string } | null }) {
   const base = `/orders/${encodeURIComponent(x.number)}`;
   if (isUnpaid(x)) return { label: "Selesaikan pembayaran", href: `${base}#pembayaran` };
-  if (x.status === "dikirim" && x.awb) return { label: `Lacak: ${[courierName(x.courier), x.awb].filter(Boolean).join(" ")}`, href: `${base}#pengiriman` };
+  if (x.status === "dikirim" && x.awb) return { label: "Lacak paket", href: `${base}#pengiriman` };
   if (x.status === "baru" || x.status === "diproses" || x.status === "dikirim") return { label: "Lihat perkembangan", href: `${base}#pengiriman` };
   return { label: "Lihat rincian pesanan", href: base };
 }

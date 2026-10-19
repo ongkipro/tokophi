@@ -131,7 +131,7 @@ const aria = (k: keyof AddressErrors, help?: string) => ({
               <input name="kelurahan" maxlength="80" value={v.kelurahan} />
             </label>
             <label class="form-field">
-              <span>Kode pos <span class="opt">(wajib)</span></span>
+              Kode pos
               <input name="postalCode" required inputmode="numeric" maxlength="5" autocomplete="postal-code" value={v.postalCode} class="acc-num" {...aria("postalCode")} />
               {err("postalCode") && <span class="login-error" id="e-postalCode">{err("postalCode")}</span>}
             </label>

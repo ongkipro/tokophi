@@ -98,11 +98,11 @@
 .request-row strong { font-weight: 500; }
 .acc-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .acc-row-actions form { display: contents; }
-/* Sign-out: a quiet destructive action, not the loudest thing on the page (review round 3). */
+/* Sign-out is not destructive: neutral ink. Only closing the account reads red (review rounds 3, 13, 14). */
 .button.acc-signout {
-  margin-top: 12px; background: transparent; border-color: transparent; color: var(--destructive); padding-inline: 10px; margin-left: -10px;
+  margin-top: 12px; background: transparent; border-color: transparent; color: var(--foreground); padding-inline: 10px; margin-left: -10px;
 }
-.button.acc-signout:hover { background: color-mix(in oklab, var(--destructive) 8%, transparent); }
+.button.acc-signout:hover { background: var(--muted); }
 .acc-theme[hidden] { display: none; }
 /* Muted ink on the muted track measured 4.34:1 in light mode; nudge the unselected options darker. */
 .acc-theme .filter { color: color-mix(in oklab, var(--muted-foreground) 75%, var(--foreground)); }
