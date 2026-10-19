@@ -147,7 +147,7 @@ Pattern: **route** (`app/(admin)/<x>/page.tsx`, `dynamic="force-dynamic"`) → *
 - **System:** shadcn/ui **on Base UI (`@base-ui/react`), NOT Radix** + **Tailwind v4** (tokens in `@tokophi/ui/styles`). Indigo `--primary`, `rounded-xl`, soft shadows, `text-muted-foreground` for secondary, `tabular-nums` for figures, AA, theme-aware (light/dark).
 - **The 3 mistakes to avoid:** triggers use `render={<Button/>}` (not `asChild`); **no `Select`** (use DropdownMenu/Tabs/buttons); `Button`-as-link needs `nativeButton={false}`.
 - **Components:** shared in `packages/ui/src/components/ui/` (23). Admin has its own `components/ui/` mirror (de-dup pending).
-- **Shell:** admin = `components/admin/` (sidebar, topbar, brand, nav-links) + per-screen subfolders (analitik/blog/halaman/navigasi/pelanggan/pemasaran/pengaturan). Super-admin = `app/(platform)/platform-shell.tsx` + `components/bits.tsx` (badges/icons).
+- **Shell:** admin = `components/admin/` (sidebar, topbar, brand, nav-links) + per-screen subfolders (analitik/blog/halaman/navigasi/pelanggan/pemasaran/pengaturan). Topbar search = `command-palette.tsx` (Ctrl/Cmd+K) over `lib/search-model.ts` (pure: page/action/result model, role filtering, ranking, icons; tested) and `lib/data/search.ts` (`getSearchIndex` under the tenant role). Super-admin = `app/(platform)/platform-shell.tsx` + `components/bits.tsx` (badges/icons).
 - **Recurring patterns:** 2-column settings rail (super-admin Pengaturan, client Akun) · segment/status tabs with counts · collapsible grouped lists (payment channels) · chat-thread (support) · KPI cards · print sheet (`/faktur`) · drag-drop uploader (Files).
 - **Nav:** admin `lib/nav.ts` (`NAV_GROUPS`), super-admin `lib/nav.ts` (`NAV`).
 
