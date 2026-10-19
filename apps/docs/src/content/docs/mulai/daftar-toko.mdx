@@ -1,0 +1,59 @@
+---
+title: "Daftar dan tunggu persetujuan toko"
+seoTitle: "Daftar Toko di TokoΦ dan Tunggu Persetujuan Tim"
+description: "Cara mendaftarkan toko di TokoΦ: isi tiga langkah formulir, dapat alamat toko .tokophi.id, lalu tunggu tim TokoΦ meninjau toko Anda."
+routes: ["/daftar", "/akun/langganan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import daftar from "../../../assets/screens/seller-daftar-mobile-780.webp";
+
+
+Di akhir langkah ini Anda punya akun Dashboard Seller dan alamat toko sendiri, misalnya `batiknusantara.tokophi.id`. Toko baru ditinjau dulu oleh tim TokoΦ sebelum bisa diubah.
+
+## Yang Anda perlukan
+
+- Email aktif (dipakai untuk masuk, bukan untuk notifikasi).
+- Nama toko, minimal 3 dan maksimal 60 karakter.
+- Nomor WhatsApp dan alamat jemput paket. Keduanya boleh menyusul.
+
+## Langkah
+
+<Steps>
+
+1. Buka **app.tokophi.com/daftar**. Formulirnya punya tiga langkah: **Buat akun**, **Profil pemilik**, dan **Alamat penjemputan**.
+2. Di langkah pertama isi **Nama toko**, **Email**, dan **Kata sandi** (minimal 8 karakter). Di bawah nama toko langsung terlihat alamat toko Anda nanti, `nama-toko.tokophi.id`. Klik **Lanjut**.
+3. Di langkah kedua isi **Nama lengkap**. Kolom ini wajib. **WhatsApp** boleh dikosongkan, tapi kurir memakai nomor ini saat menjemput paket. Klik **Lanjut**, atau **Lewati** kalau ingin langsung membuat toko.
+4. Di langkah ketiga cari **Kecamatan** dengan mengetik satu kata, misalnya `Gubeng`, lalu pilih **Kelurahan / desa**, **Kode pos**, dan **Alamat lengkap**. Semua kolom di langkah ini boleh diisi nanti di **Pengaturan → Alamat**.
+5. Klik **Selesai & buat toko**. Anda langsung masuk ke Dashboard Seller.
+
+</Steps>
+
+<Shot src={daftar} phone alt="Formulir daftar toko TokoΦ: Nama toko dengan pratinjau alamat .tokophi.id, Email, Kata sandi, dan tombol Lanjut." caption="Langkah pertama di app.tokophi.com/daftar. Alamat toko terlihat di bawah nama toko." />
+
+:::note[Catatan]
+Alamat toko dibuat otomatis dari nama toko dan tidak bisa dipilih sendiri. Kalau nama itu sudah dipakai toko lain, sistem menambahkan angka di belakangnya, misalnya `nama-toko-2`. Kalau ingin alamat yang lebih rapi, Anda bisa memasang domain sendiri nanti.
+:::
+
+## Selama menunggu persetujuan
+
+Toko baru selalu ditinjau dulu, biasanya dalam 1×24 jam. Selama itu:
+
+- Di bagian atas Dashboard muncul pesan kuning *"Menunggu persetujuan tim TokoΦ … Kamu bisa melihat-lihat dulu — penyimpanan aktif setelah disetujui."*, dan menu samping menampilkan label **Menunggu review**.
+- Anda bisa membuka semua menu, tetapi setiap tombol simpan akan ditolak.
+- Halaman **Akun → Langganan** menampilkan status **Ditangguhkan**. Ini status menunggu tinjauan, bukan karena tagihan Anda terlambat.
+
+:::caution[Penting]
+TokoΦ belum mengirim email apa pun, termasuk pemberitahuan bahwa toko sudah disetujui. Masuk lagi ke Dashboard Seller untuk mengecek. Toko Anda sudah aktif kalau pesan kuning dan label **Menunggu review** sudah hilang.
+:::
+
+Masa uji coba gratis 3 hari dihitung sejak Anda mendaftar, bukan sejak toko disetujui. Setelah itu bulan pertama Rp50.000, lalu Rp275.000 per bulan, atau Rp2.700.000 per tahun.
+
+## Kalau ada masalah
+
+- *"Email sudah terdaftar. Silakan masuk."* Email ini sudah punya akun. Masuk lewat **app.tokophi.com/login**.
+- *"Nama toko itu baru saja dipakai. Coba nama lain sedikit."* Ubah nama toko sedikit.
+- *"Terlalu banyak percobaan pendaftaran. Coba lagi dalam beberapa menit."* Tunggu beberapa menit, lalu coba lagi.
+- *"Alamat penjemputan terlalu pendek — tulis jalan, nomor, RT/RW."* Lengkapi alamatnya, atau kosongkan dulu dan isi nanti.

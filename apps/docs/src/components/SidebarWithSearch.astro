@@ -1,0 +1,15 @@
+---
+// Sidebar override: search sits at the top of the chapter list (and of the mobile menu drawer),
+// since it is no longer in the header.
+import Default from "@astrojs/starlight/components/Sidebar.astro";
+import Search from "virtual:starlight/components/Search";
+import SearchExtras from "./SearchExtras.astro";
+---
+
+<div class="tp-sidebar-search"><Search /></div>
+<SearchExtras />
+<Default />
+
+<style>
+  .tp-sidebar-search { margin-bottom: 1rem; }
+</style>

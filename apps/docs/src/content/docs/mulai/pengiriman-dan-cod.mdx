@@ -1,0 +1,81 @@
+---
+title: "Pilih jasa kirim dan atur COD"
+seoTitle: "Pilih Jasa Kirim dan Aktifkan COD di Toko Online"
+description: "Tentukan layanan kurir yang muncul di checkout, aktifkan bayar di tempat (COD) bila perlu, dan atur gratis ongkir otomatis untuk toko Anda."
+routes: ["/pengaturan"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import jasa from "../../../assets/screens/seller-jasa-kirim-1170.webp";
+import cod from "../../../assets/screens/seller-cod-1200.webp";
+import codCheckout from "../../../assets/screens/storefront-checkout-cod-780.webp";
+
+
+Pembeli hanya bisa memilih layanan kirim yang Anda aktifkan. Tarif dihitung langsung dari alamat jemput Anda ke alamat pembeli, dan nomor resi terbit otomatis lewat TokoΦ Kirim. Anda tidak perlu punya akun di tiap kurir.
+
+## Yang Anda perlukan
+
+- Alamat jemput yang sudah disimpan ([langkah 3](/mulai/profil-dan-alamat/)).
+
+## Langkah
+
+<Steps>
+
+1. Buka **Pengaturan → Pengiriman** dan gulir ke kartu **Jasa Kirim**.
+2. Layanan dikelompokkan menjadi **Same Day**, **Next Day**, **Reguler**, **Hemat**, dan **Kargo**. Nyalakan layanan yang ingin Anda tawarkan. Kurir yang tersedia: SiCepat, JNE, J&T Express, Shopee Express (SPX), AnterAja, SAP Express, Lion Parcel, Ninja Xpress, ID Express, dan J&T Cargo.
+3. Klik **Simpan**. Muncul pesan *"Jasa kirim disimpan."*
+
+</Steps>
+
+<Shot src={jasa} alt="Kelompok layanan Reguler di kartu Jasa Kirim: delapan layanan dengan sakelar menyala, hanya SPX Standard berlabel COD." caption="Kelompok Reguler. Hanya layanan berlabel COD yang bisa dipakai untuk bayar di tempat." />
+
+:::caution[Penting]
+Saat pertama kali dibuka, semua layanan tampak menyala, tetapi belum tersimpan sampai Anda klik **Simpan**. Minimal satu layanan harus aktif, karena tanpa layanan pembeli tidak bisa checkout.
+:::
+
+### Bayar di tempat (COD), opsional
+
+COD tidak aktif sampai Anda menyalakannya.
+
+<Steps>
+
+1. Di kartu **Bayar di Tempat (COD)**, nyalakan **Aktifkan COD**.
+2. Di daftar Jasa Kirim, layanan yang mendukung COD berlabel **COD**. Pastikan minimal satu layanan berlabel itu menyala.
+3. Klik **Simpan** di kartu Jasa Kirim.
+
+</Steps>
+
+<Shot src={cod} alt="Kartu Bayar di Tempat (COD) di Pengaturan dengan sakelar Aktifkan COD menyala, tersedia lewat Shopee Express." caption="Kartu Bayar di Tempat (COD) di Pengaturan → Pengiriman." />
+
+Saat ini COD hanya tersedia jika semua syarat ini terpenuhi:
+
+- Layanan Shopee Express (SPX).
+- Tujuan di DKI Jakarta, Jawa Barat, Jawa Tengah, DI Yogyakarta, Jawa Timur, atau Banten.
+- Total pesanan maksimal Rp2.000.000.
+
+Kalau salah satu syarat tidak terpenuhi, checkout tidak menawarkan COD dan menjelaskan alasannya kepada pembeli.
+
+<Shot src={codCheckout} phone alt="Checkout toko di ponsel dengan pilihan pembayaran COD terpilih." caption="Yang dilihat pembeli: COD di checkout toko." />
+ Biaya COD (3% dari harga barang plus ongkir, minimal Rp2.500, ditambah PPN 11% atas biaya itu) dibayar pembeli. Uang COD masuk ke saldo Anda setelah pesanan selesai.
+
+### Gratis ongkir otomatis, opsional
+
+<Steps>
+
+1. Di kartu **Gratis Ongkir Otomatis**, nyalakan **Aktifkan gratis ongkir**.
+2. Isi **Minimum belanja**. Belanja di atas nilai itu mendapat ongkir gratis. Kalau dikosongkan atau diisi 0, ongkir selalu gratis.
+3. Klik **Simpan** di kartu Jasa Kirim. Satu tombol itu menyimpan jasa kirim, COD, dan gratis ongkir sekaligus.
+
+</Steps>
+
+:::note[Catatan]
+Pembayaran non-tunai (QRIS dan Virtual Account) diatur oleh TokoΦ, bukan oleh Seller. Tidak ada yang perlu Anda nyalakan. Biaya transaksinya dibayar pembeli.
+:::
+
+## Kalau ada masalah
+
+- *"Pilih minimal satu layanan — tanpa itu pembeli tidak bisa checkout."* Nyalakan minimal satu layanan sebelum menyimpan.
+- *"Belum ada layanan yang mendukung COD."* Tombol COD tidak bisa dinyalakan karena belum ada layanan berlabel COD yang tersedia untuk toko Anda.
+- *"Belum ada layanan kirim yang diaktifkan platform. Hubungi TokoΦ."* Buka tiket di [**Bantuan**](https://app.tokophi.com/bantuan).

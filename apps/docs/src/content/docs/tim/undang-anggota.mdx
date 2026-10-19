@@ -1,0 +1,54 @@
+---
+title: "Undang anggota tim"
+seoTitle: "Undang Anggota Tim ke Dashboard Seller TokoΦ"
+description: "Tambahkan anggota tim ke Dashboard Seller, pilih perannya, lalu serahkan kata sandi sementara sendiri karena TokoΦ tidak mengirim email undangan."
+routes: ["/pengaturan", "/akun/keamanan", "/login"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Setelah langkah ini, anggota tim Anda punya akun sendiri untuk masuk ke Dashboard Seller dengan peran yang Anda pilih. Anda tidak perlu lagi berbagi kata sandi pemilik toko.
+
+## Yang Anda perlukan
+
+- Masuk sebagai **Pemilik** toko. Hanya peran ini yang bisa menambah, mengubah, dan mengeluarkan anggota. Peran lain tetap bisa membuka **Pengaturan → Pengguna** dan melihat daftar anggota, tetapi tombol **Undang pengguna** tidak muncul bagi mereka.
+- Nama dan alamat email anggota. Email ini dipakai sebagai nama login, bukan untuk mengirim pesan.
+- Cara menghubungi anggota di luar TokoΦ, misalnya WhatsApp.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Pengaturan**, lalu klik **Pengguna** di daftar kiri. Kartu **Pengguna & Peran** menampilkan semua anggota toko.
+2. Klik **Undang pengguna** di kanan atas kartu.
+3. Isi **Nama** dan **Email**.
+4. Di bagian **Peran**, klik satu baris: **Admin**, **Staf**, **Staf Gudang**, **Advertiser**, atau **Customer Service**. Setiap baris menulis singkat apa yang boleh dikerjakan peran itu. Rincian lengkapnya ada di [Peran tim](/referensi/peran-tim/).
+5. Klik **Undang**. Tombol ini baru aktif setelah **Nama** dan **Email** terisi.
+6. Untuk email yang belum pernah punya akun TokoΦ, dialog berganti dan menampilkan **Email** serta **Kata sandi sementara**. Klik ikon salin di sebelah kata sandi, lalu klik **Selesai**.
+7. Kirim email dan kata sandi sementara itu ke anggota lewat WhatsApp atau cara lain yang Anda percaya.
+8. Minta anggota masuk di **app.tokophi.com/login**, lalu segera mengganti kata sandinya lewat avatar di kanan atas → **Keamanan** → **Ubah Kata Sandi**.
+
+</Steps>
+
+Sampai anggota masuk untuk pertama kali, namanya di daftar berlabel **Belum pernah masuk**. Label itu hilang setelah login pertamanya berhasil.
+
+:::caution[Penting]
+Kata sandi sementara hanya ditampilkan sekali. Setelah Anda klik **Selesai**, Anda tidak bisa melihatnya lagi, dan Dashboard Seller tidak punya tombol untuk membuat kata sandi baru bagi anggota. Salin sebelum menutup dialog. Kalau terlanjur hilang, hubungi tim TokoΦ lewat halaman [Kontak](https://tokophi.com/kontak/).
+:::
+
+:::note[Catatan]
+Tidak ada email undangan. TokoΦ tidak mengirim email apa pun ke anggota, jadi anggota tidak akan tahu dirinya diundang sampai Anda memberi tahu sendiri.
+:::
+
+Kalau email itu **sudah punya akun TokoΦ** (misalnya ia juga bekerja di toko lain), tidak ada kata sandi baru. Muncul pesan *"… ditambahkan ke tim. Akunnya sudah ada, jadi kata sandinya TIDAK berubah."* Anggota masuk dengan kata sandinya sendiri, lalu memilih toko Anda lewat [pemilih toko](/tim/ganti-toko/). Label **Belum pernah masuk** pada anggota seperti ini bisa tetap tampil walaupun ia sudah bekerja di toko Anda, karena label itu hanya hilang saat login langsung membuka toko Anda, bukan saat ia pindah dari toko lain.
+
+Keterangan **Peran** di bagian bawah kartu **Pengguna & Peran** sudah usang. Isinya hanya tiga peran dan menyebut Admin bisa mengelola "pengaturan". Yang benar: ada lima peran yang bisa Anda berikan, dan Admin tidak bisa mengubah pengaturan toko, rekening, penarikan saldo, atau anggota tim. Pegang tabel di [Peran tim](/referensi/peran-tim/), bukan keterangan itu.
+
+## Kalau ada masalah
+
+- *"… sudah diundang … dan belum pernah masuk. Kata sandinya tidak diubah."* Anggota ini sudah ada di tim Anda tetapi belum pernah login. Undangan ulang tidak membuat kata sandi baru. Kirim lagi kata sandi sementara yang dulu, atau hubungi tim TokoΦ kalau sudah hilang.
+- *"… sudah menjadi … di toko ini. Tidak ada yang diubah."* Anggota sudah aktif. Untuk mengganti perannya, lihat [Ubah peran atau keluarkan anggota](/tim/ubah-peran-dan-hapus/).
+- *"Nama wajib diisi."* atau *"Email tidak valid."* Isi kedua kolom, lalu klik **Undang** lagi.
+- *"Gagal menyimpan undangan. Coba lagi."* Tidak ada yang tersimpan. Klik **Undang** sekali lagi.
+- Anggota mendapat *"Email atau kata sandi salah."* saat login. Pastikan ia mengetik email yang sama persis dengan yang Anda isi, dan kata sandi sementara tanpa spasi tambahan.

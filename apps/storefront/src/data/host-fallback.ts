@@ -48,3 +48,21 @@ export const isNamelessHost = (host: string, extraZones: readonly string[] = [])
   if (h.endsWith(".sslip.io")) return true;
   return [...PLATFORM_ZONES, ...extraZones].some((z) => underZone(h, z));
 };
+
+/**
+ * True for `<reserved label>.<base>` — `admin.tokophi.id`, `api.tokophi.id`, `toko.tokophi.id`.
+ *
+ * Observed live 2026-10-12: a reserved label yields no candidate slug (so the "named a store → 404"
+ * guard never fires), and the host sits in a platform zone (so `isNamelessHost` allowed the default
+ * store). Every reserved name on the store domain therefore served the DEMO shop with a self
+ * canonical — duplicate pages for search engines, and `panduan.tokophi.id` reading as the shop.
+ * These hosts name something, just not a store: refuse them. The demo keeps `toko.tokophi.com`
+ * (another zone, not `<label>.<base>`); Traefik sends the platform labels on .id to .com before
+ * they reach this app (ops/tokophi-id-platform-redirect.yaml).
+ */
+export const isReservedStoreLabel = (host: string, base: string, reserved: ReadonlySet<string>): boolean => {
+  const b = base.trim().toLowerCase();
+  if (!b || !host.endsWith(`.${b}`)) return false;
+  const label = host.slice(0, -(b.length + 1));
+  return !!label && !label.includes(".") && reserved.has(label);
+};

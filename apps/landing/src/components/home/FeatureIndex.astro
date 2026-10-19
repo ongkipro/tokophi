@@ -1,0 +1,52 @@
+---
+import { COURIER_COUNT, COURIER_NAMES } from "../../lib/offer";
+
+// The full inventory, grouped by the job a seller is doing. Plain lists: a reader scans for the one
+// item they need, so these are not cards.
+const groups = [
+  { title: "Toko dan tampilan", items: ["Alamat toko sendiri, atau domain milik Anda", "Store Builder: beranda, kategori, halaman produk", "Logo, warna brand, 5 pasangan huruf", "Halaman, blog, dan menu navigasi", "SEO: sitemap, data terstruktur, gambar ringan"] },
+  { title: "Pembayaran", items: ["Checkout tanpa akun, divalidasi untuk alamat Indonesia", "QRIS dan Virtual Account 5 bank", "COD lewat SPX (bisa diaktifkan atau dimatikan)", "PPN toko: harga termasuk atau belum termasuk pajak", "Saldo, mutasi per pesanan, dan penarikan ke rekening"] },
+  { title: "Pengiriman", items: [`${COURIER_COUNT} kurir: ${COURIER_NAMES.join(", ")}`, "Pilih sendiri layanan kurir yang ditawarkan", "Booking massal dan penjemputan kurir", "Resi terisi otomatis, label thermal siap cetak", "Pengembalian dan pembatalan tercatat"] },
+  { title: "Pemasaran", items: ["Pixel dan konversi server Meta, TikTok, Google", "Feed katalog Google dan TikTok", "Landing page dengan form COD", "Voucher, gratis ongkir, dan Flash Sale", "Pemulihan keranjang lewat WhatsApp"] },
+  { title: "Operasional dan tim", items: ["Produk, variasi, stok per lokasi, pembelian stok", "Pesanan, pelanggan, segmen, dan ulasan", "Analitik penjualan, pengunjung, dan sumber pesanan", "6 peran tim: Pemilik, Admin, Staf, Gudang, Advertiser, CS", "Verifikasi dua langkah untuk login"] },
+] as const;
+---
+
+<section class="section index" aria-labelledby="index-title">
+  <div class="index-head">
+    <h2 id="index-title" class="h2">Semua yang sudah termasuk.</h2>
+    <p class="lede">Satu paket, tanpa tambahan berbayar per fitur.</p>
+  </div>
+  <div class="index-grid">
+    {groups.map((g) => (
+      <div>
+        <h3>{g.title}</h3>
+        <ul>{g.items.map((it) => <li>{it}</li>)}</ul>
+      </div>
+    ))}
+  </div>
+  <p class="index-more"><a class="text-link" href="/fitur/">Lihat rincian setiap fitur</a></p>
+</section>
+
+<style>
+  .index-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2.25rem clamp(1.5rem, 3vw, 2.5rem);
+    margin-top: clamp(2.25rem, 4vw, 3rem);
+  }
+  .index-grid h3 { padding-bottom: 0.7rem; border-bottom: 1px solid var(--color-ink); font-size: 0.975rem; font-weight: 700; }
+  .index-grid ul { margin-top: 0.4rem; }
+  .index-grid li {
+    padding-block: 0.6rem;
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+  .index-more { margin-top: 2rem; }
+  @media (max-width: 1199px) { .index-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 799px) { .index-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 539px) { .index-grid { gap: 1.75rem 1rem; } .index-grid li { font-size: 0.8125rem; padding-block: 0.45rem; } }
+  @media (max-width: 419px) { .index-grid { grid-template-columns: 1fr; } }
+</style>

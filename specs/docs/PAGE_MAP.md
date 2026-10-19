@@ -104,7 +104,7 @@
 | `/pesanan/massal` | 'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'. | page | `apps/admin/app/(admin)/pesanan/massal/page.tsx` | `massal-client.tsx` | `bulk-shipping` | `bulk-shipping` | — | — | ✓ | `apps/admin/lib/search-model.test.ts` |
 | `/pesanan` | 'Pesanan' — orders list with status tabs; URL params validated before any enum cast. | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/search-model.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
 | `/produk/[id]` | Product editor — variants grid, media (upload/drag), dimensions (they price ongkir), taxonomy. | page | `apps/admin/app/(admin)/produk/[id]/page.tsx` | `product-editor.tsx` `taxonomy-field.tsx` | `products` | `media` `products` `purchases` `taxonomy` | — | — | ✓ | `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/uuid-guard.test.ts` |
-| `/produk/baru` | New product. | page | `apps/admin/app/(admin)/produk/baru/page.tsx` | — | — | — | — | — |  | — |
+| `/produk/baru` | New product. | page | `apps/admin/app/(admin)/produk/baru/page.tsx` | — | `products` | — | — | — | ✓ | — |
 | `/produk/inventori` | 'Inventori' — stock per variant/location, bulk save. | page | `apps/admin/app/(admin)/produk/inventori/page.tsx` | `inventori-client.tsx` | `inventory` `products` | `inventory` | — | — | ✓ | `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/search-model.test.ts` `apps/admin/lib/seller-entity-links.test.ts` |
 | `/produk/kategori/[id]` | Collection editor (manual/conditions). | page | `apps/admin/app/(admin)/produk/kategori/[id]/page.tsx` | `collection-editor.tsx` | `collections` `products` | `collections` `media` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/kategori/baru` | New collection. | page | `apps/admin/app/(admin)/produk/kategori/baru/page.tsx` | — | `products` | — | — | — | ✓ | — |
@@ -226,14 +226,14 @@
 
 | URL | what it is | file | layout | src/data | src/lib | locals | set:html | tests |
 |---|---|---|---|---|---|---|---|---|
-| `/404` | Not found. | `apps/landing/src/pages/404.astro` | `Base` | — | — |  |  | — |
-| `/cara-kerja` | How it works. | `apps/landing/src/pages/cara-kerja.astro` | `MarketingLayout` | — | — |  |  | — |
-| `/demo` | Link/frame to the demo store. | `apps/landing/src/pages/demo.astro` | `MarketingLayout` | — | — |  |  | — |
-| `/faq` | FAQ. | `apps/landing/src/pages/faq.astro` | `MarketingLayout` | — | — |  |  | — |
-| `/fitur` | Feature overview. | `apps/landing/src/pages/fitur.astro` | `MarketingLayout` | — | — |  |  | — |
+| `/404` | Not found. | `apps/landing/src/pages/404.astro` | `Base` | — | `navigation` |  |  | — |
+| `/cara-kerja` | Signup → review → setup → first order, the daily workflow, and the subscription billing timeline. | `apps/landing/src/pages/cara-kerja.astro` | `MarketingLayout` | — | `navigation` `offer` |  |  | — |
+| `/demo` | What to try on the demo storefront (batiknusantara.tokophi.id), with its real screens. | `apps/landing/src/pages/demo.astro` | `MarketingLayout` | — | `offer` |  |  | — |
+| `/fitur` | Every feature in the one plan, grouped (store, sales, shipping, marketing, operations) with real screenshots. | `apps/landing/src/pages/fitur.astro` | `MarketingLayout` | — | `offer` |  |  | — |
+| `/harga` | Subscription pricing (one plan, monthly/annual switch) and the who-pays-which-fee table. | `apps/landing/src/pages/harga.astro` | `MarketingLayout` | — | — |  |  | — |
 | `/` | tokophi.com front door. | `apps/landing/src/pages/index.astro` | `MarketingLayout` | — | — |  |  | — |
-| `/kontak` | Contact. | `apps/landing/src/pages/kontak.astro` | `Base` | — | `identity` |  |  | — |
-| `/pembayaran-pengiriman` | Payment channels + shipping/COD explained for prospects. | `apps/landing/src/pages/pembayaran-pengiriman.astro` | `MarketingLayout` | — | — |  |  | — |
+| `/kontak` | Contact. | `apps/landing/src/pages/kontak.astro` | `Base` | — | `identity` `navigation` |  |  | — |
+| `/pembayaran-pengiriman` | Payment channels, COD rules, couriers, payout, and the who-pays-which-fee table, all from code constants. | `apps/landing/src/pages/pembayaran-pengiriman.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/privasi` | Privacy policy. | `apps/landing/src/pages/privasi.astro` | `Base` | — | `identity` |  |  | — |
 
 ### Endpoints
@@ -278,7 +278,7 @@
 | `orders.ts` | `getOrder` `getOrderList` `getOrders` `getPerluDikirimCount` |
 | `pages.ts` | `getPage` `getPages` |
 | `platform-finance.ts` | `getSubscriptionPpnEnabled` |
-| `products.ts` | `getProduct` `getProducts` `productNumberById` `resolveProductIdByNumber` `serverNowTs` |
+| `products.ts` | `getCategoryOptions` `getProduct` `getProducts` `productNumberById` `resolveProductIdByNumber` `serverNowTs` |
 | `promo.ts` | `getPromoEditor` `listPromoPages` |
 | `purchases.ts` | `getPurchaseOrders` `getPurchaseProducts` |
 | `reconciliation.ts` | `getReconciliationMismatches` `reconciliationMismatchRows` |
@@ -372,7 +372,7 @@
 | `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
 | `checkout.ts` | `getRecoveredCheckout` |
 | `content.ts` | `formatDate` `getArticle` `getArticles` `getPage` `getPages` `parseBody` `readMinutes` |
-| `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` |
+| `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` `isReservedStoreLabel` |
 | `landing.ts` | `getLandingPage` |
 | `nav.ts` | `getFooterNav` `getMainNav` |
 | `promo.ts` | `getPromoConfig` |

@@ -42,6 +42,7 @@ describe("RESERVED_SLUGS", () => {
         "batik-nusantara",
         "cname",
         "localhost",
+        "panduan",
         "rich",
         "storefront",
         "tema-platform",

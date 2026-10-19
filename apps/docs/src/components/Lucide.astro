@@ -1,0 +1,13 @@
+---
+// Inline Lucide SVG (owner invariant: inline SVG from the Lucide set, currentColor, aria-hidden,
+// functional icons only). Nodes come from lucide-icons.ts, generated from the installed package.
+import { ICONS } from "./lucide-icons";
+
+interface Props { name: keyof typeof ICONS | string; size?: number | string; class?: string }
+const { name, size = "1em", class: cls } = Astro.props;
+const nodes = ICONS[name];
+if (!nodes) throw new Error(`Lucide icon "${name}" is not in lucide-icons.ts`);
+---
+<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class={cls}>
+  {nodes.map(([tag, attrs]) => { const Tag = tag; return <Tag {...attrs} />; })}
+</svg>

@@ -1,0 +1,70 @@
+---
+title: "Tambah produk pertama"
+seoTitle: "Cara Tambah Produk, Varian, Foto, dan Berat Ongkir"
+description: "Tambahkan produk dengan harga, varian, foto, dan berat yang benar supaya ongkir akurat, lalu tampilkan di toko dan di halaman kategorinya."
+routes: ["/produk", "/produk/baru", "/produk/kategori"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import list from "../../../assets/screens/seller-produk-1600.webp";
+import editor from "../../../assets/screens/seller-produk-editor-1600.webp";
+
+
+Di akhir langkah ini produk pertama Anda tampil di toko dengan foto, harga, dan stok, dan ongkirnya dihitung dari berat yang benar.
+
+## Yang Anda perlukan
+
+- Foto produk (JPG, PNG, WebP, atau SVG, maksimal 2 MB per foto). Selain SVG, foto otomatis dikonversi ke WebP supaya toko tetap ringan.
+- Berat produk dalam gram, dan sebaiknya juga ukuran paketnya.
+
+## Langkah
+
+<Shot src={list} alt="Halaman Produk dengan tombol Tambah Produk di kanan atas, ringkasan jumlah produk, tab Semua/Aktif/Draft, dan daftar produk." caption="Halaman Produk. Mulai dari tombol Tambah Produk." />
+
+<Steps>
+
+1. Buka **Produk**, lalu klik **Tambah Produk**.
+2. Isi **Judul**. Hanya kolom ini yang wajib. Lalu isi **Deskripsi Singkat** (satu kalimat yang tampil di dekat harga) dan **Deskripsi**.
+3. Di bagian **Harga** isi **Harga**. **Harga coret** boleh diisi untuk menampilkan harga sebelum diskon. **Biaya per item** hanya terlihat oleh Anda dan dipakai untuk menghitung margin.
+4. Di bagian **Inventaris** isi **SKU** dan **Kuantitas** (stok).
+5. Kalau produk punya pilihan warna atau ukuran, nyalakan **Produk ini memiliki varian**. Isi jenisnya (misalnya `Warna`), lalu ketik tiap nilai dan tekan Enter. Anda bisa menambah satu jenis lagi lewat **Tambah jenis varian**, maksimal 2 jenis. Isi harga dan stok per varian, atau pakai **Harga semua** / **Stok semua** lalu klik **Terapkan ke semua**.
+6. Di bagian **Pengiriman** isi **Berat (gram)** dan **Dimensi paket (cm)**.
+7. Di kartu **Status** pilih **Aktif** supaya produk tampil di toko. **Draft** berarti produk disembunyikan.
+8. Klik **Simpan**.
+9. Halaman produk terbuka lagi. Sekarang di bagian **Media** Anda bisa mengklik atau menyeret foto ke sana. Foto pertama menjadi gambar utama.
+
+</Steps>
+
+<Shot src={editor} alt="Editor produk TokoΦ: Judul, Deskripsi, Media dengan foto utama, Harga, serta kartu Status Aktif/Draft di samping." caption="Editor produk. Status Aktif ada di kanan atas, tombol Simpan di pojok kanan." />
+
+:::caution[Penting]
+Isi berat dengan berat asli barang. Kalau dikosongkan, ongkir dihitung dengan asumsi 500 g dan bisa salah, dan daftar produk menandai produk itu dengan **Berat belum diisi**. Kurir juga menghitung berat volumetrik (P × L × T ÷ 6.000), dan yang dipakai adalah angka yang lebih besar. Paket yang besar tapi ringan tetap perlu diisi ukurannya.
+:::
+
+:::note[Catatan]
+Foto baru bisa ditambahkan setelah produk disimpan sekali. Ini memang begitu, bukan error.
+:::
+
+### Tampilkan di halaman kategori
+
+Pilihan **Kategori** di kartu **Organisasi** editor produk tidak memasukkan produk ke halaman kategori di toko. Untuk menampilkan produk di halaman kategori:
+
+<Steps>
+
+1. Buka **Produk → Kategori**, lalu klik **Buat kategori** (atau buka kategori yang sudah ada).
+2. Di **Jenis koleksi** pilih **Manual**, lalu cari dan tambahkan produk lewat **Cari produk untuk ditambahkan**.
+3. Pastikan **Terbitkan koleksi** menyala, lalu simpan.
+
+</Steps>
+
+:::caution[Penting]
+Pilih **Manual**. Kategori **Otomatis** saat ini menyimpan kondisinya tetapi belum menampilkan produk apa pun di toko.
+:::
+
+## Kalau ada masalah
+
+- *"Nama produk wajib diisi"*: isi **Judul**.
+- *"…melebihi 2MB"*: perkecil foto sebelum diunggah.
+- Produk tidak muncul di toko: pastikan statusnya **Aktif**. Kalau yang dicari adalah halaman kategori, pastikan produk sudah ditambahkan di kategori itu dengan cara **Manual**.

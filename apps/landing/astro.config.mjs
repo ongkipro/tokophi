@@ -1,6 +1,5 @@
 import { defineConfig } from "astro/config";
 import node from "@astrojs/node";
-import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 
 // TokoΦ landing (apex tokophi.com + www) — the platform's front door.
@@ -12,7 +11,9 @@ export default defineConfig({
   site: "https://tokophi.com",
   output: "static",
   adapter: node({ mode: "standalone" }),
-  integrations: [react()],
+  // /faq/ was retired 2026-10-12 (owner: FAQ not needed yet); its pre-purchase answers now live on
+  // /harga/. A static redirect keeps old links and any indexed URL landing somewhere useful.
+  redirects: { "/faq": "/harga/" },
   vite: {
     plugins: [tailwindcss()],
   },

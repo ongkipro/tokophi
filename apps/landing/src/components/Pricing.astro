@@ -1,0 +1,120 @@
+---
+import Icon from "./Icon.astro";
+import { PRICE } from "../lib/offer";
+
+interface Props { signupUrl: string; headingLevel?: "h1" | "h2" }
+const { signupUrl, headingLevel = "h2" } = Astro.props;
+const Heading = headingLevel;
+
+const includes = [
+  "Semua fitur, tanpa batas jumlah produk",
+  "Toko di alamat sendiri, bisa memakai domain milik Anda",
+  "QRIS, Virtual Account 5 bank, dan COD",
+  "Ongkir otomatis dan booking 10 kurir",
+  "Pixel, konversi server, dan feed katalog iklan",
+  "Akun tim dengan 6 peran dan hak akses berbeda",
+];
+---
+
+{/* One plan, two billing cycles. The switch is two native radio inputs; CSS :has() shows the chosen
+    price. Without :has() support both prices stay visible, so no price is ever hidden. */}
+<div class="pricing">
+  <div class="price-panel">
+    <Heading class="price-title" id="harga-title">Satu paket, semua fitur.</Heading>
+    <p class="price-sub">Mulai dengan uji coba gratis {PRICE.trialDays} hari. Tanpa kartu kredit.</p>
+
+    <fieldset class="cycle">
+      <legend class="sr-only">Pilih cara bayar</legend>
+      <label><input type="radio" name="cycle" value="monthly" checked /> <span>Bulanan</span></label>
+      <label><input type="radio" name="cycle" value="annual" /> <span>Tahunan</span></label>
+    </fieldset>
+    <p class="cycle-note">Bayar tahunan hemat {PRICE.annualSaving} dibanding 12 bulan biasa.</p>
+
+    <div class="price price-monthly">
+      <p class="price-big">{PRICE.firstMonth}<span>bulan pertama</span></p>
+      <p class="price-then">Selanjutnya {PRICE.monthly} per bulan.</p>
+    </div>
+    <div class="price price-annual">
+      <p class="price-big">{PRICE.annual}<span>per tahun</span></p>
+      <p class="price-then">Setara {PRICE.annualPerMonth} per bulan. Bayar tahunan langsung setelah uji coba, Anda mendapat 13 bulan.</p>
+    </div>
+
+    <a href={signupUrl} class="btn btn-lg price-cta">Coba gratis {PRICE.trialDays} hari</a>
+    <p class="price-fine">Pembayaran langganan lewat Virtual Account. Bila tagihan lewat {PRICE.graceDays} hari, Dashboard Seller menjadi baca-saja, tetapi toko Anda tetap bisa dikunjungi pembeli.</p>
+  </div>
+
+  <div class="price-includes">
+    <h3>Sudah termasuk</h3>
+    <ul>
+      {includes.map((it) => <li><Icon name="check" size={18} />{it}</li>)}
+    </ul>
+    <p class="price-review">Setiap pendaftaran toko baru ditinjau tim TokoΦ lebih dulu. Setelah disetujui, toko Anda bisa langsung disusun dan dibuka.</p>
+  </div>
+</div>
+
+<style>
+  .pricing {
+    display: grid;
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+    gap: clamp(2rem, 5vw, 5rem);
+    align-items: start;
+  }
+  .price-panel {
+    padding: clamp(1.75rem, 4vw, 2.75rem);
+    border-radius: 0.75rem;
+    background: #1d1f3a;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  .price-title {
+    font-family: var(--font-serif);
+    font-size: var(--fs-h2);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+  .price-sub { margin-top: 0.75rem; color: #c3c7e6; }
+
+  .cycle { display: inline-flex; margin-top: 1.75rem; padding: 0.25rem; border-radius: 0.6rem; background: rgba(255, 255, 255, 0.08); }
+  .cycle label { position: relative; cursor: pointer; }
+  .cycle input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+  .cycle span { display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.55rem 1rem; border-radius: 0.45rem; color: #c3c7e6; font-size: 0.9375rem; font-weight: 600; }
+  .cycle-note { margin-top: 0.6rem; color: #a9b0ff; font-size: 0.8125rem; }
+  .cycle input:checked + span { background: #fff; color: #14152a; }
+  .cycle input:focus-visible + span { outline: 2px solid #a9b0ff; outline-offset: 2px; }
+
+  .price { margin-top: 1.5rem; }
+  .price + .price { border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 1.5rem; }
+  .pricing:has(input[value="monthly"]:checked) .price-annual,
+  .pricing:has(input[value="annual"]:checked) .price-monthly { display: none; }
+  .pricing:has(input:checked) .price + .price { border-top: 0; padding-top: 0; }
+  .price-big {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    font-family: var(--font-serif);
+    font-size: clamp(2.5rem, 2rem + 2.2vw, 3.6rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .price-big span { font-family: var(--font-sans); font-size: 1rem; font-weight: 500; letter-spacing: 0; color: #c3c7e6; }
+  .price-then { margin-top: 0.75rem; color: #eef0ff; font-size: 1.125rem; font-weight: 600; line-height: 1.5; }
+  .price-cta { margin-top: 1.75rem; width: 100%; background: #fff; color: #14152a; }
+  .price-cta:hover { background: #eef1ff; }
+  .price-fine { margin-top: 1rem; color: #a2a8cc; font-size: 0.8125rem; line-height: 1.6; }
+
+  .price-includes { padding-top: clamp(1.75rem, 4vw, 2.75rem); }
+  .price-includes h3 { font-size: 1rem; font-weight: 700; }
+  .price-includes ul { margin-top: 1rem; display: grid; gap: 0.85rem; }
+  .price-includes li { display: flex; gap: 0.65rem; color: #dfe2f7; line-height: 1.5; }
+  .price-includes :global(svg) { flex: none; margin-top: 0.15rem; color: #a9b0ff; }
+  .price-review { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid rgba(255, 255, 255, 0.12); color: #a2a8cc; font-size: 0.875rem; line-height: 1.6; }
+
+  @media (max-width: 899px) {
+    .pricing { grid-template-columns: 1fr; }
+    .price-includes { padding-top: 0; }
+  }
+</style>

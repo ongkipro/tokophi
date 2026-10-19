@@ -1,0 +1,61 @@
+---
+title: "Catat pembelian stok ke pemasok"
+seoTitle: "Pesanan Pembelian (PO): Catat Stok dari Pemasok"
+description: "Buat pesanan pembelian ke pemasok, tandai barangnya diterima supaya stok bertambah otomatis, dan batalkan PO atau penerimaan yang salah."
+routes: ["/produk/pembelian", "/produk/[id]", "/produk/inventori"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Pesanan pembelian (PO) mencatat barang yang Anda pesan dari pemasok. Setelah langkah ini PO Anda tercatat, stok yang sedang dalam perjalanan terlihat di [Inventori](/produk/inventori/), dan stok bertambah sendiri saat barangnya Anda tandai diterima.
+
+:::caution[Penting (per 12 Oktober 2026)]
+PO hanya bisa dibuat untuk pemasok yang sudah tersimpan di toko Anda, dan Dashboard Seller belum punya menu untuk menambah pemasok. Toko baru akan mendapat pesan *"Pemasok tidak ditemukan. Pilih pemasok yang sudah tersimpan."* saat membuat PO. Sampai menu itu tersedia, catat stok masuk langsung di [Inventori](/produk/inventori/), atau hubungi tim TokoΦ lewat menu [**Bantuan**](https://app.tokophi.com/bantuan).
+:::
+
+## Yang Anda perlukan
+
+- Nama pemasok yang sudah tersimpan di toko Anda (lihat kotak di atas).
+- Produk yang sudah disimpan, beserta harga belinya (HPP) per unit.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Produk → Pembelian**, lalu klik **Buat pesanan pembelian**.
+2. Isi **Pemasok** persis dengan nama pemasok yang tersimpan. Huruf besar dan kecil tidak berpengaruh.
+3. Isi **Estimasi tiba** (opsional) dan **Catatan** (opsional).
+4. Klik **Tambah item**, pilih produk atau variannya dari daftar, lalu isi **Jumlah** dan **HPP** (harga beli per unit). Ulangi untuk setiap item. Satu varian hanya boleh muncul sekali dalam satu PO.
+5. Periksa **Total**, lalu klik **Buat**. PO muncul di daftar dengan status **Dipesan**.
+6. Saat barang datang, klik ikon tiga titik di baris PO, lalu **Tandai diterima**. Stok setiap item bertambah sesuai jumlah yang dipesan, dan status PO menjadi **Diterima**.
+
+</Steps>
+
+:::note[Catatan]
+Saat Anda memilih produk, kolom **HPP** langsung terisi perkiraan 60% dari harga jual. Itu bukan harga beli Anda. Ganti dengan harga dari pemasok.
+:::
+
+### Dari editor produk
+
+Di editor produk, **Tindakan lainnya → Buat pesanan pembelian** membuka PO untuk satu varian produk itu. Isinya **Pemasok**, **Varian**, **Jumlah**, **Biaya / unit**, dan **Estimasi tiba**, lalu klik **Buat PO**. Aturan pemasoknya sama dengan di atas.
+
+### Membatalkan
+
+- **PO yang barangnya belum datang:** ikon tiga titik → **Batalkan**. PO dihapus dari daftar.
+- **Salah menandai diterima:** ikon tiga titik → **Batalkan penerimaan**. Stok yang tadi ditambahkan dikurangi lagi, dan PO kembali ke **Dipesan**. Setelah itu Anda bisa membatalkan PO-nya kalau perlu.
+
+PO berstatus **Diterima** tidak bisa langsung dibatalkan. Batalkan penerimaannya dulu.
+
+Barang diterima sekaligus untuk seluruh PO. Belum ada cara mencatat penerimaan sebagian.
+
+## Kalau ada masalah
+
+- *"Pemasok wajib diisi"*: isi **Pemasok**.
+- *"Pemasok tidak ditemukan. Pilih pemasok yang sudah tersimpan."*: nama pemasok tidak ada di toko Anda. Lihat kotak **Penting** di atas.
+- *"Nama pemasok tidak unik. Rapikan data pemasok sebelum membuat PO."*: ada dua pemasok dengan nama yang sama. Hubungi tim TokoΦ lewat **Bantuan**.
+- *"Tambah minimal 1 item dengan jumlah dan HPP yang valid"*: setiap item butuh produk, jumlah, dan HPP di atas 0. Baris yang belum lengkap tidak ikut disimpan.
+- *"Pemasok, varian, jumlah, dan biaya per unit wajib valid."*: lengkapi semua kolom, dengan jumlah dan biaya di atas 0.
+- *"Satu varian hanya boleh muncul sekali dalam pesanan."*: gabungkan baris yang memilih varian yang sama.
+- *"Produk ini belum memiliki varian tersimpan"* (dari editor produk): simpan produknya dulu.
+- *"Penerimaan … dibatalkan, tetapi stok … produk menjadi minus …"*: barang dari PO itu sudah terjual sebelum penerimaannya dibatalkan. Periksa dan betulkan stoknya di [Inventori](/produk/inventori/).

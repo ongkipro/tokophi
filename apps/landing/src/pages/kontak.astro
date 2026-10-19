@@ -2,17 +2,19 @@
 import Base from "../layouts/Base.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 import SiteFooter from "../components/SiteFooter.astro";
-import { IDENTITY, HAS_CONTACT, MISSING_IDENTITY } from "../lib/identity";
+import { IDENTITY, HAS_CONTACT, MISSING_IDENTITY, whatsappDisplay } from "../lib/identity";
+import { PANDUAN_URL } from "../lib/navigation";
 
 // Identity + how to reach a human. This page exists because the apex had NEITHER, which is what an
 // ads reviewer looks for first and what a buyer looks for when something goes wrong.
 // ⚠️ NO FORM here on purpose: a contact form would need a mailer, and this product has none —
 // submissions would go nowhere while looking like they had been received.
+const missing = MISSING_IDENTITY.join(", ");
 const loginUrl = import.meta.env.PUBLIC_LOGIN_URL || "https://app.tokophi.com/login";
 
-const title = "Kontak | TokoΦ";
+const title = "Kontak TokoΦ: Identitas Penyelenggara dan Cara Menghubungi Kami";
 const description =
-  "Identitas penyelenggara TokoΦ dan cara menghubungi kami untuk pemilik toko maupun pembeli.";
+  "Identitas penyelenggara TokoΦ dan cara menghubungi kami, untuk pemilik toko maupun pembeli yang berbelanja di toko yang berjalan di TokoΦ.";
 ---
 
 <Base {title} {description} path="/kontak/">
@@ -30,12 +32,12 @@ const description =
         MISSING_IDENTITY.length > 0 && (
           <div class="notice" role="note">
             <p>
-              <strong>Halaman ini belum lengkap.</strong> {MISSING_IDENTITY.join(", ")} belum
+              <strong>Halaman ini belum lengkap.</strong> {missing.charAt(0).toUpperCase() + missing.slice(1)} belum
               dicantumkan.
             </p>
             <p>
-              Kami memilih menyatakannya secara terbuka daripada memasang keterangan sementara yang
-              tidak bisa dibedakan dari keterangan sungguhan.
+              Badan usaha penyelenggara TokoΦ sedang dalam proses pengurusan. Keterangannya akan
+              dicantumkan di sini setelah terbit, bukan diganti dengan keterangan sementara.
             </p>
           </div>
         )
@@ -60,7 +62,8 @@ const description =
           </dl>
         ) : (
           <p>
-            Identitas badan usaha penyelenggara belum dicantumkan di halaman ini.
+            Badan usaha penyelenggara sedang dalam proses pengurusan dan akan dicantumkan di sini
+            setelah terbit.
           </p>
         )
       }
@@ -81,7 +84,7 @@ const description =
               <>
                 <dt>WhatsApp</dt>
                 <dd>
-                  <a href={`https://wa.me/${IDENTITY.whatsapp}`}>+{IDENTITY.whatsapp}</a>
+                  <a href={`https://wa.me/${IDENTITY.whatsapp}`}>{whatsappDisplay(IDENTITY.whatsapp)}</a>
                 </dd>
               </>
             )}
@@ -105,8 +108,9 @@ const description =
 
       <h2>Anda pemilik toko?</h2>
       <p>
-        Pengaturan toko, langganan, pengiriman, dan pesanan diatur langsung dari
-        panel Seller. <a href={loginUrl}>Masuk ke panel Seller</a>.
+        Pengaturan toko, langganan, pengiriman, dan pesanan diatur langsung dari Dashboard Seller.
+        Langkah demi langkahnya ada di <a href={PANDUAN_URL}>Panduan seller</a>.
+        <a href={loginUrl}>Masuk ke Dashboard Seller</a>.
       </p>
     </main>
 

@@ -1,0 +1,54 @@
+---
+import { FEES, MIN_PAYOUT, PRICE } from "../lib/offer";
+
+const rows = [
+  { what: "Langganan TokoΦ", who: "Anda", how: `${PRICE.monthly}/bulan, atau ${PRICE.annual}/tahun. Tidak ada potongan dari hasil penjualan barang.` },
+  { what: "Biaya QRIS", who: "Pembeli", how: `${FEES.qris}, ditambahkan otomatis di checkout.` },
+  { what: "Biaya Virtual Account", who: "Pembeli", how: `${FEES.va}, ditambahkan otomatis di checkout.` },
+  { what: "Biaya COD", who: "Pembeli", how: `${FEES.cod}.` },
+  { what: "Ongkos kirim", who: "Pembeli", how: "Sesuai tarif kurir dan layanan yang dipilih pembeli saat checkout. Anda tidak perlu menalangi ongkir." },
+  { what: "Penarikan saldo", who: "Tidak ada", how: `Tanpa biaya. Minimal ${MIN_PAYOUT} per penarikan, ditransfer ke rekening yang terdaftar.` },
+] as const;
+---
+
+<div class="fees">
+  <table>
+    <caption class="sr-only">Siapa membayar biaya apa</caption>
+    <thead>
+      <tr><th scope="col">Biaya</th><th scope="col">Dibayar oleh</th><th scope="col">Besarnya</th></tr>
+    </thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr>
+          <th scope="row">{r.what}</th>
+          <td class="who"><span class:list={["who-tag", r.who === "Anda" && "is-you"]}>{r.who}</span></td>
+          <td>{r.how}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+  <p class="fees-note">Yang Anda terima dari setiap pesanan adalah nilai barang setelah diskon, ditambah PPN barang bila toko Anda memungutnya. Ongkir dan biaya pembayaran dipakai untuk membayar kurir dan penyedia pembayaran.</p>
+</div>
+
+<style>
+  .fees table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+  .fees th, .fees td { padding: 1rem 1rem 1rem 0; border-bottom: 1px solid var(--color-line); text-align: left; vertical-align: top; line-height: 1.55; }
+  .fees thead th { padding-block: 0.6rem; border-bottom-color: var(--color-ink); color: var(--color-muted); font-size: 0.8125rem; font-weight: 600; }
+  .fees tbody th { width: 30%; font-weight: 650; }
+  .fees .who { width: 9rem; }
+  .fees td:last-child { color: var(--color-muted); }
+  .who-tag { font-weight: 600; }
+  .who-tag.is-you { color: var(--color-primary-ink); }
+  .fees-note { margin-top: 1.25rem; max-width: 46rem; color: var(--color-muted); font-size: 0.875rem; line-height: 1.65; }
+
+  @media (max-width: 699px) {
+    .fees thead { display: none; }
+    .fees table, .fees tbody, .fees tr, .fees th, .fees td { display: block; width: auto; }
+    .fees tr { padding-block: 1rem; border-bottom: 1px solid var(--color-line); }
+    .fees th, .fees td { padding: 0; border: 0; }
+    .fees tbody th, .fees .who { width: auto; }
+    .fees .who { margin-top: 0.2rem; font-size: 0.875rem; }
+    .fees .who::before { content: "Dibayar oleh: "; color: var(--color-muted); }
+    .fees td:last-child { margin-top: 0.35rem; }
+  }
+</style>

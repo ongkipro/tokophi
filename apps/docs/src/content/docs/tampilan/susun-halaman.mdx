@@ -1,0 +1,95 @@
+---
+title: "Susun beranda, kategori, dan produk dengan Store Builder"
+seoTitle: "Store Builder: Template Beranda, Kategori, Produk"
+description: "Buat template beranda, kategori, dan produk di Store Builder, pilih template default, pasang ke kategori tertentu, lalu atur font dan warna toko."
+routes: ["/tema", "/tema/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import builder from "../../../assets/screens/seller-store-builder-1600.webp";
+
+Menu **Tema** adalah [Store Builder](/referensi/kamus/#store-builder): tempat Anda menyusun tampilan toko dari bagian-bagian siap pakai. Kalau Anda hanya ingin mengganti isi beranda, langkah singkatnya ada di [Rapikan tampilan toko](/mulai/tampilan-toko/). Artikel ini membahas sisanya: beberapa [template](/referensi/kamus/#template) sekaligus, template untuk kategori dan produk tertentu, dan bagian apa saja yang tersedia di tiap jenis halaman.
+
+## Yang Anda perlukan
+
+- Peran **Pemilik** atau **Admin**. Peran lain tidak bisa mengubah tema ([Peran tim](/referensi/peran-tim/)).
+- Gambar maksimal 2 MB per file (JPG, PNG, atau WebP). Gambar otomatis dikonversi ke WebP.
+
+## Tiga jenis template
+
+| Tab di **Tema** | Yang diatur template |
+|---|---|
+| **Beranda** | Seluruh halaman depan toko. |
+| **Kategori** | Isi halaman kategori di bawah judul dan sampul kategori. Judul dan sampul selalu tampil. |
+| **Produk** | Bagian bawah halaman produk. Galeri, tombol beli, ulasan, dan deskripsi produk tidak ikut diubah. |
+
+Template berlabel **Default** dipakai untuk semua halaman sejenis yang tidak punya template khusus. Selama template Default belum berisi satu bagian pun, toko tetap memakai tampilan bawaan.
+
+## Langkah
+
+### Buat template dan jadikan default
+
+<Steps>
+
+1. Buka **Tema** di grup menu **Toko Online**, lalu pilih tab **Beranda**, **Kategori**, atau **Produk**.
+2. Klik tombol **Template Beranda** (labelnya mengikuti tab: **Template Kategori** atau **Template Produk**). Isi **Nama Template**, lalu klik **Buat & Buka Builder**. Template pertama dari tiap jenis otomatis menjadi default.
+3. Di builder, seret bagian dari daftar di kiri ke kanvas, lalu klik bagian itu untuk mengubah teks, gambar, dan tautannya.
+4. Klik **Publish**. Muncul pesan *"Template tersimpan"*.
+5. Untuk mengganti template yang tampil, kembali ke **Tema** lewat **Kembali ke Daftar Template**, klik tombol ⋯ di kartu template, lalu pilih **Jadikan default**.
+
+</Steps>
+
+<Shot src={builder} alt="Store Builder TokoΦ: daftar bagian seperti Kolom Ikon, FAQ, Hero, dan Grid Produk di kiri, pratinjau beranda di kanan." caption="Builder template beranda. Seret bagian dari kiri ke kanvas." />
+
+:::caution[Penting]
+**Publish** adalah satu-satunya tombol simpan di builder. Tidak ada draft, dan template yang sedang dipakai langsung berubah untuk pembeli. Menghapus template lewat ⋯ → **Hapus** juga permanen. Kategori atau produk yang memakainya kembali ke template Default.
+:::
+
+### Pasang template ke kategori atau produk tertentu
+
+<Steps>
+
+1. Di tab **Kategori** (atau **Produk**), gulir ke kartu **Penetapan Template — Kategori** (atau **— Produk**).
+2. Klik tombol template di baris yang ingin diubah, lalu pilih nama template. Pilih **Pakai template default** untuk mengembalikannya.
+3. Untuk banyak baris sekaligus, centang barisnya, lalu klik **Terapkan ke terpilih**.
+
+</Steps>
+
+Penetapan langsung tersimpan begitu Anda memilih, tanpa tombol simpan terpisah.
+
+### Bagian yang tersedia
+
+| Bagian | Beranda | Kategori | Produk |
+|---|:-:|:-:|:-:|
+| Hero (maks. 5 slide) | ✓ | | |
+| Daftar Produk | | ✓ | |
+| Grid Produk (maks. 2 per halaman, 2–24 produk) | ✓ | ✓ | ✓ |
+| Gambar + Teks, Kolom Ikon (maks. 8 kolom), FAQ (maks. 12 pertanyaan) | ✓ | ✓ | ✓ |
+| Banner Promo, Teks Berjalan, Testimoni, Teks & Pernyataan, Jurnal | ✓ | ✓ | ✓ |
+| Navigasi Kategori, Bento Koleksi, Lookbook | ✓ | | |
+
+**Daftar Produk** menampilkan seluruh isi kategori dengan urutan dan halaman. **Grid Produk** hanya menampilkan sejumlah produk (terlaris, terbaru, atau acak). Bagian **Jurnal** menampilkan artikel [blog](/tampilan/artikel-blog/) terbaru.
+
+### Font, warna, dan galeri produk
+
+Tombol **Tampilan**, **Warna Brand**, dan **Galeri Produk** ada di bagian atas halaman **Tema**. **Tampilan** dan **Warna Brand** juga ada di bilah atas builder.
+
+- **Tampilan**: **Font judul** (Bawaan, Elegan, Modern, Klasik, Tegas) dan **Nuansa warna dasar** (Hangat, Netral, Sejuk).
+- **Warna Brand**: satu warna dasar lewat **Pilih Warna** atau **Kode Hex**, lalu **Simpan Warna**.
+- **Galeri Produk**: **Susunan galeri** (Thumbnail di samping, Thumbnail di bawah, Grid 2 kolom), **Rasio thumbnail utama**, dan **Rasio gambar kartu produk**.
+
+:::note[Catatan]
+Ketiga pengaturan ini punya tombol simpan sendiri dan langsung berlaku untuk seluruh toko, terpisah dari **Publish**. Menekan **Publish** tidak menyimpannya, dan menyimpannya tidak menerbitkan template.
+:::
+
+## Kalau ada masalah
+
+- *"Template default tidak bisa dihapus — jadikan template lain sebagai default dulu"*: pilih **Jadikan default** pada template lain, lalu hapus.
+- *"Nama template maksimal 60 karakter"*: persingkat namanya.
+- *"Akses ditolak — peran Anda tidak bisa mengubah tema toko"*: minta Pemilik atau Admin yang mengubah.
+- Bagian **Grid Produk** tidak bisa ditambah lagi: satu halaman maksimal berisi 2 Grid Produk.
+- Kartu template kategori bertuliskan *"Template ini belum punya seksi Daftar Produk"*: tambahkan bagian **Daftar Produk**, kalau tidak halaman kategori tampil tanpa produk.
+- Saat mengunggah gambar muncul *"Melebihi 5MB"*: batas sebenarnya 2 MB. Perkecil gambar sampai di bawah 2 MB.
+- Perubahan belum terlihat di toko: pastikan Anda sudah menekan **Publish** pada template yang berlabel **Default** atau yang dipasang ke kategori/produk itu, lalu muat ulang halaman toko setelah beberapa detik.

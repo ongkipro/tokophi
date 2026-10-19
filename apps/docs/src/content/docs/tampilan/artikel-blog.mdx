@@ -1,0 +1,53 @@
+---
+title: "Tulis artikel blog"
+seoTitle: "Tulis dan Terbitkan Artikel Blog di Toko Anda"
+description: "Tulis artikel blog dengan kutipan, penulis, dan gambar unggulan, terbitkan di halaman Jurnal toko, lalu tampilkan artikel terbaru di beranda."
+routes: ["/blog", "/blog/baru", "/blog/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Artikel blog membantu pembeli mengenal produk Anda, misalnya panduan ukuran atau cara merawat bahan. Di toko, kumpulan artikel tampil dengan judul **Jurnal** di alamat `nama-toko.tokophi.id/blog`, dan tiap artikel di `/blog/<handle>`.
+
+## Yang Anda perlukan
+
+- Peran **Pemilik**, **Admin**, **Staf**, atau **Advertiser** ([Peran tim](/referensi/peran-tim/)).
+- Gambar unggulan (opsional): PNG, JPG, WebP, atau SVG, maksimal 2 MB.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Blog** di grup menu **Toko Online**, lalu klik **Tambah artikel**.
+2. Isi **Judul** (wajib) dan tulis isi artikel di **Konten**.
+3. Isi **Kutipan**: satu-dua kalimat ringkasan. Kutipan tampil di bawah judul artikel dan dipakai sebagai deskripsi artikel di hasil pencarian.
+4. Di **Handle URL**, isi alamat artikel, atau biarkan kosong supaya dibuat otomatis dari judul.
+5. Di kartu **Gambar unggulan**, klik **Klik untuk unggah gambar**. Gambar otomatis dikonversi ke WebP dan juga masuk ke **Files**.
+6. Di kartu **Organisasi**, periksa **Penulis**. Nama ini tampil di halaman artikel, jadi ganti dengan nama Anda atau kosongkan.
+7. Nyalakan **Terbitkan artikel** supaya artikel tampil di toko. Kalau dibiarkan mati, artikel tersimpan sebagai draft.
+8. Klik **Simpan**. Muncul pesan *"Artikel dibuat"* (atau *"Artikel disimpan"* saat mengedit), lalu Anda kembali ke daftar artikel.
+
+</Steps>
+
+:::caution[Penting]
+Untuk artikel baru, kolom **Penulis** sudah terisi sebuah nama contoh. Kalau tidak diganti, nama itu tampil sebagai penulis artikel Anda di toko.
+:::
+
+:::note[Catatan]
+Kolom **Tag**, **Judul SEO**, dan **Deskripsi meta** saat ini tidak tersimpan. Isi **Kutipan** untuk deskripsi di hasil pencarian. Kolom handle di editor diawali `/blogs/…/`, tetapi alamat sebenarnya di toko adalah `/blog/<handle>`.
+:::
+
+:::tip[Tips]
+Tampilkan artikel terbaru di beranda dengan menambahkan bagian **Jurnal** di [Store Builder](/tampilan/susun-halaman/).
+:::
+
+Menghapus artikel lewat ⋯ → **Hapus** bersifat permanen. Kalau hanya ingin menyembunyikannya, matikan **Terbitkan artikel** lalu simpan.
+
+## Kalau ada masalah
+
+- *"Judul artikel wajib diisi"*: isi **Judul** sebelum menyimpan.
+- *"Gagal menyimpan artikel"*: biasanya handle sudah dipakai artikel lain di toko Anda. Ubah **Handle URL**, lalu simpan lagi.
+- *"…: melebihi 2MB (…MB)."*: perkecil gambar sampai di bawah 2 MB.
+- Artikel tidak bisa dibuka di toko: pastikan **Terbitkan artikel** menyala dan alamatnya memakai `/blog/`, bukan `/blogs/`.
+- Kolom **Komentar** di daftar artikel: toko belum punya fitur komentar, jadi angkanya tidak bertambah.

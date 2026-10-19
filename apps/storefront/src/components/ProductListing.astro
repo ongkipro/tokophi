@@ -186,7 +186,8 @@ function buildFacets(): Facet[] {
     });
   }
 
-  const cats = [...new Map(products.map((p) => [p.categoryHandle, p.category])).entries()];
+  // Unlabelled products (blank category) get no "" facet option.
+  const cats = [...new Map(products.filter((p) => p.categoryHandle).map((p) => [p.categoryHandle, p.category])).entries()];
   if (cats.length > 1) {
     out.push({
       key: "kategori",

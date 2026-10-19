@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://panduan.tokophi.com/sitemap-index.xml

@@ -1,0 +1,79 @@
+---
+title: "Pesan kurir: satu per satu atau massal"
+seoTitle: "Pesan Kurir Satuan atau Lewat Pengiriman Massal"
+description: "Kapan memesan kurir lewat Pengiriman Massal dan kapan dari detail pesanan, berapa pesanan sekali jalan, kapan kurir menjemput, dan kapan resi terbit."
+routes: ["/pesanan/massal", "/pesanan/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import Shot from "../../../components/Shot.astro";
+import massal from "../../../assets/screens/seller-pengiriman-massal-1600.webp";
+
+Ada dua cara memesan kurir lewat TokoΦ Kirim: banyak pesanan sekaligus di **Pengiriman Massal**, atau satu pesanan dari halaman detailnya. Setelah membaca ini Anda tahu kapan memakai yang mana dan apa yang terjadi setelah tombolnya ditekan. Untuk alur lengkap pertama kali, lihat [Proses pesanan pertama](/mulai/pesanan-pertama/).
+
+:::caution[Penting (per 12 Oktober 2026)]
+Layanan pengiriman TokoΦ Kirim masih berjalan dalam mode uji. Pemesanan kurir dan nomor resi terlihat seperti aslinya, tetapi **belum ada kurir yang datang menjemput**. Tombol bertanda *"mode demo"* atau *"resi contoh"* juga berasal dari mode ini. Sebelum mengirim pesanan sungguhan, hubungi tim TokoΦ lewat menu [**Bantuan**](https://app.tokophi.com/bantuan). Langkah di bawah tetap berguna untuk mengenal alurnya.
+:::
+
+## Yang Anda perlukan
+
+- Alamat jemput dan jasa kirim yang sudah disimpan ([langkah 3](/mulai/profil-dan-alamat/) dan [langkah 4](/mulai/pengiriman-dan-cod/)).
+- Pesanan di tab **Perlu Dikirim**, yaitu yang sudah dibayar atau COD. Lihat [Tab dan status pesanan](/pesanan/tab-dan-status/).
+
+## Pilih caranya
+
+| | Pengiriman Massal | Detail pesanan |
+|---|---|---|
+| Layanan kurir | Otomatis sama dengan pilihan pembeli | Boleh memilih layanan lain lewat **Cek Ongkir** |
+| Jumlah | Maksimal 50 pesanan sekali jalan | Satu pesanan |
+| Asuransi | Tidak | Bisa dicentang |
+| Selisih ongkir | Tidak ada | Ada kalau tarifnya berbeda |
+
+Pakai **Pengiriman Massal** untuk pekerjaan harian. Pakai detail pesanan kalau layanan pilihan pembeli sudah tidak tersedia atau paketnya perlu asuransi.
+
+## Langkah: Pengiriman Massal
+
+<Steps>
+
+1. Buka **Pesanan → Pengiriman Massal**. Empat kartu di atas menghitung **Perlu dikirim**, **Sudah dibooking**, **Resi terbit**, dan **Sudah dicetak**.
+2. Persempit daftar bila perlu dengan filter **Layanan**, **Jasa kirim**, **Status cetak**, atau **Isi** (**Bijian** untuk satu jenis barang, **Bundling** untuk beberapa).
+3. Centang pesanan yang ingin dikirim. Kotak paling atas memilih semua pesanan di daftar.
+4. Klik **Generate resi**. Angka di tombol menunjukkan berapa pesanan terpilih yang belum dibooking. Kalau Anda memilih lebih dari 50, sisanya tetap tercentang. Klik tombolnya lagi untuk melanjutkan.
+5. Kolom **Resi** berubah dari **Belum dibooking** menjadi **Menunggu resi**. TokoΦ mengambil resi otomatis setiap 15 menit. Klik **Ambil resi** kalau tidak ingin menunggu.
+6. Setelah nomor resi muncul, lanjutkan ke [Cetak label](/pesanan/cetak-label/).
+
+</Steps>
+
+<Shot src={massal} alt="Halaman Pengiriman Massal dengan kartu hitungan, filter, serta tombol Generate resi, Ambil resi, dan Cetak resi." caption="Pengiriman Massal. Nama pembeli diburamkan pada gambar ini." />
+
+## Langkah: satu pesanan dari detail
+
+<Steps>
+
+1. Buka pesanan dengan mengklik nomornya, atau klik **Atur Pengiriman** untuk pesanan berstatus Diproses.
+2. Klik **Cek Ongkir**. Pada pesanan QRIS atau VA yang belum dibayar, tombol ini bertuliskan **Menunggu pembayaran** dan tidak bisa diklik.
+3. Daftar layanan muncul dengan **Estimasi** dan **Ongkir**. Centang **Asuransi** bila perlu, lalu klik **Pilih** pada layanan yang diinginkan.
+4. Jendela **Konfirmasi biaya pengiriman** membandingkan ongkir yang **Dibayar pembeli** dengan tarif layanan pilihan Anda. Kalau lebih mahal, selisihnya dipotong dari hasil pesanan, dan kekurangannya memakai saldo tersedia. Kalau lebih murah, selisihnya menjadi margin pengiriman TokoΦ dan tidak masuk saldo Anda.
+5. Klik **Konfirmasi & booking**. Muncul pesan *"Pengiriman dibooking ke kurir."* dan kartu **Pengiriman** bertuliskan **Dibooking — belum ada resi**. Klik **Lacak** untuk mengambil resi lebih cepat.
+
+</Steps>
+
+## Setelah kurir dipesan
+
+- Pesanan berstatus **Baru** otomatis pindah ke **Diproses**. Status menjadi **Dikirim** saat kurir melaporkan paket sudah dijemput.
+- Kurir dijadwalkan menjemput **besok pukul 10.00 WIB** di alamat jemput Anda, baik dari Pengiriman Massal maupun dari detail pesanan.
+- Untuk membatalkan, klik **Batalkan** di kartu **Pengiriman** pada detail pesanan. Pembatalan butuh nomor resi dan tidak bisa dilakukan lagi setelah pesanan Selesai, Batal, atau Retur. Pesan *"Permintaan pembatalan dikirim. Resi dan debit ongkir tetap tercatat sampai kurir mengonfirmasi."* berarti permintaan masih menunggu jawaban kurir.
+
+:::note[Catatan]
+**Menunggu resi** tepat setelah booking itu normal, bukan gagal. Resi terbit setelah kurir menerima permintaan jemput.
+:::
+
+## Kalau ada masalah
+
+- *"Alamat pengirim belum lengkap: … Lengkapi di Pengaturan → Alamat sebelum membuat pengiriman."* Lengkapi alamat jemput, termasuk kecamatan, di **Pengaturan → Alamat**.
+- *"Layanan … tidak tersedia lagi untuk tujuan ini."* atau *"Pesanan tidak punya kurir/layanan tersimpan."* (Pengiriman Massal) Pesan dari detail pesanan lewat **Cek Ongkir**.
+- *"Tarif berubah menjadi Rp…. Periksa dan konfirmasi ulang sebelum booking."* Buka **Cek Ongkir** lagi dan pilih ulang.
+- *"Saldo Seller tidak cukup untuk selisih ongkir Rp…."* Pilih layanan yang tarifnya sama atau lebih murah dari yang dibayar pembeli.
+- *"Nomor resi belum terbit dari kurir, dan pembatalan butuh nomor resi. …"* Klik **Lacak** sampai resi muncul, lalu batalkan.
+- Peringatan *"Tujuan pengiriman ditebak dari nama kota"*. Pesanan lama ini tidak menyimpan kecamatan tujuan. Periksa kecamatan yang disebut di pesan itu, dan batalkan pengiriman sebelum kurir menjemput kalau salah.

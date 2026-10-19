@@ -1,0 +1,63 @@
+---
+title: "Pantau dan ubah stok di Inventori"
+seoTitle: "Atur Stok Produk dan Varian di Menu Inventori"
+description: "Lihat produk yang stoknya menipis atau habis, ubah stok banyak varian sekaligus, dan pahami kapan stok berkurang atau kembali karena pesanan."
+routes: ["/produk/inventori", "/produk", "/produk/[id]"]
+verified: 2026-10-12
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+Halaman **Inventori** menampilkan stok semua produk dan variannya dalam satu tabel. Setelah langkah ini Anda bisa menemukan produk yang hampir habis dan mengubah stok banyak produk dengan satu kali simpan.
+
+## Langkah
+
+<Steps>
+
+1. Buka **Produk → Inventori**.
+2. Pilih tab **Semua**, **Menipis**, atau **Habis**. **Menipis** berisi produk dengan total stok di bawah 20, **Habis** berisi produk dengan stok 0.
+3. Cari produk lewat kolom pencarian di atas tabel dengan mengetik nama produknya.
+4. Di kolom **Tersedia**, klik **+** atau **−**, atau ketik angka stok yang baru. Produk dengan varian punya satu baris per varian di bawah baris produknya. Baris produk itu hanya menunjukkan total.
+5. Ulangi untuk produk lain. Tombol di kanan atas berubah menjadi **Simpan N perubahan**.
+6. Klik tombol itu. Muncul pesan *"Stok N varian diperbarui"*.
+
+</Steps>
+
+Kolom **Status stok** memakai label **Habis** (0), **Menipis** (di bawah 20), dan **Tersedia**. Kartu di atas tabel merangkum jumlah produk, **Stok menipis**, **Stok habis**, dan **Nilai inventori** (stok × harga jual). Tombol **Ekspor** mengunduh daftar stok sebagai file CSV.
+
+Kolom **Masuk** menunjukkan barang dari [pesanan pembelian](/produk/pembelian/) yang belum diterima.
+
+:::note[Catatan]
+Kartu **Total SKU** menghitung jumlah produk, bukan jumlah varian. Kolom pencarian menulis "Cari nama produk atau SKU…", tetapi saat ini hanya nama produk yang dicari.
+:::
+
+### Kapan stok berubah sendiri
+
+| Kejadian | Stok |
+|---|---|
+| Pembeli membuat pesanan (COD, QRIS, atau Virtual Account) | Berkurang saat pesanan dibuat, sebelum dibayar |
+| Pesanan **Batal**, termasuk pesanan prepaid yang tidak dibayar dalam 24 jam | Kembali |
+| Pesanan ditandai **Retur** | Kembali |
+| Pesanan pembelian ditandai **Diterima** | Bertambah sesuai jumlah yang dipesan |
+
+Di toko, produk atau varian dengan stok 0 bertuliskan **Stok habis**. Pembeli tidak bisa memesan lebih banyak dari stok yang tersisa.
+
+### Mengubah stok dari editor produk
+
+Stok juga bisa diubah di editor produk, lewat kolom **Kuantitas** (produk tanpa varian) atau kolom **Stok** di tabel [varian](/produk/varian/). Menu **Tindakan lainnya → Perbarui stok / inventori** hanya mengubah angka **Kuantitas** di layar. Klik **Simpan** setelahnya, karena angka itu belum tersimpan sebelum Anda menekan **Simpan**.
+
+:::caution[Penting]
+**Simpan** di editor produk menulis stok persis sesuai angka di layar. Kalau ada pesanan masuk selama editor terbuka, stok yang sudah berkurang bisa tertimpa angka lama. Untuk mengubah stok, pakai halaman **Inventori**. Halaman ini menolak perubahan kalau stok sudah berubah sejak halaman dimuat.
+:::
+
+:::note[Catatan]
+Untuk produk dengan varian, **Perbarui stok / inventori** di editor produk tidak berpengaruh, karena stoknya diatur per varian. Ubah stok varian di tabel varian atau di halaman **Inventori**.
+:::
+
+## Kalau ada masalah
+
+- *"Gagal: stok kedaluwarsa untuk … Memuat ulang..."*: stok produk itu berubah sejak halaman dimuat, misalnya karena ada pesanan. Perubahan produk itu tidak disimpan, sedangkan produk lain dalam simpanan yang sama tetap tersimpan. Halaman memuat angka terbaru; periksa lagi, lalu ubah dan simpan ulang.
+- *"Gagal: beberapa varian tidak valid atau hilang."*: muat ulang halaman, lalu ulangi perubahan.
+- *"Gagal memperbarui stok"*: coba simpan lagi.
+- *"Akses ditolak — peran Anda tidak bisa mengubah stok"*: minta pemilik toko mengubahnya. Lihat [Tim](/tim/).
+- Tombol **Simpan** tidak bisa diklik: belum ada angka yang berubah. Kolom stok yang dikosongkan tidak ikut disimpan, jadi isi dengan angka (boleh 0).
