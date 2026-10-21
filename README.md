@@ -63,5 +63,6 @@ WORKTREE"** section of `AGENTS.md`.
 ## Environment
 
 - **Production:** four surfaces (landing, storefront, Seller, Super Admin) on a self-hosted domain — see `DEPLOY.md`
+- **Not in production:** `apps/account` (TokoΦ Account, branch `feat/accounts`, local only) — see `specs/docs/TOKOPHI_ACCOUNT_SPEC.md`
 - **Staging:** none — one production box; a PR's CI builds all four surfaces (`.github/workflows`)
 - **Local:** http://localhost:3000 (Seller) · http://localhost:3001 (Super Admin) · storefront per `apps/storefront` README

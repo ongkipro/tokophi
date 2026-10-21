@@ -86,6 +86,7 @@ Historical audits, `docs/BACKLOG.md`, `docs/WORKLOG.md`, `docs/TASKS.md`, and `d
 | **super-admin** | `apps/super-admin` | the platform (us) | Next.js | :3001 | `rich.tokophi.com` |
 | **storefront** | `apps/storefront` | shoppers | Astro **SSR** | :4327 | `<slug>.tokophi.com` |
 | **landing** | `apps/landing` | the world | Astro **static** | :4328 | `tokophi.com` |
+| *account* (branch `feat/accounts`, local only) | `apps/account` | buyers, affiliates | Astro **SSR** | :4329 | none yet (DEC-018) |
 
 **The admin hosts the entire public HTTP API** (`/api/public/*`, `/api/cron/*`, `/api/uploads/*`) and the
 media store. **The landing page has no database dependency, on purpose** — the front door must serve when

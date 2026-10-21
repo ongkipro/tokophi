@@ -90,3 +90,15 @@ This audit and report suite aligns with the senior engineering guidelines define
 3. **Ongoing Maintenance:** Maintain weekly regression runs of `npm test` and `verify-ledger`.
 
 **Final Certification:** **TokoΦ Commerce SaaS Platform is fully audited, verified, and certified for production readiness.**
+
+---
+
+## Addendum — 2026-10-19 (after the 2026-08-15 audit; not part of that certification)
+
+The audit above is a dated snapshot and its readiness certification is **unchanged and not re-run**. Since then:
+
+- **Shipped to production:** the Seller search palette (Task 10.26, PR #419, merge `9c1e7240`) — 5 files, no migration; deploy verified by image tag 4/4 on `9c1e724`; not yet opened in a logged-in production session.
+- **Built on branch `feat/accounts`, local only, not deployed:** a fifth surface `apps/account` (TokoΦ Account), the store affiliate programme (0116), buyer accounts and order claims (0117–0118), per-store return window and complaint-resolution period (0119–0121), and Seller cards "Kebijakan retur" / "Layanan pengaduan". 122 migrations / 91 tables on that branch. Spec: `TOKOPHI_ACCOUNT_SPEC.md`; rules register §20; market and legal research in `tasks/2026-10-19-account-market-research.md`.
+- **Decisions pending, not made on the owner's behalf:** ADR 0018 (affiliate commission paid from the seller's balance) is *proposed*; tax (Q5) needs an adviser, so Task 9.14 is blocked. PP 33/2026 and PP 20/2026 were not read. Brief for the advisers: `tasks/2026-10-19-adviser-brief-tax-and-legal.md`.
+- **Known gaps in the account app:** `design-gate.py apps/account` fails on `review` after 15 rounds; real Google sign-in, a real WhatsApp hand-off, and refund-in-progress / payment-deadline order states were not exercised.
+- Where to look for current truth: `specs/docs/STATUS.md`, `BUILD-LOG.md`, root `TASKS.md`.

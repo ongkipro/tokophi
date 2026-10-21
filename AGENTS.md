@@ -154,6 +154,7 @@ tokophi/
     super-admin/  # "Super Admin" — platform control plane (@tokophi/super-admin) — what WE use (manage all stores/plans/billing)
     storefront/   # Astro SSR shopper site — multi-tenant by Host header
     landing/      # @tokophi/landing — static Astro front door for the apex (no DB on purpose)
+    account/      # TokoΦ Account — buyer + affiliate account (Astro SSR, :4329). Branch feat/accounts ONLY, local, not in production
   packages/
     ui/           # @tokophi/ui — shared shadcn/Base UI components + cn + Tailwind v4 tokens (styles.css)
     lib/          # @tokophi/lib — shared formatters (IDR/num/…)
