@@ -9,6 +9,10 @@ export type NavBadgeKey = "perluDikirim";
 export type NavItem = { label: string; href: string; icon: LucideIcon; badgeKey?: NavBadgeKey; children?: NavChild[] };
 export type NavGroup = { label?: string; items: NavItem[] };
 
+/** CRM is still being built: shown in local dev, hidden (nav + routes 404) in a production build.
+ *  lazy: flip by deleting this flag once CRM ships; no env var until a staging build needs it. */
+export const CRM_ENABLED = process.env.NODE_ENV !== "production";
+
 // Shopify-core IA minus Themes & Apps/Plugins; Produk & Pelanggan have submenus.
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -89,14 +93,14 @@ export const NAV_GROUPS: NavGroup[] = [
       // because that is the axis it belongs to — Bantuan (merchant ⇄ platform) deliberately stays
       // at the bottom, a different axis entirely.
       { label: "Obrolan", href: "/obrolan", icon: MessageSquare },
-      {
+      ...(CRM_ENABLED ? [{
         label: "CRM", href: "/crm", icon: MessagesSquare,
         children: [
           { label: "Follow-up WA", href: "/crm/followup" },
           { label: "Pipeline", href: "/crm/pipeline" },
           { label: "Template", href: "/crm/template" },
         ],
-      },
+      }] : []),
       // Promo — one parent for every "make people buy now" tool, so the sidebar isn't three near-
       // identical rows (Diskon, Flash Sale, Landing Page were all top-level). Grouped, not renamed: the
       // routes (/diskon, /flash-sale, /promo) are unchanged; only the IA is. The parent row lands on

@@ -283,7 +283,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | **`/pelanggan/keranjang`** (Keranjang Ditinggal) | `checkout` | **`checkout_sessions`**, `orders` (the completed-checkout denominator), `followups`, `wa_templates` | `checkout.recordCartContact` | `followups` (`type='keranjang'`) |
 | `/pelanggan/segmen` | `segments` | `customer_segments` | `segments` | `customer_segments` |
 | `/pelanggan/ulasan` | `reviews` | `reviews`, `customers` | — | — |
-| `/crm`, `/crm/{followup,pipeline,template}` | `crm` | `followups`, `leads`, `wa_templates`, `customers` | `crm` | `followups` |
+| `/crm`, `/crm/{followup,pipeline,template}` — **dev only** (2026-10-15: `CRM_ENABLED` in `lib/nav.ts` drops the nav entry and `crm/layout.tsx` 404s in a production build) | `crm` | `followups`, `leads`, `wa_templates`, `customers` | `crm` | `followups` |
 | `/diskon/*` | `discounts` | `discounts` | `discounts` | `discounts`, `discount_usages` |
 | `/analitik` | `analytics`, `funnel` | `orders`, `order_line_items`, `products`, `analytics_daily`, **`analytics_events`** | — | — |
 | `/pemasaran` | `marketing` | `orders` (+ `ad_channels` for *labels only*) | — | — |
