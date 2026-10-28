@@ -1,11 +1,7 @@
 # TokoΦ — Data Model
 
-> The entities the UI works with, and how they map to the **PostgreSQL** tables (now live via `@tokophi/db` — see `SCHEMA.md`). Super-admin + 16 admin modules already read the DB; the rest still read the mock shapes below.
-> Mock shapes live in three places:
-> - **admin-mock** → `apps/admin/lib/mock/store.ts`
-> - **super-admin-mock** → `apps/super-admin/lib/mock.ts`
-> - **storefront-mock** → `apps/storefront/src/data/catalog.ts`
-> - **shared** → `packages/data/src/menu.ts` (`@tokophi/data`) — canonical nav, imported by admin mock **and** the storefront.
+> The entities the UI works with, and how they map to the **PostgreSQL** tables (live via `@tokophi/db` — see `SCHEMA.md`, which is derived from the catalog and wins on any disagreement).
+> ⚠️ **Historical shape notes.** This file was written in the mock-data era. The mock files it names (`apps/admin/lib/mock/store.ts`, `apps/super-admin/lib/mock.ts`) and the shared `@tokophi/data` package were **deleted** (Task 6.7, 2026-09-09); every surface now reads the database, the admin's view types live in `apps/admin/lib/types/domain.ts`, and the storefront reads per request via `apps/storefront/src/data/catalog.ts`. Where a heading below says `*-mock`, read it as "the flat view shape".
 >
 > Content entities mirror **Shopify Admin API** shapes so the eventual API feels familiar. Aligned with `SCHEMA.md`.
 > **ADR 0009 (Store Builder):** `page_templates` entity (store-scoped, `type` = homepage/category/product, `sections` jsonb) plus `template_id` FKs on `collections`/`products` and `stores.logo_url` — migrated (`0026`/`0027`). See [`decisions/0009-self-serve-store-builder.md`](../decisions/0009-self-serve-store-builder.md).
@@ -144,7 +140,7 @@ never stored on the row.
 
 ---
 
-## Content entities (Shopify-modeled) — admin-mock, `@tokophi/data` for menus
+## Content entities (Shopify-modeled)
 
 ### Page  *(mock: `CmsPage`, `PAGES`)* — Shopify `Page`
 `id, title, handle, published, updatedDaysAgo, template(templateSuffix), views` + body(HTML) + SEO → `pages`. Storefront URL `/halaman/<handle>` (route built).
@@ -152,9 +148,8 @@ never stored on the row.
 ### Blog + Article  *(mock: `BlogPost`, `BLOG_POSTS`, `BLOG_CATEGORIES`)* — Shopify `Blog` + `Article`
 `BlogPost = id, title, handle, blog(category), author, published, publishedDaysAgo, excerpt, comments` + body + tags + featured image + SEO → `blogs` (1) ⟶ `articles` (N). Storefront `/blog` list + article detail `/blog/<handle>` both built (2026-07-14).
 
-### Menu + MenuItem  *(shared: `@tokophi/data` → `MAIN_MENU`/`FOOTER_MENU`; admin re-wraps as `NavMenu`/`NavItem` in `MENUS`)* — Shopify `Menu` + `MenuItem`
-- **Canonical source:** `packages/data/src/menu.ts`. `MenuItem = { id, label, type, href, children? }`; `MenuItemType = beranda | koleksi | produk | halaman | blog | url`.
-- Admin `store.ts` maps it to `NavItem = { id, title, type, target, children? }` (label→title, href→target) so the **menu builder and storefront nav never drift** (single source of truth). Default menus: `main-menu` ("Menu Utama", header) and `footer`.
+### Menu + MenuItem  *(per-store `menus` ⟶ `menu_items`)* — Shopify `Menu` + `MenuItem`
+- **Canonical source:** the store's own `menus` / `menu_items` rows (per tenant). The admin Navigasi editor writes them (`apps/admin/lib/actions/menus.ts`) and the storefront reads the same tree (`apps/storefront/src/data/nav.ts`), so they cannot drift. `MenuItemType = beranda | koleksi | produk | halaman | blog | url`. Default menus: `main-menu` ("Menu Utama", header) and `footer`.
 - → `menus` ⟶ `menu_items` (self-referential `parent_id`). Item types map to Shopify `MenuItemType` (`FRONTPAGE, COLLECTION, PRODUCT, PAGE, BLOG, ARTICLE, HTTP`).
 
 ---
@@ -166,11 +161,11 @@ Self-contained mock for the demo store, kept 1:1 with the admin fashion demo (sa
 - **Store**  *(`STORE`)* — `name, tagline, whatsapp, city` (demo: "Batik Nusantara").
 - **Collection**  *(`COLLECTIONS`)* — `handle, name, emoji, blurb`. Plus **virtual collections** defined in `kategori/[handle].astro` `getStaticPaths`: `semua` (all products) and `promo-gajian` (compareAt||bestseller).
 - **Product**  *(`PRODUCTS`)* — `handle, name, price, compareAt?, category, categoryHandle, image, description, sizes[], badge?, bestseller?`. Helpers: `productImages` (5-image gallery), `bestsellers`, `byCollection`, `findProduct`, `findCollection`.
-- Nav header/footer consume `@tokophi/data`. Cart is client-side (localStorage); checkout province/shipping/payment options are page-local mock arrays.
+- Nav header/footer read the store's own `menus`/`menu_items`. Cart is client-side (localStorage); checkout province/shipping/payment options are page-local mock arrays.
 
 ---
 
-## Platform entities — super-admin-mock (`apps/super-admin/lib/mock.ts`)
+## Platform entities — super-admin *(historical; the mock file is gone, the live reads are `apps/super-admin/lib/data*`)*
 
 - **Store**  *(`STORES`, `Store`)* — `id, name, owner, email, city, plan(pemula|bisnis|skala), status(aktif|trial|ditangguhkan), gmv, orders, products, createdDaysAgo` → `stores` (+ `accounts`).
 - **Plan**  *(`PLANS`, `PlanInfo`)* — `key, name, price, blurb, features[]` → `plans` (Pemula Rp99k / Bisnis Rp299k / Skala Rp799k per month).
