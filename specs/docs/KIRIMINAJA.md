@@ -58,7 +58,7 @@ and this row is a bug.
 
 | table / file | rows | purpose | producer |
 |---|---|---|---|
-| `kiriminaja_areas` (+ `lat`,`lng` `0109`) | 7 030 | the vendor's districts: ongkir origin/destination ids, province for the COD allow-list, district centroid (95,8%) | `packages/db/data/kiriminaja-areas.csv` ← vendor export; centroids ← `scripts/build-area-coords.mjs` (Kemendagri boundaries) |
+| `kiriminaja_areas` (+ `lat`,`lng` `0109`) | 7 030 | the vendor's districts: ongkir origin/destination ids, province for the COD allow-list, district centroid (95,8%) | `packages/db/data/kiriminaja-areas.csv` ← vendor export; centroids ← `packages/db/scripts/build-area-coords.mjs` (Kemendagri boundaries) |
 | `kelurahan` (`id` Kemendagri · `ka_kelurahan_id` vendor · `postcode` · `lat`,`lng`) | 78 764 | postcode auto-fill at checkout; the vendor's subdistrict id (94,0%); village centroid (99,6%) | `data/kelurahan.csv` ← `build-kelurahan.mjs` (wilayah + kodepos) + `build-ka-kelurahan-ids.mjs` (vendor walk, claim-once) + `build-area-coords.mjs` — all reloaded by `seed-areas.ts` on every deploy (truncate + insert; reference data, not store data) |
 | `store_settings.sender_*` | per store | the seller's pickup: name, phone, address, `sender_kecamatan_id`, `sender_kelurahan_id` (vendor id), `sender_postcode`; `sender_lat/lng` are DEAD (the centroid rule replaces them) | Pengaturan → Alamat (`sender-address-card.tsx`) |
 | `store_shipping_methods` + `store_settings.couriers` (fallback) · `store_settings.cod_enabled` | per store | which services this seller offers; whether the seller opts into COD | Pengaturan → Pengiriman / Jasa Kirim |
@@ -413,7 +413,7 @@ wrong JSON type makes the unmarshal name the real struct field and stay silent f
 exist; only those two bind (`RequestPickupV62RequestPackage`). Every name unique to the v6.2 doc —
 including the table's `destination_subdistrict_id`/`destination_village_id` — is silently ignored,
 and the doc omits the village field it actually has. Field-by-field evidence:
-`specs/docs/tasks/2026-08-12-n40-v62-contract.md`.
+`specs/docs/tasks/2026-08-12-n40-v62-contract.md` — ⚠️ that file is **not on `main`**: it lives only on the unmerged branch `origin/docs/n40-v62-contract` (commit `596ed83f`); read it with `git show 596ed83f:specs/docs/tasks/2026-08-12-n40-v62-contract.md`.
 
 ### ⚠️ Two v6.2 behaviours that differ from v6.1, both measured
 

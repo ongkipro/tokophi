@@ -179,7 +179,7 @@ per variant/location.
 ### Shipping — KiriminAja (real courier API) — COMPLETE end-to-end
 Platform-managed aggregator (§4). Sandbox base `https://tdev.kiriminaja.com`, `Authorization: Bearer`;
 key + `KIRIMINAJA_ORDER_PREFIX` in **gitignored** `.env.local`, never committed. Client
-`apps/admin/lib/kiriminaja.ts` — endpoints verified against the Postman collection; **version prefix
+`packages/lib/src/kiriminaja.ts` — endpoints verified against the Postman collection; **version prefix
 varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2, `province`/`tracking`=unversioned,
 `request_pickup`=v6.1). The whole flow is wired + verified E2E:
 - **Super-admin** → Pengaturan: aggregator = KiriminAja + live **"Test koneksi"**.
@@ -193,7 +193,7 @@ varies per endpoint** (`shipping_price`=v6.1, `get_address_by_name`=v2, `provinc
 ### Payments — AutoLaris (real payment gateway) — COMPLETE (checkout)
 Single platform-managed PSP = **AutoLaris** (`gateway_provider` enum; VA 6 banks / QRIS / DANA).
 Base `https://api-h2h.autolaris.com`, Bearer key in gitignored `.env.local`. Client
-`apps/admin/lib/autolaris.ts` (`create_payment`). Flow:
+`packages/lib/src/autolaris.ts` (`create_payment`). Flow:
 - **Super-admin** → Pengaturan → Gateway Pembayaran: AutoLaris + live **"Test koneksi"**.
 - **Storefront checkout** → shopper picks a channel (QRIS/VA/DANA) → **"Bayar"** hits the public proxy
   `apps/admin/app/api/public/pay` → real VA/QRIS/e-wallet bill → the **sukses page shows the payment
