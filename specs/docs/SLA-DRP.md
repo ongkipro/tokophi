@@ -220,8 +220,15 @@ Rp810.000 of withdrawable money with no order behind it. Run it where the creden
 
 An untested recovery path is a **Proposal**, not a capability. None of these has a recorded run:
 
-- [ ] *(re-prioritised 2026-10-28: Task OUT-1028 step 4 — do it before any rebuild)* **Restore a dump into a scratch database and reconcile it** against production row counts. This
-      is the cheapest and highest-value one; the dump is 1,2 MB.
+- [x] **Restore a dump into a scratch database and reconcile it** — done 2026-10-29 (Task OUT-1028
+      step 4) while production was unreachable: `tokophi-20261027-062558.dump` (2,4 MB, PG 16.15,
+      sha256 `dd030de66adc6fbd…`) → `pg_restore --exit-on-error` into a scratch DB in **3 s**, exit 0;
+      116 migrations with the head stamp equal to the journal's `0115`; 84 tables, 57 with RLS,
+      340 table grants to `tokophi_app`; `verify-rls` ✓ (54/55) and `verify-ledger` ✓. Reconciled
+      against the 2026-10-11 production copy (live production could not be read): every table equal
+      or larger in the dump (+1 order/payment/customer, +4 invoices, last order 2026-10-23). ⚠️ The
+      restore does NOT prove the encrypted CAPI tokens (3 rows in `store_tracking_channels`) are
+      readable — that needs the encryption key held in Coolify's env, still unverified off-box.
 - [ ] **Kill a container and time L1.** The heartbeat is fresh; the *restart* has never been observed
       end to end by anyone who wrote it down.
 - [ ] **Rebuild from nothing** on a throwaway VPS — the only way to turn the "total loss" row in §4
