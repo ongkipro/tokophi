@@ -3452,6 +3452,13 @@
         ]
       },
       {
+        "module": "pengaduan.ts",
+        "exports": [
+          "getComplaintService",
+          "saveComplaintService"
+        ]
+      },
+      {
         "module": "picker.ts",
         "exports": [
           "pickerCategoryImages",
@@ -3512,6 +3519,13 @@
         "module": "rekening.ts",
         "exports": [
           "getBankAccount"
+        ]
+      },
+      {
+        "module": "retur.ts",
+        "exports": [
+          "getReturnWindow",
+          "saveReturnWindow"
         ]
       },
       {

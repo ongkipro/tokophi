@@ -321,6 +321,7 @@
 | `pages.ts` | `createPage` `deletePage` `updatePage` |
 | `payment-settings.ts` | `getPlatformChannels` |
 | `payments.ts` | `createOrderPayment` |
+| `pengaduan.ts` | `getComplaintService` `saveComplaintService` |
 | `picker.ts` | `pickerCategoryImages` `pickerCategoryLinks` `pickerPageLinks` `pickerProductLinks` `pickerProducts` |
 | `products.ts` | `bulkDeleteProducts` `bulkSetProductStatus` `createProduct` `deleteProduct` `duplicateProduct` `updateProduct` |
 | `profile.ts` | `getProfile` `updateProfile` |
@@ -329,6 +330,7 @@
 | `purchases.ts` | `cancelPurchaseOrder` `createPurchaseOrder` `receivePurchaseOrder` `unreceivePurchaseOrder` |
 | `register.ts` | `registerStore` |
 | `rekening.ts` | `getBankAccount` |
+| `retur.ts` | `getReturnWindow` `saveReturnWindow` |
 | `reviews.ts` | `deleteReview` `replyToReview` `setReviewStatus` |
 | `security.ts` | `changePassword` `disable2FA` `enable2FA` `getSecurity` `setup2FA` |
 | `segments.ts` | `createSegment` `deleteSegment` `updateSegment` |
