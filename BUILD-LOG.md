@@ -4452,7 +4452,6 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Conflict:** `package-lock.json` only (main's landing dropped React/GSAP). Resolved by taking main's lockfile and `npm install` to re-add the `apps/docs` workspace; `npm ci` exit 0; landing/storefront on astro 5.18.2, docs 7.3.8.
 - **Guard that caught us:** `packages/lib/src/password.test.ts` file-type census went red on the new `.mdx` and `.conf` types → `.mdx` scanned (MDX compiles to a JS module), `.conf` inert (nginx directives).
 - **Verification on the merged tree:** builds landing/storefront/docs exit 0, admin/super-admin exit 0 (Dockerfile dummy `DATABASE_URL`); `vitest run` 163 files passed / 29 skipped (DB suites skip without a `_test` database), 1452 tests passed; `check:storefront` and `check:landing` 0 errors; `npm run check -w @tokophi/docs` green; `docker build -f apps/docs/Dockerfile .` exit 0; `verify:doc-authority` and `verify:traceability` ok.
-||||||| parent of 57139536 (docs(agents): split AGENTS.md under Claude Code's 150k-char limit (155.9k -> 52k))
 
 ### [2026-10-28 14:20 UTC] — DOCS · AGENTS.md split under the 150k-char limit (owner request in chat)
 
