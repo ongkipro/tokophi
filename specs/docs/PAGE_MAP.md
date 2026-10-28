@@ -54,6 +54,7 @@
 | Super Admin (platform control plane) | 12 | 2 | 1 |
 | Storefront (multi-tenant shopper site) | 19 | — | 10 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
+| Akun TokoΦ (buyer account + affiliate dashboard, SSR auth) | 18 | — | 5 |
 
 ## Seller (merchant panel) — `apps/admin`
 
@@ -243,6 +244,43 @@
 | URL | what it is | methods | file | src/data | src/lib | `@tokophi/db` | gate | tests |
 |---|---|---|---|---|---|---|---|---|
 | `/sitemap.xml` | Sitemap for the apex. | GET | `apps/landing/src/pages/sitemap.xml.ts` | — | — |  | — | — |
+
+## Akun TokoΦ (buyer account + affiliate dashboard, SSR auth) — `apps/account`
+
+18 pages · 0 layouts · 0 API routes
+
+### Pages
+
+| URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `/404` | Not found — also what every 'not mine' record answers (another account's order, store or programme). | page | `apps/account/src/pages/404.astro` | — | — | — | — | — |  | — |
+| `/account` | 'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme. | page | `apps/account/src/pages/account/index.astro` | — | `account` `addresses` `affiliate` `orders` | — | — | — |  | — |
+| `/addresses/edit` | Add (no `?id`) or edit (`?id=<mine>`) a saved address. | page | `apps/account/src/pages/addresses/edit.astro` | — | `addresses` | — | — | — |  | — |
+| `/addresses` | 'Alamat' — saved addresses: list, make primary, delete. | page | `apps/account/src/pages/addresses/index.astro` | — | `addresses` | — | — | — |  | — |
+| `/addresses/wilayah` | Kecamatan search for the address form (signed-in only), through the ONE shared reference source. | endpoint | `apps/account/src/pages/addresses/wilayah.ts` | — | `addresses` | — | — | — |  | — |
+| `/affiliate/[id]` | One programme: code, share link, status banner, this store's totals and ledger. | page | `apps/account/src/pages/affiliate/[id].astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate/gabung` | Apply to ONE store's programme as a signed-in account; the merchant still approves it. | page | `apps/account/src/pages/affiliate/gabung.astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate` | 'Affiliate' · Ringkasan — totals across every store the account promotes, and the hold rule in one line. | page | `apps/account/src/pages/affiliate/index.astro` | — | `affiliate` | — | — | — |  | `apps/account/src/lib/nav.test.ts` |
+| `/affiliate/komisi` | 'Komisi' — one ledger across every programme of this account, filtered by status. | page | `apps/account/src/pages/affiliate/komisi.astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate/program` | 'Program' — every store this account promotes, one row each. | page | `apps/account/src/pages/affiliate/program.astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate/undangan` | Accept a seller's invitation — the ONLY way an existing store affiliate row is bound to an account (single-use handle). | page | `apps/account/src/pages/affiliate/undangan.astro` | — | `affiliate` | — | — | — |  | `apps/account/src/lib/nav.test.ts` |
+| `/auth/google/callback` | Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session. | endpoint | `apps/account/src/pages/auth/google/callback.ts` | — | — | — | — | — |  | — |
+| `/auth/google/start` | Google sign-in start — mints the 128-bit `state` cookie and the safe `next`. | endpoint | `apps/account/src/pages/auth/google/start.ts` | — | — | — | — | — |  | — |
+| `/` | Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it. | page | `apps/account/src/pages/index.astro` | — | `affiliate` `orders` | — | — | — |  | — |
+| `/keluar` | Revokes this session row and deletes the cookie. | endpoint | `apps/account/src/pages/keluar.ts` | — | `account` | — | — | — |  | — |
+| `/klaim` | Saves an order to the account from the store's checkout-success link (ACC-11). A claim is keyed on a UNIQUE `order_id`. | page | `apps/account/src/pages/klaim.astro` | — | `orders` | — | — | — |  | — |
+| `/masuk` | Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle). | page | `apps/account/src/pages/masuk.astro` | — | — | — | — | — |  | — |
+| `/masuk/dev` | LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden. | endpoint | `apps/account/src/pages/masuk/dev.ts` | — | `account` | — | — | — |  | — |
+| `/orders/[number]` | One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one. | page | `apps/account/src/pages/orders/[number]/index.astro` | — | — | — | — | — |  | — |
+| `/orders/[number]/receipt` | Bukti pesanan — the printable page under the order's own URL. | page | `apps/account/src/pages/orders/[number]/receipt.astro` | — | — | — | — | — |  | — |
+| `/orders` | 'Pesanan' — only orders saved to this account, from stores still linked. | page | `apps/account/src/pages/orders/index.astro` | — | `orders` | — | — | — |  | — |
+| `/stores/[slug]` | Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link. | page | `apps/account/src/pages/stores/[slug].astro` | — | `orders` | — | — | — |  | — |
+| `/stores` | 'Toko' — stores this account is actively linked to, most recent purchase first. | page | `apps/account/src/pages/stores/index.astro` | — | `orders` | — | — | — |  | — |
+
+### API routes
+
+| URL | what it is | methods | file | gate | owner `db` | tests |
+|---|---|---|---|---|---|---|
 
 ## Module index (what the pages above import)
 

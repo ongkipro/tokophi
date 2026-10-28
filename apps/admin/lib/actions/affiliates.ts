@@ -1,6 +1,6 @@
 "use server";
 import { schema } from "@tokophi/db";
-import { clampBps, normalizeAffiliateCode, suggestAffiliateCode } from "@tokophi/lib/affiliate";
+import { normalizeAffiliateCode, parseAffiliateHoldDays, parseAffiliateRatePct, suggestAffiliateCode } from "@tokophi/lib/affiliate";
 import { INVITE_TTL_DAYS, newInvite } from "@tokophi/lib/account-invite";
 import { accountAppUrl } from "@/lib/account-url";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
@@ -15,12 +15,22 @@ import { withTenant } from "@/lib/tenant";
 type Result = { ok: true } | { ok: false; error: string };
 const PATH = "/affiliate";
 
-export async function saveAffiliateSettings(input: { enabled: boolean; ratePct: number; holdDays: number }): Promise<Result> {
+export async function saveAffiliateSettings(input: {
+  enabled: boolean;
+  ratePct: string | number;
+  holdDays: string | number;
+}): Promise<Result> {
   const { storeId } = await requireCapability("affiliates:write");
+  // Refused, never guessed: an affiliate reads this rate as their pay, and the commission it produces is
+  // frozen at order time — a silent 0% cannot be repaired by correcting the setting later.
+  const rate = parseAffiliateRatePct(input.ratePct);
+  if (!rate.ok) return { ok: false, error: rate.error };
+  const hold = parseAffiliateHoldDays(input.holdDays);
+  if (!hold.ok) return { ok: false, error: hold.error };
   const values = {
     affiliateEnabled: !!input.enabled,
-    affiliateRateBps: clampBps(Number(input.ratePct) * 100),
-    affiliateHoldDays: Math.max(0, Math.min(90, Math.round(Number(input.holdDays)) || 0)),
+    affiliateRateBps: rate.bps,
+    affiliateHoldDays: hold.days,
   };
   await withTenant(storeId, (db) =>
     db.insert(schema.storeSettings).values({ storeId, ...values }).onConflictDoUpdate({ target: schema.storeSettings.storeId, set: values }),
@@ -113,12 +123,18 @@ export async function markCommissionPaid(id: string, note?: string): Promise<Res
 }
 
 /** F-A9: per-product rate. `ratePct = null` removes the override (back to the store default). */
-export async function setProductAffiliateRate(productId: string, ratePct: number | null): Promise<Result> {
+export async function setProductAffiliateRate(productId: string, ratePct: string | number | null): Promise<Result> {
   const { storeId } = await requireCapability("affiliates:write");
+  let bps: number | null = null;
+  if (ratePct !== null) {
+    const parsed = parseAffiliateRatePct(ratePct);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    bps = parsed.bps;
+  }
   const rows = await withTenant(storeId, (db) =>
     db
       .update(schema.products)
-      .set({ affiliateRateBps: ratePct === null ? null : clampBps(Number(ratePct) * 100) })
+      .set({ affiliateRateBps: bps })
       .where(and(eq(schema.products.id, productId), eq(schema.products.storeId, storeId)))
       .returning({ id: schema.products.id }),
   );

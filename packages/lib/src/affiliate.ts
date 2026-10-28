@@ -42,9 +42,58 @@ export function computeAffiliateCommission(args: {
     rates.add(bps);
     scaled += l.totalIdr * bps;
   }
-  const commissionIdr = Math.floor((scaled * goods) / subtotalIdr / 10_000);
+  // `scaled * goods` passes 2^53 on ordinary Indonesian order sizes (first divergence measured at
+  // subtotal 13.095.367 with a voucher: 1.178.582 instead of 1.178.583), so the product and the floor
+  // are done in BigInt. Only vouchered orders can diverge — when goods === subtotal the division is exact.
+  const commissionIdr = Number((BigInt(scaled) * BigInt(goods)) / (BigInt(subtotalIdr) * 10_000n));
   const rateNote = [...rates].sort((a, b) => a - b).map(formatRateBps).join(" / ");
   return { baseIdr: goods, commissionIdr, rateNote };
+}
+
+export const AFFILIATE_HOLD_MAX_DAYS = 90;
+
+const RATE_INVALID = "Isi persentase 0–100, mis. 10 atau 12,5.";
+const HOLD_INVALID = `Isi angka bulat 0–${AFFILIATE_HOLD_MAX_DAYS} (hari).`;
+
+export type RateParse = { ok: true; bps: number } | { ok: false; error: string };
+export type HoldParse = { ok: true; days: number } | { ok: false; error: string };
+
+/**
+ * Form input → `affiliate_rate_bps`. REFUSED, never guessed — an affiliate reads this number as their pay.
+ *
+ * `Number("10%")` is `NaN`, and the `|| 0` that used to follow it turned a seller's typo into a SILENT 0%
+ * programme: the save succeeded, the toast said "disimpan", and every order attributed from that moment
+ * froze `commission_idr = 0` into `affiliate_commissions`. Because a commission is frozen at order time,
+ * fixing the setting afterwards does not repair those orders — the affiliate is simply never paid for them.
+ * Same discipline as `parseWorkingDays`, for the same reason: a number somebody is owed money by.
+ *
+ * Basis points are the storage unit, so two decimals of a percent are exact and a third is refused rather
+ * than rounded away.
+ */
+export function parseAffiliateRatePct(v: unknown): RateParse {
+  let pct: number;
+  if (typeof v === "number") pct = v;
+  else if (typeof v === "string") {
+    const m = /^\s*(\d{1,3})(?:[.,](\d{1,2}))?\s*%?\s*$/.exec(v);
+    if (!m) return { ok: false, error: RATE_INVALID };
+    pct = Number(`${m[1]}.${m[2] ?? "0"}`);
+  } else return { ok: false, error: RATE_INVALID };
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) return { ok: false, error: RATE_INVALID };
+  // Round the SCALED value: 12.5 * 100 is 1250.0000000000002 in binary floating point.
+  return { ok: true, bps: Math.round(pct * 100) };
+}
+
+/** Form input → `affiliate_hold_days`. 0 is legitimate (payable as soon as the order finishes); blank is not. */
+export function parseAffiliateHoldDays(v: unknown): HoldParse {
+  let n: number;
+  if (typeof v === "number") n = v;
+  else if (typeof v === "string") {
+    const m = /^\s*(\d{1,3})\s*(?:hari)?\s*$/i.exec(v);
+    if (!m) return { ok: false, error: HOLD_INVALID };
+    n = Number(m[1]);
+  } else return { ok: false, error: HOLD_INVALID };
+  if (!Number.isInteger(n) || n < 0 || n > AFFILIATE_HOLD_MAX_DAYS) return { ok: false, error: HOLD_INVALID };
+  return { ok: true, days: n };
 }
 
 /** 0–100% — a rate outside it is a data error, never a payout instruction. */

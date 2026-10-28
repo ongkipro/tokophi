@@ -1889,7 +1889,11 @@ export const affiliateCommissions = pgTable(
     paidNote: text(),
     createdAt: createdAt(),
   },
-  (t) => [index("affiliate_commissions_store_idx").on(t.storeId, t.status)],
+  (t) => [
+    index("affiliate_commissions_store_idx").on(t.storeId, t.status),
+    // The affiliate's own ledger joins and filters on this pair (0122); the store index cannot serve it.
+    index("affiliate_commissions_affiliate_idx").on(t.affiliateId, t.status),
+  ],
 );
 
 // Platform-side payout policy (single row).

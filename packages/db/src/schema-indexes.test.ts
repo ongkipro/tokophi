@@ -107,6 +107,7 @@ const INDEX_CENSUS: Record<string, Census> = {
   buyer_addresses_buyer_idx: "drizzle",
   buyer_addresses_one_primary: "drizzle",
   affiliate_commissions_store_idx: "drizzle",
+  affiliate_commissions_affiliate_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:

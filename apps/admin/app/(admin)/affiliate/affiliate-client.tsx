@@ -347,7 +347,8 @@ function SettingsCard({ program }: { program: AffiliateProgram }) {
             disabled={pending}
             onClick={() =>
               run(
-                () => saveAffiliateSettings({ enabled, ratePct: Number(rate.replace(",", ".")) || 0, holdDays: Number(hold) || 0 }),
+                // Raw strings: the server parses and REFUSES. `Number("10%") || 0` used to save a silent 0%.
+                () => saveAffiliateSettings({ enabled, ratePct: rate, holdDays: hold }),
                 "Pengaturan affiliate disimpan.",
               )
             }
@@ -417,7 +418,7 @@ function ProductRatesCard({ program }: { program: AffiliateProgram }) {
             <Button
               disabled={pending || !productId || rate.trim() === ""}
               onClick={() =>
-                run(() => setProductAffiliateRate(productId, Number(rate.replace(",", ".")) || 0), "Komisi produk disimpan.")
+                run(() => setProductAffiliateRate(productId, rate), "Komisi produk disimpan.")
               }
             >
               Simpan
