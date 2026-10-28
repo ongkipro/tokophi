@@ -374,7 +374,9 @@ export const stores = pgTable("stores", {
   // So the merchant chooses the moment, from Pemasaran → Pelacakan, warned in plain Indonesian.
   catalogIdScheme: text().notNull().default("handle"),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("stores_account_idx").on(t.accountId),
+]);
 
 // Per-store rollup snapshot for the platform control plane (super-admin). A cache of
 // metrics that are otherwise aggregated from each store's orders/products — refreshed by a
@@ -426,7 +428,7 @@ export const storeUsers = pgTable(
     invitedAt: ts(),
     acceptedAt: ts(),
   },
-  (t) => [unique().on(t.storeId, t.userId)],
+  (t) => [unique().on(t.storeId, t.userId), index("store_users_user_idx").on(t.userId)],
 );
 
 export const locations = pgTable("locations", {
@@ -437,7 +439,9 @@ export const locations = pgTable("locations", {
   name: text().notNull(),
   address: text(),
   isDefault: boolean().notNull().default(false),
-});
+}, (t) => [
+  index("locations_store_idx").on(t.storeId),
+]);
 
 // ---------- catalog: products ----------
 export const products = pgTable(
@@ -521,7 +525,12 @@ export const products = pgTable(
     // (`store_settings.affiliate_rate_bps`); 0 is a real "no commission on this product".
     affiliateRateBps: integer(),
   },
-  (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
+  (t) => [
+    unique().on(t.storeId, t.handle),
+    unique().on(t.storeId, t.number),
+    index("products_google_category_idx").on(t.googleCategoryId),
+    index("products_template_idx").on(t.templateId),
+  ],
 );
 
 // Per-store allocation counters. A table of its own rather than a column on `stores`/`store_settings`
@@ -544,7 +553,9 @@ export const productMedia = pgTable("product_media", {
   url: text().notNull(),
   alt: text(),
   position: integer().notNull().default(0),
-});
+}, (t) => [
+  index("product_media_product_idx").on(t.productId),
+]);
 
 export const productOptions = pgTable("product_options", {
   id: pk(),
@@ -553,7 +564,9 @@ export const productOptions = pgTable("product_options", {
     .references(() => products.id),
   name: text().notNull(),
   position: integer().notNull().default(0),
-});
+}, (t) => [
+  index("product_options_product_idx").on(t.productId),
+]);
 
 export const productVariants = pgTable(
   "product_variants",
@@ -585,7 +598,7 @@ export const productVariants = pgTable(
     // No default, same reasoning as `products.number`.
     seq: integer().notNull(),
   },
-  (t) => [unique().on(t.productId, t.seq)],
+  (t) => [unique().on(t.productId, t.seq), index("product_variants_store_idx").on(t.storeId)],
 );
 
 export const inventoryLevels = pgTable(
@@ -602,7 +615,10 @@ export const inventoryLevels = pgTable(
     incoming: integer().notNull().default(0),
     committed: integer().notNull().default(0),
   },
-  (t) => [unique().on(t.variantId, t.locationId)],
+  (t) => [
+    unique().on(t.variantId, t.locationId),
+    index("inventory_levels_location_idx").on(t.locationId),
+  ],
 );
 
 // ---------- catalog: collections ----------
@@ -633,7 +649,7 @@ export const collections = pgTable(
     // only once it has actually been edited — no date beats an invented one.
     updatedAt: ts(),
   },
-  (t) => [unique().on(t.storeId, t.handle)],
+  (t) => [unique().on(t.storeId, t.handle), index("collections_template_idx").on(t.templateId)],
 );
 
 export const collectionProducts = pgTable(
@@ -647,7 +663,10 @@ export const collectionProducts = pgTable(
       .references(() => products.id),
     position: integer().notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.collectionId, t.productId] })],
+  (t) => [
+    primaryKey({ columns: [t.collectionId, t.productId] }),
+    index("collection_products_product_idx").on(t.productId),
+  ],
 );
 
 export const collectionConditions = pgTable("collection_conditions", {
@@ -658,7 +677,9 @@ export const collectionConditions = pgTable("collection_conditions", {
   field: conditionField().notNull(),
   operator: conditionOperator().notNull(),
   value: text().notNull(),
-});
+}, (t) => [
+  index("collection_conditions_collection_idx").on(t.collectionId),
+]);
 
 // ---------- store builder (ADR 0009) ----------
 // One row = one drag-drop template a merchant assembled in the admin's Store Builder (Puck).
@@ -678,7 +699,9 @@ export const pageTemplates = pgTable("page_templates", {
   isDefault: boolean().notNull().default(false),
   createdAt: createdAt(),
   updatedAt: createdAt(),
-});
+}, (t) => [
+  index("page_templates_store_idx").on(t.storeId),
+]);
 
 // Single-product direct-order LANDING config (the /promo/<handle> funnel — one row per product the
 // merchant turns into a promo page). Content that has no home on `products`: the marketing headline,
@@ -711,7 +734,7 @@ export const promoPages = pgTable(
     createdAt: createdAt(),
     updatedAt: createdAt(),
   },
-  (t) => [unique().on(t.storeId, t.productId)],
+  (t) => [unique().on(t.storeId, t.productId), index("promo_pages_product_idx").on(t.productId)],
 );
 
 // Custom-HTML LANDING page (/lp/<slug>). Unlike promo_pages (auto-built from a product), the merchant
@@ -738,7 +761,7 @@ export const landingPages = pgTable(
     createdAt: createdAt(),
     updatedAt: createdAt(),
   },
-  (t) => [unique().on(t.storeId, t.slug)],
+  (t) => [unique().on(t.storeId, t.slug), index("landing_pages_product_idx").on(t.productId)],
 );
 
 // ---------- suppliers & purchasing ----------
@@ -751,7 +774,9 @@ export const suppliers = pgTable("suppliers", {
   contact: text(),
   phone: text(),
   email: text(),
-});
+}, (t) => [
+  index("suppliers_store_idx").on(t.storeId),
+]);
 
 // ⚠️ `code` is unique PER STORE (0084). Globally unique was actively broken here: the code is
 // `PO-${Date.now().toString().slice(-6)}`, which REPEATS every ~16.7 minutes, so two purchase orders
@@ -771,7 +796,7 @@ export const purchaseOrders = pgTable(
     note: text(),
     createdAt: createdAt(),
   },
-  (t) => [unique().on(t.storeId, t.code)],
+  (t) => [unique().on(t.storeId, t.code), index("purchase_orders_supplier_idx").on(t.supplierId)],
 );
 
 export const purchaseOrderItems = pgTable("purchase_order_items", {
@@ -783,7 +808,10 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   qty: integer().notNull().default(0),
   costIdr: money().notNull().default(0),
   receivedQty: integer().notNull().default(0),
-});
+}, (t) => [
+  index("purchase_order_items_purchase_order_idx").on(t.purchaseOrderId),
+  index("purchase_order_items_variant_idx").on(t.variantId),
+]);
 
 export const stockTransfers = pgTable("stock_transfers", {
   id: pk(),
@@ -794,7 +822,11 @@ export const stockTransfers = pgTable("stock_transfers", {
   toLocation: uuid().references(() => locations.id),
   status: transferStatus().notNull().default("draft"),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("stock_transfers_from_location_idx").on(t.fromLocation),
+  index("stock_transfers_store_idx").on(t.storeId),
+  index("stock_transfers_to_location_idx").on(t.toLocation),
+]);
 
 // ---------- orders & fulfillment ----------
 // A shopper. NOT a login — buying never requires an account, and it must not: forcing a
@@ -826,7 +858,9 @@ export const customers = pgTable("customers", {
   passwordHash: text(),
   lastOrderAt: ts(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("customers_store_idx").on(t.storeId),
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Abandoned checkout (0044).
@@ -899,7 +933,9 @@ export const checkoutSessions = pgTable("checkout_sessions", {
 
   createdAt: createdAt(),
   updatedAt: ts(),
-});
+}, (t) => [
+  index("checkout_sessions_customer_idx").on(t.customerId),
+]);
 
 export const orders = pgTable("orders", {
   id: pk(),
@@ -1023,7 +1059,8 @@ export const orders = pgTable("orders", {
   placedAt: createdAt(),
 }, (t) => [
   index("orders_store_placed_idx").on(t.storeId, t.placedAt),
-]);
+    index("orders_customer_idx").on(t.customerId),
+  ]);
 
 // Immutable checkout-time allocation. This is the audit source for seller proceeds; the legacy
 // orders.discount_idr remains a compatibility total but cannot distinguish goods from shipping.
@@ -1105,7 +1142,8 @@ export const orderLineItems = pgTable("order_line_items", {
   totalIdr: money().notNull().default(0),
 }, (t) => [
   index("order_line_items_order_idx").on(t.orderId),
-]);
+    index("order_line_items_variant_idx").on(t.variantId),
+  ]);
 
 export const payments = pgTable("payments", {
   id: pk(),
@@ -1160,7 +1198,9 @@ export const fulfillments = pgTable("fulfillments", {
   trackingNo: text(),
   status: fulfillmentStatus().notNull().default("menunggu"),
   shippedAt: ts(),
-});
+}, (t) => [
+  index("fulfillments_order_idx").on(t.orderId),
+]);
 
 // ---------- customers extras ----------
 export const customerAddresses = pgTable("customer_addresses", {
@@ -1175,7 +1215,9 @@ export const customerAddresses = pgTable("customer_addresses", {
   city: text(),
   province: text(),
   postcode: text(),
-});
+}, (t) => [
+  index("customer_addresses_customer_idx").on(t.customerId),
+]);
 
 export const customerSegments = pgTable("customer_segments", {
   id: pk(),
@@ -1187,7 +1229,9 @@ export const customerSegments = pgTable("customer_segments", {
   rule: jsonb(),
   memberCount: integer().notNull().default(0),
   growth: real().notNull().default(0),
-});
+}, (t) => [
+  index("customer_segments_store_idx").on(t.storeId),
+]);
 
 export const reviews = pgTable("reviews", {
   id: pk(),
@@ -1203,7 +1247,11 @@ export const reviews = pgTable("reviews", {
   reply: text(), // the seller's public reply, shown on the PDP under the review; NULL = not replied
   status: reviewStatus().notNull().default("menunggu"),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("reviews_customer_idx").on(t.customerId),
+  index("reviews_product_idx").on(t.productId),
+  index("reviews_store_idx").on(t.storeId),
+]);
 
 // ---------- CRM ----------
 export const leads = pgTable("leads", {
@@ -1218,7 +1266,9 @@ export const leads = pgTable("leads", {
   valueIdr: money().notNull().default(0),
   note: text(),
   lastContactAt: ts(),
-});
+}, (t) => [
+  index("leads_store_idx").on(t.storeId),
+]);
 
 export const followups = pgTable("followups", {
   id: pk(),
@@ -1233,7 +1283,10 @@ export const followups = pgTable("followups", {
   status: followupStatus().notNull().default("menunggu"),
   lastMessage: text(),
   sentAt: ts(),
-});
+}, (t) => [
+  index("followups_customer_idx").on(t.customerId),
+  index("followups_store_idx").on(t.storeId),
+]);
 
 export const waTemplates = pgTable("wa_templates", {
   id: pk(),
@@ -1243,7 +1296,9 @@ export const waTemplates = pgTable("wa_templates", {
   name: text().notNull(),
   type: text(),
   body: text().notNull(),
-});
+}, (t) => [
+  index("wa_templates_store_idx").on(t.storeId),
+]);
 
 export const waMessages = pgTable("wa_messages", {
   id: pk(),
@@ -1255,7 +1310,11 @@ export const waMessages = pgTable("wa_messages", {
   phone: text(),
   body: text(),
   sentAt: ts(),
-});
+}, (t) => [
+  index("wa_messages_followup_idx").on(t.followupId),
+  index("wa_messages_lead_idx").on(t.leadId),
+  index("wa_messages_store_idx").on(t.storeId),
+]);
 
 // ---------- discounts ----------
 // ⚠️ `code` is unique PER STORE (0084), not globally. A bare `.unique()` here meant the first merchant
@@ -1289,7 +1348,10 @@ export const discountUsages = pgTable("discount_usages", {
     .references(() => discounts.id),
   orderId: uuid().references(() => orders.id),
   usedAt: createdAt(),
-});
+}, (t) => [
+  index("discount_usages_discount_idx").on(t.discountId),
+  index("discount_usages_order_idx").on(t.orderId),
+]);
 
 // ---------- flash sale (PROMO P3) ----------
 // A time-boxed price drop on chosen products. The window is [startsAt, endsAt); `status` is the merchant's
@@ -1304,7 +1366,9 @@ export const flashSales = pgTable("flash_sales", {
   startsAt: ts().notNull(),
   endsAt: ts().notNull(),
   status: discountStatus().notNull().default("terjadwal"),
-});
+}, (t) => [
+  index("flash_sales_store_idx").on(t.storeId),
+]);
 
 // One row per product in the sale. `salePriceIdr` is the ABSOLUTE promo price and applies to every variant
 // of the product — /api/public/order uses it ONLY when it is below the variant's base price (a sale never
@@ -1324,7 +1388,10 @@ export const flashSaleItems = pgTable(
       .references(() => products.id),
     salePriceIdr: money().notNull(),
   },
-  (t) => [unique().on(t.flashSaleId, t.productId)],
+  (t) => [
+    unique().on(t.flashSaleId, t.productId),
+    index("flash_sale_items_product_idx").on(t.productId),
+  ],
 );
 
 // ---------- content (Toko Online) ----------
@@ -1353,7 +1420,9 @@ export const blogs = pgTable("blogs", {
     .references(() => stores.id),
   title: text().notNull(),
   handle: text().notNull(),
-});
+}, (t) => [
+  index("blogs_store_idx").on(t.storeId),
+]);
 
 export const articles = pgTable(
   "articles",
@@ -1377,7 +1446,7 @@ export const articles = pgTable(
     seoDesc: text(),
     publishedAt: ts(),
   },
-  (t) => [unique().on(t.storeId, t.handle)],
+  (t) => [unique().on(t.storeId, t.handle), index("articles_blog_idx").on(t.blogId)],
 );
 
 export const menus = pgTable(
@@ -1407,7 +1476,10 @@ export const menuItems = pgTable("menu_items", {
   type: menuItemType().notNull().default("url"),
   target: text(),
   position: integer().notNull().default(0),
-});
+}, (t) => [
+  index("menu_items_menu_idx").on(t.menuId),
+  index("menu_items_parent_idx").on(t.parentId),
+]);
 
 // ---------- marketing & analytics ----------
 export const adChannels = pgTable("ad_channels", {
@@ -1429,7 +1501,9 @@ export const adChannels = pgTable("ad_channels", {
   conversions: integer().notNull().default(0),
   revenueIdr: money().notNull().default(0),
   campaigns: jsonb(), // AdCampaign[] { name, spend, conversions, revenue }
-});
+}, (t) => [
+  index("ad_channels_store_idx").on(t.storeId),
+]);
 
 export const adMetrics = pgTable("ad_metrics", {
   id: pk(),
@@ -1445,7 +1519,9 @@ export const adMetrics = pgTable("ad_metrics", {
   conversions: integer().notNull().default(0),
   revenueIdr: money().notNull().default(0),
   reach: integer().notNull().default(0),
-});
+}, (t) => [
+  index("ad_metrics_store_idx").on(t.storeId),
+]);
 
 // Per-store marketing-pixel / conversion-tracking config — the REAL setup behind Pemasaran → Pelacakan
 // (which was disabled placeholders). One row per (store, channel). DISTINCT from `ad_channels`, whose
@@ -1680,7 +1756,9 @@ export const payouts = pgTable("payouts", {
   note: text(),
   requestedAt: createdAt(),
   paidAt: ts(),
-});
+}, (t) => [
+  index("payouts_store_idx").on(t.storeId),
+]);
 
 // ── Refund obligations (0112, Task 8.31) ──────────────────────────────────────────────────────
 // A paid prepaid order that is cancelled owes the BUYER their money. Written ONLY by
@@ -1777,7 +1855,11 @@ export const buyerStoreLinks = pgTable(
     claimMethod: text().notNull().default("token"),
     createdAt: createdAt(),
   },
-  (t) => [unique("buyer_store_links_buyer_id_store_id_unique").on(t.buyerId, t.storeId), index("buyer_store_links_store_idx").on(t.storeId)],
+  (t) => [
+    unique("buyer_store_links_buyer_id_store_id_unique").on(t.buyerId, t.storeId),
+    index("buyer_store_links_store_idx").on(t.storeId),
+    index("buyer_store_links_customer_idx").on(t.customerId),
+  ],
 );
 export const buyerOrderClaims = pgTable(
   "buyer_order_claims",
@@ -1795,7 +1877,10 @@ export const buyerOrderClaims = pgTable(
       .references(() => stores.id),
     claimedAt: createdAt(),
   },
-  (t) => [index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId)],
+  (t) => [
+    index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId),
+    index("buyer_order_claims_store_idx").on(t.storeId),
+  ],
 );
 export const buyerAddresses = pgTable(
   "buyer_addresses",
@@ -1821,6 +1906,7 @@ export const buyerAddresses = pgTable(
   (t) => [
     index("buyer_addresses_buyer_idx").on(t.buyerId),
     uniqueIndex("buyer_addresses_one_primary").on(t.buyerId).where(sql`${t.isPrimary}`),
+    index("buyer_addresses_district_idx").on(t.districtId),
   ],
 );
 
@@ -2142,7 +2228,9 @@ export const domains = pgTable("domains", {
     .references(() => stores.id),
   hostname: text().notNull(),
   verified: boolean().notNull().default(false),
-});
+}, (t) => [
+  index("domains_store_idx").on(t.storeId),
+]);
 
 export const notificationTemplates = pgTable("notification_templates", {
   id: pk(),
@@ -2153,7 +2241,9 @@ export const notificationTemplates = pgTable("notification_templates", {
   channel: notificationChannel().notNull(),
   subject: text(),
   body: text(),
-});
+}, (t) => [
+  index("notification_templates_store_idx").on(t.storeId),
+]);
 
 // ---------- platform & billing (super-admin control plane) ----------
 export const plans = pgTable("plans", {
@@ -2196,7 +2286,9 @@ export const invoices = pgTable("invoices", {
   paymentUrl: text(),
   paidAt: ts(),
   issuedAt: createdAt(),
-});
+}, (t) => [
+  index("invoices_account_idx").on(t.accountId),
+]);
 
 export const platformActivity = pgTable("platform_activity", {
   id: pk(),
@@ -2204,7 +2296,9 @@ export const platformActivity = pgTable("platform_activity", {
   text: text().notNull(),
   storeId: uuid().references(() => stores.id), // nullable: null = platform-wide, set = per-store audit
   ts: createdAt(),
-});
+}, (t) => [
+  index("platform_activity_store_idx").on(t.storeId),
+]);
 
 // ---------- cron liveness — ONE row per sidecar, overwritten every tick (0091) ----------
 //
@@ -2346,6 +2440,8 @@ export const impersonationGrants = pgTable(
     // UNIQUE, not just an index: two rows sharing a hash would make "spend the one row" ambiguous.
     uniqueIndex("impersonation_grants_token_hash_key").on(t.tokenHash),
     index("impersonation_grants_store_idx").on(t.storeId),
+    index("impersonation_grants_operator_idx").on(t.operatorId),
+    index("impersonation_grants_user_idx").on(t.userId),
   ],
 );
 
@@ -2362,7 +2458,9 @@ export const media = pgTable("media", {
   width: integer(),
   height: integer(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("media_store_idx").on(t.storeId),
+]);
 
 // ---------- custom merchant domains (CNAME) — CUSTOM_DOMAIN.md ----------
 // Holds ONLY custom hosts. `<slug>.tokophi.com` is NOT a row — it is derived (slug + base domain), and
@@ -2417,7 +2515,9 @@ export const supportTickets = pgTable("support_tickets", {
   status: ticketStatus().notNull().default("open"), // open = awaiting platform · answered = platform replied · closed
   lastMessageAt: createdAt(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("support_tickets_store_idx").on(t.storeId),
+]);
 export const supportMessages = pgTable("support_messages", {
   id: pk(),
   ticketId: uuid()
@@ -2430,7 +2530,10 @@ export const supportMessages = pgTable("support_messages", {
   sender: text().notNull(), // "merchant" | "platform"
   body: text().notNull(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("support_messages_store_idx").on(t.storeId),
+  index("support_messages_ticket_idx").on(t.ticketId),
+]);
 
 // ---------- shopper ⇄ merchant chat, "Obrolan" (migration 0043 — specs/docs/CHAT_SPEC.md) ----------
 //
@@ -2470,7 +2573,9 @@ export const chatVisitors = pgTable("chat_visitors", {
   firstSeenAt: createdAt(),
   lastSeenAt: createdAt(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("chat_visitors_customer_idx").on(t.customerId),
+]);
 
 export const conversations = pgTable("conversations", {
   id: pk(),
@@ -2492,7 +2597,12 @@ export const conversations = pgTable("conversations", {
   entryUrl: text(),
   productHandle: text(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("conversations_assigned_user_idx").on(t.assignedUserId),
+  index("conversations_customer_idx").on(t.customerId),
+  index("conversations_order_idx").on(t.orderId),
+  index("conversations_visitor_idx").on(t.visitorId),
+]);
 
 export const conversationMessages = pgTable("conversation_messages", {
   id: pk(),
@@ -2510,7 +2620,10 @@ export const conversationMessages = pgTable("conversation_messages", {
   body: text().notNull(), // ≤ 2000 chars, checked in the action/route (not a CHECK)
   readAt: ts(), // when the OTHER side read it
   createdAt: createdAt(),
-});
+}, (t) => [
+  index("conversation_messages_sender_user_idx").on(t.senderUserId),
+  index("conversation_messages_store_idx").on(t.storeId),
+]);
 
 // ---------- inferred types (Row = select, New* = insert) ----------
 export type Account = typeof accounts.$inferSelect;
