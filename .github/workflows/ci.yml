@@ -314,10 +314,13 @@ jobs:
 
       - run: npm run ${{ matrix.app == 'docs' && 'check' || 'build' }} -w @tokophi/${{ matrix.app }}
 
+      # `next build` does not run ESLint, so this is the only place the React Compiler rules (a component
+      # defined inside a component, `Date.now()` in a client render path) are checked. Measured
+      # 2026-10-28: 0 errors (warnings do not fail). Only the two Next apps have a lint script.
+      - if: matrix.app == 'admin' || matrix.app == 'super-admin'
+        run: npm run lint -w @tokophi/${{ matrix.app }}
+
 # NOT here yet, deliberately:
-#   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it
-#     now would make CI red on day one, which is how a check stops being read. Fix the lint errors,
-#     then add the step.
 #   · `verify-ledger` (N61) — and this one is a DECISION, not a to-do.
 #     ① It answers a question about PRODUCTION DATA: children of `orders` whose parent row is gone,
 #       and what they are worth in a merchant's withdrawable balance. Production carried 48 such rows

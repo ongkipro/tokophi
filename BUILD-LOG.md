@@ -4452,3 +4452,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Conflict:** `package-lock.json` only (main's landing dropped React/GSAP). Resolved by taking main's lockfile and `npm install` to re-add the `apps/docs` workspace; `npm ci` exit 0; landing/storefront on astro 5.18.2, docs 7.3.8.
 - **Guard that caught us:** `packages/lib/src/password.test.ts` file-type census went red on the new `.mdx` and `.conf` types → `.mdx` scanned (MDX compiles to a JS module), `.conf` inert (nginx directives).
 - **Verification on the merged tree:** builds landing/storefront/docs exit 0, admin/super-admin exit 0 (Dockerfile dummy `DATABASE_URL`); `vitest run` 163 files passed / 29 skipped (DB suites skip without a `_test` database), 1452 tests passed; `check:storefront` and `check:landing` 0 errors; `npm run check -w @tokophi/docs` green; `docker build -f apps/docs/Dockerfile .` exit 0; `verify:doc-authority` and `verify:traceability` ok.
+
+### [2026-10-28 UTC] — CI/REPO HYGIENE · lint becomes a CI gate; two stray root files removed (owner request: "lanjutkan")
+
+- **Executor:** Main Session. No app code changed.
+- **Measured:** `npm run lint -w @tokophi/admin` → 0 errors, 14 warnings; `-w @tokophi/super-admin` → 0 errors, 3 warnings (the "28 errors" figure in `AGENTS.md` and the "currently red" note in `ci.yml` were stale; storefront/landing/docs have no lint script).
+- **Changed:** `.github/workflows/ci.yml` — new step in the `build` matrix job, `npm run lint -w @tokophi/<app>` for admin and super-admin only; the "NOT here yet … lint" comment removed (its own stated precondition — fix the errors first — is met). `AGENTS.md` Conventions lint note updated.
+- **Removed (tracked strays, nothing referenced them):** `pnpm-workspace.yaml` (placeholder `esbuild: set this to true or false`; the repo is npm workspaces, `packageManager: npm@11.17.0`) and root `drizzle/meta/_journal.json` (an empty `entries: []` journal from a `drizzle-kit` run in the wrong cwd; the real one is `packages/db/drizzle/`).
+- **Verification:** `yaml.safe_load(ci.yml)` ok; `npx vitest run test packages/db/src/doc-counts.test.ts` and `verify-migrations` — see below/PR. Whether the new step is green on GitHub is only known once the PR's CI runs.
