@@ -31,6 +31,8 @@ groundwork.
 **Observed.** Four surfaces, one VPS (`45.77.33.112`, `vhp-4c-8gb-amd`, Singapore), one Postgres
 container, one region. Cloudflare in front.
 
+**Observed — an outage in progress (2026-10-28, cause unverified).** All hosts 522, VPS unreachable, onset between 2026-10-27 07:47 and 13:47 UTC (inferred from the workstation's backup-pull log), ≥ 26 h at the time of writing and **again noticed by the owner, not by a monitor** — Task 8.1 is still the open fix. Track it in `TASKS.md` Task OUT-1028; write the final window, cause and RTO here when it ends.
+
 **Observed — the safety nets that exist** (`DEPLOY.md` has the detail):
 - **L1 watchdog** restarts containers stuck `created`/`exited`. Heartbeat measured **45 s** fresh
   against a 10-minute staleness threshold.
@@ -218,7 +220,7 @@ Rp810.000 of withdrawable money with no order behind it. Run it where the creden
 
 An untested recovery path is a **Proposal**, not a capability. None of these has a recorded run:
 
-- [ ] **Restore a dump into a scratch database and reconcile it** against production row counts. This
+- [ ] *(re-prioritised 2026-10-28: Task OUT-1028 step 4 — do it before any rebuild)* **Restore a dump into a scratch database and reconcile it** against production row counts. This
       is the cheapest and highest-value one; the dump is 1,2 MB.
 - [ ] **Kill a container and time L1.** The heartbeat is fresh; the *restart* has never been observed
       end to end by anyone who wrote it down.

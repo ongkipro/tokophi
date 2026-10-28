@@ -7,6 +7,10 @@ blockers" had been false since 2026-08-22, and it dropped the N36–N43 disambig
 
 This file is a navigation handoff. It is not a second task board.
 
+## 🔴🔴 PRODUCTION IS DOWN — 2026-10-28 (read this first)
+
+All hosts answer Cloudflare **522**, `45.77.33.112` does not ping. Cause **unverified** (billing suspension is the leading suspect, as on 2026-09-04→07). Next action is the owner's: read the instance STATUS and balance in the Vultr console of the account that owns `45.77.33.112` — it is not visible from the workstation. Full plan, rebuild checklist and what is NOT yet verified: root `TASKS.md` **Task OUT-1028**; evidence in `BUILD-LOG.md` 2026-10-28 16:10 UTC. Off-box data is safe up to 2026-10-27 06:25 UTC. **Do not migrate before the cause is known, and do not redeploy from Coolify while the instance is suspended.**
+
 ## 🔴 Open from production — 2026-09-07
 
 Both surfaced by the incident in `BUILD-LOG.md` 2026-09-07 11:53 UTC. Neither is fixable in code.
