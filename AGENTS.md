@@ -1343,9 +1343,9 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
 - **Storefront slugs are Indonesian:** `/produk/`, `/kategori/`, `/blog/`, `/halaman/` (not `/products//collections/…`).
 - Design: modern SaaS, `text-muted-foreground` for secondary text, indigo `--primary` accent, rounded-xl, soft shadows, responsive, AA. Keep it **console-clean**.
 - After changes: `npm run build` must pass, and the dev-overlay must show **0 issues** (check the browser console).
-- ⚠️ **`next build` does NOT run ESLint.** `npm run lint -w @tokophi/admin` is a separate gate that
-  nothing runs — no CI, no build step, no doc asked for it — so it rotted quietly to **28 errors** by
-  2026-07-31. Most were React Compiler rules that matter: a component defined inside another component
+- ⚠️ **`next build` does NOT run ESLint.** `npm run lint -w @tokophi/admin` (and `-w @tokophi/super-admin`) is a separate gate. It
+  sat unrun until it rotted to **28 errors** by 2026-07-31; it is fixed (0 errors, 2026-10-28) and now a CI step in the
+  `build` job — keep it at 0 errors. Most were React Compiler rules that matter: a component defined inside another component
   remounts its whole subtree on every parent render (state lost, inputs losing focus mid-typing), and
   `Date.now()` in a CLIENT render path is the SSR-vs-client hydration mismatch this file forbids two
   bullets up. Run it before you open a PR; the open ones are itemised in `specs/docs/BACKLOG.md`.
