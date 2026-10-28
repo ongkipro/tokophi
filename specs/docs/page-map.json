@@ -862,7 +862,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": [],
+          "tests": [
+            "apps/admin/lib/search-model.test.ts"
+          ],
           "whatItIs": "'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'."
         },
         {
@@ -886,6 +888,7 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/orders.test.ts",
+            "apps/admin/lib/search-model.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts",
             "packages/lib/src/autolaris-submit.test.ts"
@@ -958,6 +961,7 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/inventory.test.ts",
+            "apps/admin/lib/search-model.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts"
           ],
           "whatItIs": "'Inventori' — stock per variant/location, bulk save."
@@ -1055,6 +1059,7 @@
             "apps/admin/lib/actions/inventory.test.ts",
             "apps/admin/lib/actions/menus.test.ts",
             "apps/admin/lib/form-labels.test.tsx",
+            "apps/admin/lib/search-model.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ],
@@ -3209,7 +3214,9 @@
       {
         "module": "search.ts",
         "exports": [
-          "getSearchIndex"
+          "getSearchIndex",
+          "loadSearchIndex",
+          "phoneKeywords"
         ]
       },
       {
