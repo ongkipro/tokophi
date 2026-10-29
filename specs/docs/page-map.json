@@ -573,6 +573,7 @@
             "error.tsx"
           ],
           "data": [
+            "affiliates",
             "billing",
             "domain",
             "orders",
@@ -3387,7 +3388,8 @@
       {
         "module": "affiliates.ts",
         "exports": [
-          "getAffiliateProgram"
+          "getAffiliateProgram",
+          "getPendingAffiliateCount"
         ]
       },
       {

@@ -10,7 +10,8 @@ import { ToggleRow } from "@/components/admin/pengaturan/toggle-row";
 import { useCan } from "@/components/admin/permissions";
 import { IDR, num, waLink } from "@tokophi/lib/format";
 import { formatRateBps } from "@tokophi/lib/affiliate";
-import type { AffiliateProgram, AffiliateRow, CommissionState } from "@/lib/data/affiliates";
+import type { AffiliateProgram, AffiliateRow } from "@/lib/data/affiliates";
+import { COMMISSION_STATE as STATE } from "@/lib/commission-state";
 import {
   createAffiliate,
   inviteAffiliateToAccount,
@@ -38,13 +39,6 @@ import { Label } from "@tokophi/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@tokophi/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tokophi/ui/tabs";
 
-const STATE: Record<CommissionState, { label: string; className: string }> = {
-  belum_selesai: { label: "Pesanan berjalan", className: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
-  ditahan: { label: "Masa retur", className: "bg-amber-500/10 text-amber-700 dark:text-amber-400" },
-  siap: { label: "Siap dibayar", className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },
-  dibayar: { label: "Dibayar", className: "bg-muted text-muted-foreground" },
-  batal: { label: "Batal", className: "bg-muted text-muted-foreground line-through" },
-};
 const AFF_STATUS: Record<AffiliateRow["status"], { label: string; className: string }> = {
   menunggu: { label: "Menunggu", className: "bg-amber-500/10 text-amber-700 dark:text-amber-400" },
   aktif: { label: "Aktif", className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" },

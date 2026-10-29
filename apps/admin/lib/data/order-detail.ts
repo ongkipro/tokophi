@@ -1,6 +1,6 @@
 import "server-only";
 import { schema } from "@tokophi/db";
-import { eq, asc, desc, sql } from "drizzle-orm";
+import { and, eq, asc, desc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
 import {
   shipmentPaymentState,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/shipment-payment";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
 import { weightForOrder } from "@/lib/shipping-weight";
+import { commissionState, type CommissionState } from "@/lib/commission-state";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
 // (joined to the variant + product for the variant title / image / emoji), the money columns the
@@ -198,6 +199,20 @@ export type OrderSender = {
   postcode: string | null;
 };
 
+/** The affiliate commission frozen on this order (0116, F-A6) — at most one row per order. */
+export type OrderAffiliateRecord = {
+  code: string;
+  name: string;
+  /** How the order was attributed: the `?ref=` link or the code typed at checkout. */
+  source: string;
+  baseIdr: number;
+  commissionIdr: number;
+  rateNote: string | null;
+  state: CommissionState;
+  eligibleAtLabel: string | null;
+  paidAtLabel: string | null;
+};
+
 export type OrderDetail = {
   lines: OrderLine[];
   money: OrderMoney;
@@ -206,6 +221,7 @@ export type OrderDetail = {
   address: OrderAddress | null;
   payment: OrderPaymentRecord | null;
   refund: OrderRefundRecord | null;
+  affiliate: OrderAffiliateRecord | null;
   sender: OrderSender | null;
   financial: OrderFinancialBreakdown;
 };
@@ -457,6 +473,39 @@ export async function getOrderDetail(
       ? { status: rf.status, amount: rf.amount, note: rf.note ?? null, paidAtLabel: rf.paidAt ? FMT.format(rf.paidAt) : null }
       : null;
 
+    // Affiliate commission — explicit store_id on both tables (the WHERE is the rule, RLS is the net).
+    const ac = schema.affiliateCommissions;
+    const [aff] = await db
+      .select({
+        code: schema.affiliates.code,
+        name: schema.affiliates.name,
+        source: ac.source,
+        baseIdr: ac.baseIdr,
+        commissionIdr: ac.commissionIdr,
+        rateNote: ac.rateNote,
+        status: ac.status,
+        eligibleAt: ac.eligibleAt,
+        paidAt: ac.paidAt,
+        isReady: sql<boolean>`${ac.status} = 'pending' and ${ac.eligibleAt} is not null and ${ac.eligibleAt} <= now()`,
+      })
+      .from(ac)
+      .innerJoin(schema.affiliates, and(eq(schema.affiliates.id, ac.affiliateId), eq(schema.affiliates.storeId, storeId)))
+      .where(and(eq(ac.orderId, o.id), eq(ac.storeId, storeId)))
+      .limit(1);
+    const affiliate: OrderAffiliateRecord | null = aff
+      ? {
+          code: aff.code,
+          name: aff.name,
+          source: aff.source,
+          baseIdr: Number(aff.baseIdr),
+          commissionIdr: Number(aff.commissionIdr),
+          rateNote: aff.rateNote,
+          state: commissionState({ status: aff.status, isReady: aff.isReady, hasEligibleAt: !!aff.eligibleAt }),
+          eligibleAtLabel: aff.eligibleAt ? FMT.format(aff.eligibleAt) : null,
+          paidAtLabel: aff.paidAt ? FMT.format(aff.paidAt) : null,
+        }
+      : null;
+
     const [financial] = await db
       .select()
       .from(schema.orderFinancials)
@@ -596,6 +645,7 @@ export async function getOrderDetail(
       address,
       payment,
       refund,
+      affiliate,
       sender,
       financial: financialBreakdown,
     };

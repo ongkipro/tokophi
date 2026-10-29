@@ -1,11 +1,11 @@
 import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
-export type NavChild = { label: string; href: string };
+export type NavChild = { label: string; href: string; badgeKey?: NavBadgeKey };
 
 /** Counts the nav can show. A key, never a literal: `badge: "7"` used to live here — a hardcoded
  *  string that had counted nothing, was wrong for every store, and would have stayed wrong forever.
  *  The value is fetched server-side and passed into <NavLinks counts=… />. */
-export type NavBadgeKey = "perluDikirim";
+export type NavBadgeKey = "perluDikirim" | "affiliateMenunggu";
 export type NavItem = { label: string; href: string; icon: LucideIcon; badgeKey?: NavBadgeKey; children?: NavChild[] };
 export type NavGroup = { label?: string; items: NavItem[] };
 
@@ -109,7 +109,7 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Voucher", href: "/diskon" },
           { label: "Flash Sale", href: "/flash-sale" },
           { label: "Landing Page", href: "/promo" },
-          { label: "Affiliate", href: "/affiliate" },
+          { label: "Affiliate", href: "/affiliate", badgeKey: "affiliateMenunggu" },
         ],
       },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },

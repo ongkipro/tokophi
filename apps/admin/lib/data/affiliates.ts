@@ -7,13 +7,13 @@ import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac-policy";
 import { affiliateContactView } from "@/lib/affiliate-mask";
 import { accountAppUrl } from "@/lib/account-url";
+import { commissionState, type CommissionState } from "@/lib/commission-state";
 
 // Seller panel → Affiliate (Task 9.4, specs/AFFILIATE_SPEC.md). Every read runs under the tenant
 // context (RLS) AND filters on `storeId` explicitly — the WHERE is the rule, the policy is the net.
 
 export type AffiliateStatus = "menunggu" | "aktif" | "ditolak" | "nonaktif";
-/** Display state of a commission. `siap` and `ditahan` are DERIVED from `eligible_at`, never stored. */
-export type CommissionState = "belum_selesai" | "ditahan" | "siap" | "dibayar" | "batal";
+export type { CommissionState } from "@/lib/commission-state";
 
 export type AffiliateRow = {
   id: string;
@@ -61,6 +61,19 @@ export type AffiliateProgram = {
   overrides: { productId: string; title: string; rateBps: number }[];
   products: { id: string; title: string }[];
 };
+
+/** Applications waiting for the merchant's yes/no — the sidebar badge on Promo → Affiliate. A pending
+ *  applicant is the only thing in this programme that stalls until a human looks, and the menu sits in
+ *  a collapsed submenu, so without this nobody learns an application exists. */
+export async function getPendingAffiliateCount(): Promise<number> {
+  return withCurrentTenant(async (db, storeId) => {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)`.mapWith(Number) })
+      .from(schema.affiliates)
+      .where(and(eq(schema.affiliates.storeId, storeId), eq(schema.affiliates.status, "menunggu")));
+    return row?.n ?? 0;
+  });
+}
 
 export async function getAffiliateProgram(): Promise<AffiliateProgram> {
   const session = await getSession();
@@ -177,12 +190,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
         baseIdr: r.baseIdr,
         commissionIdr: r.commissionIdr,
         rateNote: r.rateNote,
-        state:
-          r.status === "dibayar" ? "dibayar"
-          : r.status === "batal" ? "batal"
-          : r.isReady ? "siap"
-          : r.eligibleAt ? "ditahan"
-          : "belum_selesai",
+        state: commissionState({ status: r.status, isReady: r.isReady, hasEligibleAt: !!r.eligibleAt }),
         eligibleAt: iso(r.eligibleAt),
         paidAt: iso(r.paidAt),
         createdAt: r.createdAt.toISOString(),

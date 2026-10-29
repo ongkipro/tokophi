@@ -57,6 +57,7 @@ import { IDR, timeAgo } from "@tokophi/lib/format";
 import type { Order, OrderStatus } from "@/lib/types/domain";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
+import { COMMISSION_STATE } from "@/lib/commission-state";
 import { Button } from "@tokophi/ui/button";
 import { Separator } from "@tokophi/ui/separator";
 import { Textarea } from "@tokophi/ui/textarea";
@@ -195,7 +196,7 @@ export function OrderDetail({
 }) {
   // Everything below is REAL: `detail` comes from order_line_items / orders / customers /
   // customer_addresses / payments.
-  const { lines, money, shipment, buyer, address, payment, refund, sender, financial } =
+  const { lines, money, shipment, buyer, address, payment, refund, affiliate, sender, financial } =
     detail;
   // The order's own destination (orders.city/province) — the only city this parcel is tied to.
   const destination =
@@ -1327,6 +1328,48 @@ export function OrderDetail({
               </div>
             </CardContent>
           </Card>
+
+          {affiliate && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between gap-2">
+                  Affiliate
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COMMISSION_STATE[affiliate.state].className}`}>
+                    {COMMISSION_STATE[affiliate.state].label}
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Affiliate</span>
+                  <span className="text-right font-medium">{affiliate.name} · <span className="font-mono">{affiliate.code}</span></span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Dari</span>
+                  <span className="font-medium">{affiliate.source === "kode" ? "Kode diketik di checkout" : "Link ?ref="}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Dasar komisi{affiliate.rateNote ? ` (${affiliate.rateNote})` : ""}</span>
+                  <span className="tabular-nums">{IDR(affiliate.baseIdr)}</span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between gap-2 text-base font-semibold">
+                  <span>Komisi</span>
+                  <span className="tabular-nums">{IDR(affiliate.commissionIdr)}</span>
+                </div>
+                {affiliate.state === "ditahan" && affiliate.eligibleAtLabel && (
+                  <p className="text-xs text-muted-foreground">Bisa dibayar mulai {affiliate.eligibleAtLabel}.</p>
+                )}
+                {affiliate.state === "dibayar" && affiliate.paidAtLabel && (
+                  <p className="text-xs text-muted-foreground">Ditandai dibayar {affiliate.paidAtLabel}.</p>
+                )}
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Komisi dihitung dari nilai barang setelah diskon (tanpa ongkir, biaya, dan pajak) dan dibayar seller
+                  langsung ke affiliate. Tidak memotong saldo atau rekonsiliasi pesanan ini.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

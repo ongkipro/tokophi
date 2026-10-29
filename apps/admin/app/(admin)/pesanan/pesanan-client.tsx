@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Download, MoreHorizontal, PackageCheck, Eye, XCircle, CheckCircle2, Info, AlertTriangle } from "lucide-react";
+import { Download, MoreHorizontal, PackageCheck, Eye, XCircle, CheckCircle2, Info, AlertTriangle, Handshake } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/admin/order-status";
@@ -15,6 +15,7 @@ import { OrderProductCell } from "@/components/admin/pesanan/order-product-cell"
 import { setOrderStatus } from "@/lib/actions/orders";
 import { orderStatusRefusalMessage } from "@/lib/order-status-refusal";
 import { IDR, num, timeAgo } from "@tokophi/lib/format";
+import { COMMISSION_STATE } from "@/lib/commission-state";
 import { cn } from "@tokophi/ui/lib/utils";
 import { exportCsv } from "@/lib/csv";
 import {
@@ -229,6 +230,7 @@ export function PesananClient({
                         <span className="text-sm text-muted-foreground">Belum diatur</span>
                       )}
                       <ProblemBadge o={o} />
+                      <AffiliateBadge o={o} />
                     </TableCell>
 
                     <TableCell className="py-3">
@@ -317,6 +319,7 @@ export function PesananClient({
                         <span className="text-muted-foreground">Belum diatur</span>
                       )}
                       <ProblemBadge o={o} />
+                      <AffiliateBadge o={o} />
                     </DataRow>
                   </DataCard>
                 ))
@@ -403,6 +406,23 @@ function ProblemBadge({ o }: { o: OrderListRow }) {
       title={o.problemNote ?? "Kurir melaporkan kendala pengiriman."}
     >
       <AlertTriangle className="size-3" /> Kendala
+    </Badge>
+  );
+}
+
+// Who brought this order, and what it costs the seller. The commission is the SELLER's own to pay
+// (v1: outside TokoΦ) — it is not taken from the order or the balance, so this is a note, not a deduction.
+function AffiliateBadge({ o }: { o: OrderListRow }) {
+  const a = o.affiliate;
+  if (!a) return null;
+  const st = COMMISSION_STATE[a.state];
+  return (
+    <Badge
+      variant="secondary"
+      className={`mt-1 border-0 font-medium ${st.className}`}
+      title={`Affiliate ${a.name} (${a.code}) — komisi ${IDR(a.commissionIdr)}, ${st.label.toLowerCase()}. Dibayar seller langsung; tidak memotong saldo.`}
+    >
+      <Handshake className="size-3" /> {a.code} · {IDR(a.commissionIdr)}
     </Badge>
   );
 }

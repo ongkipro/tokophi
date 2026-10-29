@@ -82,7 +82,10 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
   const active = isSectionActive(pathname, item.href) || !!activeChild;
   const [open, setOpen] = React.useState<boolean | null>(null);
   const expanded = item.children ? (open ?? active) : false;
-  const badgeCount = item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0;
+  // A collapsed parent carries its children's counts (Promo ← Affiliate): the work is otherwise hidden
+  // behind a chevron. Once open the child shows its own badge, so the parent drops the duplicate.
+  const childCount = item.children?.reduce((n, c) => n + (c.badgeKey ? (counts?.[c.badgeKey] ?? 0) : 0), 0) ?? 0;
+  const badgeCount = (item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0) + (expanded ? 0 : childCount);
 
   const rowLink = (
     <Link
@@ -131,11 +134,16 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
                 href={storeHref(c.href)}
                 onClick={onNavigate}
                 className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm transition-colors",
+                  "flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
                   cActive ? "font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {c.label}
+                {c.badgeKey && counts?.[c.badgeKey] ? (
+                  <Badge variant={cActive ? "default" : "secondary"} className="h-5 px-1.5 text-[11px] tabular-nums">
+                    {num(counts[c.badgeKey] ?? 0)}
+                  </Badge>
+                ) : null}
               </Link>
             );
           })}
