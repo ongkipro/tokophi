@@ -4672,3 +4672,13 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
   - 🟡 `packages/lib/src/area-search.ts` statically imports `@tokophi/db` + `drizzle-orm`, neither declared in its `package.json`, while `@tokophi/db` already depends on `@tokophi/lib` — an undeclared circular workspace dep that works only by hoisting.
   - 🟡 22 tables are written by neither the seed nor the guard's list, so the same silent-loss gap can recur; a census test (the `rbac-census.test.ts` shape) would close it.
 - **Dummy data:** unchanged from the previous entry; nothing in the repo.
+
+### [2026-10-29 UTC] — FIX · CI typecheck red on PR #424: BigInt literal in `packages/lib/src/affiliate.ts`
+
+- **Executor:** Main Session (owner: "ya lanjut comit push jika sudah di sempurnakan"). Scope: `feat/accounts-consolidated` (PR #424).
+- **Symptom:** job `tests · astro check · typecheck` failed at `npx tsc --noEmit` (apps/admin): `affiliate.ts(48,90): TS2737 BigInt literals are not available when targeting lower than ES2020`. `apps/admin` and `apps/super-admin` target ES2017; `packages/lib` targets ES2022. `next build` does not typecheck, so only this gate saw it.
+- **Fix:** `10_000n` → `BigInt(10_000)` (identical value; no tsconfig change). Grep found no other BigInt literal in `apps/*` or `packages/*/src` outside tests.
+- **Guard added:** `affiliate.test.ts` "stays exact past 2^53" (subtotal 13 095 367, goods 13 095 350, 10% → 1 309 535). Proven red against a mutated copy using plain `Math.floor` Number math (got 1 309 534), green on the fix; file restored afterwards.
+- **Files:** `packages/lib/src/affiliate.ts`, `packages/lib/src/affiliate.test.ts`, `BUILD-LOG.md`.
+- **Verification:** `tsc --noEmit` exit 0 in apps/admin and apps/super-admin; `npx vitest run packages/lib test` → 178 files passed / 34 skipped (DB suites skip: no DATABASE_URL here), 1562 tests passed.
+- **Also found (not a code fault):** every CI run since 2026-10-28 failed in ~2 s with "job was not started because recent account payments have failed" (GitHub billing). Repo made public 2026-10-29; re-run of PR #426 then went green.

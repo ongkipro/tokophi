@@ -15,6 +15,17 @@ describe("computeAffiliateCommission (F-A6)", () => {
     expect(r).toEqual({ baseIdr: 180_000, commissionIdr: 27_000, rateNote: "10% / 20%" });
   });
 
+  it("stays exact past 2^53: a vouchered Rp13.095.367 order pays 10% of its goods, not one rupiah less", () => {
+    // scaled × goods = 1.3e15 × 1.3e7 passes 2^53, where plain Number math floors this to 1 309 534.
+    const r = computeAffiliateCommission({
+      lines: [{ totalIdr: 13_095_367, rateBps: null }],
+      subtotalIdr: 13_095_367,
+      goodsProceedsIdr: 13_095_350,
+      defaultRateBps: 1000,
+    });
+    expect(r.commissionIdr).toBe(1_309_535);
+  });
+
   it("floors once at the end, never per line", () => {
     // Two lines of 15 @ 10% = 3 in total; flooring each line first would give 1 + 1 = 2.
     const r = computeAffiliateCommission({

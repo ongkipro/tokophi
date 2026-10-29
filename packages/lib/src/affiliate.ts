@@ -45,7 +45,7 @@ export function computeAffiliateCommission(args: {
   // `scaled * goods` passes 2^53 on ordinary Indonesian order sizes (first divergence measured at
   // subtotal 13.095.367 with a voucher: 1.178.582 instead of 1.178.583), so the product and the floor
   // are done in BigInt. Only vouchered orders can diverge — when goods === subtotal the division is exact.
-  const commissionIdr = Number((BigInt(scaled) * BigInt(goods)) / (BigInt(subtotalIdr) * 10_000n));
+  const commissionIdr = Number((BigInt(scaled) * BigInt(goods)) / (BigInt(subtotalIdr) * BigInt(10_000)));
   const rateNote = [...rates].sort((a, b) => a - b).map(formatRateBps).join(" / ");
   return { baseIdr: goods, commissionIdr, rateNote };
 }
