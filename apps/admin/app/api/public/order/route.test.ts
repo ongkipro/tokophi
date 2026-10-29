@@ -10,6 +10,7 @@ import {
   vi,
 } from "vitest";
 import type * as ShippingQuote from "@/lib/shipping-quote";
+import { verifyClaimToken } from "@tokophi/lib/claim-token";
 
 const h = vi.hoisted(() => {
   const state = {
@@ -417,6 +418,7 @@ suite("POST /api/public/order — public store availability", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(payload).toMatchObject({ ok: true, cod: true });
+    expect(payload).not.toHaveProperty("claimToken"); // ACCOUNT_CLAIM_SECRET unset → feature off
     expect(h.quoteShipping).toHaveBeenCalledTimes(1);
     expect(after.checkoutSessions).toEqual([
       expect.objectContaining({
@@ -538,6 +540,30 @@ suite("POST /api/public/order — public store availability", () => {
     expect(after.orders.length).toBe(1);
     expect(secondBody.code).toBe("order_already_created");
     expect(secondBody.orderNumber).toBe(firstBody.orderNumber);
+  }, 60_000);
+
+  // Task 10.13 (spec §17 D-3): with ACCOUNT_CLAIM_SECRET set, the SUCCESS answer carries a claim
+  // token bound to the created order; the duplicate answer (reachable by replaying a session id) does not.
+  it("issues a claim token for the created order on success only", async () => {
+    const secret = "t".repeat(40);
+    vi.stubEnv("ACCOUNT_CLAIM_SECRET", secret);
+    try {
+      const key = "claim";
+      await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+      const fixture = fixtures[key]!;
+
+      const first = await POST(orderRequest(key));
+      const firstBody = (await first.json()) as { ok?: boolean; orderNumber?: string; claimToken?: string };
+      const [created] = (await mutationState(fixture.id)).orders as { id: string; number: string }[];
+      expect(firstBody).toMatchObject({ ok: true, orderNumber: created.number });
+      expect(verifyClaimToken(firstBody.claimToken!, secret, Date.now(), created.id)).not.toBeNull();
+
+      const replay = (await (await POST(orderRequest(key))).json()) as Record<string, unknown>;
+      expect(replay.code).toBe("order_already_created");
+      expect(replay).not.toHaveProperty("claimToken");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 60_000);
 
   it("re-checks the store lock inside the transaction before the customer upsert", async () => {

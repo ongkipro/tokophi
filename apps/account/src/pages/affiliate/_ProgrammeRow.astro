@@ -1,0 +1,55 @@
+---
+// One programme as a row (prototype `orderCard` anatomy): store mark, store + status, code + orders,
+// the ready amount. The whole card opens the programme. Ringkasan adds a share row; the Program list
+// adds a stat strip with every real figure the programme has (rate, hold, orders, three totals).
+import { IDR } from "@tokophi/lib/format";
+import type { MyStore } from "../../data/affiliate";
+import { STATUS_LABEL, initials, ratePct } from "../../lib/affiliate-view";
+import { storefrontOrigin } from "../../lib/nav";
+import ShareLink from "./_ShareLink.astro";
+
+interface Props {
+  s: MyStore;
+  /** Ringkasan: a share shortcut under each ACTIVE programme. Program list: the stat strip instead. */
+  share?: boolean;
+}
+const { s, share = false } = Astro.props;
+const st = STATUS_LABEL[s.status];
+const link = `${storefrontOrigin(s.storeSlug)}/?ref=${encodeURIComponent(s.code)}`;
+const inputId = `share-${s.affiliateId}`;
+---
+<article class="order-card aff-row">
+  <span class="store-mark" aria-hidden="true">{initials(s.storeName)}</span>
+  <span class="order-main">
+    <span class="order-topline">
+      <a class="aff-row-link" href={`/affiliate/${s.affiliateId}`}><strong>{s.storeName}</strong></a>
+      <span class={`badge ${st.tone}`}>{st.text}</span>
+    </span>
+    <span class="order-meta">
+      Kode <span class="aff-code">{s.code}</span> · <span class="num">{s.orders}</span> pesanan
+    </span>
+  </span>
+  {share ? (
+    <span class="order-total">
+      <strong>{IDR(s.readyIdr)}</strong>
+      <span>siap dibayar</span>
+    </span>
+  ) : (
+    <span class="order-total aff-detail-cue" aria-hidden="true">Lihat detail</span>
+  )}
+  {!share && (
+    <dl class="aff-strip">
+      {s.rateBps !== null && <div><dt>Tarif dasar</dt><dd class="num">{ratePct(s.rateBps)}</dd></div>}
+      <div><dt>Masa tahan</dt><dd class="num">H+{s.holdDays}</dd></div>
+      <div><dt>Pesanan</dt><dd class="num">{s.orders}</dd></div>
+      <div class="aff-ready"><dt>Siap dibayar</dt><dd class="num">{IDR(s.readyIdr)}</dd></div>
+      <div><dt>Ditahan</dt><dd class="num">{IDR(s.heldIdr)}</dd></div>
+      <div><dt>Dibayar</dt><dd class="num">{IDR(s.paidIdr)}</dd></div>
+    </dl>
+  )}
+  {share && s.status === "aktif" && (
+    <div class="aff-share">
+      <ShareLink link={link} code={s.code} id={inputId} label={`Link affiliate ${s.storeName}`} />
+    </div>
+  )}
+</article>

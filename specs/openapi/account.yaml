@@ -1,12 +1,39 @@
-# NOT WRITTEN — Task 5.8 owner decision.
-# Placeholder so that the link in specs/README.md resolves. A 934-line draft of this contract exists
-# on the unmerged branch `feature/buyer-account-local` (commit 8dc12d7); it has NOT been accepted and
-# describes no deployed route. `npm run verify:openapi` skips a file carrying the status below: it
-# documents nothing and exempts nothing. Replace the whole file with the accepted contract, or delete
-# it and its links, when Task 5.8 is decided.
-x-tokophi-status: not-written
+# TokoΦ Account — NO API CONTRACT YET (Task 5.8 is still the owner's decision).
+#
+# This file used to carry `x-tokophi-status: not-written`, which makes `verify:openapi` skip it whole —
+# it documented nothing AND exempted nothing. That was harmless only while the surface was invisible to
+# the verifier: `apps/account` was missing from `scripts/gen-page-map.mjs`, and the route inventory the
+# verifier reads is that generated page map. Adding the surface to the generator made five public
+# endpoints appear at once, all of them browser navigations rather than operations any caller codes
+# against. They are exempted here, with the same reasoning admin-api.yaml already applies to the
+# identical Seller endpoints — NOT documented, because documenting them would invent a contract.
+#
+# `paths: {}` stays: when Task 5.8 is decided, the accepted contract replaces this file. Until then a new
+# account endpoint fails `verify:openapi` until someone writes it down or says here why it is not a
+# contract — which is the point.
 openapi: 3.1.0
 info:
-  title: TokoΦ Account API (not written)
+  title: TokoΦ Account (exemptions only — contract not written, Task 5.8)
   version: 0.0.0
 paths: {}
+x-tokophi-route-exemptions:
+  - app: apps/account
+    path: /auth/google/start
+    methods: [GET]
+    reason: Browser redirect into Google OAuth, the same navigation as the Seller's `/api/auth/google/start`. Mints the `state` cookie and the safe `next`; not a JSON operation and not a third-party contract.
+  - app: apps/account
+    path: /auth/google/callback
+    methods: [GET]
+    reason: Google's OAuth redirect target. The contract is Google's authorization-code flow; the response is a redirect that opens the session cookie. Same reason as the Seller's callback.
+  - app: apps/account
+    path: /keluar
+    methods: [POST]
+    reason: Revokes this session row and deletes the cookie, then redirects. Reached only from the account shell's own sign-out form; internal to the surface.
+  - app: apps/account
+    path: /masuk/dev
+    methods: [POST]
+    reason: LOCAL DEVELOPMENT sign-in. `devSignInAllowed()` refuses it outright in any production build (Vite bakes `import.meta.env.PROD`), so it exists in no deployed contract.
+  - app: apps/account
+    path: /addresses/wilayah
+    methods: [GET]
+    reason: Kecamatan lookup for the account's own address form, signed-in only, reading the shared reference data. Same-origin UI support for one form; the storefront's equivalent is served by `/api/public/ongkir`.

@@ -813,6 +813,55 @@
       "when": 1787545711751,
       "tag": "0115_provider_order_prefix",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1787545800000,
+      "tag": "0116_store_affiliates",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1787545900000,
+      "tag": "0117_tokophi_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1787546000000,
+      "tag": "0118_buyer_order_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1787546100000,
+      "tag": "0119_store_return_window",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1787546200000,
+      "tag": "0120_return_window_floor",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1787546300000,
+      "tag": "0121_store_complaint_resolution",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1787546400000,
+      "tag": "0122_affiliate_commissions_affiliate_idx",
+      "breakpoints": true
     }
   ]
 }

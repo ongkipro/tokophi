@@ -1,6 +1,7 @@
 import { schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { settleOrderLedger, type Db } from "./ledger-credit";
+import { onOrderStatusForAffiliate } from "./affiliate-attribution";
 import { defaultInventoryLevelId } from "./inventory-location";
 import type { OrderStatusRefusal } from "./order-status-refusal";
 
@@ -142,6 +143,8 @@ export async function applyOrderStatusChange(
   // The order's money moves with its status — booked/released/clawed back — inside THIS transaction,
   // so the book can never disagree with the order it describes.
   await settleOrderLedger(db, { storeId, orderId: order.id, status, prevStatus: order.status });
+  // Affiliate commission (0116, F-A7): voided with the order, or its hold window started — same txn.
+  await onOrderStatusForAffiliate(db, { storeId, orderId: order.id, status });
 
   return { applied: true };
 }

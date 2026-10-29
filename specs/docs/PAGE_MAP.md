@@ -50,19 +50,21 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 3 | 19 |
+| Seller (merchant panel) | 57 | 3 | 19 |
 | Super Admin (platform control plane) | 12 | 2 | 1 |
-| Storefront (multi-tenant shopper site) | 18 | — | 10 |
+| Storefront (multi-tenant shopper site) | 19 | — | 10 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
+| Akun TokoΦ (buyer account + affiliate dashboard, SSR auth) | 18 | — | 5 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 3 layouts · 19 API routes
+57 pages · 3 layouts · 19 API routes
 
 ### Pages
 
 | URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `/affiliate` | 'Affiliate' (under Promo) — store affiliate programme: commissions with 'Tandai dibayar', affiliates (approve/reject/deactivate/add), programme settings and per-product rates (Task 9.4, `specs/AFFILIATE_SPEC.md`). | page | `apps/admin/app/(admin)/affiliate/page.tsx` | `affiliate-client.tsx` | `affiliates` | `affiliates` | — | — | ✓ | — |
 | `/akun/keamanan` | 'Keamanan' — change password (revokes other sessions), 2FA/TOTP. | page | `apps/admin/app/(admin)/akun/keamanan/page.tsx` | `security-client.tsx` | — | `security` | — | — | ✓ | — |
 | `/akun/langganan` | 'Langganan' — the store's plan, trial/period countdown, payment history, link to the printable faktur. | page | `apps/admin/app/(admin)/akun/langganan/page.tsx` | — | `billing` `platform-finance` | `billing` `payment-settings` | — | — | ✓ | — |
 | `/akun` | layout | layout | `apps/admin/app/(admin)/akun/layout.tsx` | `akun-nav.tsx` | — | — | — | — |  | — |
@@ -178,13 +180,14 @@
 
 ## Storefront (multi-tenant shopper site) — `apps/storefront`
 
-18 pages · 10 endpoints
+19 pages · 10 endpoints
 
 ### Pages
 
 | URL | what it is | file | layout | src/data | src/lib | locals | set:html | tests |
 |---|---|---|---|---|---|---|---|---|
 | `/404` | Not found (also what a wrong Host resolves to). | `apps/storefront/src/pages/404.astro` | `Layout` | — | — | ✓ |  | — |
+| `/affiliate` | 'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5). | `apps/storefront/src/pages/affiliate.astro` | `Layout` | `affiliate` `catalog` | `chat` | ✓ |  | — |
 | `/blog/[handle]` | One article. | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
@@ -242,6 +245,43 @@
 |---|---|---|---|---|---|---|---|---|
 | `/sitemap.xml` | Sitemap for the apex. | GET | `apps/landing/src/pages/sitemap.xml.ts` | — | — |  | — | — |
 
+## Akun TokoΦ (buyer account + affiliate dashboard, SSR auth) — `apps/account`
+
+18 pages · 0 layouts · 0 API routes
+
+### Pages
+
+| URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `/404` | Not found — also what every 'not mine' record answers (another account's order, store or programme). | page | `apps/account/src/pages/404.astro` | — | — | — | — | — |  | — |
+| `/account` | 'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme. | page | `apps/account/src/pages/account/index.astro` | — | `account` `addresses` `affiliate` `orders` | — | — | — |  | — |
+| `/addresses/edit` | Add (no `?id`) or edit (`?id=<mine>`) a saved address. | page | `apps/account/src/pages/addresses/edit.astro` | — | `addresses` | — | — | — |  | — |
+| `/addresses` | 'Alamat' — saved addresses: list, make primary, delete. | page | `apps/account/src/pages/addresses/index.astro` | — | `addresses` | — | — | — |  | — |
+| `/addresses/wilayah` | Kecamatan search for the address form (signed-in only), through the ONE shared reference source. | endpoint | `apps/account/src/pages/addresses/wilayah.ts` | — | `addresses` | — | — | — |  | — |
+| `/affiliate/[id]` | One programme: code, share link, status banner, this store's totals and ledger. | page | `apps/account/src/pages/affiliate/[id].astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate/gabung` | Apply to ONE store's programme as a signed-in account; the merchant still approves it. | page | `apps/account/src/pages/affiliate/gabung.astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate` | 'Affiliate' · Ringkasan — totals across every store the account promotes, and the hold rule in one line. | page | `apps/account/src/pages/affiliate/index.astro` | — | `affiliate` | — | — | — |  | `apps/account/src/lib/nav.test.ts` |
+| `/affiliate/komisi` | 'Komisi' — one ledger across every programme of this account, filtered by status. | page | `apps/account/src/pages/affiliate/komisi.astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate/program` | 'Program' — every store this account promotes, one row each. | page | `apps/account/src/pages/affiliate/program.astro` | — | `affiliate` | — | — | — |  | — |
+| `/affiliate/undangan` | Accept a seller's invitation — the ONLY way an existing store affiliate row is bound to an account (single-use handle). | page | `apps/account/src/pages/affiliate/undangan.astro` | — | `affiliate` | — | — | — |  | `apps/account/src/lib/nav.test.ts` |
+| `/auth/google/callback` | Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session. | endpoint | `apps/account/src/pages/auth/google/callback.ts` | — | — | — | — | — |  | — |
+| `/auth/google/start` | Google sign-in start — mints the 128-bit `state` cookie and the safe `next`. | endpoint | `apps/account/src/pages/auth/google/start.ts` | — | — | — | — | — |  | — |
+| `/` | Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it. | page | `apps/account/src/pages/index.astro` | — | `affiliate` `orders` | — | — | — |  | — |
+| `/keluar` | Revokes this session row and deletes the cookie. | endpoint | `apps/account/src/pages/keluar.ts` | — | `account` | — | — | — |  | — |
+| `/klaim` | Saves an order to the account from the store's checkout-success link (ACC-11). A claim is keyed on a UNIQUE `order_id`. | page | `apps/account/src/pages/klaim.astro` | — | `orders` | — | — | — |  | — |
+| `/masuk` | Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle). | page | `apps/account/src/pages/masuk.astro` | — | — | — | — | — |  | — |
+| `/masuk/dev` | LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden. | endpoint | `apps/account/src/pages/masuk/dev.ts` | — | `account` | — | — | — |  | — |
+| `/orders/[number]` | One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one. | page | `apps/account/src/pages/orders/[number]/index.astro` | — | — | — | — | — |  | — |
+| `/orders/[number]/receipt` | Bukti pesanan — the printable page under the order's own URL. | page | `apps/account/src/pages/orders/[number]/receipt.astro` | — | — | — | — | — |  | — |
+| `/orders` | 'Pesanan' — only orders saved to this account, from stores still linked. | page | `apps/account/src/pages/orders/index.astro` | — | `orders` | — | — | — |  | — |
+| `/stores/[slug]` | Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link. | page | `apps/account/src/pages/stores/[slug].astro` | — | `orders` | — | — | — |  | — |
+| `/stores` | 'Toko' — stores this account is actively linked to, most recent purchase first. | page | `apps/account/src/pages/stores/index.astro` | — | `orders` | — | — | — |  | — |
+
+### API routes
+
+| URL | what it is | methods | file | gate | owner `db` | tests |
+|---|---|---|---|---|---|---|
+
 ## Module index (what the pages above import)
 
 ### Seller reads — `apps/admin/lib/data`
@@ -249,6 +289,7 @@
 | module | exports |
 |---|---|
 | `activity.ts` | `getActivityFeed` |
+| `affiliates.ts` | `getAffiliateProgram` |
 | `analytics.ts` | `SERIES_DAYS` `dailyStatsRows` `getCategorySales` `getChannelSalesDaily` `getCustomerMix` `getDailyStats` `getHourlyStats` `getOrderStats` `getProductSalesDaily` `getRegionSales` `hourlyStatsRows` |
 | `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `provinceForDistrict` `resolveArea` `resolveDestinationKelurahan` `searchAreaLocal` |
 | `articles.ts` | `getArticle` `getArticles` `getBlogs` |
@@ -296,6 +337,7 @@
 
 | module | exports |
 |---|---|
+| `affiliates.ts` | `createAffiliate` `inviteAffiliateToAccount` `markCommissionPaid` `saveAffiliateSettings` `setAffiliateStatus` `setProductAffiliateRate` |
 | `articles.ts` | `createArticle` `deleteArticle` `updateArticle` |
 | `auth.ts` | `signIn` `signOut` |
 | `billing.ts` | `cancelSubscriptionInvoice` `createSubscriptionPayment` `getInvoicePayment` `getPendingSubscription` |
@@ -317,6 +359,7 @@
 | `pages.ts` | `createPage` `deletePage` `updatePage` |
 | `payment-settings.ts` | `getPlatformChannels` |
 | `payments.ts` | `createOrderPayment` |
+| `pengaduan.ts` | `getComplaintService` `saveComplaintService` |
 | `picker.ts` | `pickerCategoryImages` `pickerCategoryLinks` `pickerPageLinks` `pickerProductLinks` `pickerProducts` |
 | `products.ts` | `bulkDeleteProducts` `bulkSetProductStatus` `createProduct` `deleteProduct` `duplicateProduct` `updateProduct` |
 | `profile.ts` | `getProfile` `updateProfile` |
@@ -325,6 +368,7 @@
 | `purchases.ts` | `cancelPurchaseOrder` `createPurchaseOrder` `receivePurchaseOrder` `unreceivePurchaseOrder` |
 | `register.ts` | `registerStore` |
 | `rekening.ts` | `getBankAccount` |
+| `retur.ts` | `getReturnWindow` `saveReturnWindow` |
 | `reviews.ts` | `deleteReview` `replyToReview` `setReviewStatus` |
 | `security.ts` | `changePassword` `disable2FA` `enable2FA` `getSecurity` `setup2FA` |
 | `segments.ts` | `createSegment` `deleteSegment` `updateSegment` |
@@ -368,8 +412,9 @@
 
 | module | exports |
 |---|---|
+| `affiliate.ts` | `applyAffiliate` |
 | `cache.ts` | `cacheClear` `cached` `ttlMs` |
-| `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
+| `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeAffiliateEnabled` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
 | `checkout.ts` | `getRecoveredCheckout` |
 | `content.ts` | `formatDate` `getArticle` `getArticles` `getPage` `getPages` `parseBody` `readMinutes` |
 | `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` `isReservedStoreLabel` |

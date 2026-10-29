@@ -258,6 +258,10 @@ const tiktok = pixels.find((p) => p.channel === "tiktok") ?? null;
         }
         if (v) document.cookie = clicks[i][2] + "=" + encodeURIComponent(clicks[i][3] + v) + suffix;
       }
+      // Affiliate `?ref=CODE` (0116): last click wins, sent by checkout within 30 days as `refCode`.
+      // Same shape as @tokophi/lib/affiliate normalizeAffiliateCode — the server re-checks it anyway.
+      var ref = String(q.get("ref") || "").trim().toUpperCase();
+      if (/^[A-Z0-9]{3,20}$/.test(ref)) localStorage.setItem("tphi:ref", JSON.stringify({ v: ref, t: Date.now() }));
     } catch (e) {}
   })();
 </script>

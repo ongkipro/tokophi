@@ -1,0 +1,87 @@
+---
+// Sign-in (spec §18.3): the prototype's login-shell — context column + login card. Google is the only
+// production method; phone + OTP is phase 2 (§18.5). The local "Masuk lokal" form exists only where
+// devSignInAllowed() says so, and its selectors (form[action="/masuk/dev"], input[name=email]) are
+// what the screenshot/UI scripts drive — keep them stable.
+import Layout from "../layouts/Layout.astro";
+import { googleEnabled } from "@tokophi/lib/google-oauth";
+import { devSignInAllowed } from "../lib/dev-signin";
+import { safeNext } from "../lib/nav";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+if (Astro.locals.account) return Astro.redirect(next);
+const google = googleEnabled("ACCOUNT_GOOGLE_REDIRECT_URI");
+const dev = devSignInAllowed();
+const ERRORS: Record<string, string> = {
+  google_batal: "Masuk dengan Google dibatalkan.",
+  google_state: "Sesi masuk kedaluwarsa. Coba lagi.",
+  google_gagal: "Google tidak bisa memverifikasi akun ini. Pastikan email Google Anda sudah terverifikasi.",
+  dev_email: "Masukkan alamat email yang valid.",
+  akun: "Akun ini tidak aktif.",
+};
+// Say WHY sign-in is needed when the visitor came from a link that does something.
+const purpose = next.startsWith("/klaim")
+  ? "Masuk untuk menyimpan pesanan Anda ke Akun TokoΦ."
+  : next.startsWith("/affiliate/undangan")
+    ? "Masuk untuk menerima undangan affiliate dari seller."
+    : null;
+const code = Astro.url.searchParams.get("e") ?? "";
+const error = ERRORS[code] ?? null;
+const closed = Astro.url.searchParams.has("ditutup");
+const check = '<path d="M20 6 9 17l-5-5"/>';
+---
+<Layout title="Masuk">
+  <div class="login-shell" id="login-shell">
+    <div class="login-context">
+      <span class="login-wordmark" aria-label="TokoΦ">
+        <span style="font-weight:600;letter-spacing:-0.02em">Toko<span style="color:var(--primary)">Φ</span></span>
+      </span>
+      <h1 class="login-context-title">Masuk ke Akun TokoΦ</h1>
+      <p class="login-context-desc">Satu akun untuk berbelanja dan menjadi affiliate di banyak toko TokoΦ. Belanja tetap bisa tanpa akun.</p>
+      <ul class="login-perks">
+        {["Lihat pesanan dari berbagai toko di satu tempat", "Simpan alamat pengiriman Anda", "Kelola komisi affiliate dari banyak toko"].map((t) => (
+          <li>
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={check} />
+            {t}
+          </li>
+        ))}
+      </ul>
+      <div class="login-privacy">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        <p>Data setiap toko tetap terpisah. Toko tidak bisa melihat akun Anda atau pesanan Anda di toko lain.</p>
+      </div>
+    </div>
+
+    <div class="login-card">
+      {closed && <p class="privacy-note notice-ok" role="status">Akun Anda sudah ditutup. Data pesanan di tiap toko tidak berubah.</p>}
+      {purpose && <p class="login-purpose">{purpose}</p>}
+      {error && <p class="login-error" role="alert" id="signin-error">{error}</p>}
+
+      {google && (
+        <a class="button secondary google" href={`/auth/google/start?next=${encodeURIComponent(next)}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-7Z" /><path d="M12 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.4c-.9.6-2 .9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.5v2.5a9.5 9.5 0 0 0 8.5 5.2Z" /><path d="M6.7 13.8a5.7 5.7 0 0 1 0-3.6V7.7H3.5a9.5 9.5 0 0 0 0 8.6l3.2-2.5Z" /><path d="M12 6.3c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9.5 9.5 0 0 0 3.5 7.7l3.2 2.5C7.4 8 9.5 6.3 12 6.3Z" /></svg>
+          Masuk dengan Google
+        </a>
+      )}
+      {google && <p class="field-help">Dari akun Google, kami hanya menyimpan nama dan email Anda.</p>}
+      {!google && !dev && <p class="login-error" role="alert">Masuk belum tersedia di server ini.</p>}
+
+      {dev && (
+        <section class="dev-signin" aria-labelledby="dev-h">
+          <form class="login-form" method="post" action="/masuk/dev">
+            <input type="hidden" name="next" value={next} />
+            <label class="login-label" id="dev-h" for="dev-email">Masuk lokal <span class="dev-tag">pengembangan</span></label>
+            <input class="login-input" id="dev-email" type="email" name="email" required autocomplete="email" placeholder="nama@contoh.id" aria-describedby="dev-help" aria-invalid={code === "dev_email" ? "true" : undefined} />
+            <p class="field-help" id="dev-help">Hanya ada di server pengembangan, tanpa kata sandi. Tidak pernah aktif di produksi.</p>
+            <button class="button primary login-submit" type="submit">Masuk</button>
+          </form>
+        </section>
+      )}
+
+      <div class="seller-escape">
+        <span>Punya toko?</span>
+        <a href="https://app.tokophi.com/login" class="link-button">Masuk ke Dashboard Seller</a>
+      </div>
+    </div>
+  </div>
+</Layout>

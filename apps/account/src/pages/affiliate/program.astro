@@ -1,0 +1,36 @@
+---
+// Affiliate · Program: every store this account promotes, one row each (spec §18.3). No store
+// directory (AFFILIATE_SPEC OD-A6) — joining starts from a store's address on Gabung.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { myAffiliateStores } from "../../data/affiliate";
+import { signInUrl } from "../../lib/nav";
+import ProgrammeRow from "./_ProgrammeRow.astro";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const stores = await myAffiliateStores(db, account.id);
+---
+<Layout title="Program" active="program">
+  <header class="page-header">
+    <div>
+      <h1>Program</h1>
+      <p class="lead">Setiap toko punya program sendiri: kode, tarif, masa tahan, dan pembayaran diatur oleh toko itu.</p>
+    </div>
+    <a class="button secondary" href="/affiliate/gabung">Gabung program toko</a>
+  </header>
+  {stores.length === 0 ? (
+    <section class="state-card">
+      <h2>Belum ada program</h2>
+      <p>Gabung ke program affiliate sebuah toko dengan alamat tokonya, atau buka link undangan dari seller.</p>
+      <a class="button primary" href="/affiliate/gabung">Gabung program toko</a>
+    </section>
+  ) : (
+    <>
+      <p class="result-count">{stores.length} program</p>
+      <div class="order-list">
+        {stores.map((s) => <ProgrammeRow s={s} />)}
+      </div>
+    </>
+  )}
+</Layout>

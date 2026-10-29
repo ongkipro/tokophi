@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FrontDoorShell, MARKETING_HOME } from "@/components/admin/front-door/front-door-shell";
-import { googleEnabled } from "@/lib/google";
+import { googleEnabled } from "@tokophi/lib/google-oauth";
 import { signupOpen } from "@/lib/provision";
 import { DaftarForm } from "./daftar-form";
 

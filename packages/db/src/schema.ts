@@ -517,6 +517,9 @@ export const products = pgTable(
     // is retired forever, because handing it to the next variant re-points a live catalog item at a
     // different SKU — a silent mis-attribution, not an error.
     variantSeqNext: integer().notNull().default(1),
+    // Affiliate commission override in basis points (0116). NULL = the store default
+    // (`store_settings.affiliate_rate_bps`); 0 is a real "no commission on this product".
+    affiliateRateBps: integer(),
   },
   (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
 );
@@ -1713,6 +1716,186 @@ export const refunds = pgTable(
   }),
 );
 
+// ── Store affiliate programme (0116, specs/AFFILIATE_SPEC.md) ─────────────────────────────────────
+// The merchant pays affiliates OUTSIDE TokoΦ: nothing here touches `ledger_entries` or `payouts`.
+export const affiliateStatus = pgEnum("affiliate_status", ["menunggu", "aktif", "ditolak", "nonaktif"]);
+export const affiliateCommissionStatus = pgEnum("affiliate_commission_status", [
+  "pending",
+  "dibayar",
+  "batal",
+]);
+// ── TokoΦ Account (0117, specs/docs/TOKOPHI_ACCOUNT_SPEC.md §17.9) ─────────────────────────────────
+// One platform identity per person (buyer area + affiliate area of apps/account). Cross-tenant: no
+// store_id, no RLS — apps/account reads only with an explicit buyer_id predicate (§17.8 D-4).
+export const buyerAccounts = pgTable("buyer_accounts", {
+  id: pk(),
+  /** Google `sub`. `dev:<email>` only from the local dev sign-in, which refuses production builds. */
+  googleSub: text().unique(),
+  email: text(),
+  /** Canonical `62…`, set only by phase-2 phone verification. */
+  phone: text().unique(),
+  phoneVerifiedAt: ts(),
+  name: text(),
+  /** active | suspended | closed (check constraint in 0117). */
+  status: text().notNull().default("active"),
+  createdAt: createdAt(),
+});
+export const buyerSessions = pgTable(
+  "buyer_sessions",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    createdAt: createdAt(),
+    lastSeenAt: createdAt(),
+    revokedAt: ts(),
+    userAgent: text(),
+  },
+  (t) => [index("buyer_sessions_buyer_idx").on(t.buyerId)],
+);
+// ── TokoΦ Account buyer half (0118, §17.9, Tasks 10.5–10.9) ─────────────────────────────────────────
+// A claim (one claimant per order) + the store link it consents to are the ONLY bridge from an
+// account to a store's orders — never an email/phone match. Both carry store_id ⇒ tenant RLS policy.
+export const buyerStoreLinks = pgTable(
+  "buyer_store_links",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    customerId: uuid().references(() => customers.id),
+    /** active | revoked (check constraint in 0118). */
+    status: text().notNull().default("active"),
+    consentVersion: text().notNull(),
+    consentedAt: createdAt(),
+    revokedAt: ts(),
+    /** token (phase 1) | phone (phase 2). */
+    claimMethod: text().notNull().default("token"),
+    createdAt: createdAt(),
+  },
+  (t) => [unique("buyer_store_links_buyer_id_store_id_unique").on(t.buyerId, t.storeId), index("buyer_store_links_store_idx").on(t.storeId)],
+);
+export const buyerOrderClaims = pgTable(
+  "buyer_order_claims",
+  {
+    id: pk(),
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    claimedAt: createdAt(),
+  },
+  (t) => [index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId)],
+);
+export const buyerAddresses = pgTable(
+  "buyer_addresses",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    label: text(),
+    recipient: text().notNull(),
+    phone: text().notNull(),
+    address: text().notNull(),
+    /** KiriminAja district id — the same currency as `orders.ship_district_id`. */
+    districtId: integer()
+      .notNull()
+      .references((): AnyPgColumn => kiriminajaAreas.id),
+    kelurahan: text(),
+    postalCode: text().notNull(),
+    isPrimary: boolean().notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: createdAt(),
+  },
+  (t) => [
+    index("buyer_addresses_buyer_idx").on(t.buyerId),
+    uniqueIndex("buyer_addresses_one_primary").on(t.buyerId).where(sql`${t.isPrimary}`),
+  ],
+);
+
+export const affiliates = pgTable(
+  "affiliates",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    /** Upper-case, `[A-Z0-9]{3,20}` — what the shopper types and what `?ref=` carries. Unique per store. */
+    code: text().notNull(),
+    name: text().notNull(),
+    /** Canonical `62…` (normalizePhone) — also the self-referral check against the buyer's phone. */
+    phone: text().notNull(),
+    email: text(),
+    bankName: text(),
+    bankAccount: text(),
+    bankHolder: text(),
+    status: affiliateStatus().notNull().default("menunggu"),
+    /** Applicant's pitch (where they promote) or the merchant's note. */
+    note: text(),
+    createdAt: createdAt(),
+    approvedAt: ts(),
+    /** TokoΦ Account owning this per-store row (0117) — one account, many stores. Set by applying while
+     *  signed in or by accepting the seller's invitation; NEVER by email/phone match. */
+    accountId: uuid().references((): AnyPgColumn => buyerAccounts.id),
+    /** sha256 of the seller-issued invitation token (single use: cleared on accept). */
+    inviteHash: text(),
+    inviteExpiresAt: ts(),
+  },
+  (t) => [
+    unique().on(t.storeId, t.code),
+    index("affiliates_store_status_idx").on(t.storeId, t.status),
+    unique("affiliates_store_id_account_id_unique").on(t.storeId, t.accountId),
+    index("affiliates_account_idx").on(t.accountId),
+    uniqueIndex("affiliates_invite_hash_idx").on(t.inviteHash).where(sql`${t.inviteHash} is not null`),
+  ],
+);
+export const affiliateCommissions = pgTable(
+  "affiliate_commissions",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    affiliateId: uuid()
+      .notNull()
+      .references(() => affiliates.id),
+    /** One commission per order, ever — the database's guarantee, not a check-then-write. */
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    /** `kode` = typed at checkout · `link` = captured `?ref=`. */
+    source: text().notNull(),
+    /** Goods value after discount that the rate applied to (frozen at order time). */
+    baseIdr: money().notNull().default(0),
+    commissionIdr: money().notNull().default(0),
+    /** Human-readable rate snapshot, e.g. "10%" or "10% / 20% (per produk)". */
+    rateNote: text(),
+    status: affiliateCommissionStatus().notNull().default("pending"),
+    /** Set when the order reaches `selesai` (+ hold days). Pending AND eligible_at <= now() = payable. */
+    eligibleAt: ts(),
+    paidAt: ts(),
+    paidNote: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("affiliate_commissions_store_idx").on(t.storeId, t.status),
+    // The affiliate's own ledger joins and filters on this pair (0122); the store index cannot serve it.
+    index("affiliate_commissions_affiliate_idx").on(t.affiliateId, t.status),
+  ],
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),
@@ -1766,6 +1949,10 @@ export const storeSettings = pgTable("store_settings", {
   // Which SERVICES may carry it is not a merchant choice — KiriminAja reports a per-service `cod`
   // flag (see kaServices()), and the platform narrows that further. See ADR/BACKLOG.
   codEnabled: boolean().notNull().default(false),
+  /** Working days after receipt the store accepts a return request (2–90, check in 0119/0120; floor = PP 80/2019 Pasal 69(1)). NULL = not declared. */
+  returnWindowDays: integer(),
+  /** Working days within which the store commits to resolve a complaint (1–60, check in 0121; PP 80/2019 Pasal 27(2)(e)). NULL = not declared. */
+  complaintResolutionDays: integer(),
   // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),
@@ -1775,6 +1962,12 @@ export const storeSettings = pgTable("store_settings", {
   promoHubTitle: text(),
   promoHubSubtitle: text(),
   promoHubBannerUrl: text(),
+  // Store affiliate programme (0116, specs/AFFILIATE_SPEC.md). OFF by default: an existing store never
+  // starts paying commissions it did not choose. Rate in BASIS POINTS (1000 = 10%) — integers, so a
+  // commission is never a float. Hold days = the return window before a commission is payable.
+  affiliateEnabled: boolean().notNull().default(false),
+  affiliateRateBps: integer().notNull().default(1000),
+  affiliateHoldDays: integer().notNull().default(3),
 });
 
 export const platformPaymentGateways = pgTable("platform_payment_gateways", {

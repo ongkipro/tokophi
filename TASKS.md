@@ -245,7 +245,7 @@
 - **Target Files:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md`, `specs/PRD.md`, release/readiness docs that currently claim or omit the account surface.
 - **Change:** Record one explicit owner decision: integrate the accepted account architecture into the production release, or defer the account and remove it from production release claims. Do not treat the standalone localStorage prototype as production evidence.
 - **Done when:** One decision is recorded with owner, rationale, release impact, and acceptance boundary; every canonical product/release document agrees; implementation tasks are added only if integration is chosen.
-- **Status:** `[ ]` **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
+- **Status:** `[~]` **2026-10-15: owner directed LOCAL development, and confirmed it holds "sampai final" (OD-5)** ("sambil kita develop local kebutuhan akun user (pembeli)") — spec carried onto `main`'s path (`specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §1–15 from `8dc12d7`, §17 plan), implementation tasks in **Stage 10**. **Production release is still undecided** (spec §17.7 OD-5); ADR 0016 stays PROPOSED. Earlier: **BLOCKED — on an owner decision** (verified 2026-09-08). No decision is recorded anywhere; the 2026-09-03 resume checklist lists it under *"keputusan lama yang masih menggantung"*. Worse, the documents this task names as targets do not exist on disk: `find specs -iname '*account*'` returns only `tasks/2026-08-12-n62-account-throttle.md`; `specs/openapi/` holds only `admin-api.yaml` + `storefront-api.yaml`; `specs/decisions/` ends at `0015`. Yet `REQUIREMENTS.md` F-K11 links `TOKOPHI_ACCOUNT_SPEC.md` + ADR `0016-global-buyer-account.md`, and `specs/README.md` links `TOKOPHI_ACCOUNT_SPEC.md`, `openapi/account.yaml`, `openapi/headless.yaml` — four dangling links in canonical documents (also counts against Task 5.14). Whichever way the owner rules, the record has to be created, not amended.
 
 ### Task 5.9: Make Multi-Store Selection Explicit and Deterministic
 - **Requirement:** `F-T10`
@@ -969,3 +969,322 @@ Seeded by the **2026-09-07 production incident**: the single Vultr VPS `volumdev
   3. `AGENTS.md`'s seed-rot note covers CHARTS only ("the demo looks dead"); add the write path, because the symptom there is a save that fails with a message about suspension on a store nobody suspended.
 - **Done when:** on a machine whose clock is past the anchor, `npm run seed:recent -w @tokophi/db` is enough to make an admin save succeed; no agent has to hand-edit `stores` to drive a write path.
 - **Status:** `[x]` **DONE 2026-09-09** — finding first: `seed.ts` was ALREADY relative (`fromNow(20)` on `batiknusantara`, `baa70c6`); the `2026-08-04` on the dev DB was "seeded 2026-07-15 + 20 days" rot, so the main seed is untouched and every deliberately overdue/trial/VIP store keeps its shape. `seed-recent.ts` gained `seedBillingPeriod(exec, storeId)` — ONE idempotent UPDATE `set current_period_end = now() + 30 days where id = $1 and current_period_end < now()` — run first by `main()`, plus an `import.meta.url` entrypoint guard so importing the module cannot run the top-up. `packages/db/src/seed-recent-billing.test.ts` (6 real-Postgres tests, verdict from `computeBilling()` itself; 3 mutations → 3 reds). Dev DB: `batiknusantara` `2026-08-04` → `2026-10-09` after one `seed:recent`; second run "masih aktif — tidak disentuh"; the other 7 stores byte-identical. No migration needed (`verify-migrations` ✓). AGENTS.md note added by the parent.
+
+### Task 8.38: Platform Messaging Channel — One Sender for WhatsApp/SMS (owner-gated)
+- **Requirement:** `MSG-1`
+- **Tracing:** owner 2026-10-15 — *"api wa ini dan sms belum aku urus"*, *"untuk wa dan sms nanti aja masuk task"*. A task, not a PRD, until the owner picks a provider.
+- **Target Files:** `packages/lib/src/messaging.ts` (new; the `OtpSender` seam in `buyer-otp.ts` becomes one use of it), its test, the provider's env names in `.env.example`; callers later: account OTP (Task 10.14), order/shipping notices, abandoned-cart + CRM follow-up (today `wa.me` links opened by the seller), affiliate notices (Stage 9).
+- **Change:** one `send({ to, template, params })` interface with a dev stub that prints locally and **refuses in a production build**; one provider adapter once chosen; per-recipient rate limit through `rate-limit-store`; no message body or code in logs.
+- **Owner steps first (all UNVERIFIED — to be checked against the chosen provider's official documentation before any code):** (1) choose WhatsApp Business Platform (directly or via a provider) and/or an SMS vendor, and the budget; (2) complete the provider's business verification; (3) register the sender (WhatsApp business phone number / SMS sender ID); (4) get the message templates approved — OTP/authentication, order status, follow-up; (5) put the credentials into `secrets-env`, never into the repo.
+- **Done when:** with the chosen provider's sandbox/test credentials, a test sends one OTP template and one order-status template to the owner's own number and records the provider's message id; with no provider configured a production build refuses to send (unit test).
+- **Status:** `[ ]` **BLOCKED on the owner** — no provider chosen, no account, no credentials (2026-10-15).
+
+## Stage 9: Store Affiliate Programme
+
+Spec + owner decisions: [`specs/AFFILIATE_SPEC.md`](specs/AFFILIATE_SPEC.md) (PRD v1.1 2026-10-15, requirements `F-A1`–`F-A17`,
+mirrored in `specs/docs/REQUIREMENTS.md` §2.10). Branch `feat/store-affiliate`; its own dev database
+(`tokophi_affiliate`) per `AGENTS.md` § Database rule 3. One PR per phase, `npm run test:db` +
+`verify:guards` before each merge.
+
+### Task 9.1: Affiliate Data Model and the Commission Calculator
+- **Requirement:** `F-A6` (constraints: `F-A1`, `F-A9`, `F-A10`)
+- **Risk Level:** R3 — migration + tenant-owned tables.
+- **Allowed Paths:** `packages/db/drizzle/0116_store_affiliates.sql`, `packages/db/drizzle/meta/_journal.json`, `packages/db/src/schema.ts`, `packages/lib/src/affiliate.ts`, `packages/lib/src/affiliate.test.ts`, `packages/lib/package.json`, doc-count anchors (`AGENTS.md`, `specs/docs/STATUS.md`, `specs/docs/CODE_MAP.md`, `specs/docs/SCHEMA.md`).
+- **Change:** additive migration `0116` (two enums, `affiliates`, `affiliate_commissions` with RLS `tenant_isolation`, three `store_settings` columns, `products.affiliate_rate_bps`); pure `computeAffiliateCommission()` + `normalizeAffiliateCode()` in `@tokophi/lib/affiliate`.
+- **Done when:** `verify-migrations` and `verify-rls` pass on a database migrated to `0116`; the F-A6 acceptance example (200 000 / 20 000 / 10 %+20 %) returns 27 000 in a unit test, plus rounding, zero-subtotal and override cases.
+- **Status:** `[x]` **DONE 2026-10-15** — `verify-rls` on the branch DB `tokophi_affiliate` (at `0116`): **56/57** store-scoped tables, sole exception `platform_activity`, "RLS verified ✅"; `@tokophi/lib/affiliate` 10/10 incl. F-A6. Earlier: **BUILT 2026-10-11.** `0116` applied twice to the branch DB `tokophi_affiliate` (idempotent: second run all "already exists, skipping"); `verify-migrations` ✓; RLS on both tables measured by hand on the branch DB (two stores' rows inserted, `SET LOCAL ROLE tokophi_app` + store A's GUC sees 1); `tokophi_app` holds SELECT/INSERT/UPDATE/DELETE via default privileges. `@tokophi/lib/affiliate` 10 tests green incl. the F-A6 example (27 000) and the floor-once case. Doc counts moved to 86 tables · 117 migrations · 49 enums (`doc-counts.test.ts` 18/18), indexes classified (`schema-indexes.test.ts` 8/8). **Left:** `npm run verify-rls` against a database migrated to `0116` (needs this worktree's `DATABASE_URL` pointed at `tokophi_affiliate`).
+
+### Task 9.2: Attribute the Order and Freeze the Commission in `/api/public/order`
+- **Requirement:** `F-A4` (constraints: `F-A1`, `F-A5`, `F-A6`)
+- **Risk Level:** R3 — the public money route.
+- **Allowed Paths:** `apps/admin/app/api/public/order/route.ts`, `apps/admin/lib/affiliate-attribution.ts`, `apps/admin/lib/affiliate-attribution.test.ts`.
+- **Depends On:** Task 9.1
+- **Done when:** a real-Postgres test places orders with typed code, captured ref, both, an inactive code, a self-referral and the programme off, and asserts exactly the F-A4/F-A5/F-A1 outcomes; a commission row is written in the order transaction (an order rollback leaves none).
+- **Status:** `[x]` **DONE 2026-10-15** — `affiliate-attribution.test.ts` 8/8 on the throwaway `tokophi_affiliate_test` (`TEST_DB_REQUIRED=1`, migrated to `0116` by `db-setup`). Earlier: **CODE DONE 2026-10-11.** `apps/admin/lib/affiliate-attribution.ts` `attachAffiliateCommission` (typed code first, else captured ref; aktif + same store only; self-referral by phone; per-product override; `on conflict (order_id) do nothing`), called inside the order transaction in `/api/public/order` after the voucher bump. Body gains `affiliateCode` / `refCode`. `tsc` 0. Test file `affiliate-attribution.test.ts` (5 attribution cases) runs once the worktree points at the branch DB.
+
+### Task 9.3: Commission Lifecycle on Order Status Changes
+- **Requirement:** `F-A7`
+- **Risk Level:** R3
+- **Allowed Paths:** `apps/admin/lib/order-status.ts`, `apps/admin/lib/affiliate-attribution.ts`, `apps/admin/lib/order-status.test.ts`.
+- **Depends On:** Task 9.2
+- **Done when:** a real-Postgres test moves orders to `batal`, `retur` and `selesai` through `applyOrderStatusChange` and asserts `batal` / `eligible_at = now + hold days`; a `dibayar` commission is untouched.
+- **Status:** `[x]` **DONE 2026-10-15** — lifecycle cases in the same 8/8 run. Earlier: **CODE DONE 2026-10-11.** `onOrderStatusForAffiliate` is called by `applyOrderStatusChange` after `settleOrderLedger`, same transaction: `batal`/`retur` → `batal` unless `dibayar`; `selesai` → `eligible_at = now() + store hold days`. 3 lifecycle cases in `affiliate-attribution.test.ts`.
+
+### Task 9.4: Seller Panel — Programme Settings, Affiliates, Commissions, Mark Paid
+- **Requirement:** `F-A3` (constraints: `F-A8`, `F-A9`, `F-A10`)
+- **Risk Level:** R2 — new tenant screens on the established guard.
+- **Allowed Paths:** `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/data/affiliates.ts`, `apps/admin/lib/actions/affiliates.ts`, `apps/admin/lib/rbac-policy.ts`, `apps/admin/lib/rbac-census.test.ts`, `apps/admin/lib/nav.ts`, `apps/admin/lib/types/domain.ts`, `specs/docs/PAGE_MAP.md`, `specs/docs/page-map.json`.
+- **Depends On:** Task 9.1
+- **Done when:** in a browser on the branch DB the owner enables the programme, approves an applicant, sets a product override, and marks a ready commission paid; a not-ready commission is refused; a `staff` session sees no write controls and its server action is refused; store A's session lists none of store B's affiliates.
+- **Status:** `[x]` **DONE 2026-10-15 (local, branch DB `tokophi_affiliate`)** — owner chose local development; two throwaway users (owner + staff, `aff-check-*@example.invalid`, temp passwords from `tempPassword()`, never printed) on the local `batiknusantara` copy, admin `next dev` on :3010, Chrome via Playwright. Owner: hold default shows 3, programme enabled, 15 % product override saved, applicant approved, exactly one "Tandai dibayar" (the ready commission) and it marked paid, the server action refused the not-ready commission ("belum siap dibayar"), 0 page errors. Staff: no full phone/bank in the HTML, `••••1111` shown, 0 `wa.me` links (owner: 2), no approve/reject/pay buttons, settings inputs disabled, server action refused (`ForbiddenError`), 0 page errors. Users, test affiliates/commissions, the override and the toggle removed/restored afterwards. Not driven: reject, deactivate, "Tambah affiliate" dialog. *Previously:* `[~]` **BUILT 2026-10-11; browser check BLOCKED 2026-10-15 on login** — the branch DB `tokophi_affiliate` is a production copy, so no seller password is known locally; minting a session (needs `AUTH_SECRET`) or inserting a throwaway seller there was not done without the owner. Server side is covered by the 2026-10-15 full run (1713/1713 incl. DB suites, `rbac-census`). `/affiliate` (Promo → Affiliate): stats, tabs Komisi (Tandai dibayar only on `siap`), Affiliate (approve/reject/deactivate, copy link, WhatsApp), Pengaturan (programme toggle, default %, hold days, per-product rates); "Tambah affiliate" dialog. `affiliates:write` = owner, admin (census `admin-too`), advertiser. `markCommissionPaid` is one guarded UPDATE (pending + eligible_at <= now()). `tsc` 0, lint 0 errors, page map regenerated.
+
+### Task 9.5: Storefront — `/affiliate` Application Form, `?ref=` Capture, Checkout Code Field
+- **Requirement:** `F-A2` (constraints: `F-A1`, `F-A4`)
+- **Risk Level:** R2
+- **Allowed Paths:** `apps/storefront/src/pages/affiliate.astro`, `apps/storefront/src/data/affiliate.ts`, `apps/storefront/src/components/MarketingPixels.astro`, `apps/storefront/src/pages/checkout.astro`.
+- **Depends On:** Task 9.2
+- **Done when:** in a browser: the form creates a `menunggu` row for the Host's store and the 6th post in an hour is refused; `/?ref=CODE` then checkout sends `refCode`; a typed code is sent as `affiliateCode`; `/affiliate` is 404 with the programme off; `checkout.astro` stays under its source-size cap.
+- **Status:** `[~]` **BUILT 2026-10-11; browser-checked 2026-10-15 except the order POST.** Chrome (Playwright, 390px) on `astro dev` against `tokophi_affiliate`: `/affiliate` 404 with the programme off, 200 on; posts 1–5 created 5 `menunggu` rows (codes `UJIAFF…`), post 6 refused ("Terlalu banyak…"); `/?ref=uji123` stored `tphi:ref` = `UJI123`; checkout HTML carries `#affiliate-input` when on; 0 page errors. Test rows deleted and the toggle restored afterwards. **Not driven:** `refCode`/`affiliateCode` in the actual order request (needs a cart + the admin order API running). `storefront/src/pages/affiliate.astro` (plain POST form, honeypot, 5/hour/IP, 404 when off) + `src/data/affiliate.ts`; `?ref=` captured in the always-on inline script of `MarketingPixels.astro` (`tphi:ref`); checkout shows "Kode affiliate (opsional)" only when the programme is on and sends `affiliateCode` + `refCode` (≤ 30 days). `checkout.astro` 2848 / 2864. `astro check` 0 errors.
+
+### Task 9.6: Landing-Funnel Attribution (`/lp`, OrderFunnel) — v1.1
+- **Requirement:** `F-A13` (constraints: `F-A4`, `F-A5`)
+- **Risk Level:** R2 — touches the public order payload, not the money computation.
+- **Allowed Paths:** `apps/storefront/src/components/OrderFunnel.astro`
+- **Canonical Contract Owners:** `/api/public/order` body (`affiliateCode`, `refCode`).
+- **Accepted Invariants:** the funnel sends the same fields with the same 30-day rule as `checkout.astro`; a wrong code never blocks the order.
+- **Depends On:** Task 9.5
+- **Done when:** in a browser on the branch DB, `/lp/<slug>?ref=CODE` (enabled store, `CODE` aktif) → place the funnel order → one `affiliate_commissions` row with `source='link'` for that order.
+- **Non-Scope:** a code field in the funnel form (later, if owners ask).
+- **Status:** `[ ]` — gap confirmed 2026-10-15: `OrderFunnel.astro` posts to `/api/public/order` without either field.
+
+### Task 9.7: Mask Affiliate Personal Data for Roles Without `affiliates:write`
+- **Requirement:** `F-A12`
+- **Risk Level:** R2 — personal data on an established tenant screen.
+- **Allowed Paths:** `apps/admin/lib/data/affiliates.ts`, `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/affiliate-mask.test.ts`
+- **Accepted Invariants:** masking happens on the server (the full value never reaches the HTML); `owner`/`admin`/`advertiser` views unchanged.
+- **Depends On:** Task 9.4
+- **Done when:** a test renders the data for a `staff` capability set and finds no full phone/bank number; a browser `staff` session shows `••••1234` and no `wa.me` link.
+- **Status:** `[x]` **DONE 2026-10-15** — `apps/admin/lib/affiliate-mask.ts` (`maskTail`, `maskEmail`, `affiliateContactView`), applied in `getAffiliateProgram` on `can(session.role, "affiliates:write")`; `contactMasked` hides the WhatsApp button. `affiliate-mask.test.ts` 4/4 (incl. staff/cs/gudang lack the capability and the data layer still routes through the mask). Browser: see Task 9.4 (staff HTML has no full phone/bank, `••••1111`, 0 `wa.me`). Email is masked too (`s•••@domain`), beyond the original ask.
+
+### Task 9.8: Commission CSV Export
+- **Requirement:** `F-A11` (constraints: `F-A10`)
+- **Risk Level:** R2
+- **Allowed Paths:** `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/data/affiliates.ts`
+- **Accepted Invariants:** reuses `apps/admin/lib/csv.ts`; store-scoped read under `withCurrentTenant`; gated on `affiliates:write`.
+- **Depends On:** Task 9.4
+- **Done when:** with two stores seeded on the branch DB, store A's export holds only A's rows with the F-A11 columns, and a `staff` session has no export control and its request is refused.
+- **Status:** `[ ]` — note line per OD-A4 once decided.
+
+### Task 9.9: Erase a Rejected or Inactive Affiliate's Personal Data
+- **Requirement:** `F-A17`
+- **Risk Level:** R2 — destructive on personal fields only.
+- **Allowed Paths:** `apps/admin/lib/actions/affiliates.ts`, `apps/admin/app/(admin)/affiliate/**`, `apps/admin/lib/affiliate-erase.test.ts`
+- **Accepted Invariants:** commission rows and the code survive; an `aktif` or `menunggu` affiliate cannot be erased; confirm dialog via `components/admin/confirm-delete.tsx`.
+- **Depends On:** Task 9.4
+- **Done when:** a real-Postgres test erases a `nonaktif` affiliate with 2 commissions → personal fields null, name "Affiliate dihapus", both commissions present; erasing an `aktif` one is refused.
+- **Status:** `[ ]` — OD-A5 (manual vs automatic) decides whether a cron follows.
+
+### Task 9.10: Flag a Return After a Commission Was Paid
+- **Requirement:** `F-A14`
+- **Risk Level:** R3 — commission lifecycle inside the order-status transaction.
+- **Allowed Paths:** `apps/admin/lib/affiliate-attribution.ts`, `apps/admin/lib/affiliate-attribution.test.ts`, `apps/admin/app/(admin)/affiliate/**`
+- **Depends On:** Task 9.3
+- **Done when:** the existing "a paid commission is never voided by a later return" test still passes and a new case asserts the flag; the Seller list shows "retur setelah dibayar".
+- **Escalation Conditions:** OD-A1 chooses a claw-back record → new migration, re-plan.
+- **Status:** `[ ]` **BLOCKED — owner decision OD-A1.**
+
+### Task 9.14: Affiliate Commission Paid from the Seller's Balance After True Delivery
+- **Requirement:** `F-A7`
+- **Tracing:** changes F-A7 (payable only after delivery + hold) per [ADR 0018](specs/decisions/0018-affiliate-commission-paid-from-seller-balance.md) (recorded in `DECISIONS.md`); owner 2026-10-19 — *"dana affiliate bisa di cairkan setelah barang benar2 terkirim dan memotong saldo seller"*.
+- **Risk Level:** R4 — moves money, widens custodian liability, may make the platform a tax-withholding party.
+- **Change (proposed, ADR 0018 §3):** record the source of `selesai` (courier vs seller) on the transition; only a courier-written one starts the hold; at `eligible_at` one seller ledger debit per commission (partial unique index); the affiliate requests a payout through the seller-payout path; "Tandai dibayar" retired or re-meant; account "Dibayar" = paid by the platform.
+- **Done when:** ADR 0018 is *accepted* (Q1–Q8 answered, tax adviser on Q5), then: real-Postgres tests (one debit per commission, no debit before delivery + hold, `retur` before the debit writes none), `FINANCE.md` money map gains the row, `AFFILIATE_SPEC.md` §12 superseded.
+- **Status:** `[ ]` **BLOCKED** — ADR 0018 is *proposed*; the tax answer (Q5) does not exist and `selesai` carries no source marker (Q2). Nothing is implemented; the built rule (merchant pays outside TokoΦ) still runs.
+
+### Task 9.13: Interim Affiliate Dashboard by Signed Link
+- **Requirement:** `F-A18`
+- **Status:** `SUPERSEDED` **2026-10-15 by Task 9.11** — built and browser-checked the same day (BUILD-LOG), then removed on `feat/accounts` before any merge when the owner asked for an affiliate account "seperti akun user … banyak toko bukan personal". Removed: `packages/lib/src/affiliate-link{,.test}.ts` + export, the storefront `/affiliate/saya` page and its data function, the layout `pixels` switch, the admin "Salin link dashboard" action, `AFFILIATE_LINK_SECRET` (env-health, compose).
+
+### Task 9.11: Cross-Store Affiliate Account (TokoΦ Account, phase 1)
+- **Requirement:** `F-A15` (+ account spec `ACC-14`)
+- **Tracing:** owner 2026-10-15 — *"akun affiliate itu buat seperti akun user -> jadi bisa affiliate banyak toko bukan personal"*.
+- **Risk Level:** R3 — cross-store identity link, affiliates' financial figures, a bearer invitation in a URL.
+- **Allowed Paths:** `packages/db/drizzle/0117_tokophi_account.sql` + journal, `packages/db/src/schema.ts`, `packages/lib/src/account-invite{,.test}.ts`, `apps/account/**`, `apps/admin/lib/{account-url.ts,actions/affiliates.ts,data/affiliates.ts,affiliate-invite.test.ts,env-health.ts}`, `apps/admin/app/(admin)/affiliate/affiliate-client.tsx`, `apps/storefront/src/pages/affiliate.astro`, `apps/storefront/astro.config.mjs`, docs.
+- **Accepted Invariants:** one `affiliates` row per store per account (unique `(store_id, account_id)`); every `apps/account` read carries `account_id = <me>`; a row is bound to an account only by applying while signed in or by the seller's single-use 7-day invitation (sha256 stored, cleared on accept, one conditional UPDATE) — never by email/phone; account tables have RLS with no policy (owner path only); dev sign-in refuses production builds.
+- **Depends On:** Task 9.4
+- **Done when:** `apps/account/src/data/account-data.test.ts` (isolation across accounts and stores, join, rate limit, phone non-takeover, invitation single-use / expiry / already-linked / already-member) and `apps/admin/lib/affiliate-invite.test.ts` (staff refused, owner mints, account accepts once) pass on a throwaway DB; in Chrome a dev-signed-in account sees two stores at 390 and 1280 px with 0 page errors, another account gets 404 on its row, the seller's invitation binds once and is refused on reuse.
+- **Status:** `[x]` **DONE 2026-10-15** on `feat/accounts` — see BUILD-LOG. Real Google sign-in not driven (OD-7 redirect URI); production (compose service, Traefik, DNS) not built — OD-2/OD-5.
+
+### Task 9.12: Affiliate Notifications — Phase 2
+- **Requirement:** `F-A16`
+- **Risk Level:** R2
+- **Allowed Paths:** decided with the messaging-channel task.
+- **Depends On:** Task 9.4; the platform messaging channel (WhatsApp/SMS — owner 2026-10-15: "nanti aja masuk task").
+- **Done when:** approving an affiliate queues one message; a send failure does not undo the approval.
+- **Status:** `[ ]` **BLOCKED — no messaging provider.**
+
+## Stage 10: TokoΦ Account — Buyer Account (phased)
+
+Spec/PRD: `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` §17 **rev 2** (requirements `ACC-1`…`ACC-15`, decisions D-1…D-5, owner questions OD-1…OD-7). **Phase 1 needs no messaging provider** (Google sign-in + order claim token); phase 2 = phone OTP after Task 8.38; phase 3 = affiliate binding after Stage 9 merges. Built locally only; production is Task 5.8. ⚠️ **No migration until `feat/store-affiliate` (`0116`) is on `main`** — the buyer migration takes the next number after it, re-checked against `origin/main`'s journal at the time.
+
+Phase 1 order: 10.1 ✓ → 10.12 → 10.2 → 10.3 → 10.13 → 10.5 → 10.6 → 10.7 → 10.8 → 10.4 → 10.9 → 10.10 → 10.11.
+
+### Task 10.1: OTP Primitives and the Delivery Seam (`@tokophi/lib/buyer-otp`)
+- **Requirement:** `ACC-1 (constraints: ACC-2)`
+- **Target Files:** `packages/lib/src/buyer-otp.ts`, `packages/lib/src/buyer-otp.test.ts`, `packages/lib/package.json`
+- **Change:** Six-digit code from the CSPRNG; stored form is an HMAC bound to phone + secret; `checkOtp` refuses malformed → consumed → expired → locked before comparing (constant-time); 60 s resend cooldown; `OtpSender` interface with a dev stub that throws in a production build.
+- **Done when:** `vitest run packages/lib/src/buyer-otp.test.ts` passes and covers right/wrong/expired/consumed/locked, the refusal order, the cooldown and the production refusal.
+- **Status:** `[x]` **DONE 2026-10-15** — 7/7 tests; no migration, no caller yet.
+
+### Task 10.12: Lift Google Sign-in into `@tokophi/lib` (admin keeps working)
+- **Requirement:** `ACC-10`
+- **Target Files:** `packages/lib/src/google-oauth.ts` (new) + test, `packages/lib/package.json`, `apps/admin/lib/google.ts` (re-exports / thin wrapper), `apps/admin/app/api/auth/google/{start,callback}/route.ts` (imports only)
+- **Change:** move `googleConfig`-style config reading, `authorizeUrl` and `exchangeCode` (JWKS verify, issuer + audience, `email_verified`) into the shared package unchanged in behaviour, parameterised by redirect URI; admin imports them. No new dependency (`jose` is already used).
+- **Done when:** a unit test builds the authorize URL (exact params) and rejects an id_token with the wrong audience/issuer using a locally signed JWKS; `tsc -p apps/admin` 0 and the admin suite green — the Seller Google login path is byte-for-byte the same URL as before.
+- **Status:** `[x]` **DONE 2026-10-15** — `packages/lib/src/google-oauth.ts` (+ `newOAuthState` / `stateMatches`, `verifyIdToken` with injectable keys); admin start/callback/login/daftar import it, `apps/admin/lib/google.ts` deleted. `google-oauth.test.ts` 5/5 (exact authorize URL as before, per-app redirect variable, state, local-JWKS verify: wrong aud/iss/key/missing sub, `email_verified` only as boolean true). The lost `import "server-only"` is replaced by `test/google-oauth-server-only.test.ts` (no `"use client"` file may import it; mutation-proved red). Not driven against real Google.
+
+### Task 10.2: Buyer Account Schema — Idempotent Migrations (phase 1 tables)
+- **Requirement:** `ACC-10 (constraints: ACC-3, ACC-6…ACC-8, ACC-11, ACC-12)`
+- **Target Files:** `packages/db/drizzle/0117_tokophi_account.sql` (+ a later migration for links/claims/addresses) + journal, `packages/db/src/schema.ts`, `specs/docs/SCHEMA.md`, `schema-indexes.test.ts`
+- **Change:** `buyer_accounts`, `buyer_sessions` (**done in 0117**, RLS on with no policy — owner path only); `buyer_store_links`, `buyer_order_claims` (unique `order_id`), `buyer_addresses` per spec §17.9 still to come, with RLS policies on the two tables that carry `store_id`. `buyer_otp_challenges` is phase 2.
+- **Done when:** each migration applies twice on a scratch DB, `verify-migrations` ✓, `verify-rls` green, doc counts updated.
+- **Status:** `[x]` **DONE 2026-10-15** (`feat/accounts`) — `0117` (accounts, sessions) + `0118_buyer_order_claims` (`buyer_store_links`, `buyer_order_claims` with `tenant_isolation` policies; `buyer_addresses` RLS on, no policy; one primary via partial unique). Applied to the branch DB `tokophi_accounts` + `tokophi_accounts_test` only; verify-migrations ✓, verify-rls 58/59, doc counts 91/119.
+
+### Task 10.3: `apps/account` Scaffold, Google Sign-in and Sign-out
+- **Requirement:** `ACC-10`
+- **Target Files:** `apps/account/**`
+- **Change:** Astro SSR app per D-1 (dev port 4329); `/masuk` → Google (shared helper, `ACCOUNT_GOOGLE_REDIRECT_URI`, `state` cookie) → callback finds/creates `buyer_accounts` by `sub` → `buyer_sessions` row + `tphi_account` cookie (D-5); sign-out revokes the row; LOCAL dev sign-in (`dev:<email>`, refused in production builds). Feature-flagged: no Google env ⇒ no button, no crash.
+- **Done when:** a browser run signs in with a localhost Google test client at 390 and 1280 px with 0 console errors; the dev sign-in path is refused in a production build (unit-tested).
+- **Status:** `[~]` **2026-10-15** — app, middleware (the row decides every request), dev sign-in, Google start/callback, sign-out built; dev sign-in + sign-out driven in Chrome. **Not done:** a real Google sign-in (owner OD-7: add the account callback to the existing client); production surface (OD-2/OD-5).
+
+### Task 10.13: Claim Token — Issued by the Order API, Verified by the Account
+- **Requirement:** `ACC-13`
+- **Target Files:** `packages/lib/src/claim-token.ts` (new) + test, `apps/admin/app/api/public/order/route.ts` (one added response field), `.env.example` (`ACCOUNT_CLAIM_SECRET`)
+- **Change:** D-3 — `issueClaimToken(orderId, now)` / `verifyClaimToken(token, now)` (HMAC-SHA256, constant-time, 30-day validity); the order API adds `claimToken` beside `orderNumber` on every success response, and only when the secret is set.
+- **Done when:** unit tests: a token verifies for its order only, fails after 30 days, fails on any flipped byte or a different secret; the order-route tests still pass with every existing field unchanged and `claimToken` present (secret set) / absent (unset).
+- **Status:** `[x]` **DONE 2026-10-15** — `packages/lib/src/claim-token.ts` 6/6 tests (own order only, 30-day expiry, future-dated refused, other secret, every single-char flip, forged payload, malformed). `/api/public/order` adds `claimToken` to the two `ok: true` answers only (COD + gateway success), issuance wrapped so it can never fail a written order; `route.test.ts` 7/7 on `tokophi_buyer_account_test` (absent without the secret; present + verifies for the created order with it; absent on the replay 409; mutation-proved). **Not done:** `.env.example` line for `ACCOUNT_CLAIM_SECRET` (the file is behind the workstation secret-read guard — add it by hand). R3: independent review before merge.
+
+### Task 10.4: Sessions List and "Keluar dari Perangkat Lain"
+- **Requirement:** `ACC-3`
+- **Target Files:** `apps/account/src/pages/sesi.astro`, `apps/account/src/data/account.ts` + test
+- **Change:** list the account's live sessions; revoke-others in one `update … where buyer_id = $1 and id <> $2`.
+- **Done when:** test with two sessions: after revoke-others the second session row is dead, the first still loads.
+- **Status:** `[x]` **DONE 2026-10-15** — `apps/account/src/data/account-data.test.ts`.
+
+### Task 10.5: Claim an Order with the Token and Link the Store (with Consent)
+- **Requirement:** `ACC-11`
+- **Target Files:** `apps/account/src/pages/klaim/**`, claim/link data module + test
+- **Change:** `/klaim?t=…` (sign-in first if needed, the token survives the round trip) → consent screen naming the store and what is shared → one transaction inserts `buyer_order_claims` and creates/re-activates `buyer_store_links`; one message for every refusal.
+- **Done when:** real-Postgres test: valid token + consent → one claim + one active link; tampered, expired, other-order, declined, already-claimed-by-another → no row and the identical message; same buyer again → no-op success.
+- **Status:** `[x]` **DONE 2026-10-15** — `apps/account/src/data/orders.ts` (`previewClaim`/`claimOrder`, consent `CONSENT_VERSION`), `/klaim` (sign-in keeps the token through `next`). `buyer-data.test.ts`: valid → 1 claim + 1 active link, again no-op; tampered/expired/unknown/declined/claimed-by-another/non-string → `{ok:false}` and no row; no secret ⇒ off. Mutation (claimant check removed) → red.
+
+### Task 10.6: Order Hub and Order Detail — Claimed Orders Only
+- **Requirement:** `ACC-12`
+- **Target Files:** `apps/account/src/pages/pesanan/**`, hub data module + test
+- **Change:** orders reached only through `buyer_order_claims` joined to an `active` link, projected through an explicit allowlist (spec §3).
+- **Done when:** test: claims on one order in A and one in B, an unclaimed A order of the same customer and a store C sharing the phone → exactly the two claimed orders listed; unclaimed/other-store order by id or number → not-found; revoked B link drops B; no excluded field in the response.
+- **Status:** `[x]` **DONE 2026-10-15** — `myOrders`/`myOrder` (claim ⋈ active link of the same buyer+store; explicit key allowlist asserted), `/pesanan` + `/pesanan/[number]` (404 otherwise). Mutation (`ln.status = 'active'` dropped) → red.
+
+### Task 10.7: "Toko" — Linked Stores with a Way Back
+- **Requirement:** `ACC-6`
+- **Target Files:** `apps/account/src/pages/toko/**`
+- **Change:** stores derived from claimed orders with an active link; each opens its canonical storefront host.
+- **Done when:** test: exactly the linked stores appear, each with its storefront URL.
+- **Status:** `[x]` **DONE 2026-10-15** — `myStores` + `/toko`; origin = active primary `store_domains` host, else `<slug>.<STOREFRONT_BASE_DOMAIN>` (the storefront's `primaryOrigin` rule).
+
+### Task 10.8: Saved Addresses (max 10, one primary, snapshots untouched)
+- **Requirement:** `ACC-7`
+- **Target Files:** `apps/account/src/pages/alamat/**`, address data module + test
+- **Change:** CRUD with the KiriminAja district id; primary flip in one transaction; 11th refused.
+- **Done when:** test: editing an address used by an order leaves that order's `ship_*` unchanged; 11th insert refused; exactly one primary.
+- **Status:** `[x]` **DONE 2026-10-15** — `apps/account/src/data/addresses.ts` (checkout validators, cap serialised on the account row `for update`, primary flip in one txn, delete promotes the newest), `/alamat`, `/alamat/ubah` (works without JS; live search via `/alamat/wilayah`). District search lifted into `@tokophi/lib/area-search` (one implementation; Seller `areas.ts` delegates).
+
+### Task 10.9: Unlink a Store
+- **Requirement:** `ACC-8`
+- **Target Files:** `apps/account/src/pages/toko/**`, link data module + test
+- **Change:** set the link `revoked`; nothing store-owned is written; claims stay recorded but are hidden while the link is revoked.
+- **Done when:** test: the store leaves the hub; `orders`/`customers`/`payments` counts for that store identical before/after.
+- **Status:** `[x]` **DONE 2026-10-15** — `unlinkStore`; test asserts counts AND the order row's `row_to_json` unchanged; re-claiming = fresh consent re-activates.
+
+### Task 10.10: "Simpan ke Akun TokoΦ" on the Checkout Success Page
+- **Requirement:** `ACC-13`
+- **Target Files:** `apps/storefront/src/pages/checkout/sukses.astro` (its client script), `apps/storefront/src/pages/thanks.astro`, storefront test
+- **Change:** when the kept order carries `claimToken` and `PUBLIC_ACCOUNT_URL` is set, render one link `${PUBLIC_ACCOUNT_URL}/klaim?t=…`; otherwise render exactly what renders today.
+- **Done when:** storefront verify suite green; a browser checkout on the branch DB shows the link with a token that verifies for that order; with the env unset the page HTML is unchanged.
+- **Status:** `[~]` **2026-10-15** — env is the existing `ACCOUNT_APP_URL` (not a new `PUBLIC_ACCOUNT_URL`); `checkout.astro` keeps `res.claimToken` in `lastOrder`; `sukses.astro` renders the box only with env + token. Browser-proved with a seeded `lastOrder` (link present with token / hidden without). **Not done:** a REAL local checkout (no KiriminAja key locally ⇒ no quote ⇒ no order); storefront `verify` suite not run.
+
+### Task 10.11: Browser Proof and the Tenant-Negative Sweep (phase 1)
+- **Requirement:** `ACC-12 (constraints: ACC-3, ACC-6…ACC-8, ACC-10, ACC-11, ACC-13)`
+- **Target Files:** `apps/account/scripts/check-*.mjs`, `BUILD-LOG.md`, `specs/docs/STATUS.md`
+- **Change:** drive every phase-1 screen at 390 and 1280 px, keyboard and both themes; one sweep proving a buyer can never read an unclaimed or unlinked order by id or number.
+- **Done when:** checks pass on a local build against the branch DB; STATUS.md records the phase-1 checkpoint.
+- **Status:** `[~]` **2026-10-15** — dev-server Playwright sweep (390/1280, light/dark, keyboard skip link, no horizontal overflow, 0 console errors; other account → 404 on a claimed order) recorded in BUILD-LOG. **Not done:** a production-build run and a committed `apps/account/scripts/check-*.mjs`.
+
+### Task 10.16: Account Shell from the Accepted Prototype (both workspaces)
+- **Requirement:** spec §18.1–18.3 (constraints: NF-4, §7)
+- **Target Files:** `apps/account/src/layouts/Layout.astro`, `apps/account/src/styles/{prototype,global}.css`, `apps/account/public/assets/geist-*`, `apps/account/DESIGN.md`
+- **Change:** port the prototype stylesheet and shell (sidebar, topbar, bottom bar, theme), add the Belanja/Affiliate workspace switch and route-derived navigation.
+- **Done when:** every page renders inside the shell at 390/1440 px, light and dark, no overflow.
+- **Status:** `[x]` **DONE 2026-10-16** — shell (sidebar, sticky topbar, bottom bar, Belanja/Affiliate switch, theme) and `prototype.css` ported; every route renders inside it; `check-ui.mjs` (360–1440, light/dark) no overflow.
+
+### Task 10.17: Buyer Screens at Prototype Fidelity
+- **Requirement:** spec §18.4 A–E, G, H (constraints: ACC-3, ACC-6…ACC-8, ACC-11, ACC-12)
+- **Target Files:** `apps/account/src/pages/{index,masuk,klaim}.astro`, `apps/account/src/pages/{orders,stores,addresses,account}/**`, `apps/account/src/data/{orders,addresses,account}.ts`, tests
+- **Change:** Beranda, Pesanan (search/filter/tabs), status-first detail + receipt, Toko + store profile, Alamat, Akun (name, devices, theme), sign-in and claim screens; Indonesian 2026-10-15 paths redirect.
+- **Done when:** real-Postgres tests cover every new read (incl. negative: another account's store profile/receipt → not found); browser sweep green.
+- **Status:** `[x]` **DONE 2026-10-16** — Beranda, `/orders` (+ detail, receipt), `/stores` (+ profile), `/addresses`, `/account`, `/klaim`, sign-in, 404. Real-Postgres tests (`buyer-data`, `addresses`, `account-data`) green; another account → 404 on order, receipt and store profile (negative sweep in `check-ui.mjs`).
+
+### Task 10.18: Affiliate Workspace at Prototype Fidelity
+- **Requirement:** spec §18.4 F (constraints: ACC-14, AFFILIATE_SPEC F-A15)
+- **Target Files:** `apps/account/src/pages/affiliate/**`, `apps/account/src/data/affiliate.ts`, tests
+- **Change:** Ringkasan, cross-store Komisi ledger with filters, Program list/detail (share link, masked bank, status banners), Gabung, Undangan — same shell, affiliate navigation.
+- **Done when:** real-Postgres tests for the ledger (another account's rows absent); browser sweep green.
+- **Status:** `[x]` **DONE 2026-10-16** — Ringkasan, Komisi (cross-store ledger, filters), Program, Gabung, Undangan. `affiliate-data.test.ts` green incl. another account's rows absent; negative sweep: another account's programme id → 404.
+
+### Task 10.19: UI Acceptance — Build, Committed Check, Design Gate
+- **Requirement:** spec §18.6 (closes Task 10.11)
+- **Target Files:** `apps/account/scripts/check-ui.mjs`, `apps/account/DESIGN.md`, `BUILD-LOG.md`, `specs/docs/STATUS.md`
+- **Change:** a committed Playwright sweep of every route against `astro build`; design-gate with independent review.
+- **Done when:** `astro check` 0, account tests green, build + sweep green, `design-gate.py apps/account` exit 0.
+- **Status:** `[~]` **2026-10-19** — done: `astro check` 0 errors, 686 tests across account/db/lib/admin-search on the branch DB, `astro build` OK, committed `scripts/check-ui.mjs` PASS (18 routes × 7 viewports + negative sweep) against the dev server, order-state renders (unpaid VA, in transit, cancelled) added. **NOT done: `design-gate.py apps/account` still exits 1 on `review` only** (`refs`, `critique` and every style check pass). The independent visual review has now run **15 rounds in three batches of five** (the owner cleared the log twice), all REVISE; each round found real defects that were fixed and measured, and each batch ended at the cap with smaller, mostly repeated or subjective findings (open list: `apps/account/design/review.md`; per-round verdicts archived as `review-rounds-1-5.txt`, `review-rounds-6-10.txt`, `review-round*.md`). The owner decides whether to clear the log again, accept the residual findings, or change the gate. The sweep ran against the dev server, not the built server.
+
+### Task 10.20: Close the Account (ACC-15)
+- **Requirement:** `ACC-15`
+- **Target Files:** `apps/account/src/data/account.ts` (`closeAccount`), `apps/account/src/data/account-data.test.ts`, `apps/account/src/pages/account/index.astro`, `apps/account/src/pages/masuk.astro`
+- **Change:** self-service "Tutup akun" with an explicit confirm step; refused while a programme owes the account a ready or held commission; the Google `sub` becomes an inert `closed:<id>` marker (the identity check constraint needs one identity column), so the same Google identity later starts a new account.
+- **Done when:** real-Postgres test: sessions revoked (row, not just unusable), links revoked, claims and addresses gone, the order row byte-identical, affiliate row detached and kept, second close refused, same identity ⇒ a different account, another account untouched; unpaid commission ⇒ refused and nothing changes. Mutations (no owed check, sessions kept, claims kept, addresses kept, affiliate not detached) each go red.
+- **Status:** `[x]` **DONE 2026-10-19, hardened the same day after an independent review** — closure now also deactivates the account's `aktif`/`menunggu` affiliate rows (attribution only credits `aktif`, so a detached live code would have kept accruing), blanks session device strings, takes the account-row lock (shared by claim, address, join and invitation acceptance so racing writes are refused), and checks what is owed under that lock. Tests across `account-data`, `buyer-data`, `addresses`; mutations (no owed check, sessions kept, claims kept, addresses kept, affiliate not detached or not deactivated, device string kept, claim/address/join guards removed) each red. Live: a throw-away account closes and is signed out; the demo account with unpaid commission is refused. **Not covered:** deletion of backups or store-side copies (OD-6, spec §19.3); the Astro POST handler itself (cookie delete / redirect) is checked by HTTP, not by a test.
+
+### Task 10.21: Market Review — Content and Spec Pass
+- **Requirement:** spec §19 (constraints: ACC-12, ACC-14, ACC-15)
+- **Target Files:** `specs/docs/TOKOPHI_ACCOUNT_SPEC.md` (§17.6, §17.13, §18.5, §18.6, §19), `specs/docs/tasks/2026-10-19-account-market-research.md`, `apps/account/src/pages/index.astro`, `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** research the Indonesian market (evidence-graded), record what it changes and what it does not (R1–R8), and apply the content fixes it supports: no repeated order on Beranda, "Pintasan", finished-order detail leads with Produk and "Bukti pesanan".
+- **Done when:** the spec carries §19 with a decision per finding and OD-9…OD-11 for what the data cannot yet support; `verify:doc-authority` and `verify:traceability` pass.
+- **Status:** `[x]` **DONE 2026-10-19.** Open owner decisions: OD-9 (return/complaint window), OD-10 (store-side tax on commission), OD-11 (affiliate clicks), OD-6 (privacy/retention review, includes confirming PP 33/2026 against its text).
+
+### Task 10.22: Store Return Window — Setting and Buyer Display (OD-9 stage 1)
+- **Requirement:** `ACC-16`
+- **Target Files:** `packages/db/drizzle/0119_store_return_window.sql` (+ journal), `packages/db/src/schema.ts`, `packages/lib/src/return-window.ts` (+ test), `apps/admin/lib/actions/retur.ts`, `apps/admin/components/admin/pengaturan/retur-card.tsx`, `apps/admin/app/(admin)/pengaturan/page.tsx`, `apps/account/src/data/orders.ts`, `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** nullable `store_settings.return_window_days` (check 1–90, idempotent migration, applied to branch DBs only); a "Kebijakan retur" card in Seller Pengaturan → Pengiriman; the order detail states "selama N hari setelah barang diterima" for shipped/delivered orders when declared, nothing otherwise.
+- **Done when:** helper test (normalise, 90 cap, null ⇒ nothing); real-Postgres test: null by default, each store's own value, no leak across stores, the database refuses 0/-1/91; the three mutations (join not bound to the store, projection dropped, no cap) go red; doc counts 120 / 0119.
+- **Status:** `[x]` **DONE 2026-10-19; parser hardened the same day** — `normalizeReturnWindow` stripped non-digits, so "7,5" became 75 days and "1.000" became 1; it is now `parseReturnWindow`, strict, and the Seller sees an error instead of a guessed promise. Account side proved live (set 7 ⇒ line on a delivered order, none on an in-flight one, gone after reverting to NULL); the status gates are pure functions with tests. **The Seller card was then driven in a real browser (Chrome, a throw-away owner on the branch DB, since removed): "7,5", "1.000", "91" refused with the DB unchanged; "7" and "14 hari" saved; empty cleared; a reload showed the saved value; a staff-role user saw the input disabled and no save button; no console errors.** Still no unit test for `saveReturnWindow` itself. **Not proved:** the Seller card was type-checked and linted but **not driven in a browser** (no Seller session in this environment); its save mirrors `setCodEnabled`.
+
+### Task 10.23: Return / Complaint Hand-off to the Store (OD-9 stage 2)
+- **Requirement:** `ACC-16`
+- **Target Files:** `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** an "Ajukan retur / komplain" button that opens the store's WhatsApp with a prefilled message (order number, store). No ticket system and no return status.
+- **Done when:** the button exists only when the store has a WhatsApp number; the message names the order; browser-checked.
+- **Status:** `[x]` **DONE 2026-10-19** — shown for `dikirim`/`selesai` orders **whose store has a WhatsApp number**, whatever window the store declared (RR-10, a Main Session rule the owner has not confirmed yet), absent for in-process orders; on a delivered order the button sits in the summary card (it was at the page bottom, ~2100 px down on a phone); helper tests (names store + order, prompts proof, promises nothing, wa.me encoding). Checked by HTTP against the live dev server, **not in a browser or on a phone**; the WhatsApp chat itself was not opened.
+
+### Task 10.24: Return Window Legal Floor — Working Days, Minimum 2
+- **Requirement:** `ACC-16`
+- **Target Files:** `packages/db/drizzle/0120_return_window_floor.sql` (+ journal), `packages/db/src/schema.ts`, `packages/lib/src/return-window.ts` (+ test), `apps/admin/components/admin/pengaturan/retur-card.tsx`, `apps/account/src/lib/account-lib.test.ts`, `apps/account/src/data/buyer-data.test.ts`, `specs/docs/tasks/2026-10-19-account-market-research.md` §8, spec §19 R9–R11, §20
+- **Change:** after reading the primary text of PP 80/2019 (Pasal 69(1): at least 2 hari kerja from receipt for exchange/cancellation; Pasal 27: complaint service) and UU 8/1999 (Pasal 4 h, 7 g, 18), the declared window is in **hari kerja** and **at least 2**: the parser refuses 1, the database check is 2–90 (new migration, idempotent, applied twice), the buyer line and the Seller card say "hari kerja". The Seller card now tells the merchant that the complaint button needs a WhatsApp number.
+- **Done when:** helper test (floor, unit, 1 refused); real-Postgres test (0/1/-1/91 refused); `verify-migrations` ✓; doc counts 121 / 0120; the Seller card exercised in a real browser.
+- **Status:** `[x]` **DONE 2026-10-19.** **Owner to confirm** (it tightens the "optional, no default" ruling with a floor and a unit — a Main Session reading of the regulation, not legal advice). **Not built:** OD-12 (complaint contact + resolution period required in Seller settings).
+
+### Task 10.25: Complaint-Resolution Period and Contact Warning (OD-12 stage 1)
+- **Requirement:** `ACC-17`
+- **Target Files:** `packages/db/drizzle/0121_store_complaint_resolution.sql` (+ journal), `packages/db/src/schema.ts`, `packages/lib/src/{working-days,complaint-service}.ts` (+ test), `packages/lib/src/return-window.ts` (now uses the shared parser), `apps/admin/lib/actions/pengaduan.ts`, `apps/admin/components/admin/pengaturan/pengaduan-card.tsx`, `apps/admin/app/(admin)/pengaturan/page.tsx`, `apps/account/src/data/orders.ts`, `apps/account/src/lib/order-view.ts`, `apps/account/src/pages/orders/[number]/index.astro`
+- **Change:** nullable `store_settings.complaint_resolution_days` (check 1–60, idempotent migration, applied twice); one shared strict working-days parser for the return window and this period; a "Layanan pengaduan" card in Seller Pengaturan → Pengiriman that also warns when the store has no WhatsApp number; the order detail states the store's own figure on shipped/delivered orders when declared.
+- **Done when:** helper tests; real-Postgres tests (null by default, own value, no cross-store leak, DB refuses 0/-1/61); status gate test; `verify-migrations` ✓; doc counts 122 / 0121; the Seller card driven in a real browser.
+- **Status:** `[x]` **DONE 2026-10-19** — Seller card driven in Chrome (throw-away owner on the branch DB, since removed): "7,5", "61", "0" refused with the DB unchanged; "3" and "5 hari kerja" saved; empty clears; with the store's WhatsApp blanked the warning shows, and the original number was restored exactly; 0 console errors. **Stage 2 not built:** requiring a contact and period before a store can sell (legal + business decision).
+
+### Task 10.26: Seller Search Palette — Icons, Empty State, Ranking, Accessibility
+- **Requirement:** `NF-4`
+- **Tracing:** owner request 2026-10-19 — *"sekalian paralel sempurnakan ui ux nya search -> icon dan kebutuhan di dalamnya"*. No functional requirement exists for the admin search; NF-4 (Indonesian UI) is the only one it touches.
+- **Target Files:** `apps/admin/components/admin/command-palette.tsx`, `apps/admin/lib/data/search.ts` (+ `search.test.ts`), `apps/admin/lib/search-model.ts` (+ test)
+- **Change:** every page keeps its sidebar icon (35 rows used one identical icon); distinct icons per result kind; order rows show status and total, product rows the cheapest price and "Draf", customer rows the order count (phones are searchable, never shown); an empty state of recents (per store, localStorage in try/catch), role-filtered quick actions and a few popular pages instead of a 35-row dump; accent/case-insensitive ranking with highlighted matches and a per-group cap; "Cari … di semua pesanan" because the index holds only the newest orders; combobox/listbox semantics with `aria-activedescendant`, a live count, IME-safe Enter, focus return; phone layout with 44 px rows and a 16 px input.
+- **Done when:** pure-model tests; real-Postgres tests of the index query under the restricted role; the palette driven in Chrome (desktop + phone, light + dark, keyboard only); tsc/eslint clean.
+- **Status:** `[x]` **DONE 2026-10-19** by a forked agent, then re-checked by the main session (tsc, eslint, 32 tests, scope of changed files, screenshots). **Not verified:** roles admin/staff/cs/advertiser in a browser (unit-tested against the role table only; owner and a `gudang` role were run), iOS Safari / soft keyboard / screen reader / real IME / macOS Cmd+K, a production build. **Open owner decisions:** the six quick actions and six popular pages; "lihat semua" exists only for orders (Produk/Pelanggan lists ignore `?q=`); a customer's phone is searchable but hidden; whether to cap the index for large stores. **DEPLOYED 2026-10-19 (owner: "deploy" → "Hanya palet"):** cherry-picked alone onto `main` (branch `feat/seller-search-palette`), PR #419, CI green after regenerating `PAGE_MAP.md` and merging a moved `main`; merge `9c1e7240`; production containers 4/4 on `9c1e724`. **Not verified on production:** the palette itself was not opened in a logged-in production session (only the image tag was checked).
+
+### Task 10.14: Phase 2 — Phone OTP Sign-in, Add Phone, Full Linked-Store History
+- **Requirement:** `ACC-1 (constraints: ACC-2, ACC-5)`
+- **Target Files:** migration `<next>_buyer_otp.sql` (`buyer_otp_challenges`), `apps/account/src/pages/masuk/**`, `apps/account/src/pages/akun/**`, tests
+- **Change:** wire Task 10.1's primitive to the Task 8.38 sender; sign in by phone, or verify a phone on a Google account; with a verified phone the hub widens to ACC-5.
+- **Done when:** real-Postgres tests for ACC-1/ACC-2 acceptance and the ACC-5 negative case (store C with the same phone and no link stays hidden); one real OTP delivered through the chosen provider's test credentials.
+- **Status:** `[ ]` **BLOCKED** on Task 8.38.
+
+### Task 10.15: Affiliate Signs In with the Account
+- **Requirement:** `ACC-14`
+- **Status:** `[x]` **DONE 2026-10-15 as part of Task 9.11** (promoted from phase 3 to phase 1 by the owner's cross-store affiliate account decision).

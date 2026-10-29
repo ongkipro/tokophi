@@ -199,7 +199,12 @@ function nextSurface(app, label) {
 
 function astroSurface(app, label) {
   const pagesDir = join(ROOT, "apps", app, "src/pages");
-  const files = walk(pagesDir, (p) => /\.(astro|ts)$/.test(p) && !/\.test\.ts$/.test(p)).sort();
+  // Astro excludes any path segment starting with `_` from routing, so a partial living beside its page
+  // (`affiliate/_Ledger.astro`) is a component, not a route. Listing one as a URL would invent a page that
+  // 404s. No surface had such a partial before `account`, which is why this filter arrives with it.
+  const files = walk(pagesDir, (p) => /\.(astro|ts)$/.test(p) && !/\.test\.ts$/.test(p))
+    .filter((f) => !rel(f).slice(rel(pagesDir).length).split("/").some((seg) => seg.startsWith("_")))
+    .sort();
   const rows = files.map((f) => {
     const src = read(f);
     // Astro frontmatter is between the first two `---` lines; endpoints are plain TS.
@@ -322,6 +327,7 @@ const surfaces = [
   nextSurface("super-admin", "Super Admin (platform control plane)"),
   astroSurface("storefront", "Storefront (multi-tenant shopper site)"),
   astroSurface("landing", "Landing (tokophi.com, static, no DB)"),
+  astroSurface("account", "Akun TokoΦ (buyer account + affiliate dashboard, SSR auth)"),
 ];
 
 let md = `# TokoΦ — PAGE MAP (generated — do not edit by hand)

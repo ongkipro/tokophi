@@ -1,0 +1,190 @@
+---
+// Beranda (spec §18.4 A): what needs doing now, then where things stand. Every card and tile is a
+// real row — an action card exists only when its job exists; "Komisi siap" only for an affiliate.
+import Layout from "../layouts/Layout.astro";
+import CopyScript from "../components/CopyScript.astro";
+import ProductThumb from "../components/ProductThumb.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myAffiliateStores } from "../data/affiliate";
+import { buyAgain, isUnpaid, myOrders, myStores } from "../data/orders";
+import { signInUrl } from "../lib/nav";
+import { PAYMENT_METHOD, courierName, nextStep, statusOf, when } from "../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const [affStores, orders, stores, again] = await Promise.all([
+  myAffiliateStores(db, account.id),
+  myOrders(db, account.id),
+  myStores(db, account.id),
+  buyAgain(db, account.id),
+]);
+const unpaid = orders.filter(isUnpaid);
+const shipped = orders.filter((o) => o.status === "dikirim" && o.awb);
+const active = orders.filter((o) => o.status === "baru" || o.status === "diproses" || o.status === "dikirim");
+const ready = affStores.reduce((s, x) => s + x.readyIdr, 0);
+// The store name under a "Beli lagi" product only helps when the products come from different stores.
+const multiStore = new Set(again.map((g) => g.storeName)).size > 1;
+const name = account.name?.trim() || null;
+const orderHref = (n: string) => `/orders/${encodeURIComponent(n)}`;
+const firstPay = unpaid[0];
+const firstShip = shipped[0];
+// A quiet status strip when nothing needs doing but an order is still moving (no pay/ship card above).
+const firstActive = !firstPay && !firstShip ? active[0] : undefined;
+const activeStatus = firstActive ? statusOf(firstActive) : null;
+// The strips already carry their orders (a payment AND a shipment strip can show at once); the list does not repeat them.
+const stripOrders = new Set([firstPay, firstShip, firstActive].filter(Boolean));
+const recent = orders.filter((o) => !stripOrders.has(o)).slice(0, 3);
+---
+<Layout title="Beranda" active="beranda">
+  <header class="page-header">
+    <div>
+      <h1>{name ? `Halo, ${name}` : "Halo"}</h1>
+      <p class="lead">Pesanan, pengiriman, dan toko tempat Anda berbelanja, dalam satu akun.</p>
+    </div>
+  </header>
+
+  {firstPay && (
+    <section class="action-hub-card job-card job-pay" aria-labelledby="job-pay">
+      <div class="job-body">
+        <div class="job-meta"><span class="badge warning">Perlu tindakan</span></div>
+        <h2 id="job-pay">{unpaid.length === 1 ? "1 pesanan menunggu pembayaran" : `${unpaid.length} pesanan menunggu pembayaran`}</h2>
+        <p>
+          <strong>{firstPay.storeName}</strong> · <span class="num">{firstPay.number}</span> · <strong class="num">{IDR(firstPay.totalIdr)}</strong>
+          {firstPay.payment && <> via {PAYMENT_METHOD[firstPay.payment.method] ?? firstPay.payment.method}</>}
+        </p>
+      </div>
+      <div class="job-actions">
+        <a class="button primary" href={`${orderHref(firstPay.number)}#pembayaran`}>Selesaikan pembayaran</a>
+      </div>
+    </section>
+  )}
+
+  {firstShip && (
+    <section class="active-shipment-card job-card job-ship" aria-labelledby="job-ship">
+      <div class="job-body">
+        <div class="job-meta">
+          <span class="badge shipped">Sedang dikirim</span>
+          <span>{courierName(firstShip.courier)} · Resi <strong class="num" id="home-awb">{firstShip.awb}</strong></span>
+        </div>
+        <h2 id="job-ship">Paket dari {firstShip.storeName} sedang dikirim</h2>
+        <p>Pesanan <span class="num">{firstShip.number}</span>. Lacak dengan nomor resi di situs kurir.</p>
+      </div>
+      <div class="job-actions">
+        <a class="button primary" href={`${orderHref(firstShip.number)}#pengiriman`}>Lihat pengiriman</a>
+        <button class="button secondary" type="button" data-copy="home-awb" hidden>Salin resi</button>
+      </div>
+    </section>
+  )}
+
+  {firstActive && activeStatus && (
+    <section class="job-card job-ship" aria-labelledby="job-active">
+      <div class="job-body">
+        <h2 id="job-active">Pesanan dari {firstActive.storeName} sedang diproses</h2>
+        <p>Pesanan <span class="num">{firstActive.number}</span> · <strong class="num">{IDR(firstActive.totalIdr)}</strong>. Resi muncul setelah kurir menjemput paket.</p>
+      </div>
+      <div class="job-actions">
+        <a class="button primary" href={orderHref(firstActive.number)}>Lihat pesanan</a>
+      </div>
+    </section>
+  )}
+
+  {(orders.length > 0 || stores.length > 0 || affStores.length > 0) && (
+  <div class="dashboard-stats-grid">
+    <a href="/orders?status=aktif" class="dashboard-stat-card">
+      <span class="stat-k">Pesanan aktif</span>
+      <strong class="stat-v num">{active.length}</strong>
+      <span class="stat-hint">dari {orders.length} pesanan tersimpan</span>
+    </a>
+    <a href="/stores" class="dashboard-stat-card">
+      <span class="stat-k">Toko terhubung</span>
+      <strong class="stat-v num">{stores.length}</strong>
+      <span class="stat-hint">Lihat toko</span>
+    </a>
+    {affStores.length > 0 && (
+      <a href="/affiliate" class="dashboard-stat-card stat-feature">
+        <span class="stat-k">Komisi siap dibayar</span>
+        <strong class="stat-v num">{IDR(ready)}</strong>
+        <span class="stat-hint">{affStores.length} program affiliate</span>
+      </a>
+    )}
+  </div>
+  )}
+
+  <div class="detail-grid buyer-grid home-grid">
+    <div class="stack">
+      <section class="dashboard-section" aria-labelledby="recent-h">
+        <div class="section-heading">
+          <h2 id="recent-h">Pesanan terbaru</h2>
+          {orders.length > 0 && <a href="/orders" class="link-button">Lihat semua ({orders.length})</a>}
+        </div>
+        {orders.length > 0 && recent.length === 0 ? (
+          <p class="field-help">Pesanan Anda yang lain akan tampil di sini. Pesanan di atas sudah yang terbaru.</p>
+        ) : recent.length === 0 ? (
+          <section class="state-card" role="status">
+            <h2>Simpan pesanan pertama</h2>
+            <p>Pesanan muncul di sini setelah Anda menyimpannya ke akun:</p>
+            <ol class="howto">
+              <li>Belanja dan checkout di toko TokoΦ seperti biasa, tanpa perlu akun.</li>
+              <li>Di halaman sukses, ketuk <strong>“Simpan ke Akun TokoΦ”</strong>.</li>
+              <li>Masuk dengan akun ini, lalu setujui toko tersebut ditampilkan di sini.</li>
+            </ol>
+          </section>
+        ) : (
+          <div class="order-list">
+            {recent.map((o) => {
+              const s = statusOf(o);
+              const next = nextStep(o);
+              return (
+                <a class="order-card" href={next.href} aria-label={`Buka pesanan ${o.number} dari ${o.storeName}`}>
+                  <ProductThumb src={o.thumb} />
+                  <span class="order-main">
+                    <span class="order-topline"><strong>{o.storeName}</strong><span class={`badge ${s.badge}`}>{s.label}</span></span>
+                    <span class="order-meta">{when(o.placedAt)} · {o.firstLine ?? "Pesanan"}{o.lineCount > 1 && ` +${o.lineCount - 1} produk`}</span>
+                  </span>
+                  <span class="order-total"><strong class="num">{IDR(o.totalIdr)}</strong><span>{next.label}</span></span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+
+    <div class="stack">
+      {/* With no saved order the empty state above already explains this. */}
+      {orders.length > 0 && (
+      <section class="dashboard-section" aria-labelledby="save-h">
+        <div class="section-heading"><h2 id="save-h">Simpan pesanan lain</h2></div>
+        <div class="section-card save-more">
+          <p>Buka tautan simpan di halaman sukses checkout toko (berlaku 30 hari) saat masuk dengan akun ini. Tautan hilang? Hubungi toko dengan nomor pesanan Anda.</p>
+        </div>
+      </section>
+      )}
+      {again.length > 0 && (
+        <section class="dashboard-section" aria-labelledby="again-h">
+          <div class="section-heading">
+            <h2 id="again-h">Beli lagi</h2>
+            <span class="section-note">Harga terbaru di toko</span>
+          </div>
+          <ul class="buy-again-list" role="list">
+            {again.map((g) => (
+              <li>
+                <a class="buy-again-row" href={g.url} rel="noopener noreferrer" aria-label={`${g.title}${multiStore ? ` dari ${g.storeName}` : ""} — buka di toko`}>
+                  <ProductThumb src={g.thumb} />
+                  <span class="buy-again-text">
+                    <strong>{g.title}</strong>
+                    {multiStore && <small>{g.storeName}</small>}
+                  </span>
+                  <svg class="service-menu-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  </div>
+  <CopyScript />
+</Layout>
+

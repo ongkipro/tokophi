@@ -35,6 +35,7 @@ import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { IDR } from "@tokophi/lib/format";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { claimSecret, issueClaimToken } from "@tokophi/lib/claim-token";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import {
@@ -43,6 +44,8 @@ import {
 } from "@/lib/tracking-events";
 import { adChannel } from "@/lib/ad-channel";
 import { defaultInventoryLevelId } from "@/lib/inventory-location";
+import { attachAffiliateCommission } from "@/lib/affiliate-attribution";
+import type { Db } from "@/lib/ledger-credit";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -220,6 +223,10 @@ async function handle(req: Request) {
     destId?: number; // KiriminAja district id the ongkir quote was issued for
     channelCode?: string;
     discountCode?: string; // PROMO P0 — a voucher; validated + priced by lib/promo (never trusted from the body)
+    // Store affiliate programme (0116): the code the shopper TYPED, and the `?ref=` the storefront
+    // captured. Selectors only — resolved against this store's ACTIVE affiliates, never trusted.
+    affiliateCode?: string;
+    refCode?: string;
     // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
     // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
@@ -415,6 +422,7 @@ async function handle(req: Request) {
     price: number;
     qty: number;
     handle: string;
+    productId: string;
   }[] = [];
   // Flash sale (PROMO P3): productId → promo price for sales live RIGHT NOW. Applied below per line,
   // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
@@ -550,6 +558,7 @@ async function handle(req: Request) {
       price: unitPrice,
       qty,
       handle: i.handle!,
+      productId: prod.id, // per-product affiliate rate (F-A9)
     });
   }
   // ── REFUSE A CART WHOSE PRICE MOVED ──────────────────────────────────────────────────────────
@@ -1144,6 +1153,19 @@ async function handle(req: Request) {
         if (!bumped.length) throw new VoucherExhausted(appliedDiscountCode);
       }
 
+      // Affiliate commission (F-A4/F-A6), frozen in THIS transaction so it exists iff the order does.
+      // A bad or unknown code returns null and the order proceeds — a code must never cost the sale.
+      await attachAffiliateCommission(tx as unknown as Db, {
+        storeId: store.id,
+        orderId: ord.id,
+        buyerPhone: phone,
+        typedCode: body.affiliateCode,
+        refCode: body.refCode,
+        lines: resolved.map((r) => ({ productId: r.productId, totalIdr: r.price * r.qty })),
+        subtotalIdr: subtotal,
+        goodsProceedsIdr: finance.goodsProceedsIdr,
+      });
+
       return { customerId: cid, order: ord };
     }));
   } catch (err) {
@@ -1285,12 +1307,24 @@ async function handle(req: Request) {
     console.error("[order] tracking enqueue failed", err);
   }
 
+  // Buyer-account claim token (Task 10.13, spec §17 D-3): one extra field on the two SUCCESS answers
+  // only — never on the 409 duplicate (reachable by replaying a session id) nor on a 502/503 partial
+  // failure. Absent when ACCOUNT_CLAIM_SECRET is unset. It must never fail a written order.
+  let claimToken: string | undefined;
+  try {
+    const secret = claimSecret();
+    if (secret) claimToken = issueClaimToken(order.id, secret);
+  } catch (err) {
+    console.error("[order] claim token not issued for", order.number, err);
+  }
+
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
     return NextResponse.json(
       {
         ok: true,
         orderNumber: order.number,
+        claimToken,
         cod: true,
         subtotal,
         lines,
@@ -1458,6 +1492,7 @@ async function handle(req: Request) {
     {
       ok: true,
       orderNumber: order.number,
+      claimToken,
       // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
       // the shopper believing a number the order does not contain.
       subtotal,

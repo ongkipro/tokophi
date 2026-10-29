@@ -1,0 +1,90 @@
+/* Account app styles (spec §18). The visual system is the accepted prototype, ported verbatim in
+   prototype.css; this file only adapts it to a multi-page server-rendered app (links instead of
+   SPA buttons) and adds the few pieces the prototype did not need. */
+@import "./prototype.css";
+/* Per-area additions — each file owned by one track; prototype classes first. @import must precede rules. */
+@import "./buyer.css";
+@import "./account.css";
+@import "./affiliate.css";
+
+/* SPA buttons became real links: same look, no underline. */
+a.nav-item, a.button, a.avatar-button, .mobile-nav a, .workspace-switch a { text-decoration: none; }
+a.avatar-button { display: inline-flex; }
+.mobile-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+
+.skip-link {
+  position: absolute; left: 12px; top: -48px; z-index: 100;
+  padding: 8px 12px; border-radius: var(--radius-md);
+  background: var(--foreground); color: var(--background); font-size: 14px; font-weight: 500;
+}
+.skip-link:focus { top: 12px; }
+
+/* Workspace switch: Belanja / Affiliate — a segmented pair of links, shown only to affiliates. */
+.workspace-switch {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+  margin: 6px 12px 0; padding: 3px;
+  background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.workspace-switch a {
+  display: flex; align-items: center; justify-content: center; min-height: 32px;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 13px; font-weight: 500; color: var(--muted-foreground);
+}
+.workspace-switch a:hover { color: var(--foreground); }
+.workspace-switch a[aria-current="page"] { background: var(--background); color: var(--foreground); box-shadow: var(--shadow-xs); }
+.workspace-switch.mobile-only { display: none; margin: 0 0 16px; }
+@media (max-width: 1023px) {
+  .workspace-switch.mobile-only { display: grid; }
+  .workspace-switch.mobile-only a { min-height: 40px; }
+}
+.sidebar-note a { color: var(--primary); font-weight: 500; }
+
+/* Dev-only sign-in on /masuk (never rendered in a production build). */
+.dev-signin { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); }
+
+/* Dark: secondary buttons sat darker than the card they are on and read as holes (review 2026-10-16). */
+.dark .button.secondary { background: color-mix(in oklab, var(--foreground) 10%, var(--card)); border-color: color-mix(in oklab, var(--foreground) 16%, var(--card)); }
+.dark .button.secondary:hover { background: color-mix(in oklab, var(--foreground) 16%, var(--card)); }
+/* The identity card now carries the email: long addresses ellipsize instead of widening the sidebar. */
+.identity-card > div { min-width: 0; }
+.identity-card > div > span, .identity-card > div > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Dark indigo: the prototype kept the light-mode indigo in dark, measured 2.90:1 on the card (fails
+   AA). Lighter indigo for text/links/rings, dark ink on filled indigo buttons (the shadcn dark pattern). */
+.dark {
+  --primary: oklch(0.68 0.17 277);
+  --primary-foreground: oklch(0.145 0 0);
+  --ring: oklch(0.68 0.17 277);
+}
+
+/* Desktop shell, full-bleed (owner 2026-10-16: no gap beside the sidebar; header continues across):
+   the prototype centred a 1200 px box, leaving empty bands left of the sidebar and right of the
+   topbar on wide screens. Sidebar pinned to the left edge at full height, sticky topbar across the
+   rest, content centred in the area beside the sidebar and capped at 1120 px (prototype README). */
+@media (min-width: 1024px) {
+  /* The sidebar column is painted by the shell, so it reaches the bottom of any page length while the
+     sidebar itself stays sticky at viewport height. */
+  .app-shell {
+    max-width: none; margin: 0; width: 100%; min-height: 100vh;
+    background: linear-gradient(to right, var(--card) 255px, var(--border) 255px 256px, transparent 256px);
+  }
+  .sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; align-self: start;
+  }
+  /* Topbar spans the full width, but its content lines up with the 1120 px content column below. */
+  .topbar { position: sticky; top: 0; z-index: 50; padding-inline: max(24px, calc((100% - 1120px) / 2 + 24px)); }
+  .content { max-width: 1120px; justify-self: center; }
+}
+
+/* Every order card is a standalone bordered card; an older prototype rule (list rows) still removed
+   the LAST card's bottom border, so the final card of each stack looked clipped (review round 4). */
+.order-card:last-child { border-bottom: 1px solid var(--border); }
+/* Dark: avatar initials on the tinted muted identity card measured 4.34:1 — a lighter indigo ink. */
+.dark .identity-card .avatar-large, .dark .avatar-button { color: oklch(0.8 0.11 277); }
+/* `--destructive-foreground` was referenced (prototype.css) but never defined, so text on a filled red
+   inherited the body ink. White on light red 4.56:1, dark ink on dark-mode red 6.84:1. */
+:root { --destructive-foreground: oklch(0.985 0 0); }
+.dark { --destructive-foreground: oklch(0.145 0 0); }
+/* The wordmark is the only brand carrier in the chrome: one step larger than the prototype's 15 px. */
+.sidebar-brand strong { font-size: 18px; }
+.sidebar-brand small { font-size: 12px; }

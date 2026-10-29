@@ -1,0 +1,122 @@
+---
+// Public affiliate application (Task 9.5, F-A1/F-A2, specs/AFFILIATE_SPEC.md). A plain HTML form that
+// POSTs to itself — works with JS off. The store comes from the Host header (Astro.locals.store),
+// never from the form. Creates a `menunggu` row; the merchant approves it in the Seller panel.
+import { normalizePhone } from "@tokophi/lib/validate";
+import PageHeader from "../components/PageHeader.astro";
+import Layout from "../layouts/Layout.astro";
+import { storeAffiliateEnabled } from "../data/catalog";
+import { applyAffiliate } from "../data/affiliate";
+import { clientIp, rateLimit } from "../lib/chat";
+
+const store = Astro.locals.store;
+if (!(await storeAffiliateEnabled(store.id))) return new Response(null, { status: 404, statusText: "Not Found" }); // F-A1
+
+// F-A15: one TokoΦ Account can be an affiliate of many shops. Offered only when the account app is
+// configured (ACCOUNT_APP_URL); the plain form below stays for people without an account.
+const accountBase = (process.env.ACCOUNT_APP_URL ?? "").trim().replace(/\/+$/, "");
+const accountJoin = /^https?:\/\/[^/\s]+$/.test(accountBase) ? `${accountBase}/affiliate/gabung?toko=${encodeURIComponent(store.slug)}` : null;
+
+const clip = (v: FormDataEntryValue | null, n: number) => String(v ?? "").trim().slice(0, n);
+let outcome: "form" | "ok" | "exists" = "form";
+let error = "";
+let values = { name: "", phone: "", email: "", channel: "", bankName: "", bankAccount: "", bankHolder: "" };
+
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  values = {
+    name: clip(f.get("name"), 80),
+    phone: clip(f.get("phone"), 32),
+    email: clip(f.get("email"), 120),
+    channel: clip(f.get("channel"), 300),
+    bankName: clip(f.get("bankName"), 60),
+    bankAccount: clip(f.get("bankAccount"), 40),
+    bankHolder: clip(f.get("bankHolder"), 80),
+  };
+  const phone = normalizePhone(values.phone);
+  if (clip(f.get("website"), 100)) {
+    outcome = "ok"; // honeypot filled: a bot. Answer like a success so it learns nothing.
+  } else if (!rateLimit(`affiliate:apply:${clientIp(Astro.request, Astro.clientAddress)}`, 5, 3_600_000)) {
+    error = "Terlalu banyak pendaftaran dari jaringan ini. Coba lagi nanti.";
+  } else if (!values.name) {
+    error = "Nama wajib diisi.";
+  } else if (!phone) {
+    error = "Nomor WhatsApp tidak valid.";
+  } else {
+    const r = await applyAffiliate(store.id, {
+      name: values.name,
+      phone,
+      email: values.email || null,
+      channel: values.channel || null,
+      bankName: values.bankName || null,
+      bankAccount: values.bankAccount || null,
+      bankHolder: values.bankHolder || null,
+    });
+    if (r === "created") outcome = "ok";
+    else if (r === "exists") outcome = "exists";
+    if (outcome === "form") error = "Gagal menyimpan pendaftaran, coba lagi.";
+  }
+}
+
+const input =
+  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand-500";
+---
+
+<Layout title="Program Affiliate" description={`Gabung jadi affiliate ${store.name} dan dapatkan komisi dari setiap penjualan.`}>
+  <PageHeader
+    crumbs={[{ name: "Beranda", href: "/" }, { name: "Affiliate" }]}
+    eyebrow="Affiliate"
+    title={`Jadi affiliate ${store.name}`}
+    dek="Bagikan link atau kode Anda. Setiap pesanan yang selesai memberi Anda komisi."
+  />
+  <section class="mx-auto max-w-xl px-4 py-10 sm:px-6">
+    {outcome === "ok" && (
+      <div role="status" class="rounded-xl border border-line bg-white p-6">
+        <h2 class="font-display text-xl font-semibold text-ink">Pendaftaran diterima</h2>
+        <p class="mt-2 text-sm text-muted">
+          Terima kasih! Tim {store.name} akan meninjau pendaftaran Anda dan mengirim kode affiliate lewat WhatsApp.
+        </p>
+      </div>
+    )}
+    {outcome === "exists" && (
+      <div role="status" class="rounded-xl border border-line bg-white p-6">
+        <h2 class="font-display text-xl font-semibold text-ink">Nomor ini sudah terdaftar</h2>
+        <p class="mt-2 text-sm text-muted">Pendaftaran dengan nomor WhatsApp ini sudah kami terima. Tim {store.name} akan menghubungi Anda.</p>
+      </div>
+    )}
+    {outcome === "form" && accountJoin && (
+      <p class="mb-4 rounded-xl border border-line bg-white p-4 text-sm text-ink">
+        Punya Akun TokoΦ? <a class="font-semibold underline" href={accountJoin}>Daftar lewat akun</a> — satu akun untuk jadi affiliate di banyak toko, dan komisi Anda bisa dilihat kapan saja.
+      </p>
+    )}
+    {outcome === "form" && (
+      <form method="post" class="flex flex-col gap-4">
+        {error && <p role="alert" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        <label class="flex flex-col gap-1.5 text-sm text-ink">Nama lengkap
+          <input name="name" required maxlength="80" autocomplete="name" value={values.name} class={input} />
+        </label>
+        <label class="flex flex-col gap-1.5 text-sm text-ink">Nomor WhatsApp
+          <input name="phone" required inputmode="tel" autocomplete="tel" placeholder="mis. 0812 3456 7890" value={values.phone} class={input} />
+        </label>
+        <label class="flex flex-col gap-1.5 text-sm text-ink">Email (opsional)
+          <input name="email" type="email" autocomplete="email" value={values.email} class={input} />
+        </label>
+        <label class="flex flex-col gap-1.5 text-sm text-ink">Di mana Anda akan promosi?
+          <textarea name="channel" rows="3" maxlength="300" placeholder="mis. TikTok @nama, grup WhatsApp reseller" class={input}>{values.channel}</textarea>
+        </label>
+        <fieldset class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <legend class="mb-1 text-sm text-ink">Rekening untuk komisi (opsional)</legend>
+          <input name="bankName" placeholder="Bank / e-wallet" aria-label="Bank atau e-wallet" value={values.bankName} class={input} />
+          <input name="bankAccount" inputmode="numeric" placeholder="Nomor rekening" aria-label="Nomor rekening" value={values.bankAccount} class={input} />
+          <input name="bankHolder" placeholder="Atas nama" aria-label="Atas nama rekening" value={values.bankHolder} class={`${input} sm:col-span-2`} />
+        </fieldset>
+        {/* Honeypot: invisible to people, irresistible to form-filling bots. */}
+        <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="absolute -left-[9999px] h-0 w-0 opacity-0" />
+        <button type="submit" class="rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+          Daftar jadi affiliate
+        </button>
+        <p class="text-xs text-muted">Komisi dibayarkan langsung oleh {store.name} setelah pesanan selesai dan lewat masa retur.</p>
+      </form>
+    )}
+  </section>
+</Layout>

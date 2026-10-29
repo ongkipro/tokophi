@@ -35,6 +35,8 @@ const CENSUS: Record<Capability, Holder> = {
   "products:write": "admin-too",
   "products:delete": "admin-too",
   "discounts:write": "admin-too",
+  // Affiliate programme (0116) — approve/rate/mark-paid; the money moves outside TokoΦ.
+  "affiliates:write": "admin-too",
   "content:write": "admin-too",
   "orders:write": "admin-too",
   "inventory:write": "admin-too",

@@ -17,7 +17,7 @@
 
 ---
 
-## 1. The four surfaces
+## 1. The four surfaces (+ `apps/account`, local only — §6b)
 
 TokoΦ is an npm-workspaces monorepo. Four deployable surfaces, five shared packages, one Postgres.
 
@@ -31,7 +31,7 @@ TokoΦ is an npm-workspaces monorepo. Four deployable surfaces, five shared pack
 | Package | What it is | Consumed by |
 |---|---|---|
 | `@tokophi/db` | Drizzle schema (`src/schema.ts`, 971 lines), `db` client, `withTenant()` (RLS), migrations, seed. | admin, super-admin, storefront |
-| `@tokophi/lib` | `format` (IDR/num/timeAgo), `billing`, `autolaris` (PSP client), `kiriminaja` (courier client), `cache` (+ in-process `rateLimit`), `colors`, `couriers`, `totp`, `integration-status`, `payment-fees`. | admin, super-admin, storefront |
+| `@tokophi/lib` | `format` (IDR/num/timeAgo), `billing`, `autolaris` (PSP client), `kiriminaja` (courier client), `cache` (+ in-process `rateLimit`), `colors`, `couriers`, `totp`, `integration-status`, `payment-fees`, **`buyer-otp`** (2026-10-15 — buyer-account sign-in code: CSPRNG code, phone-bound HMAC as the stored form, refusal order, 60 s cooldown, `OtpSender` seam with a dev-only stub; no caller yet — wired in account phase 2 after root Task 8.38, spec `TOKOPHI_ACCOUNT_SPEC.md` §17), **`google-oauth`** (2026-10-15, moved from `apps/admin/lib/google.ts` — Google code flow, state, id_token JWKS verify; client-component imports forbidden by `test/google-oauth-server-only.test.ts`), **`claim-token`** (2026-10-15 — HMAC order claim token; issued by `/api/public/order` on success when `ACCOUNT_CLAIM_SECRET` is set). | admin, super-admin, storefront |
 | `@tokophi/ui` | 22 shadcn primitives on **Base UI** (not Radix) + Tailwind v4 tokens. | super-admin (admin still has its own local copy) |
 | `@tokophi/sections` | **Types only, zero runtime.** The Store-Builder section contract (`SECTION_TYPES`, `SECTION_DEFAULTS`, `StoredTemplateData` = the shape of `page_templates.sections`). | admin (Puck editor) **and** storefront (Astro renderer) — this is what stops the two from drifting. |
 
@@ -284,6 +284,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | `/pelanggan/segmen` | `segments` | `customer_segments` | `segments` | `customer_segments` |
 | `/pelanggan/ulasan` | `reviews` | `reviews`, `customers` | — | — |
 | `/crm`, `/crm/{followup,pipeline,template}` | `crm` | `followups`, `leads`, `wa_templates`, `customers` | `crm` | `followups` |
+| **`/affiliate`** (Promo → Affiliate, 0116) | `affiliates` (`getAffiliateProgram` — phone/email/bank pass through `lib/affiliate-mask.ts` and are masked unless the viewer holds `affiliates:write`, F-A12) | `store_settings` (`affiliate_enabled`, `affiliate_rate_bps`, `affiliate_hold_days`), `stores`, `affiliates`, `affiliate_commissions` ("siap" is derived: `pending` and `eligible_at <= now()`), `products` | `affiliates.{saveAffiliateSettings,setAffiliateStatus,createAffiliate,markCommissionPaid,setProductAffiliateRate,inviteAffiliateToAccount}` (all `affiliates:write`; `inviteAffiliateToAccount` mints the single-use 7-day TokoΦ Account invitation for an `aktif`, unlinked affiliate — only its sha256 is written, `affiliates.invite_hash`; hidden unless `ACCOUNT_APP_URL` is set). The list shows "Terhubung ke Akun TokoΦ" when `affiliates.account_id` is set | `store_settings`, `affiliates`, `affiliate_commissions` (`dibayar` only when ready), `products.affiliate_rate_bps` |
 | `/diskon/*` | `discounts` | `discounts` | `discounts` | `discounts`, `discount_usages` |
 | `/analitik` | `analytics`, `funnel` | `orders`, `order_line_items`, `products`, `analytics_daily`, **`analytics_events`** | — | — |
 | `/pemasaran` | `marketing` | `orders` (+ `ad_channels` for *labels only*) | — | — |
@@ -300,7 +301,7 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | Route | Auth | Rate limit | What it does |
 |---|---|---|---|
 | `POST /api/public/ongkir` | **none** (CORS `*`) | 60/min/IP | `op=search` → `kiriminaja_areas` autocomplete · `op=rates` → live `kaShippingPrice`, filtered by **(platform-enabled couriers) ∩ (the merchant's per-service picks in `store_shipping_methods`)**, keyed `"<courier>:<service_type>"`; no picked rows = fall back to the courier-level list rather than a checkout with zero options. ⚠️ **Fixed `35b88a4`** — it filtered on `store_settings.couriers` (the COURIER list) while the Jasa Kirim card writes per *service*, so every service the seller switched off was still offered (**14 rates for 11 picks** → **10**). Each rate is labelled with the **effective** COD flag (KiriminAja capability × platform `codAllowed` × the store's `cod_enabled`) · `op=instant` → same-day pricing from the store's `sender_lat/lng`. |
-| `POST /api/public/order` | **none** (CORS `*`) | 10/min/IP | The checkout. **Enforces the 5-condition COD gate before any row is written**, then upserts `customers`, checks stock, writes `orders` + `order_line_items`, decrements `inventory_levels`, and creates either a `cod` payment (`menunggu`) or an AutoLaris bill. Finally flips the matching `checkout_sessions` row (scoped to the **unique** `(store_id, session_id)`) to `pulih` + `recovered_order_id` + `recovered_at` + `customer_id` — **the only honest definition of "recovered"**: not "we sent a WhatsApp and they bought something later", but *this session became that order*. Non-fatal: a paid order must never fail because a marketing table did. |
+| `POST /api/public/order` | **none** (CORS `*`) | 10/min/IP | The checkout. **Enforces the 5-condition COD gate before any row is written**, then upserts `customers`, checks stock, writes `orders` + `order_line_items`, decrements `inventory_levels`, and creates either a `cod` payment (`menunggu`) or an AutoLaris bill. **Affiliate (0116):** `affiliateCode` (typed) or `refCode` (captured `?ref=`) is resolved against this store's `aktif` affiliates by `lib/affiliate-attribution.ts#attachAffiliateCommission`, which writes at most one `affiliate_commissions` row in the same transaction (unique `order_id`); a wrong code never blocks the order. `applyOrderStatusChange` then calls `onOrderStatusForAffiliate`: `batal`/`retur` cancel an unpaid commission, `selesai` (delivered) sets `eligible_at` = now + hold days (`store_settings.affiliate_hold_days`, default 3). Finally flips the matching `checkout_sessions` row (scoped to the **unique** `(store_id, session_id)`) to `pulih` + `recovered_order_id` + `recovered_at` + `customer_id` — **the only honest definition of "recovered"**: not "we sent a WhatsApp and they bought something later", but *this session became that order*. Non-fatal: a paid order must never fail because a marketing table did. |
 | `POST /api/public/pay` | **none** | 20/min/IP | Standalone `alCreatePayment`. **Dead**: `PUBLIC_PAY_API` is declared in `apps/storefront/.env.example` but no storefront source file reads it. |
 | `POST /api/public/pay/callback` | **shared secret** `X-Callback-Token` / `?token=`, constant-time compare; **returns 401 in production when `AUTOLARIS_CALLBACK_SECRET` is unset** (fails closed) | 60/min/IP | Marks payments paid → syncs `orders.financial_status` → **credits the ledger** → extends store subscriptions. |
 | `GET /api/cron/billing` | `CRON_SECRET` header/query. ✅ **Fails CLOSED (fixed 2026-07-14, `0776e99`)** — 401 in production when the secret is unset. It used to read `if (secret && provided !== secret)`, so **no secret meant no check at all**, on a route excluded from the auth middleware that walks every store to suspend it or bill it. | none | Syncs `stores.status` to the computed lifecycle; generates renewal VA invoices for `past_due`/`suspended` stores. |
@@ -318,6 +319,8 @@ Every mutating server action re-checks with `requireCapability(cap)` — **that*
 | `admin` | all **except `settings:write`** |
 | `staff` | `products:write`, `discounts:write`, `content:write`, `orders:write`, `customers:write`, `crm:write`, `media:write`, `support:write` |
 | `gudang` | `inventory:write`, `purchases:write`, `support:write` |
+
+`affiliates:write` (0116) is held by `owner`, `admin` and `advertiser` — not `staff` (see `rbac-policy.ts` and the census in `rbac-census.test.ts`, which is the authority over this table).
 
 Two consequences worth naming:
 - **`requestPayout` requires `settings:write` → only an `owner` can withdraw money.** Correct, and probably not obvious.
@@ -388,10 +391,11 @@ The resolved `{store, catalog}` goes on `Astro.locals`; all reads are memoised p
 | `/blog` | `blog/index.astro` | **`articles` (per-tenant, `status='terbit'`) via `content.ts`.** `/blog/[handle]` detail route exists (2026-07-14). |
 | `/akun` | `akun.astro` | **none — non-functional demo form** ("sistem akun aktif setelah backend terhubung") |
 | `/kontak` | `kontak.astro` | `stores` — WhatsApp from `store.whatsapp`; hardcoded email removed (2026-07-15) |
+| **`/affiliate`** (GET form + POST; links to the account app's `/affiliate/gabung?toko=<slug>` when `ACCOUNT_APP_URL` is set) | `affiliate.astro` + `data/affiliate.ts` | **404 unless `store_settings.affiliate_enabled`**; POST **INSERTs `affiliates`** (`menunggu`, per-store unique code) behind a honeypot and 5/hour/IP (`lib/chat` `rateLimit`) |
 | **`POST /api/track`** | `api/track.ts` | **INSERT `analytics_events`** |
 | **`POST /api/checkout-session`** | `api/checkout-session.ts` | **UPSERT `checkout_sessions`** |
 
-These two are the storefront's only API routes and its only writes. Both carry the same guards, in order:
+These two are the storefront's only API routes. (Its only other write is the `/affiliate` application form above.) `?ref=CODE` is captured client-side by the inline script in `MarketingPixels.astro` into `localStorage` `tphi:ref` (last click wins) and `checkout.astro` sends it as `refCode` within 30 days, plus the optional typed `affiliateCode` field shown only when the programme is on. Both carry the same guards, in order:
 1. `store_id` comes from `Astro.locals.store` (Host-derived) — **never from the client**. The checkout-capture body has **no field for a store id**, and one would be ignored if it did: one shop's page cannot write a cart into another shop's funnel;
 2. **bot filter** — a ~40-pattern UA regex (`bot|crawl|spider|headless|puppeteer|curl/|python-requests|axios/|…`); an **empty UA is treated as a bot**;
 3. **rate limit** — in-process per-IP fixed window: **30 / 60 s** for track, **60 / 60 s** for checkout capture (a debounced checkout fires a handful);
@@ -402,6 +406,44 @@ These two are the storefront's only API routes and its only writes. Both carry t
 ⚠️ The bot and rate-limit guards are **per-process in-memory** — they do not hold across replicas, and there is no proof-of-work, no signature, and no session validation. A distributed script with a browser UA can still inflate the funnel (and now the cart table).
 
 ---
+
+## 6b. `apps/account` — TokoΦ Account (added 2026-10-15, branch `feat/accounts`, **local only**)
+
+The fifth surface: one origin for every shop's buyers and affiliates (account spec §17–§18, AFFILIATE_SPEC
+`F-A15`). Astro SSR (`@astrojs/node` standalone), dev port **4329**, proposed `account.tokophi.com`
+(OD-2) — **no compose service, Traefik router or DNS yet**. **NOT tenant-resolved**: the account is
+cross-tenant, so there is no Host → store step. Owner DB connection; every read carries an explicit
+`buyer_id` / `affiliates.account_id` predicate (`src/data/*.ts`), and buyer reads reach store rows only
+through a claim **and** an `active` link (`orders.ts` `mine()`), held by `buyer-data.test.ts`,
+`account-data.test.ts`, `addresses.test.ts`, `affiliate-data.test.ts` and the committed browser sweep
+`scripts/check-ui.mjs` (negative: another account → 404). The account tables have RLS on with **no
+policy** (`tokophi_app` reads nothing); `buyer_store_links` / `buyer_order_claims` carry `tenant_isolation`
+for merchant-side reads.
+
+**UI (spec §18, 2026-10-16):** the accepted prototype's Seller-aligned shell (`src/styles/prototype.css`
+verbatim + `global.css` adaptations, Geist self-hosted) — full-bleed: sticky 256 px sidebar, sticky
+topbar, content capped at 1120 px; 5-item bottom bar on phones. Two workspaces in one shell, chosen by
+path: **Belanja** (`/`, `/orders`, `/stores`, `/addresses`, `/account`) and **Affiliate** (`/affiliate/**`);
+the Belanja/Affiliate switch shows only for accounts with an `affiliates` row. Every page works without
+JavaScript. Design record and render evidence: `apps/account/DESIGN.md`.
+
+| Route | Reads / writes |
+|---|---|
+| every request (`src/middleware.ts`) | cookie `tphi_account` (jose JWT, aud `tokophi-account`, carries a `buyer_sessions.id`) → the **row** decides (revoked / > 30 days / account not `active` ⇒ signed out, cookie cleared); sets `no-store`, `no-referrer`, `noindex`, `DENY` framing |
+| `/masuk`, `POST /masuk/dev` | Google button when `GOOGLE_CLIENT_ID/SECRET` + `ACCOUNT_GOOGLE_REDIRECT_URI` are set; **dev sign-in** (`dev:<email>`) only outside a production build. `next` passes `safeNext` (same-origin after URL parsing). Signing in over a live session revokes it first |
+| `/auth/google/{start,callback}` | `@tokophi/lib/google-oauth`; `state` cookie; `email_verified` required → UPSERT `buyer_accounts`, INSERT `buyer_sessions` |
+| `/` Beranda | `myOrders` (recent + active), `myStores`, `countMyAddresses`, `buyAgain` (products of my `selesai` orders still active), `myAffiliateStores` (ready commission tile only for affiliates) |
+| `/orders?q=&toko=&status=` | `myOrders` filters in SQL on top of `mine()`; `q` LIKE-escaped; status tab allowlisted |
+| `/orders/{PHI}`, `/orders/{PHI}/receipt` | `myOrder`: allowlisted projection; payment = method/status/amount/fee/total, VA number and https URL only while `menunggu`, never QR or provider ids; thumbnails only https on the store or Seller-upload origin |
+| `/stores`, `/stores/{slug}`, `POST` unlink | `myStores`, `myStore` (active link of mine, else 404); unlink = `buyer_store_links.status = 'revoked'` only |
+| `/klaim?t=` | `previewClaim` / `claimOrder`: HMAC token (D-3), consent `"yes"`, INSERT `buyer_order_claims` (unique `order_id`), UPSERT `buyer_store_links` (consent time kept unless re-linking or new wording) |
+| `/addresses`, `/addresses/edit`, `/addresses/wilayah` | `buyer_addresses` (max 10 under `for update`, one primary, successor named on delete); district search `@tokophi/lib/area-search` |
+| `/account` | rename (`buyer_accounts.name`, 1–80), `listSessions`, `revokeOneSession` (mine, not current), `revokeOtherSessions` (ACC-3), sign-out `POST /keluar`; theme Terang/Gelap/Sistem (`localStorage tphi_theme`) |
+| `/affiliate`, `/affiliate/program`, `/affiliate/{id}` | `myAffiliateStores` / `myAffiliateDetail` (`account_id` = me; another account's id ⇒ 404); share link `?ref=` encoded; payout account masked, read-only |
+| `/affiliate/komisi?store=&state=` | `myCommissions` — one ledger across my programmes, state derived in SQL, latest 200 + totals |
+| `/affiliate/gabung?toko=` | store must exist, not be locked, programme on → INSERT `affiliates` (`menunggu`, `account_id` = me); **5 attempts/h/account** counted before the phone lookup (`rate_limit_counters`, key `acc-join:<id>`), serialised per account; same phone in that store ⇒ refused, never taken over |
+| `/affiliate/undangan?t=` | preview, then ONE conditional UPDATE binds `affiliates.account_id` and clears `invite_hash` |
+| storefront `/checkout/sukses` | "Simpan ke Akun TokoΦ" box only when `ACCOUNT_APP_URL` is https (http in dev) and THIS tab holds the claim token (`sessionStorage.lastOrderClaim`, never `localStorage`) for this order number |
 
 ## 7. `apps/landing`
 

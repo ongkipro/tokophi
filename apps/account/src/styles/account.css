@@ -1,0 +1,161 @@
+/* account-area styles (spec §18). Owned by the account track; prefer prototype.css classes first.
+   Covers /masuk, /addresses, /account — only what the prototype did not need as a multi-page,
+   no-JavaScript app: server-rendered notices, inline confirm panels, link-shaped card actions. */
+
+/* Success / failure notice after a POST + redirect (role="status" / role="alert" in the markup). */
+.acc-notice {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 0 0 16px; padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, #10b981 30%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, #10b981 8%, var(--card));
+  color: var(--foreground); font-size: 14px; line-height: 1.5;
+}
+.acc-notice.bad {
+  border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 7%, var(--card));
+}
+.acc-notice svg { flex: none; margin-top: 2px; }
+
+/* Address card actions: Ubah is a link, the rest are form buttons — same look either way. */
+.card-actions { flex-wrap: wrap; }
+.card-actions form { display: contents; }
+.card-actions a {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--background); color: var(--foreground);
+  font-size: 12px; font-weight: 500; text-decoration: none; transition: all 0.15s ease-out;
+}
+.card-actions a:hover { background: var(--accent); color: var(--accent-foreground); }
+/* Destructive action stands apart: text-style, pushed to the end of the row (review 2026-10-16). */
+.card-actions a.danger-link {
+  margin-left: auto; font-size: 13px; border-color: transparent; background: transparent; color: var(--destructive);
+}
+.card-actions a.danger-link:hover {
+  background: color-mix(in oklab, var(--destructive) 8%, transparent); color: var(--destructive);
+}
+/* Light: white on --destructive measured 4.15:1, so the fill is deepened a step (≥ 4.5:1). */
+.card-actions button.danger-solid {
+  --acc-danger-fill: color-mix(in oklab, var(--destructive) 85%, black);
+  background: var(--acc-danger-fill); color: #fff; border-color: var(--acc-danger-fill);
+}
+/* Dark --destructive is a light red: white text on it measured 2.76:1, so the fill takes dark ink. */
+.dark .card-actions button.danger-solid { --acc-danger-fill: var(--destructive); color: #0a0a0a; }
+.dark .card-actions button.danger-solid:hover { background: color-mix(in oklab, var(--destructive) 85%, white); }
+.card-actions button.danger-solid:hover { background: color-mix(in oklab, var(--destructive) 75%, black); }
+.card-actions a:focus-visible, .card-actions button:focus-visible, .link-button:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+
+/* Inline "are you sure" — the no-JS confirm: the Hapus link reloads the page with this panel open. */
+.acc-confirm {
+  margin-top: 16px; padding: 14px 16px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 30%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--destructive) 5%, var(--card));
+  scroll-margin-top: 88px;
+}
+.acc-confirm p { margin: 0; color: var(--foreground); font-size: 14px; line-height: 1.5; }
+.acc-confirm p + p { margin-top: 6px; color: var(--foreground); }
+.acc-confirm .card-actions { border-top: 0; padding-top: 0; margin-top: 12px; }
+.address-head h2 { margin: 0; }
+.acc-num { font-variant-numeric: tabular-nums; }
+.address-card p strong { color: var(--foreground); }
+.acc-cap { margin-top: 12px; color: var(--muted-foreground); font-size: 13px; }
+
+/* Address form: the prototype dialog's field anatomy, as a page. */
+.acc-form-card { max-width: 640px; }
+.local-form textarea { resize: vertical; font: inherit; }
+.form-field .opt { color: var(--muted-foreground); font-weight: 400; }
+.local-form .field-help { margin: 0; font-weight: 400; }
+.local-form .login-error { margin: 0; }
+.acc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.acc-district { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.acc-district legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--foreground); }
+.acc-chosen {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--secondary); font-size: 14px; font-weight: 500;
+}
+.acc-chosen[hidden] { display: none; }
+.acc-chosen svg { flex: none; color: var(--primary); }
+.acc-search { display: flex; gap: 8px; }
+.acc-search input { flex: 1; }
+.acc-matches { display: grid; gap: 0; }
+.acc-matches:empty { display: none; }
+.acc-matches .radio-label { margin-bottom: 6px; font-size: 14px; font-weight: 400; align-items: center; }
+.acc-matches .radio-label input { margin-top: 0; }
+.acc-matches .muted { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.acc-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
+
+/* /account */
+.profile-grid > .stack { gap: 24px; align-content: start; }
+.profile-grid .section-card { margin: 0; }
+.acc-identity { margin: 0; line-height: 1.6; }
+.acc-identity small { display: block; color: var(--muted-foreground); font-size: 12px; }
+.request-row form { display: contents; }
+.request-row > div { min-width: 0; }
+.request-row strong { font-weight: 500; }
+.acc-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.acc-row-actions form { display: contents; }
+/* Sign-out is not destructive: neutral ink. Only closing the account reads red (review rounds 3, 13, 14). */
+.button.acc-signout {
+  margin-top: 12px; background: transparent; border-color: transparent; color: var(--foreground); padding-inline: 10px; margin-left: -10px;
+}
+.button.acc-signout:hover { background: var(--muted); }
+.acc-theme[hidden] { display: none; }
+/* Muted ink on the muted track measured 4.34:1 in light mode; nudge the unselected options darker. */
+.acc-theme .filter { color: color-mix(in oklab, var(--muted-foreground) 75%, var(--foreground)); }
+.acc-theme .filter[aria-pressed="true"] {
+  background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+.connection-row .acc-when { margin: 0; }
+.acc-foot { margin: 16px 0 0 !important; }
+/* "Lihat perangkat": a text-link disclosure with a chevron, not the prototype's boxed <details>. */
+details.acc-devices { margin: 4px 0 0; padding: 0; border: 0; background: transparent; border-radius: 0; }
+details.acc-devices > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px; margin-left: -8px;
+  list-style: none; color: var(--primary); font-size: 13px; font-weight: 500; border-radius: var(--radius-sm);
+}
+details.acc-devices > summary::-webkit-details-marker { display: none; }
+details.acc-devices > summary:hover { background: color-mix(in oklab, var(--primary) 10%, transparent); color: var(--primary); }
+details.acc-devices > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.acc-chev { transition: transform 0.15s ease-out; }
+details.acc-devices[open] .acc-chev { transform: rotate(180deg); }
+details.acc-devices .request-row:last-of-type { border-bottom: 0; }
+details.acc-devices > .field-help { margin: 0 0 12px; }
+.connection-row a { flex: none; }
+
+/* /masuk — the dev-only form sits under the Google button; Google button gets the brand-neutral look. */
+.login-card .button.google { width: 100%; min-height: 44px; gap: 10px; }
+.login-card .button.google svg { width: 18px; height: 18px; flex: none; }
+.login-card .button.google path:nth-child(1) { fill: #4285f4; }
+.login-card .button.google path:nth-child(2) { fill: #34a853; }
+.login-card .button.google path:nth-child(3) { fill: #fbbc05; }
+.login-card .button.google path:nth-child(4) { fill: #ea4335; }
+.login-card > * + * { margin-top: 16px; }
+.login-card .login-purpose { margin: 0 0 4px; font-size: 15px; font-weight: 500; color: var(--foreground); line-height: 1.5; }
+.login-card .dev-signin { margin-top: 16px; padding-top: 0; border-top: 0; }
+.login-card .google ~ .dev-signin { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.login-card .dev-signin .login-form { gap: 10px; }
+.login-card .dev-signin .login-label { margin-bottom: 0; }
+.dev-tag {
+  display: inline-flex; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; vertical-align: 1px;
+  background: color-mix(in oklab, #f59e0b 14%, var(--card)); color: #b45309;
+}
+.dark .dev-tag { color: #fbbf24; }
+/* The context column sits on --secondary, where plain muted ink measured 4.34:1 (light). */
+.login-shell .login-context-desc, .login-shell .login-privacy { color: color-mix(in oklab, var(--muted-foreground) 75%, var(--foreground)); }
+.login-perks { margin: 0 0 24px; padding: 0; list-style: none; display: grid; gap: 10px; font-size: 14px; color: var(--foreground); }
+.login-perks li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
+.login-perks svg { flex: none; margin-top: 2px; color: var(--primary); }
+
+@media (max-width: 640px) {
+  .acc-two { grid-template-columns: 1fr; }
+  .card-actions a.danger-link { min-width: 64px; padding-inline: 14px; margin-right: -14px; }
+  .card-actions a, .card-actions button, .connection-row a, .request-row .link-button,
+  .acc-theme .filter, .acc-actions .button, .acc-search .button, .button.acc-signout { min-height: 44px; }
+  .acc-actions .button { flex: 1; }
+  .request-row { flex-wrap: wrap; }
+}

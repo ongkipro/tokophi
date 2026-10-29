@@ -1,0 +1,45 @@
+---
+// The commission ledger (spec §18.4 F): a table where it fits, stacked cards where it does not (a CSS
+// container query, so the narrow ledger column on a programme page stacks too).
+// No buyer data: the order number is shown as text and never links to the buyer's order.
+import { IDR } from "@tokophi/lib/format";
+import type { Commission } from "../../data/affiliate";
+import { STATE_LABEL, dateId, stateText } from "../../lib/affiliate-view";
+
+interface Props {
+  rows: Commission[];
+  /** Komisi (all programmes) shows the store column; a programme's own page does not. */
+  showStore?: boolean;
+  caption: string;
+}
+const { rows, showStore = false, caption } = Astro.props;
+---
+<div class="aff-ledger-wrap">
+<div class="section-card aff-ledger-card">
+  <table class:list={["aff-ledger", { "with-store": showStore }]}>
+    <caption class="sr-only">{caption}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Tanggal</th>
+        {showStore && <th scope="col">Toko</th>}
+        <th scope="col">Pesanan</th>
+        <th scope="col" class="num">Belanja</th>
+        <th scope="col" class="num">Komisi</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr>
+          <td class="c-date num">{dateId(r.placedAt)}</td>
+          {showStore && <td class="c-store"><a href={`/affiliate/${r.affiliateId}`}>{r.storeName}</a></td>}
+          <td class="c-order"><span class="aff-code">{r.orderNumber}</span></td>
+          <td class="c-base num"><span class="aff-m">Belanja </span>{IDR(r.baseIdr)}</td>
+          <td class="c-comm num">{IDR(r.commissionIdr)}{r.rateNote && <span class="aff-rate">{r.rateNote}</span>}</td>
+          <td class="c-state"><span class={`badge ${STATE_LABEL[r.state].tone}`}>{stateText(r)}</span></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+</div>

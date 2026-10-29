@@ -73,6 +73,18 @@ export const IRREPLACEABLE: Loss[] = [
   { table: "platform_admins", what: "platform operator logins — replaced by ONE freshly seeded account" },
   { table: "shipping_aggregator", column: "api_key", what: "the courier aggregator API key — re-seeded NULL" },
   { table: "platform_payment_gateways", column: "credentials", what: "the payment gateway credentials — re-seeded NULL" },
+  {
+    table: "affiliate_commissions",
+    what: "AFFILIATE COMMISSIONS — money the merchant owes an affiliate. Paid OUTSIDE TokoΦ (0116), so the ledger does not hold a second copy and nothing can reconstruct it",
+  },
+  { table: "affiliates", what: "affiliate programme members — their codes, bank details and the merchant's approvals" },
+  { table: "buyer_accounts", what: "Akun TokoΦ identities — a Google `sub` binding is not re-derivable; the buyer must sign up again" },
+  {
+    table: "buyer_order_claims",
+    what: "orders buyers attached to their account (`order_id` is UNIQUE — once a claim is gone nobody else can make it)",
+  },
+  { table: "buyer_store_links", what: "each buyer's recorded consent per store" },
+  { table: "buyer_addresses", what: "buyers' saved delivery addresses" },
 ];
 
 /** One `Loss` that this database actually holds rows for. */

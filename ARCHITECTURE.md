@@ -23,12 +23,12 @@ Expected stack: Existing repository — npm-workspaces monorepo: Next.js (admin,
 `apps/storefront` = one multi-tenant Astro SSR container, tenant resolved from the `Host` header in
 `src/middleware.ts` (ADR 0009) → `<slug>.tokophi.id` (canonical) with `<slug>.tokophi.com` redirecting;
 `apps/landing` = static apex. Shared: `packages/ui`, `packages/lib` (formatters, billing, fees,
-password mint, KiriminAja/AutoLaris clients), `packages/db`. Route-level map of all four surfaces:
+password mint, KiriminAja/AutoLaris clients), `packages/db`. **On branch `feat/accounts` only (unmerged, local — DEC-018; not in production):** a fifth surface, `apps/account` = **TokoΦ Account** (Astro SSR, dev :4329) — one Google login for a buyer's saved orders across stores and the cross-store affiliate area; spec `specs/docs/TOKOPHI_ACCOUNT_SPEC.md`, decision `specs/decisions/0018-affiliate-commission-paid-from-seller-balance.md` (proposed). Route-level map of the four production surfaces:
 **`specs/docs/PAGE_MAP.md`** (generated, `node scripts/gen-page-map.mjs`); concern-level map:
 `specs/docs/CODE_MAP.md`, `specs/docs/SYSTEM_MAP.md`.
 
-**Data layer.** `packages/db/src/schema.ts` → **83 `pgTable`s**; `drizzle/meta/_journal.json` →
-**109 migrations, `0000_familiar_sugar_man` … `0108_order_ship_kelurahan`** (⚠️ hand-written — `npm run
+**Data layer.** `packages/db/src/schema.ts` → **91 `pgTable`s** (on `feat/accounts`; 83 on `main` when this file was last counted); `drizzle/meta/_journal.json` →
+**122 migrations on `feat/accounts`, `0000_familiar_sugar_man` … `0121_store_complaint_resolution`** (`0116`–`0121` are not in production) (⚠️ hand-written — `npm run
 generate` diffs against a snapshot frozen at `0095` and emits a batch-aborting migration; AGENTS.md). Money is `bigint` IDR.
 Two pools (`packages/db/src/client.ts`): `db` = owner (`DATABASE_URL`), `appDb` = restricted
 (`APP_DATABASE_URL`, role proved against `pg_roles` when `DATABASE_RUNTIME_ROLE=app`), and

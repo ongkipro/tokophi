@@ -901,6 +901,17 @@ export async function promoHub(storeId: string): Promise<PromoHub> {
   return { title: ss?.title ?? null, subtitle: ss?.subtitle ?? null, bannerUrl: ss?.bannerUrl ?? null };
 }
 
+// Store affiliate programme (0116) — gates the `/affiliate` form and the checkout code field. NOT
+// cached: switching the programme off must take the form down on the next request.
+export async function storeAffiliateEnabled(storeId: string): Promise<boolean> {
+  const [ss] = await db
+    .select({ enabled: schema.storeSettings.affiliateEnabled })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return !!ss?.enabled;
+}
+
 export type StoreCodPolicy = { enabled: boolean; maxAmountIdr: number; allowedProvinces: string[] };
 
 export async function storeCodPolicy(storeId: string): Promise<StoreCodPolicy> {

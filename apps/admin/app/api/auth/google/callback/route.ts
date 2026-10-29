@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/auth";
-import { OAUTH_STATE_COOKIE, exchangeCode, googleConfig } from "@/lib/google";
+import { OAUTH_STATE_COOKIE, exchangeCode, googleConfig, stateMatches } from "@tokophi/lib/google-oauth";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
 import { ProvisionConflictError, ProvisionInputError, provisionStore, signupOpen } from "@/lib/provision";
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const back = mode === "daftar" ? "/daftar" : "/login";
 
   if (url.searchParams.get("error")) return redirectTo(`${back}?error=google_batal`);
-  if (!code || !state || !cookieState || state !== cookieState) return redirectTo(`${back}?error=google_state`);
+  if (!code || !stateMatches(state, cookieState)) return redirectTo(`${back}?error=google_state`);
 
   const profile = await exchangeCode(cfg, code);
   if (!profile || !profile.emailVerified) return redirectTo(`${back}?error=google_gagal`);

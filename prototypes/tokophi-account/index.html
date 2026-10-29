@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Akun Pembeli · TokoPhi</title>
+    <script>
+      try {
+        if (localStorage.getItem("tokophi_theme") === "dark") {
+          document.documentElement.classList.add("dark");
+        }
+      } catch {}
+    </script>
+    <link rel="preload" href="/assets/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/fonts.css">
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+
+    <div class="login-shell" id="login-shell">
+      <div class="login-context">
+        <a class="login-wordmark" href="https://tokophi.com" aria-label="Kembali ke Tokophi">
+          <span style="font-weight: 600; letter-spacing: -0.02em"
+            >Toko<span style="color: var(--primary)">Φ</span></span
+          >
+        </a>
+        <h1 class="login-context-title">Masuk ke Akun Pembeli</h1>
+        <p class="login-context-desc">
+          Lihat pesanan dari berbagai toko, pantau pengiriman, dan kelola alamat Anda. Belanja tetap bisa tanpa akun.
+        </p>
+        <div class="login-privacy">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <p>Data setiap toko tetap terpisah. Toko hanya menerima data yang Anda izinkan.</p>
+        </div>
+      </div>
+      <div class="login-card">
+
+        <!-- Phone Form -->
+        <form id="phone-form" class="login-form">
+          <label for="login-phone" class="login-label">Nomor HP</label>
+          <div class="phone-input-group">
+            <span class="phone-prefix" aria-hidden="true">+62</span>
+            <input 
+              type="tel" 
+              id="login-phone" 
+              class="login-input phone-input" 
+              value="81234567890" 
+              placeholder="8xx"
+              autocomplete="tel-national"
+              inputmode="numeric"
+              required
+              aria-describedby="phone-help phone-error"
+            >
+          </div>
+          <p id="phone-help" class="field-help">Tanpa angka 0 setelah +62.</p>
+          <div id="phone-error" class="login-error" aria-live="polite" hidden>
+            Nomor HP tidak valid. Masukkan nomor yang benar.
+          </div>
+          <button type="submit" class="button primary login-submit">Lanjutkan</button>
+        </form>
+
+        <!-- OTP Form (Hidden initially) -->
+        <form id="otp-form" class="login-form" hidden>
+          <div class="otp-header">
+            <label for="login-otp" class="login-label">Kode OTP</label>
+            <button type="button" id="edit-phone" class="link-button" aria-label="Ubah nomor">
+              Ubah nomor
+            </button>
+          </div>
+          <p class="otp-desc">Kode verifikasi dikirim ke <strong id="display-phone">+62 812-3456-7890</strong></p>
+          <div class="prototype-hint" id="otp-demo-hint">
+            Kode verifikasi: <strong>123456</strong>
+          </div>
+          <input 
+            type="text" 
+            id="login-otp" 
+            class="login-input otp-input" 
+            aria-label="Kode OTP 6 digit"
+            aria-describedby="otp-demo-hint otp-error"
+            maxlength="6"
+            pattern="[0-9]{6}"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+          >
+          <div id="otp-error" class="login-error" aria-live="polite" hidden>
+            Kode OTP salah. Silakan coba lagi.
+          </div>
+          <button type="submit" id="verify-button" class="button primary login-submit" disabled>Verifikasi</button>
+          <div class="resend-action">
+            <button type="button" id="resend-otp" class="link-button">Kirim ulang kode demo</button>
+            <span id="resend-status" class="resend-status" aria-live="polite" hidden>Kode demo disiapkan ulang</span>
+          </div>
+        </form>
+
+        <button class="link-button recovery-link" type="button" data-action="recovery">Nomor lama tidak bisa diakses?</button>
+        <p class="field-help">Masukkan kode verifikasi 123456 untuk masuk.</p><a class="link-button" href="/checkout?guest=1">Coba checkout tanpa akun</a>
+        <div class="seller-escape">
+          <span>Punya toko?</span>
+          <a href="https://app.tokophi.com/login" class="link-button">Masuk ke Dashboard Seller</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-shell" id="buyer-shell" hidden>
+      <header class="topbar">
+        <a class="brand mobile-brand" href="/orders" aria-label="Akun TokoPhi">
+          <span style="font-weight: 600; letter-spacing: -0.02em"
+            >Toko<span style="color: var(--primary)">Φ</span></span
+          >
+          <span style="font-weight: 400; color: var(--muted-foreground)"
+            >Akun</span
+          >
+        </a>
+        <div class="topbar-context">Akun pembeli</div>
+        <div class="topbar-actions">
+          <button
+            class="icon-button theme-toggle"
+            id="theme-toggle"
+            type="button"
+            aria-label="Ganti tema"
+          >
+            <svg class="sun-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+          </button>
+          <button
+            class="icon-button"
+            type="button"
+            data-route="notifications"
+            aria-label="Notifikasi, 3 belum dibaca"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <span class="badge-count" aria-hidden="true" id="unread-badge">3</span>
+          </button>
+          <button
+            class="avatar-button"
+            type="button"
+            data-route="profile"
+            aria-label="Buka profil Sari"
+          >
+            SA
+          </button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="sidebar" aria-label="Navigasi akun">
+          <a href="/orders" class="sidebar-brand" aria-label="TokoPhi Akun pembeli"><strong>Toko<span>Φ</span></strong><small>Akun pembeli</small></a>
+          <div class="identity-card">
+            <span class="avatar avatar-large">SA</span>
+            <div>
+              <strong>Sari Andini</strong>
+              <span>+62 812-3456-7890</span>
+            </div>
+          </div>
+          <nav class="sidebar-nav">
+            <p class="nav-section-label">MENU UTAMA</p>
+            <button class="nav-item" type="button" data-route="dashboard">
+              <svg viewBox="0 0 24 24" class="nav-icon" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg> Beranda
+            </button>
+            <button class="nav-item is-active" type="button" data-route="orders">
+              <svg viewBox="0 0 24 24" class="nav-icon" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Pesanan
+              <span class="nav-count" aria-label="6 pesanan">6</span>
+            </button>
+            <button class="nav-item" type="button" data-route="stores">
+              <svg viewBox="0 0 24 24" class="nav-icon" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg> Toko
+            </button>
+            <button class="nav-item" type="button" data-route="addresses">
+              <svg viewBox="0 0 24 24" class="nav-icon" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> Alamat
+            </button>
+            <button class="nav-item" type="button" data-route="profile">
+              <svg viewBox="0 0 24 24" class="nav-icon" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Akun
+            </button>
+          </nav>
+        </aside>
+
+        <p class="sr-only" id="route-status" role="status" aria-live="polite"></p>
+        <main class="content" id="content" tabindex="-1"></main>
+      </div>
+
+      <nav class="mobile-nav" aria-label="Navigasi akun mobile">
+        <button type="button" data-route="dashboard">
+          <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+          Beranda
+        </button>
+        <button class="is-active" type="button" data-route="orders">
+          <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          Pesanan
+        </button>
+        <button type="button" data-route="stores">
+          <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          Toko
+        </button>
+        <button type="button" data-route="addresses">
+          <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          Alamat
+        </button>
+        <button type="button" data-route="profile">
+          <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          Akun
+        </button>
+      </nav>
+    </div>
+
+    <section class="merchant-shell" id="merchant-shell" hidden>
+      <div class="admin-layout">
+        <aside class="admin-sidebar" aria-label="Navigasi merchant">
+          <div class="admin-sidebar-header">
+            <div class="admin-wordmark">
+              <span>Toko<span>Φ</span></span>
+              <small>Dashboard Seller</small>
+            </div>
+          </div>
+          <div class="admin-sidebar-content">
+            <p class="admin-section-label">OPERASIONAL</p>
+            <span>Ringkasan</span><span>Pesanan</span><span>Produk</span
+            ><span class="admin-active">Pelanggan</span><span>Analitik</span>
+            <p class="admin-section-label">TOKO</p>
+            <span>Konten</span><span>Pengaturan</span>
+          </div>
+        </aside>
+        <div class="admin-main">
+          <header class="admin-topbar">
+            <div class="prototype-banner" role="status" style="border-radius: 4px; margin-right: auto; padding: 4px 8px; font-size: 13px;">
+              <span class="pulse" aria-hidden="true"></span>
+              Pratinjau Seller
+            </div>
+            <div class="admin-actions">
+              <label for="tenant-select">Toko aktif</label>
+              <select id="tenant-select" aria-label="Pilih tenant merchant">
+                <option value="batik">Batik Nusantara</option>
+                <option value="kopi">Kopi Senja</option>
+                <option value="tech">TechReady</option>
+              </select>
+            </div>
+            <button class="button secondary" id="close-merchant" type="button">
+              Kembali ke buyer
+            </button>
+          </header>
+          <main class="admin-content" id="merchant-content" tabindex="-1"></main>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="flow-dialog" aria-labelledby="flow-title"></dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

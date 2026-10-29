@@ -1,0 +1,24 @@
+---
+// A product photo from `product_media`, or the neutral package icon — never an empty box and never a
+// fabricated photo. The icon is always drawn; the image sits on top of it, so a missing, slow or
+// failed image still leaves the icon visible. Chrome still paints a broken-image glyph over a failed
+// sized <img>, so one bundled, delegated listener hides it (no inline handler: keeps a strict CSP
+// possible); images that failed before the script ran are swept once.
+interface Props {
+  src: string | null;
+  large?: boolean;
+  /** Long lists only; a page with a handful of thumbnails loads them eagerly. */
+  lazy?: boolean;
+}
+const { src, large = false, lazy = false } = Astro.props;
+const px = large ? 64 : 48;
+---
+<span class={`product-thumb thumb-box${large ? " large" : ""}`} aria-hidden="true">
+  <svg width={large ? 24 : 18} height={large ? 24 : 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+  {src && <img src={src} alt="" width={px} height={px} loading={lazy ? "lazy" : undefined} decoding="async" />}
+</span>
+<script>
+  const hide = (i: HTMLImageElement) => { i.hidden = true; };
+  document.addEventListener("error", (e) => { const t = e.target; if (t instanceof HTMLImageElement && t.parentElement?.classList.contains("thumb-box")) hide(t); }, true);
+  for (const i of document.querySelectorAll<HTMLImageElement>(".thumb-box img")) if (i.complete && i.naturalWidth === 0) hide(i);
+</script>

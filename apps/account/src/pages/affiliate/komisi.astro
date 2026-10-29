@@ -1,0 +1,98 @@
+---
+// Affiliate · Komisi (spec §18.4 F): one ledger across every programme of this account, filtered by
+// store and state through plain GET links (each filter keeps the other). Totals and the count
+// cover the whole filtered set; the list stops at LEDGER_LIMIT rows and says so.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { COMMISSION_STATES, LEDGER_LIMIT, myAffiliateStores, myCommissions, type CommissionState } from "../../data/affiliate";
+import { signInUrl } from "../../lib/nav";
+import { STATE_LABEL } from "../../lib/affiliate-view";
+import Ledger from "./_Ledger.astro";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const q = Astro.url.searchParams;
+const rawState = q.get("state") ?? "";
+const state = (COMMISSION_STATES as readonly string[]).includes(rawState) ? (rawState as CommissionState) : null;
+const store = (q.get("store") ?? "").trim() || null;
+const [stores, ledger] = await Promise.all([myAffiliateStores(db, account.id), myCommissions(db, account.id, { store, state })]);
+const filtered = Boolean(store || state);
+const href = (p: { store?: string | null; state?: string | null }) => {
+  const u = new URLSearchParams();
+  if (p.store) u.set("store", p.store);
+  if (p.state) u.set("state", p.state);
+  const s = u.toString();
+  return `/affiliate/komisi${s ? `?${s}` : ""}`;
+};
+const TABS: { value: CommissionState | null; label: string }[] = [
+  { value: null, label: "Semua" },
+  { value: "belum_selesai", label: "Belum selesai" },
+  { value: "ditahan", label: "Ditahan" },
+  { value: "siap", label: STATE_LABEL.siap.text },
+  { value: "dibayar", label: STATE_LABEL.dibayar.text },
+  { value: "batal", label: STATE_LABEL.batal.text },
+];
+---
+<Layout title="Komisi" active="komisi">
+  <header class="page-header">
+    <div>
+      <h1>Komisi</h1>
+      <p class="lead">Semua komisi dari setiap program Anda dalam satu daftar, terbaru di atas.</p>
+    </div>
+  </header>
+
+  {stores.length === 0 ? (
+    <section class="state-card">
+      <h2>Belum ada komisi</h2>
+      <p>Komisi muncul setelah Anda bergabung ke program toko dan ada pesanan lewat kode atau link Anda.</p>
+      <a class="button primary" href="/affiliate/gabung">Gabung program toko</a>
+    </section>
+  ) : (
+    <>
+      <div class="aff-filters">
+        {stores.length > 1 && (
+          <nav class="filter-row aff-tabs" aria-label="Toko">
+            {[{ id: null as string | null, name: "Semua toko" }, ...stores.map((s) => ({ id: s.affiliateId, name: s.storeName }))].map((t) => (
+              <a class:list={["filter", { "is-active": t.id === store }]} href={href({ store: t.id, state })} aria-current={t.id === store ? "page" : undefined}>
+                {t.name}
+              </a>
+            ))}
+          </nav>
+        )}
+        <nav class="filter-row aff-tabs" aria-label="Status komisi">
+          {TABS.map((t) => (
+            <a class:list={["filter", { "is-active": t.value === state }]} href={href({ store, state: t.value })} aria-current={t.value === state ? "page" : undefined}>
+              {t.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <div class="dashboard-stats-grid aff-stats aff-sum" role="status" aria-label="Ringkasan hasil filter">
+        <div class="dashboard-stat-card"><span class="aff-stat-label">Jumlah</span><strong class="aff-stat-value num">{ledger.count} komisi</strong></div>
+        <div class="dashboard-stat-card"><span class="aff-stat-label">Total belanja</span><strong class="aff-stat-value num">{IDR(ledger.baseIdr)}</strong></div>
+        <div class="dashboard-stat-card"><span class="aff-stat-label">Total komisi</span><strong class="aff-stat-value num">{IDR(ledger.commissionIdr)}</strong></div>
+      </div>
+      {ledger.count > LEDGER_LIMIT && <p class="result-count">Menampilkan {LEDGER_LIMIT} terbaru dari {ledger.count} komisi.</p>}
+
+      {ledger.count === 0 ? (
+        filtered ? (
+          <section class="state-card">
+            <h2>Tidak ada komisi yang cocok</h2>
+            <p>Coba status atau toko lain.</p>
+            <a class="button secondary" href="/affiliate/komisi">Hapus filter</a>
+          </section>
+        ) : (
+          <section class="state-card">
+            <h2>Belum ada komisi</h2>
+            <p>Bagikan kode atau link Anda. Pesanan yang memakainya tercatat di sini.</p>
+            <a class="button secondary" href="/affiliate">Ke Ringkasan</a>
+          </section>
+        )
+      ) : (
+        <Ledger rows={ledger.rows} showStore caption="Komisi dari semua program" />
+      )}
+    </>
+  )}
+</Layout>

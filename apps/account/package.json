@@ -1,0 +1,21 @@
+{
+  "name": "@tokophi/account",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev --port 4329",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check:ui": "node scripts/check-ui.mjs"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@astrojs/node": "^9.2.1",
+    "@tokophi/db": "*",
+    "@tokophi/lib": "*",
+    "astro": "^5.14.1",
+    "jose": "^6.2.3",
+    "typescript": "^5.9.3"
+  }
+}

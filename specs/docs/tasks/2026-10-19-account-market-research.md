@@ -1,0 +1,95 @@
+# TokoΦ Account — Indonesian market research (buyer account + store affiliate)
+
+Date: 2026-10-19. Method: web search + page fetches. **Evidence grade** is stated per finding:
+A = official/primary page, B = reputable press or agency page, C = vendor/blog/secondary, N = nothing found.
+Several pages are dated 2026; none of this was verified inside the marketplace apps themselves.
+
+## 1. Buyer: order tracking and completion
+
+| Finding | Grade | Source |
+|---|---|---|
+| Shopee "Perlu Dikirim" = paid (or COD) and waiting for the seller to process; a "Tertunda" order is under review for up to 24 h after payment | A | [Shopee Help — status pesanan](https://help.shopee.co.id/portal/4/article/72518-[Pelacakan-Pesanan]-Dimana-saya-melihat-status-pesanan), Seller Centre article 9795 |
+| Shopee Seller Centre states that from 2026-09-17 orders are completed by the system, ~2 days after arrival, and the buyer's "Pesanan Selesai" button is removed; seller funds are released about 2 days after arrival | B (a Seller Centre page surfaced by search; the exact article was not identified, so no URL is cited; the older buyer page [help 183879](https://help.shopee.co.id/portal/4/article/183879-[Pesanan]%20Mengapa%20saya%20tidak%20dapat%20menekan%20tombol%20%E2%80%9CPesanan%20Selesai%E2%80%9D) still refers to the button — re-check before relying on it) | see note |
+| Shopee return/refund request window: Mall 15 days, Star+ 7 days, other stores 2 days from receipt (or before the order completes) | A | [Shopee Help 73145](https://help.shopee.co.id/portal/4/article/73145-%5BPengembalian-Barang/Dana%5D-Apa-yang-harus-dilakukan-jika-saya-belum-menerima-produk-namun-status-pesanan-telah-diterima?previousPage=secondary+category) |
+| Tokopedia: track with a "Lacak" button; the buyer confirms arrival with "Konfirmasi Pesanan Tiba" | B (page timed out on fetch; seen through search snippet only) | [Tokopedia Help](https://www.tokopedia.com/help/article/pesanan-saya-belum-sampai) |
+| Shopee: a shipped order can be cancelled only with the seller's approval, once per order; unshipped orders auto-cancel when the seller misses the packing window | B | [Bisnis.com](https://finansial.bisnis.com/read/20230214/563/1627795/begini-cara-membatalkan-pesanan-di-shopee-yang-sudah-dikirim), [IDX Channel](https://www.idxchannel.com/milenomic/cara-membatalkan-pesanan-di-shopee-yang-tidak-bisa-dibatalkan-perhatikan-ketentuannya/2) |
+
+Reading: the market convention is **status tabs by next action** (belum bayar → perlu dikirim → dikirim → selesai → batal/pengembalian), a **tracking entry point on the order**, an **explicit, short return window**, and now **system-completed orders**. Our app has the tabs, status-first detail and "Lacak dengan nomor resi"; it has no return/complaint path and no stated window.
+
+## 2. Buyer: payments
+
+- Xendit E-commerce Payments Momentum Report 2026 (Oct 2026, 1,000 Indonesian respondents; Xendit's own transactions): e-wallet used in ~60% of purchases, 70% of buyers use e-wallets for at least half of purchases; QRIS transactions +142% (Jan 2025–Apr 2026) vs credit card +83%; bank transfer ~52% of purchases; **COD still ~40% of purchases but 40% of respondents use it less than a year ago**; **51% abandoned a purchase because their payment method was unavailable**. Grade B/C (interested party, small sample, Xendit-only volume). Sources: [Bisnis.com](https://finansial.bisnis.com/read/20261015/55/2013055/51-konsumen-indonesia-batalkan-belanja-online-akibat-metode-pembayaran-tak-tersedia), [Fortune IDN](https://www.fortuneidn.com/finance/xendit-metode-pembayaran-tak-cocok-bikin-51-konsumen-enggan-belanja-00-4vfn9-mns83w), [Selular.ID](https://selular.id/2026/10/51-konsumen-indonesia-batal-belanja-online-gara-gara-metode-pembayaran/).
+- Reading: the order screen must show **how it was paid and what is still owed** for QRIS/VA/COD alike (it does), and a COD parcel must say "bayar ke kurir" (it does). Payment *method availability* is a checkout concern, not an account concern.
+
+## 3. Buyer: sign-in method
+
+- **Nothing found** that measures phone/WhatsApp OTP vs Google preference for Indonesian e-commerce. Vendor pages (Qiscus, Message Central) promote WhatsApp OTP; CNBC Indonesia notes WhatsApp itself added an email fallback when OTP does not arrive. Grade C/N.
+- Reading: do **not** state a preference as fact. Phone OTP stays phase 2 on its existing blocker; Google remains phase 1. Whether OTP beats Google for TokoΦ buyers is an experiment to run, not a finding to cite.
+
+## 4. Privacy law (UU PDP) — consent
+
+- UU 27/2022 gives data subjects the right to withdraw consent and to access, correct, stop and delete processing (summary: [pasal.id](https://pasal.id/peraturan/uu/uu-no-27-tahun-2022); grade B, non-official summary).
+- Bisnis.com (2026-08-29) reports PP 33/2026 (implementing regulation): explicit consent must be free, informed, **specific and unambiguous**; **bundling consent to data processing with consent to terms and conditions is treated as ambiguous**; information about the processing must be given **before** consent is obtained. [Bisnis.com](https://teknologi.bisnis.com/read/20260829/84/1999753/aturan-turunan-uu-pdp-persetujuan-data-konsumen-lebih-ketat). Grade B; the PP text itself was **not** read (the page was behind a 403, the figures come from the search summary). **A lawyer must confirm against the PP before launch.**
+- Reading for us: the claim screen already has a separate, un-ticked checkbox, the information above it, a stated scope, and per-store withdrawal ("Putuskan"). **Gap: no account-level closure/deletion and no way to see or export what the account holds.** The spec already defines `closure_pending/closed` (§4) but phase 1 never built it.
+
+## 5. Affiliate: how the marketplaces present it
+
+- Shopee Affiliate: commission appears first as an **estimate**, becomes **validated** once the order is validated; cancelled/not-completed orders are not counted; the dashboard shows **clicks, purchases and total commission**; tax and service fees are deducted before payout; commission up to ~4% base (sources disagree on ranges: 1–10%, 2.5–12%) plus "Komisi XTRA". Grade C (blogs/press), no official Shopee page retrieved. [ITERA blog](https://blog.itera.ac.id/?p=4673), [Dealls](https://dealls.com/pengembangan-karir/cara-menggunakan-shopee-affiliate-bagi-pemula), [Selular.ID](https://selular.id/2026/10/shopee-affiliate-untuk-pemula-begini-cara-daftar-dan-strateginya/).
+- TikTok Shop affiliate: commission can be withdrawn only after the order is fully completed with no return/exchange request, above a minimum balance, to the registered bank account; 1–10% typical. No payout day count found. Grade C. [Selular.ID](https://selular.id/2025/12/cara-tarik-komisi-tiktok-affiliate-ke-rekening-dan-e-wallet/).
+- Tax: DJP says affiliate commission is taxable income; Shopee collects a **16-digit NPWP (NIK matched to NPWP)** as a payout requirement and withholds PPh 21 automatically; the rate basis was changed by PP 20/2026 and was **not verified**. Grade B for the principle ([pajak.go.id](https://www.pajak.go.id/id/artikel/affiliator-cuan-jalan-pajak-aman)), N for current rates.
+- Reading: our vocabulary (Siap dibayar / Ditahan / Dibayar, H+3 return hold, only completed orders count, ledger per store) matches the market's *estimate → validated → paid* model. **Differences that matter:** (a) TokoΦ stores pay commission **directly**, so any withholding duty sits with the store, not the platform — nothing on screen may imply the platform deducts tax; (b) we have **no click data**, so a "klik" column would be invented; (c) there is no minimum payout or platform wallet.
+
+## 6. What this research does NOT support (do not write it into the spec as fact)
+
+- Any claim about which sign-in method Indonesians prefer.
+- Any specific current Shopee/TikTok payout schedule, minimum, or tax rate.
+- That Tokopedia and Shopee share one status vocabulary (each page found covers one marketplace).
+- Market share numbers for COD, e-wallet or QRIS outside Xendit's own data.
+
+## 7. Stage-2 research (return / complaint hand-off), added 2026-10-19
+
+| Finding | Grade | Source |
+|---|---|---|
+| Shopee return requests need photo or video proof of the problem; one request per order; the item must come back in original condition (guides and press, not the official help page; one academic source describes stricter, older rules) | C | [IDX Channel](https://www.idxchannel.com/banking/bagaimana-cara-pengembalian-barang-di-shopee), [Babel Insight](https://www.babelinsight.id/cara-retur-barang-di-shopee-terbaru-2026-resmi-dan-aman-tanpa-ribet), [Industry.co.id](https://www.industry.co.id/read/130736/shopee-pastikan-program-retur-barang-harus-sesuai-ketentuan) |
+| WhatsApp is the most-used platform for selling across generations (Jakpat, Feb 2026, n=1,387: Gen Z 72%, Millennial 80%, Gen X 78%) and 74% of respondents chose it as the channel for messages from companies (MEF Consumer Survey 2026). **No data on complaint handling specifically.** | B/C | [GoodStats](https://data.goodstats.id/statistic/simak-media-sosial-yang-paling-sering-digunakan-untuk-berjualan-pada-2026-nvc1w), [MEF](https://mobileecosystemforum.com/?p=223812) |
+| UU 8/1999 Pasal 4 h and Pasal 7 g: a consumer may claim compensation, damages or replacement when goods do not match the agreement, and the business must provide it; Pasal 8(1)(f) treats goods that differ from the advertised description as a prohibited practice; it covers online sales (secondary legal commentary, not the statute text) | B | [Hukumonline](https://www.hukumonline.com/klinik/a/perlindungan-hukum-bagi-konsumen-belanja-online-lt50bf69280b1ee/), [Hukumonline berita](https://www.hukumonline.com/berita/a/perlindungan-hukum-konsumen-belanja-online-lt627a189298de0?page=all) |
+| PP 80/2019 (PMSE) covers merchant obligations, e-contracts, shipping, **exchange of goods, cancellation of purchase and dispute settlement**; a consumer can report harm to the Minister and the merchant must resolve it. **The articles themselves were not read.** | B | [peraturan.go.id](https://peraturan.go.id/files/pp80-2019pjl.pdf), [SmartLegal](https://smartlegal.id/galeri-hukum/lainnya/2019/12/09/pedagang-online-wajib-memiliki-izin-usaha-spsme/) |
+| Whether a "no returns" clause is void (klausula baku, Pasal 18) — **not established** | N | — |
+
+Reading for the product (not legal advice): (a) a store's declared window is *store policy*, while a buyer's claim about goods that do not match what was sold does not obviously depend on any number the store writes — so the complaint button must **not** be gated by the window; (b) marketplaces ask for photo/video, so the hand-off should prompt the buyer to prepare it, without promising what the store will do; (c) the screen must not cite a legal basis until a lawyer confirms the PP and the statute text (spec OD-6).
+
+## 8. Primary sources read, 2026-10-19 (grade A — the official text itself)
+
+The two statutes below were downloaded from the official portals and read as text (not through a summary).
+Quotations are short; the articles are public legal text. **Interpretation of how they apply to TokoΦ stores
+and to TokoΦ itself is a legal question and is not made here** (spec §20.5).
+
+**PP 80/2019 on trade through electronic systems** — body text, `peraturan.go.id/files/pp80-2019bt.pdf`
+(Lembaran Negara 2019 No. 222), with its Penjelasan (TLN 6420, `pp80-2019pjl.pdf`):
+- **Pasal 27 (1):** "Pelaku Usaha wajib menyediakan layanan pengaduan bagi Konsumen." **(2):** the complaint service
+  covers at least: address and contact number; the complaint procedure; the follow-up mechanism; competent staff;
+  and **the time period for resolving a complaint**.
+- **Pasal 66:** an e-commerce operator (PPMSE) that arranges delivery must give accurate, timely information on the
+  delivery period and status to the consumer, periodically; a mismatch that causes a dispute must be resolved by it.
+- **Pasal 69 (1):** merchants and PPMSE "wajib memberikan jangka waktu **paling sedikit 2 (dua) hari kerja** untuk
+  penukaran Barang dan/atau Jasa, atau pembatalan pembelian, terhitung sejak Barang dan/atau Jasa diterima oleh
+  Konsumen." **(2)** the grounds: the goods sent are wrong or do not match; the actual delivery period does not match;
+  hidden defect; goods damaged; goods expired. **(3)** the consumer may be charged only the cost of shipping the goods
+  back. **(4)** shipping cost may be charged to the consumer if the consumer's own carelessness contributed.
+- **Pasal 71:** every PPMSE that receives payment "wajib memiliki atau menyediakan mekanisme yang dapat memastikan
+  pengembalian dana Konsumen apabila terjadi pembatalan pembelian" (the Penjelasan gives an escrow account as an example).
+- **Pasal 72:** disputes may go to court or other dispute mechanisms, including online dispute resolution; a consumer
+  can sue a domestic business through the consumer dispute body (BPSK) or in the court where the consumer is based.
+
+**UU 8/1999 on Consumer Protection** — `peraturan.bpk.go.id/Download/33784/UU Nomor 8 Tahun 1999.pdf`:
+- **Pasal 4 (h):** the consumer's right to "kompensasi, ganti rugi dan/atau penggantian, apabila barang dan/atau jasa yang
+  diterima tidak sesuai dengan perjanjian atau tidak sebagaimana mestinya." **Pasal 7 (g)** is the matching duty of the business.
+- **Pasal 18 (1)(b), (c):** a business is forbidden to put a standard clause (klausula baku) in a document or agreement that
+  states it may refuse the return of goods bought, or refuse the return of money paid. **(3):** such a clause is "batal demi hukum".
+
+What this changes in the product (decided in spec §19.1 R9–R12, §20): a declared return window is in **hari kerja** and
+**cannot be below 2** (migration 0120); a store without a complaint contact cannot offer the buyer a complaint route
+(Pasal 27); the window figure must not be used to refuse non-conforming goods; the platform's own duties as a payment-receiving
+operator (Pasal 71) and delivery-status duty (Pasal 66) are flagged for review, not asserted.
+
+Still **not** read: PP 33/2026 (UU PDP implementing regulation; the official text was not located) and the PP 20/2026 tax change.

@@ -6,6 +6,27 @@
       "label": "Seller (merchant panel)",
       "routes": [
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/affiliate/page.tsx",
+          "clients": [
+            "affiliate-client.tsx"
+          ],
+          "data": [
+            "affiliates"
+          ],
+          "actions": [
+            "affiliates"
+          ],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "'Affiliate' (under Promo) — store affiliate programme: commissions with 'Tandai dibayar', affiliates (approve/reject/deactivate/add), programme settings and per-product rates (Task 9.4, `specs/AFFILIATE_SPEC.md`)."
+        },
+        {
           "url": "/akun/keamanan",
           "kind": "page",
           "methods": [],
@@ -2094,6 +2115,30 @@
           "whatItIs": "Not found (also what a wrong Host resolves to)."
         },
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/storefront/src/pages/affiliate.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate",
+            "catalog"
+          ],
+          "lib": [
+            "chat"
+          ],
+          "locals": true,
+          "db": false,
+          "gate": [
+            "rate-limit"
+          ],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5)."
+        },
+        {
           "url": "/api/chat/poll",
           "kind": "endpoint",
           "methods": [
@@ -2840,6 +2885,495 @@
           "whatItIs": "Sitemap for the apex."
         }
       ]
+    },
+    {
+      "app": "apps/account",
+      "label": "Akun TokoΦ (buyer account + affiliate dashboard, SSR auth)",
+      "routes": [
+        {
+          "url": "/404",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/404.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Not found — also what every 'not mine' record answers (another account's order, store or programme)."
+        },
+        {
+          "url": "/account",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/account/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "account",
+            "addresses",
+            "affiliate",
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view",
+            "session"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme."
+        },
+        {
+          "url": "/addresses/edit",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/addresses/edit.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "addresses"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Add (no `?id`) or edit (`?id=<mine>`) a saved address."
+        },
+        {
+          "url": "/addresses",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/addresses/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "addresses"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Alamat' — saved addresses: list, make primary, delete."
+        },
+        {
+          "url": "/addresses/wilayah",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/addresses/wilayah.ts",
+          "layout": [],
+          "data": [
+            "addresses"
+          ],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Kecamatan search for the address form (signed-in only), through the ONE shared reference source."
+        },
+        {
+          "url": "/affiliate/[id]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/affiliate/[id].astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "affiliate-view",
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "One programme: code, share link, status banner, this store's totals and ledger."
+        },
+        {
+          "url": "/affiliate/gabung",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/affiliate/gabung.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "affiliate-view",
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Apply to ONE store's programme as a signed-in account; the merchant still approves it."
+        },
+        {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/affiliate/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "affiliate-view",
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/account/src/lib/nav.test.ts"
+          ],
+          "whatItIs": "'Affiliate' · Ringkasan — totals across every store the account promotes, and the hold rule in one line."
+        },
+        {
+          "url": "/affiliate/komisi",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/affiliate/komisi.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "affiliate-view",
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Komisi' — one ledger across every programme of this account, filtered by status."
+        },
+        {
+          "url": "/affiliate/program",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/affiliate/program.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Program' — every store this account promotes, one row each."
+        },
+        {
+          "url": "/affiliate/undangan",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/affiliate/undangan.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "affiliate-view",
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/account/src/lib/nav.test.ts"
+          ],
+          "whatItIs": "Accept a seller's invitation — the ONLY way an existing store affiliate row is bound to an account (single-use handle)."
+        },
+        {
+          "url": "/auth/google/callback",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/auth/google/callback.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session."
+        },
+        {
+          "url": "/auth/google/start",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/auth/google/start.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Google sign-in start — mints the 128-bit `state` cookie and the safe `next`."
+        },
+        {
+          "url": "/",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate",
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it."
+        },
+        {
+          "url": "/keluar",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/account/src/pages/keluar.ts",
+          "layout": [],
+          "data": [
+            "account"
+          ],
+          "lib": [
+            "session"
+          ],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Revokes this session row and deletes the cookie."
+        },
+        {
+          "url": "/klaim",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/klaim.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Saves an order to the account from the store's checkout-success link (ACC-11). A claim is keyed on a UNIQUE `order_id`."
+        },
+        {
+          "url": "/masuk",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/masuk.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "dev-signin",
+            "nav"
+          ],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": true,
+          "tests": [],
+          "whatItIs": "Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle)."
+        },
+        {
+          "url": "/masuk/dev",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/account/src/pages/masuk/dev.ts",
+          "layout": [],
+          "data": [
+            "account"
+          ],
+          "lib": [
+            "dev-signin",
+            "nav",
+            "signin"
+          ],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden."
+        },
+        {
+          "url": "/orders/[number]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/orders/[number]/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one."
+        },
+        {
+          "url": "/orders/[number]/receipt",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/orders/[number]/receipt.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Bukti pesanan — the printable page under the order's own URL."
+        },
+        {
+          "url": "/orders",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/orders/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Pesanan' — only orders saved to this account, from stores still linked."
+        },
+        {
+          "url": "/stores/[slug]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/stores/[slug].astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link."
+        },
+        {
+          "url": "/stores",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/stores/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Toko' — stores this account is actively linked to, most recent purchase first."
+        }
+      ]
     }
   ],
   "modules": {
@@ -2848,6 +3382,12 @@
         "module": "activity.ts",
         "exports": [
           "getActivityFeed"
+        ]
+      },
+      {
+        "module": "affiliates.ts",
+        "exports": [
+          "getAffiliateProgram"
         ]
       },
       {
@@ -3223,6 +3763,17 @@
     ],
     "apps/admin/lib/actions": [
       {
+        "module": "affiliates.ts",
+        "exports": [
+          "createAffiliate",
+          "inviteAffiliateToAccount",
+          "markCommissionPaid",
+          "saveAffiliateSettings",
+          "setAffiliateStatus",
+          "setProductAffiliateRate"
+        ]
+      },
+      {
         "module": "articles.ts",
         "exports": [
           "createArticle",
@@ -3390,6 +3941,13 @@
         ]
       },
       {
+        "module": "pengaduan.ts",
+        "exports": [
+          "getComplaintService",
+          "saveComplaintService"
+        ]
+      },
+      {
         "module": "picker.ts",
         "exports": [
           "pickerCategoryImages",
@@ -3450,6 +4008,13 @@
         "module": "rekening.ts",
         "exports": [
           "getBankAccount"
+        ]
+      },
+      {
+        "module": "retur.ts",
+        "exports": [
+          "getReturnWindow",
+          "saveReturnWindow"
         ]
       },
       {
@@ -3825,6 +4390,12 @@
     ],
     "apps/storefront/src/data": [
       {
+        "module": "affiliate.ts",
+        "exports": [
+          "applyAffiliate"
+        ]
+      },
+      {
         "module": "cache.ts",
         "exports": [
           "cacheClear",
@@ -3849,6 +4420,7 @@
           "promoHub",
           "randomProducts",
           "recentProducts",
+          "storeAffiliateEnabled",
           "storeCodEnabled",
           "storeCodPolicy",
           "storeFreeShip",

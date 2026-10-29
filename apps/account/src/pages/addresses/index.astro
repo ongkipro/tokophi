@@ -1,0 +1,109 @@
+---
+// Saved addresses (ACC-7, spec §6 + §18.4): list, make primary, delete. Create/edit live on
+// /addresses/edit. No JavaScript needed anywhere: "Hapus" reloads with ?hapus=<id> and an inline
+// confirm panel that names what happens to the primary, and every action is a POST + 303 redirect.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { deleteAddress, MAX_ADDRESSES, myAddresses, setPrimaryAddress } from "../../data/addresses";
+import { signInUrl } from "../../lib/nav";
+import { phone } from "../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  const id = f.get("id");
+  const ok =
+    f.get("do") === "primary" ? (await setPrimaryAddress(db, account.id, id)) && "utama"
+    : f.get("do") === "delete" ? (await deleteAddress(db, account.id, id)) && "dihapus"
+    : false;
+  return Astro.redirect(`/addresses?${ok ? `ok=${ok}` : "gagal=1"}`, 303);
+}
+const list = await myAddresses(db, account.id);
+const full = list.length >= MAX_ADDRESSES;
+const NOTICES: Record<string, string> = {
+  disimpan: "Alamat disimpan.",
+  utama: "Alamat utama diganti.",
+  dihapus: "Alamat dihapus.",
+};
+const notice = NOTICES[Astro.url.searchParams.get("ok") ?? ""] ?? null;
+const failed = Astro.url.searchParams.has("gagal");
+// The confirm panel is open for exactly one of MY addresses; any other id is simply ignored.
+const confirming = list.find((a) => a.id === Astro.url.searchParams.get("hapus")) ?? null;
+// deleteAddress promotes the most recently updated other row — the first non-primary in this list.
+const successor = list.find((a) => !a.isPrimary) ?? null;
+const name = (a: (typeof list)[number]) => a.label ?? a.recipient;
+---
+<Layout title="Alamat" active="alamat">
+  <header class="page-header">
+    <div>
+      <h1>Alamat tersimpan</h1>
+      <p class="lead">Simpan sampai {MAX_ADDRESSES} alamat. Mengubah atau menghapus alamat di sini tidak mengubah pesanan yang sudah dibuat.</p>
+    </div>
+    {!full && list.length > 0 && <a class="button primary" href="/addresses/edit">Tambah alamat</a>}
+  </header>
+
+  {notice && (
+    <p class="acc-notice" role="status">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+      {notice}
+    </p>
+  )}
+  {failed && <p class="acc-notice bad" role="alert">Alamat tidak ditemukan atau sudah berubah. Muat ulang daftar dan coba lagi.</p>}
+
+  {list.length === 0 ? (
+    <section class="state-card">
+      <h2>Belum ada alamat tersimpan</h2>
+      <p>Tambahkan alamat rumah atau kantor. Alamat pertama otomatis menjadi alamat utama.</p>
+      <a class="button primary" href="/addresses/edit">Tambah alamat</a>
+    </section>
+  ) : (
+    <div class="address-grid">
+      {list.map((a) => (
+        <article class="address-card" id={`alamat-${a.id}`} aria-labelledby={`h-${a.id}`}>
+          <div class="address-head">
+            <h2 id={`h-${a.id}`}>{a.label ?? "Alamat"}</h2>
+            {a.isPrimary && <span class="badge connected">Utama</span>}
+          </div>
+          <p>
+            <strong>{a.recipient}</strong><br />
+            <span class="acc-num">{phone(a.phone)}</span><br />
+            {a.address}{a.kelurahan ? `, ${a.kelurahan}` : ""}<br />
+            {a.area?.text ?? "Kecamatan tidak dikenal"} {a.postalCode}
+          </p>
+          {confirming?.id === a.id ? (
+            <div class="acc-confirm" id={`hapus-${a.id}`} role="group" aria-labelledby={`q-${a.id}`}>
+              <p id={`q-${a.id}`}><strong>Hapus alamat {name(a)}?</strong></p>
+              <p>
+                {!a.isPrimary
+                  ? "Alamat utama tidak berubah."
+                  : successor
+                    ? `${name(successor)} akan menjadi alamat utama.`
+                    : "Tidak ada alamat lain, jadi Anda belum punya alamat utama sampai menambah alamat baru."}
+              </p>
+              <div class="card-actions">
+                <form method="post">
+                  <input type="hidden" name="id" value={a.id} />
+                  <button class="danger-solid" name="do" value="delete">Ya, hapus</button>
+                </form>
+                <a href={`/addresses#alamat-${a.id}`}>Batal</a>
+              </div>
+            </div>
+          ) : (
+            <div class="card-actions">
+              <a href={`/addresses/edit?id=${a.id}`}>Ubah<span class="sr-only"> alamat {name(a)}</span></a>
+              {!a.isPrimary && (
+                <form method="post">
+                  <input type="hidden" name="id" value={a.id} />
+                  <button name="do" value="primary">Jadikan utama<span class="sr-only"> ({name(a)})</span></button>
+                </form>
+              )}
+              <a class="danger-link" href={`/addresses?hapus=${a.id}#hapus-${a.id}`}>Hapus<span class="sr-only"> alamat {name(a)}</span></a>
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+  )}
+  {full && <p class="acc-cap" role="note">Sudah {MAX_ADDRESSES} alamat, batas maksimal. Hapus salah satu untuk menambah alamat baru.</p>}
+</Layout>

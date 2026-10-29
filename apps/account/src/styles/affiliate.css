@@ -1,0 +1,246 @@
+/* affiliate-area styles (spec §18). Owned by the affiliate track; prefer prototype.css classes first.
+   Everything here is prefixed `aff-` except the one badge tone the prototype never needed (`danger`). */
+
+.badge.danger {
+  /* #b91c1c in light: --destructive on its own 10 % tint measured 4.15:1; dark keeps the token (5.51:1). */
+  background: color-mix(in oklab, var(--destructive) 10%, var(--card)); color: #b91c1c;
+  border-color: color-mix(in oklab, var(--destructive) 25%, transparent);
+}
+.dark .badge.danger { color: var(--destructive); }
+.num { font-variant-numeric: tabular-nums; }
+a.filter { text-decoration: none; }
+
+/* Codes (affiliate code, PHI number): a code is the one place mono reads right. */
+.aff-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.95em; letter-spacing: 0.01em; }
+.aff-big-code {
+  margin: 4px 0 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 24px; font-weight: 600; letter-spacing: 0.04em; overflow-wrap: anywhere;
+}
+.aff-label { margin: 0; font-size: 13px; color: var(--muted-foreground); }
+
+.aff-notice { margin-bottom: 20px; }
+.aff-hold { margin: -12px 0 24px; font-size: 13px; }
+.field-help.aff-help { margin: 0; font-weight: 400; }
+.aff-optional { font-weight: 400; color: var(--muted-foreground); font-size: 12px; }
+.aff-narrow { max-width: 680px; }
+
+/* Stat tiles: the prototype's dashboard tiles, three across; on phones the first (Siap) spans. */
+.aff-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.aff-stat-value { white-space: nowrap; }
+/* Desktop: "Siap dibayar" leads (hero tile + two smaller); Komisi's totals row stays three equal. */
+@media (min-width: 901px) {
+  .aff-stats:not(.aff-sum) { grid-template-columns: 1.5fr 1fr 1fr; }
+  .aff-stats:not(.aff-sum) > :first-child .aff-stat-value { font-size: 30px; }
+}
+.aff-stat-label { font-size: 13px; color: var(--muted-foreground); font-weight: 500; display: block; margin-bottom: 4px; }
+.aff-stat-value { font-size: 22px; font-weight: 700; color: var(--foreground); overflow-wrap: anywhere; }
+.aff-stat-note { display: block; font-size: 12px; color: var(--muted-foreground); margin-top: auto; padding-top: 6px; }
+.aff-stats .dashboard-stat-card { justify-content: flex-start; }
+@media (max-width: 900px) {
+  .aff-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .aff-stats > :first-child { grid-column: 1 / -1; }
+}
+
+/* Programme row = prototype order card; the store name link stretches over the card. */
+.aff-row { position: relative; cursor: default; }
+.aff-row .store-mark { width: 48px; height: 48px; }
+.aff-sub { display: block; margin-top: 2px; }
+.aff-row-link { color: inherit; text-decoration: none; }
+.aff-row-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.aff-row-link:focus-visible { outline: none; }
+.aff-row:has(.aff-row-link:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+.aff-share {
+  grid-column: 1 / -1; position: relative; z-index: 1;
+  display: flex; gap: 8px; align-items: center;
+  padding-top: 12px; border-top: 1px dashed var(--border);
+}
+.aff-link-row { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+.aff-link {
+  position: relative; flex: 1; min-width: 0; display: block; overflow: hidden; white-space: nowrap;
+  line-height: 22px; min-height: 36px; padding: 6px 10px; font-size: 13px;
+  border: 1px solid var(--input); border-radius: var(--radius-md); background: var(--muted);
+}
+.aff-link-pretty { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--muted-foreground); user-select: none; -webkit-user-select: none; }
+.aff-link-pretty strong { color: var(--foreground); font-weight: 600; }
+.aff-link-host { color: var(--muted-foreground); }
+/* Invisible but selectable: a press or drag on the box selects the real URL. */
+.aff-link-full {
+  position: absolute; inset: 0; padding: 6px 10px; overflow: hidden; white-space: nowrap;
+  color: transparent; user-select: all; -webkit-user-select: all;
+}
+.aff-link-full::selection { color: transparent; background: color-mix(in oklab, var(--primary) 25%, transparent); }
+.aff-link-row .button { flex-shrink: 0; }
+.aff-share-block { display: grid; gap: 8px; }
+.aff-share input, .aff-join-row input {
+  flex: 1; min-width: 0; min-height: 36px; padding: 6px 10px;
+  border: 1px solid var(--input); border-radius: var(--radius-md);
+  background: var(--muted); color: var(--foreground); font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.aff-join-row { display: flex; gap: 8px; align-items: stretch; }
+.aff-join .aff-join-row input { font-family: inherit; background: var(--background); font-size: 14px; }
+.aff-share .button, .aff-join-row .button { flex-shrink: 0; }
+
+/* Forms: errors next to their field, values kept (spec §18.4 H). */
+.aff-join { gap: 8px; }
+.aff-error { margin: 0; color: var(--destructive); font-size: 13px; font-weight: 500; }
+.aff-alert {
+  margin: 0; padding: 12px 14px; border-radius: var(--radius-md); font-size: 14px;
+  color: var(--destructive); background: color-mix(in oklab, var(--destructive) 8%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--destructive) 25%, transparent);
+}
+.aff-after { margin-top: 16px; }
+.aff-empty > p { margin: 0 0 16px; color: var(--muted-foreground); max-width: 620px; }
+.aff-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 16px; }
+.aff-fieldset legend { width: 100%; padding: 16px 0 8px; border-top: 1px solid var(--border); font-size: 14px; font-weight: 600; }
+.local-form .form-field input { font-weight: 400; }
+
+/* Store identity card on Gabung / Undangan. */
+.aff-store-card { display: flex; align-items: center; gap: 14px; }
+.aff-store-card > div { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.aff-store-card > div > span { font-size: 13px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.aff-store-inline { padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.aff-consent { display: grid; gap: 16px; }
+.aff-consent-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; line-height: 1.55; }
+.aff-consent .dialog-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* Programme status banner and detail header. */
+.aff-meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.aff-banner {
+  margin-bottom: 20px; padding: 14px 16px; border-radius: var(--radius-lg); font-size: 14px;
+  border: 1px solid color-mix(in oklab, #f59e0b 25%, var(--border));
+  background: color-mix(in oklab, #f59e0b 8%, var(--card));
+}
+.aff-banner.danger {
+  border-color: color-mix(in oklab, var(--destructive) 25%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 7%, var(--card));
+}
+.aff-banner p { margin: 4px 0 0; color: var(--muted-foreground); line-height: 1.5; }
+.aff-refs { margin: 0 0 12px; }
+.aff-404-title { font-size: 18px; margin: 0 0 8px; }
+
+/* Programme detail: ledger left, code / payout / contact right; on phones the code comes first. */
+.aff-detail {
+  display: grid; gap: 24px; align-items: start;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  grid-template-areas: "ledger code" "ledger bank" "ledger ask";
+  grid-template-rows: auto auto 1fr;
+}
+.aff-d-code { grid-area: code; }
+.aff-d-ledger { grid-area: ledger; min-width: 0; }
+.aff-d-bank { grid-area: bank; }
+.aff-d-ask { grid-area: ask; }
+.aff-d-ask p { margin: 0 0 12px; }
+@media (max-width: 1023px) {
+  .aff-detail { grid-template-columns: minmax(0, 1fr); grid-template-areas: "code" "ledger" "bank" "ask"; grid-template-rows: none; }
+}
+
+/* Komisi toolbar + count. */
+/* Filter chips: one line that scrolls sideways, never wraps. */
+.filter-row.aff-tabs { display: flex; width: max-content; max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.aff-tabs .filter { flex-shrink: 0; min-height: 36px; }
+/* Filtered totals: three small tiles in one row, stacked on narrow phones. */
+.aff-sum { margin-bottom: 16px; }
+.aff-sum .aff-stat-value { font-size: 18px; }
+@media (max-width: 900px) { .aff-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); } .aff-sum > :first-child { grid-column: auto; } }
+@media (max-width: 640px) {
+  /* One compact three-column row, label above figure, so the first ledger card stays above the fold. */
+  .aff-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .aff-sum .dashboard-stat-card { padding: 8px 10px; }
+  .aff-sum .aff-stat-label { font-size: 11px; margin-bottom: 2px; }
+  .aff-sum .aff-stat-value { font-size: 14px; }
+  .filter-row.aff-tabs { margin-bottom: 8px; padding-top: 2px; padding-bottom: 2px; gap: 2px; }
+  .aff-tabs .filter { min-height: 38px; padding: 4px 10px; }
+}
+
+/* Ledger: a table where it fits… */
+.aff-ledger-wrap { container: ledger / inline-size; }
+.aff-ledger-card { padding: 0; overflow: hidden; }
+.aff-ledger { width: 100%; border-collapse: collapse; font-size: 14px; }
+.aff-ledger th {
+  text-align: left; font-size: 12px; font-weight: 500; color: var(--muted-foreground);
+  padding: 10px 16px; background: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.aff-ledger td { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle, var(--border)); vertical-align: middle; }
+.aff-ledger tbody tr:last-child td { border-bottom: 0; }
+.aff-ledger .num { text-align: right; white-space: nowrap; }
+.aff-ledger .c-date { text-align: left; color: var(--muted-foreground); }
+.aff-ledger .c-comm { font-weight: 600; }
+.aff-ledger .c-state { white-space: nowrap; }
+.aff-ledger .c-store a { color: var(--foreground); font-weight: 500; text-decoration: none; }
+.aff-ledger .c-store a:hover { color: var(--primary); text-decoration: underline; }
+.aff-rate { display: block; font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+.aff-m { display: none; }
+
+/* …and stacked cards where it does not (spec: on phones "rows become stacked cards"). */
+@container ledger (max-width: 600px) {
+  .aff-ledger-card { background: transparent; border: 0; box-shadow: none; overflow: visible; }
+  .aff-ledger thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .aff-ledger, .aff-ledger tbody { display: block; }
+  .aff-ledger tbody { display: grid; gap: 10px; }
+  .aff-ledger tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center;
+    padding: 14px 16px; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    grid-template-areas: "order comm" "date state" "base base";
+  }
+  .aff-ledger.with-store tr { grid-template-areas: "store comm" "order state" "date base"; }
+  .aff-ledger td { display: block; padding: 0; border: 0; }
+  .aff-ledger .c-store { grid-area: store; }
+  .aff-ledger .c-order { grid-area: order; font-size: 13px; }
+  .aff-ledger .c-comm { grid-area: comm; text-align: right; }
+  .aff-ledger .c-state { grid-area: state; justify-self: end; }
+  .aff-ledger .c-date { grid-area: date; font-size: 13px; }
+  .aff-ledger .c-base { grid-area: base; text-align: left; font-size: 13px; color: var(--muted-foreground); }
+  .aff-ledger.with-store .c-base { text-align: right; }
+  .aff-ledger .aff-rate { display: inline; margin-left: 4px; }
+  .aff-m { display: inline; }
+}
+.aff-ledger .c-order { white-space: nowrap; }
+@media (max-width: 640px) {
+  .aff-share .aff-link-row { flex-wrap: wrap; }
+  .aff-share .aff-link { flex-basis: 100%; }
+  .aff-share .button { width: 100%; }
+}
+
+/* Review round 2: one filter toolbar on desktop, compact totals, a fade cue on scrolling chip rows. */
+.aff-more { margin: 12px 0 0; }
+@media (min-width: 1024px) {
+  .aff-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 16px; }
+  .aff-filters .filter-row { margin-bottom: 0; }
+  .aff-filters .filter { padding: 6px 9px; }
+  .aff-sum .dashboard-stat-card { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+  .aff-sum .aff-stat-label { margin: 0; }
+  .aff-sum .aff-stat-value { font-size: 16px; }
+}
+/* The row's own end padding is scrollable overflow, so the faded strip is empty when not scrolled
+   and the last chip is fully visible at the end of a scroll. */
+@media (max-width: 1023px) {
+  .filter-row.aff-tabs {
+    padding-right: 40px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  }
+}
+
+/* Program list: every real figure of the programme as a compact strip under the row. */
+.aff-strip {
+  grid-column: 1 / -1; margin: 0; padding-top: 12px; border-top: 1px dashed var(--border);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px 16px;
+}
+.aff-strip div { min-width: 0; }
+.aff-strip dt { font-size: 12px; color: var(--muted-foreground); }
+.aff-strip dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; }
+.aff-detail-cue { align-self: start; font-size: 13px; font-weight: 500; color: var(--primary); white-space: nowrap; }
+@media (max-width: 640px) {
+  .aff-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .aff-detail-cue { display: none; }
+}
+
+
+/* A share link is data: on a phone it wraps instead of cutting off the part that identifies the affiliate.
+   (Lives here, after the base .aff-link rules: an earlier copy in buyer.css lost the cascade.) */
+@media (max-width: 640px) {
+  .aff-link { white-space: normal; }
+  .aff-link-pretty { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+}

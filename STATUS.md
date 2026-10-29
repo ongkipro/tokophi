@@ -32,8 +32,8 @@ Use `BLOCKED` only as an interruption state. Record the blocker and exact state 
 
 **The product is LIVE and has been since 2026-07-13** (`tokophi.com` landing · `app.` Seller panel ·
 `rich.` Super Admin · `<slug>.tokophi.id` storefronts). One Vultr box (`volumdev`, 45.77.33.112)
-running Coolify + `docker-compose.coolify.yml`; Postgres 16 with **109 migrations (`0000`–`0108`)**
-and **83 tables** (counted from `packages/db/drizzle/meta/_journal.json` and `schema.ts`,
+running Coolify + `docker-compose.coolify.yml`; Postgres 16. Counts on branch `feat/accounts` (2026-10-19): **122 migrations (`0000`–`0121`)**
+and **91 tables**; `0116`–`0121` and `apps/account` are **not deployed**. Counts below were 109 / 83 (counted from `packages/db/drizzle/meta/_journal.json` and `schema.ts`,
 2026-09-11 — the count is guarded by `packages/db/src/doc-counts.test.ts`); RLS verified `54/55`
 store-scoped tables (`npm run verify-rls -w @tokophi/db`, 2026-09-11). Shape of the system:
 `ARCHITECTURE.md`.

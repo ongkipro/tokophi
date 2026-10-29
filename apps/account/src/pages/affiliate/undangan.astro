@@ -1,0 +1,71 @@
+---
+// Accept a seller's invitation (ACC-14): the ONLY way an existing store affiliate is bound to an
+// account. The token lives in this URL, so the page loads no third-party script and sends no Referer
+// (middleware). Sign-in first, then a confirmation screen naming the store — never a silent bind.
+import Layout from "../../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { acceptInvite, previewInvite } from "../../data/affiliate";
+import { signInUrl } from "../../lib/nav";
+import { initials } from "../../lib/affiliate-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+let token = Astro.url.searchParams.get("t") ?? "";
+let error: string | null = null;
+let member = false;
+if (Astro.request.method === "POST") {
+  token = String((await Astro.request.formData()).get("t") ?? "");
+  const r = await acceptInvite(db, account.id, token);
+  if (r.ok) return Astro.redirect(`/affiliate/${r.affiliateId}`, 303);
+  member = r.reason === "member";
+  error = member
+    ? "Akun ini sudah terhubung dengan affiliate lain di toko ini."
+    : "Undangan ini tidak berlaku lagi (sudah dipakai, kedaluwarsa, atau dibatalkan). Minta seller mengirim undangan baru.";
+}
+const invite = error ? null : await previewInvite(db, token);
+---
+<Layout title="Undangan affiliate" active="gabung">
+  {invite ? (
+    <>
+      <header class="page-header">
+        <div>
+          <h1>Hubungkan ke Akun TokoΦ</h1>
+          <p class="lead">Seller mengundang Anda menghubungkan program affiliate tokonya ke akun ini.</p>
+        </div>
+      </header>
+      <section class="section-card aff-narrow aff-consent">
+        <div class="aff-store-card aff-store-inline">
+          <span class="store-mark" aria-hidden="true">{initials(invite.storeName)}</span>
+          <div>
+            <strong>{invite.storeName}</strong>
+            <span>Affiliate {invite.affiliateName} · kode <span class="aff-code">{invite.code}</span></span>
+          </div>
+        </div>
+        <ul class="aff-consent-list">
+          <li>Komisi kode ini di {invite.storeName} tampil di akun <strong>{account.email}</strong>.</li>
+          <li>Toko tidak mendapat akses ke akun Anda, pesanan Anda, atau toko lain yang Anda promosikan.</li>
+          <li>Rekening pembayaran tetap dicatat dan diubah oleh seller.</li>
+        </ul>
+        <form method="post" class="dialog-actions">
+          <input type="hidden" name="t" value={token} />
+          <button class="button primary" type="submit">Hubungkan</button>
+          <a class="button secondary" href="/affiliate">Bukan saya, batal</a>
+        </form>
+      </section>
+    </>
+  ) : (
+    <>
+      <header class="page-header">
+        <div><h1>Undangan tidak berlaku</h1></div>
+      </header>
+      <section class="state-card aff-narrow" role={error ? "alert" : undefined}>
+        <h2>{member ? "Sudah terhubung" : "Link sudah tidak bisa dipakai"}</h2>
+        <p>{error ?? "Link ini sudah dipakai, kedaluwarsa, atau dibatalkan. Minta seller mengirim undangan baru."}</p>
+        <div class="card-links">
+          <a class="button primary" href="/affiliate/gabung">Gabung program toko</a>
+          <a class="button secondary" href="/affiliate">Ke Ringkasan affiliate</a>
+        </div>
+      </section>
+    </>
+  )}
+</Layout>

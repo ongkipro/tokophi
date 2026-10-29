@@ -1,0 +1,21 @@
+---
+// A share link people can read: the store's host (muted) and the ref code (prominent). The full URL
+// sits in a transparent overlay on top of it, so a press/drag selects the real link without JS, and
+// the copy button (shown only when JS runs, components/CopyScript) copies that same full URL.
+interface Props {
+  link: string;
+  code: string;
+  id: string;
+  label: string;
+  button?: string;
+}
+const { link, code, id, label, button = "Salin link" } = Astro.props;
+const host = link.replace(/^https?:\/\//, "").split("/")[0];
+---
+<div class="aff-link-row">
+  <span class="aff-link" title={link}>
+    <span class="aff-link-pretty" aria-hidden="true"><span class="aff-link-host">{host}</span> · ref <strong class="aff-code">{code}</strong></span>
+    <span class="aff-link-full" id={id} aria-label={`${label}: ${link}`}>{link}</span>
+  </span>
+  <button class="button secondary" type="button" data-copy={id} data-copy-value={link} hidden>{button}</button>
+</div>

@@ -1,0 +1,213 @@
+---
+// One saved order, status first (spec §18.4 C, ACC-12): the allowlisted projection only. Not mine,
+// not linked, or unknown ⇒ the same 404. Sections are anchors (#pembayaran, #pengiriman), not tabs.
+// Nothing here is invented: no tracking events, no ETA, no QR image, no payment simulation.
+import Layout from "../../../layouts/Layout.astro";
+import CopyScript from "../../../components/CopyScript.astro";
+import ProductThumb from "../../../components/ProductThumb.astro";
+import { db } from "@tokophi/db";
+import { IDR, waLink } from "@tokophi/lib/format";
+import { isUnpaid, myOrder } from "../../../data/orders";
+import { signInUrl } from "../../../lib/nav";
+import { PAYMENT_METHOD, PAYMENT_STATUS, complaintLink, complaintPeriodFor, courierName, phone, returnLineFor, statusOf, whenLong } from "../../../lib/order-view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const order = await myOrder(db, account.id, Astro.params.number ?? "");
+if (!order) return new Response(null, { status: 404 });
+const unpaid = isUnpaid(order);
+const s = statusOf(order);
+const saved = Astro.url.searchParams.has("disimpan");
+const base = `/orders/${encodeURIComponent(order.number)}`;
+const pay = order.payment;
+const cod = pay?.method === "cod";
+const wa = order.storeWhatsapp ? waLink(order.storeWhatsapp, `Halo ${order.storeName}, saya ingin bertanya tentang pesanan ${order.number}.`) : null;
+// What the itemised rows do not explain (COD / payment fee): shown, so the total adds up on screen.
+const otherFeesIdr = order.totalIdr - (order.subtotalIdr - order.discountIdr + order.shippingIdr + order.taxIdr);
+const shipLine = [order.ship.address, order.ship.kelurahan, order.ship.city, order.ship.province, order.ship.postcode].filter(Boolean).join(", ");
+const STEPS: [string, string][] = [
+  ["baru", "Pesanan diterima toko"],
+  ["diproses", "Dikemas oleh toko"],
+  ["dikirim", "Diserahkan ke kurir"],
+  ["selesai", "Pesanan selesai"],
+];
+const stepAt = STEPS.findIndex(([k]) => k === order.status);
+// A delivered order has nothing left to track: no step list, one line.
+const finished = order.status === "selesai";
+const courier = courierName(order.courier);
+// An in-flight order is opened for its shipping progress; payment leads only while unpaid.
+const shipFirst = !unpaid && (order.status === "diproses" || order.status === "dikirim");
+// A delivered order is reopened for what was bought, so Produk leads.
+const productFirst = order.status === "selesai";
+// Only once goods are on their way or delivered, and only if the store declared a window.
+// Complaint hand-off (RR-10): for any order on its way or delivered, whatever window the store declared.
+const complaintWa = complaintLink(order);
+const returnLine = returnLineFor(order);
+const complaintPeriod = complaintPeriodFor(order);
+const chips: [string, string][] = [["pembayaran", "Pembayaran"], ["pengiriman", "Pengiriman"], ["produk", "Produk"]];
+if (productFirst) chips.unshift(...chips.splice(2, 1));
+else if (shipFirst) chips.unshift(...chips.splice(1, 1));
+// 16 unspaced digits are hard to read aloud or check: show groups of four; copying still yields one string.
+const vaGroups = pay?.virtualAccount ? (pay.virtualAccount.match(new RegExp("\\d{1,4}", "g")) ?? []) : [];
+const payHost = pay?.url ? new URL(pay.url).hostname : null;
+---
+<Layout title={`${s.label} · ${order.number}`} active="pesanan" back={{ href: "/orders", label: "Kembali ke pesanan" }}>
+  {saved && <p class="privacy-note notice-ok" role="status">Pesanan tersimpan di akun Anda. {order.storeName} kini tampil di menu Toko.</p>}
+  <header class="page-header">
+    <div>
+      <h1>{s.label}</h1>
+      <p class="lead">{order.storeName} · <span class="num">{order.number}</span> · {whenLong(order.placedAt)}</p>
+    </div>
+  </header>
+
+  {/* Phone: summary, chips, sections. ≥1024 px: sections left, summary + totals right (C4). */}
+  <div class="detail-grid buyer-grid order-grid">
+    <section class="order-overview" aria-label="Ringkasan dan tindakan pesanan">
+      <div>
+        <span>Total pesanan</span>
+        <strong class="overview-total num">{IDR(order.totalIdr)}</strong>
+      </div>
+      <div class="order-actions">
+      <div class="order-next">
+        {unpaid ? (
+          <a class="button primary" href="#pembayaran">Selesaikan pembayaran</a>
+        ) : order.status === "dikirim" && order.awb ? (
+          <>
+            <a class="button primary" href="#pengiriman">Lihat pengiriman</a>
+          </>
+        ) : productFirst || !wa ? null : (
+          <a class="button primary" href={wa} rel="noopener noreferrer" target="_blank">Hubungi {order.storeName}</a>
+        )}
+        <a class={`button ${productFirst ? "primary" : "secondary"}`} href={`${base}/receipt`}>Bukti pesanan</a>
+        {productFirst && complaintWa && <a class="button secondary" href={complaintWa} rel="noopener noreferrer" target="_blank">Ajukan retur / komplain</a>}
+      </div>
+      {productFirst && complaintWa && <p class="field-help overview-hint">Ada barang yang bermasalah? Siapkan foto atau video barangnya dan lampirkan di chat WhatsApp toko.</p>}
+      </div>
+    </section>
+
+    <nav class="order-links detail-chips" aria-label="Rincian pesanan">
+      {/* Same order as the sections below. */}
+      {chips.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+      <a href={`${base}/receipt`}>Bukti pesanan</a>
+    </nav>
+
+    <div class={`stack order-main-col${shipFirst ? " ship-first" : ""}${productFirst ? " product-first" : ""}`}>
+      <section class="section-card" id="pembayaran" aria-labelledby="pay-h">
+        <h2 id="pay-h">Pembayaran</h2>
+        {!pay ? (
+          <p class="field-help">Belum ada catatan pembayaran untuk pesanan ini. Tanyakan ke {order.storeName} bila perlu.</p>
+        ) : (
+          <>
+            <dl class="transaction-refs refs-plain">
+              <div><dt>Metode</dt><dd>{PAYMENT_METHOD[pay.method] ?? pay.method}{pay.channel && !cod ? ` · ${pay.channel.toUpperCase()}` : ""}</dd></div>
+              <div><dt>Status</dt><dd>{cod && pay.status === "menunggu" ? "Dibayar ke kurir saat paket tiba" : (PAYMENT_STATUS[pay.status] ?? pay.status)}</dd></div>
+              {pay.amountIdr !== pay.totalIdr && <div><dt>Jumlah</dt><dd class="num">{IDR(pay.amountIdr)}</dd></div>}
+              {pay.adminFeeIdr > 0 && <div><dt>Biaya admin</dt><dd class="num">{IDR(pay.adminFeeIdr)}</dd></div>}
+              {/* The total is already on this page twice; show what was paid only when it differs from it. */}
+              {pay.totalIdr !== order.totalIdr && <div><dt>Total dibayar</dt><dd class="num">{IDR(pay.totalIdr)}</dd></div>}
+            </dl>
+            {unpaid && (
+              <div class="pay-instruction">
+                {pay.virtualAccount && (
+                  <p class="copy-row">
+                    <span>Nomor virtual account{pay.channel ? ` ${pay.channel.toUpperCase()}` : ""}</span>
+                    <strong class="num mono-lg" id="va">{vaGroups.map((g) => <span class="va-grp">{g}</span>)}</strong>
+                    <button class="button secondary" type="button" data-copy="va" hidden>Salin nomor</button>
+                  </p>
+                )}
+                {pay.url && <a class="button primary" href={pay.url} rel="noopener noreferrer" target="_blank">Lanjutkan di {payHost}</a>}
+                {!pay.virtualAccount && !pay.url && (
+                  <p>Instruksi pembayaran ada di halaman sukses checkout {order.storeName}. Tidak bisa membukanya lagi? Hubungi toko dengan nomor pesanan ini.</p>
+                )}
+                <p class="field-help">Bayar sesuai total di atas. Status berubah otomatis setelah pembayaran diterima.</p>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <section class="section-card" id="pengiriman" aria-labelledby="ship-h">
+        <h2 id="ship-h">Pengiriman</h2>
+        <dl class="transaction-refs refs-plain">
+          {courier && <div><dt>Kurir</dt><dd>{courier}{order.serviceType && !/^\d+$/.test(order.serviceType) ? ` · ${order.serviceType}` : ""}</dd></div>}
+          <div>
+            <dt>Nomor resi</dt>
+            <dd>
+              {order.awb ? (
+                <span class="copy-inline"><span class="num" id="awb">{order.awb}</span><button class="button secondary small" type="button" data-copy="awb" hidden>Salin</button></span>
+              ) : order.status === "batal" || order.status === "retur" || unpaid ? "—" : "Belum terbit — muncul setelah kurir menjemput paket."}
+            </dd>
+          </div>
+        </dl>
+        {unpaid ? (
+          <p class="field-help">Pengiriman dimulai setelah pembayaran diterima toko.</p>
+        ) : finished ? null : stepAt >= 0 ? (
+          <ol class="timeline" aria-label="Perjalanan pesanan">
+            {STEPS.map(([, label], i) => (
+              <li class={`timeline-row ${i < stepAt ? "done-step" : i === stepAt ? "current-step" : "pending-step"}`} aria-current={i === stepAt ? "step" : undefined}>
+                <span class="timeline-dot" aria-hidden="true"></span>
+                <div><strong>{label}</strong><span class={i < stepAt ? "sr-only" : undefined}>{i < stepAt ? "Selesai" : i === stepAt ? "Saat ini" : "Berikutnya"}</span></div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="field-help">{order.status === "retur" ? "Paket sedang/telah dikembalikan ke toko. Hubungi toko untuk perkembangannya." : "Pesanan ini dibatalkan dan tidak dikirim."}</p>
+        )}
+        {order.awb && order.status !== "batal" && <p class="field-help">Lacak perjalanan paket dengan nomor resi di situs {courier ?? "kurir"}.</p>}
+      </section>
+
+      <section class="section-card" id="produk" aria-labelledby="prod-h">
+        <h2 id="prod-h">Produk</h2>
+        {order.lines.map((l) => (
+          <div class="line-item">
+            <ProductThumb src={l.thumb} large />
+            <div><strong>{l.title}</strong><small class="num">{l.qty} × {IDR(l.priceIdr)}</small></div>
+            <strong class="num">{IDR(l.totalIdr)}</strong>
+          </div>
+        ))}
+      </section>
+
+      {(order.ship.recipient || shipLine) && (
+        <section class="section-card" aria-labelledby="addr-h">
+          <h2 id="addr-h">Dikirim ke</h2>
+          <p>
+            <strong>{order.ship.recipient}</strong>{order.ship.phone && <> · <span class="num">{phone(order.ship.phone)}</span></>}
+            <br />{shipLine}
+          </p>
+          <p class="field-help">Perubahan alamat tersimpan tidak mengubah alamat pesanan ini.</p>
+        </section>
+      )}
+    </div>
+
+    <div class="stack order-side-col">
+      <section class="section-card" aria-labelledby="sum-h">
+        <h2 id="sum-h">Rincian total</h2>
+        <div class="summary-row"><span>Subtotal</span><strong class="num">{IDR(order.subtotalIdr)}</strong></div>
+        {order.discountIdr > 0 && <div class="summary-row"><span>Diskon</span><strong class="num">−{IDR(order.discountIdr)}</strong></div>}
+        <div class="summary-row"><span>Ongkir</span><strong class="num">{IDR(order.shippingIdr)}</strong></div>
+        {order.taxIdr > 0 && <div class="summary-row"><span>Pajak</span><strong class="num">{IDR(order.taxIdr)}</strong></div>}
+        {otherFeesIdr > 0 && <div class="summary-row"><span>{cod ? "Biaya COD" : "Biaya pembayaran"}</span><strong class="num">{IDR(otherFeesIdr)}</strong></div>}
+        <div class="summary-row total"><span>Total</span><strong class="num">{IDR(order.totalIdr)}</strong></div>
+      </section>
+      <section class="section-card" aria-labelledby="help-h">
+        <h2 id="help-h">Butuh bantuan?</h2>
+        <p>Pertanyaan tentang barang, pengiriman, atau pengembalian dijawab oleh {order.storeName}. Sebutkan nomor pesanan <span class="num">{order.number}</span>.</p>
+        {/* The store's own figures, as labelled rows: they are the facts a buyer with a problem looks for. */}
+        {(returnLine || complaintPeriod) && (
+          <dl class="transaction-refs refs-plain policy-rows">
+            {returnLine && <div><dt>Jendela retur</dt><dd>{order.returnWindowDays} hari kerja setelah barang diterima</dd></div>}
+            {complaintPeriod && <div><dt>Penyelesaian komplain</dt><dd>{order.complaintResolutionDays} hari kerja</dd></div>}
+          </dl>
+        )}
+        {complaintWa && !productFirst && <p class="field-help">Ada barang yang bermasalah? Siapkan foto atau video barangnya dan lampirkan di chat WhatsApp toko.</p>}
+        <div class="card-links">
+          {complaintWa && !productFirst && <a class="button secondary" href={complaintWa} rel="noopener noreferrer" target="_blank">Ajukan retur / komplain</a>}
+          {wa && !complaintWa && <a class="button secondary" href={wa} rel="noopener noreferrer" target="_blank">WhatsApp {order.storeName}</a>}
+          <a class="button secondary" href={order.storeOrigin} rel="noopener noreferrer">Kunjungi toko</a>
+        </div>
+      </section>
+    </div>
+  </div>
+  <CopyScript />
+</Layout>
+
