@@ -5,6 +5,8 @@
 // browser bundle and the build fails. Same split as `lib/rbac-policy.ts` (client-safe) vs
 // `lib/rbac.ts` (server). `lib/data/orders.ts` re-exports these so server code has one import.
 
+import type { CommissionState } from "@/lib/commission-state";
+
 export type OrderTab = "semua" | "belum_bayar" | "perlu_dikirim" | "dikirim" | "selesai" | "pengembalian";
 export type OrderSearchField = "no" | "pembeli" | "produk" | "resi";
 
@@ -66,6 +68,9 @@ export type OrderListRow = {
   // means "stuck NOW", not "was ever stuck". Not a status: the order is still `dikirim`.
   problem: boolean;
   problemNote: string | null;
+  // The affiliate whose code/link brought this order, with the commission frozen at order time (0116).
+  // NULL = no affiliate. This is a SELLER-side obligation: it is not deducted from the order or the balance.
+  affiliate: { code: string; name: string; commissionIdr: number; state: CommissionState } | null;
   minutesAgo: number;            // computed on the server — no clock in the render path
   lines: OrderListLine[];        // first 2, for the product-led row
   lineCount: number;

@@ -91,7 +91,7 @@
 | `/halaman` | 'Halaman' — static pages list. | page | `apps/admin/app/(admin)/halaman/page.tsx` | `halaman-client.tsx` | `pages` | `pages` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/keuangan` | 'Keuangan' — the seller's money overview (entitlement = goods + goods PPN − shipping debits). | page | `apps/admin/app/(admin)/keuangan/page.tsx` | — | `finance` | — | — | — | ✓ | — |
 | `/keuangan/penghasilan` | 'Penghasilan' — per-order earnings breakdown (fees, PPN, shipping delta). | page | `apps/admin/app/(admin)/keuangan/penghasilan/page.tsx` | `period-tabs.tsx` | `finance` `reconciliation` | — | — | — | ✓ | — |
-| `/` | layout | layout | `apps/admin/app/(admin)/layout.tsx` | `dashboard-client.tsx` `error.tsx` | `billing` `domain` `orders` `search` `store` `topbar` | — | `session` | — |  | — |
+| `/` | layout | layout | `apps/admin/app/(admin)/layout.tsx` | `dashboard-client.tsx` `error.tsx` | `affiliates` `billing` `domain` `orders` `search` `store` `topbar` | — | `session` | — |  | — |
 | `/navigasi` | 'Navigasi' — storefront menus; Simpan = delete + re-insert the tree. | page | `apps/admin/app/(admin)/navigasi/page.tsx` | `navigasi-client.tsx` | `menus` | `menus` | — | — | ✓ | `apps/admin/lib/actions/menus.test.ts` |
 | `/obrolan` | 'Obrolan' — the storefront chat inbox (WhatsApp-style, per store). | page | `apps/admin/app/(admin)/obrolan/page.tsx` | `obrolan-client.tsx` | `chat` | `chat` | — | — | ✓ | — |
 | `/` | Dashboard Seller — today's sales, orders, KPIs and the 7/30-day chart, all derived live from `orders` (never `analytics_daily`). | page | `apps/admin/app/(admin)/page.tsx` | `dashboard-client.tsx` `error.tsx` | `activity` `analytics` `funnel` `orders` `products` `returns` `reviews` `store` `support` | — | `session` | — | ✓ | — |
@@ -289,7 +289,7 @@
 | module | exports |
 |---|---|
 | `activity.ts` | `getActivityFeed` |
-| `affiliates.ts` | `getAffiliateProgram` |
+| `affiliates.ts` | `getAffiliateProgram` `getPendingAffiliateCount` |
 | `analytics.ts` | `SERIES_DAYS` `dailyStatsRows` `getCategorySales` `getChannelSalesDaily` `getCustomerMix` `getDailyStats` `getHourlyStats` `getOrderStats` `getProductSalesDaily` `getRegionSales` `hourlyStatsRows` |
 | `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `provinceForDistrict` `resolveArea` `resolveDestinationKelurahan` `searchAreaLocal` |
 | `articles.ts` | `getArticle` `getArticles` `getBlogs` |
