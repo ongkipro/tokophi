@@ -20,6 +20,8 @@ export type CommissionLine = {
   rateBps: number | null;
 };
 
+const rupiah = (n: number): number => (Number.isFinite(n) ? Math.round(n) : 0);
+
 export type CommissionResult = { baseIdr: number; commissionIdr: number; rateNote: string };
 
 // F-A6: Σ line × (goodsProceeds / subtotal) × rate, floored to whole rupiah ONCE, at the end.
@@ -31,8 +33,12 @@ export function computeAffiliateCommission(args: {
   goodsProceedsIdr: number;
   defaultRateBps: number;
 }): CommissionResult {
-  const { lines, subtotalIdr, defaultRateBps } = args;
-  const goods = Math.max(0, Math.min(args.goodsProceedsIdr, subtotalIdr));
+  const { defaultRateBps } = args;
+  // Whole rupiah, always. This runs INSIDE the order transaction and BigInt() throws a RangeError on a
+  // fraction (or NaN), which would roll back the whole order — a commission must never cost the sale.
+  const subtotalIdr = rupiah(args.subtotalIdr);
+  const lines = args.lines.map((l) => ({ ...l, totalIdr: rupiah(l.totalIdr) }));
+  const goods = Math.max(0, Math.min(rupiah(args.goodsProceedsIdr), subtotalIdr));
   const rates = new Set<number>();
   if (subtotalIdr <= 0 || goods <= 0) return { baseIdr: 0, commissionIdr: 0, rateNote: formatRateBps(defaultRateBps) };
   // Work in rupiah × bps to keep every intermediate an integer-valued number until the final floor.

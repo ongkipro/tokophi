@@ -4682,3 +4682,20 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Files:** `packages/lib/src/affiliate.ts`, `packages/lib/src/affiliate.test.ts`, `BUILD-LOG.md`.
 - **Verification:** `tsc --noEmit` exit 0 in apps/admin and apps/super-admin; `npx vitest run packages/lib test` → 178 files passed / 34 skipped (DB suites skip: no DATABASE_URL here), 1562 tests passed.
 - **Also found (not a code fault):** every CI run since 2026-10-28 failed in ~2 s with "job was not started because recent account payments have failed" (GitHub billing). Repo made public 2026-10-29; re-run of PR #426 then went green.
+
+### [2026-10-29 UTC] — AUDIT · affiliate Seller actions + commission math (owner: "audit lanjut review tes dan sempurnakan")
+
+- **Executor:** Main Session. Scope: the code PR #424 introduced (`apps/admin/lib/actions/affiliates.ts`, `packages/lib/src/affiliate.ts`) and the tests around it.
+- **Found and fixed:**
+  1. **Non-UUID ids reached `eq(table.id, …)`** in `setAffiliateStatus`, `markCommissionPaid`, `setProductAffiliateRate`, `inviteAffiliateToAccount` — Postgres throws 22P02, masked to a 500 in production, instead of the `{ ok:false }` every other action returns (`isUuid` rule, `AGENTS.md`). Now answered.
+  2. **No size limits on Seller-entered text** (`createAffiliate` name/email/bank, `markCommissionPaid` note) while the public storefront form already caps them (80/120/60/40/80). Now refused with a message — refused, not clipped: a bank account cut short pays the wrong place.
+  3. **`computeAffiliateCommission` could abort an order.** It runs inside the order transaction and uses `BigInt()`, which throws `RangeError` on a fraction or NaN; the route happens to pass integers today, but one future fractional line would roll back the sale. Inputs are now rounded to whole rupiah (reproduced the `RangeError: The number NaN cannot be converted to a BigInt` first).
+- **Tests added (real Postgres, rolled back):** `apps/admin/lib/actions/affiliates.test.ts` — 12 cases on the previously untested money actions: `markCommissionPaid` pays once and a second click writes nothing, refuses hold-window / no-hold / cancelled / another store's id / non-UUID / over-long note; `setAffiliateStatus` keeps the first `approved_at`, other store untouched; `createAffiliate` clash answered, bad phone/code/size refused, trimmed; per-product rate set/clear/refuse, mistyped store settings do not move the stored row. Plus a fractional/NaN case in `packages/lib/src/affiliate.test.ts`.
+- **Mutation proof:** removing the ready/eligible condition, the `store_id` predicate, or `isUuid` each turns exactly one test red; removing the rounding reproduces the RangeError. Files restored after each.
+- **Verification:** `tsc --noEmit` ✓ (apps/admin, packages/lib); eslint 0 errors; full `vitest run` with `TEST_DATABASE_URL`+`TEST_DB_REQUIRED=1` (`tokophi_consolidate_test`, migrated 123/123) → 216 files, 1879 tests, 0 skipped, all passed.
+- **Known, NOT fixed (needs a decision or a migration):**
+  - `affiliates` has no unique `(store_id, phone)`; "this number already applied" is an app-level check, so two simultaneous applications can both insert. Harmless to money (self-referral still compares phone) but a migration, and `0116`/`0122` are already contested.
+  - The public apply form answers "Nomor ini sudah terdaftar" — it tells an anonymous visitor that a phone number is registered with this store (5 attempts/hour/IP). Deliberate UX; flagged as a privacy trade-off.
+  - `affiliate_commissions` has no CHECK that amounts are ≥ 0 and no composite FK tying `affiliate_id` to the same `store_id`; the code keeps both true.
+  - Test gap that remains: the public `/api/public/order` ↔ attribution wiring and the storefront apply flow (`applyAffiliate`) have no automated test.
+- **Files:** `apps/admin/lib/actions/affiliates.ts` + `.test.ts` (new), `packages/lib/src/affiliate.ts` + `.test.ts`, `BUILD-LOG.md`.
