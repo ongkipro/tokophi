@@ -51,6 +51,10 @@ export async function changePassword(current: string, next: string): Promise<{ o
 export async function setup2FA(): Promise<{ ok: boolean; qr?: string; secret?: string; error?: string }> {
   const session = await getSession();
   if (!session) return { ok: false, error: "Sesi berakhir." };
+  // Overwriting the secret of an ACTIVE 2FA also switched it off — a way around `disable2FA`'s code
+  // check for anyone holding the session. Re-enrolling must go through disable2FA (with a code) first.
+  const [u] = await db.select({ on: schema.users.totpEnabled }).from(schema.users).where(eq(schema.users.id, session.userId)).limit(1);
+  if (u?.on) return { ok: false, error: "2FA sudah aktif. Nonaktifkan dulu dengan kode dari aplikasi autentikator." };
   const secret = generateTotpSecret();
   await db.update(schema.users).set({ totpSecret: secret, totpEnabled: false }).where(eq(schema.users.id, session.userId));
   const qr = await QRCode.toDataURL(otpauthURL(secret, session.email), { margin: 1, width: 200 });

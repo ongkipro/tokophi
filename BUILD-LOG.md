@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-29 13:30 UTC] — SEC/REVIEW · Whole-repo review + credential hardening + storefront AUTH_SECRET
+Executor: Main Session (Claude Code) + 3 read-only review agents (tenant/auth, ops/CI, docs). Branch `fix/auth-hardening-2026-10` (worktree `tokophi-authfix`) from `origin/main` 3403e044. Owner: "review saja keseluruhan dan jika perlu buat task md untuk development" + "menyempurnakan jika ada yang kurang".
+- **Review doc:** `specs/docs/tasks/2026-10-29-overall-review.md` — every agent finding re-checked in code before it was written; agent-only claims marked. Pointers in `specs/docs/TASKS.md` and `specs/docs/tasks/OPEN.md`.
+- **Fixed — storefront `AUTH_SECRET`:** `docker-compose.coolify.yml` forwarded it to admin and super-admin only; `authSecret()` throws in production and `verifyRecoveryToken` swallows it, so every WhatsApp abandoned-cart link opened an empty checkout; storefront chat throws. Now forwarded. Guard `test/compose-auth-secret.test.ts` (consumers derived from `@tokophi/lib/secret|recovery` imports) — RED on the old compose.
+- **Fixed — `updateProfile`:** email (login identity, and the key Google sign-in links on) changed with a session only. Now: current password required, refused under impersonation, Google-only accounts cannot change it; name-only change unaffected. UI: "Kata sandi saat ini" appears only when the email differs (`akun/profil/profil-client.tsx`). Contract: `updateProfile` gains optional `currentPassword` (one caller).
+- **Fixed — `setup2FA`:** overwrote an ACTIVE secret and set `totp_enabled=false`, bypassing `disable2FA`'s code. Now refuses while 2FA is on.
+- **Fixed — copy:** image picker "Melebihi 5MB" → "2MB" (limit is 2 MB).
+- **Verified:** `apps/admin/lib/actions/account-credentials.test.ts` (real PG, 8 cases) + compose guard: 6 RED against the original files (restored from `git show HEAD:`), 12/12 green after. Full `TEST_DB_REQUIRED=1 vitest` on `tokophi_authfix_test`: 196 files / 1737 tests passed; admin `tsc` 0; lint 0 errors; admin build exit 0. Browser (prod `next start`, scratch clone `tokophi_deps`, throwaway owner user created and deleted): `/akun/profil` hides the password field until the email changes; save without it → "Kata sandi saat ini salah.", with it → "Profil diperbarui."; no console errors.
+- **Not verified:** production (unreachable, OUT-1028) — after deploy, open a recovery link and confirm the cart is restored.
+
 ### [2026-10-19 13:30 UTC] — ADMIN · Seller search palette shipped (PR #419, merge `9c1e7240`)
 Executor: Main Session (Claude Code). Owner: "yang pencarian seller kamu implementasikan live" → "deploy" → "Hanya palet" → "ya lanjut dan hati2". The palette was built on `feat/accounts` (Task 10.26 there) and **cherry-picked alone** onto `main`: 5 files (`components/admin/command-palette.tsx`, `lib/data/search.ts`, new `lib/search-model.ts`, and tests), **no migration, nothing else from that branch**.
 - **What changed for a seller:** Ctrl/Cmd+K shows each sidebar page with its own icon (35 rows used one identical icon), orders with status and total, products with price and "Draf", customers with order count (phones are searchable, never shown), a useful empty state, match highlighting, keyboard/screen-reader support, a phone layout; pages and actions are filtered by role.
