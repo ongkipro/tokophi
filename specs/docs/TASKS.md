@@ -138,6 +138,10 @@ Everything here is in `BUILD-LOG.md` under the date shown; this list exists so t
 
 ---
 
+## Review 2026-10-29 (whole repo)
+- [x] **Overall review + credential hardening** · **M** · findings, priorities and "done when" in `specs/docs/tasks/2026-10-29-overall-review.md`. Fixed in branch `fix/auth-hardening-2026-10`: storefront `AUTH_SECRET` (abandoned-cart links were silently dead in production), email change needs the current password, `setup2FA` cannot switch an active 2FA off, image-picker "5MB" copy. Guards: `test/compose-auth-secret.test.ts`, `apps/admin/lib/actions/account-credentials.test.ts`. See BUILD-LOG 2026-10-29.
+- [ ] **Open from that review** · P0: Astro 7 + `@astrojs/node` ≥11.1.3 (R-10), uptime + balance alert (R-20) · P1: drizzle ≥0.45.2 (R-11), offsite prune guard (R-21), DB roles in backup (R-22), Docker images (R-23), npm script policy (R-24), one task tracker (R-40) · the rest P2 — see the review doc.
+
 ## Suggested order (dependencies)
 1. **Epic 0** de-dup + turbo (clean base).
 2. **Epic 3** data-layer seam (unblocks a smooth M3) — do in parallel with Epic 1 polish.

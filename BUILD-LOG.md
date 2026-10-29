@@ -8,6 +8,16 @@
 
 ## Log History & Execution Entries
 
+### [2026-10-29 13:30 UTC] — SEC/REVIEW · Whole-repo review + credential hardening + storefront AUTH_SECRET
+Executor: Main Session (Claude Code) + 3 read-only review agents (tenant/auth, ops/CI, docs). Branch `fix/auth-hardening-2026-10` (worktree `tokophi-authfix`) from `origin/main` 3403e044. Owner: "review saja keseluruhan dan jika perlu buat task md untuk development" + "menyempurnakan jika ada yang kurang".
+- **Review doc:** `specs/docs/tasks/2026-10-29-overall-review.md` — every agent finding re-checked in code before it was written; agent-only claims marked. Pointers in `specs/docs/TASKS.md` and `specs/docs/tasks/OPEN.md`.
+- **Fixed — storefront `AUTH_SECRET`:** `docker-compose.coolify.yml` forwarded it to admin and super-admin only; `authSecret()` throws in production and `verifyRecoveryToken` swallows it, so every WhatsApp abandoned-cart link opened an empty checkout; storefront chat throws. Now forwarded. Guard `test/compose-auth-secret.test.ts` (consumers derived from `@tokophi/lib/secret|recovery` imports) — RED on the old compose.
+- **Fixed — `updateProfile`:** email (login identity, and the key Google sign-in links on) changed with a session only. Now: current password required, refused under impersonation, Google-only accounts cannot change it; name-only change unaffected. UI: "Kata sandi saat ini" appears only when the email differs (`akun/profil/profil-client.tsx`). Contract: `updateProfile` gains optional `currentPassword` (one caller).
+- **Fixed — `setup2FA`:** overwrote an ACTIVE secret and set `totp_enabled=false`, bypassing `disable2FA`'s code. Now refuses while 2FA is on.
+- **Fixed — copy:** image picker "Melebihi 5MB" → "2MB" (limit is 2 MB).
+- **Verified:** `apps/admin/lib/actions/account-credentials.test.ts` (real PG, 8 cases) + compose guard: 6 RED against the original files (restored from `git show HEAD:`), 12/12 green after. Full `TEST_DB_REQUIRED=1 vitest` on `tokophi_authfix_test`: 196 files / 1737 tests passed; admin `tsc` 0; lint 0 errors; admin build exit 0. Browser (prod `next start`, scratch clone `tokophi_deps`, throwaway owner user created and deleted): `/akun/profil` hides the password field until the email changes; save without it → "Kata sandi saat ini salah.", with it → "Profil diperbarui."; no console errors.
+- **Not verified:** production (unreachable, OUT-1028) — after deploy, open a recovery link and confirm the cart is restored.
+
 ### [2026-10-19 13:30 UTC] — ADMIN · Seller search palette shipped (PR #419, merge `9c1e7240`)
 Executor: Main Session (Claude Code). Owner: "yang pencarian seller kamu implementasikan live" → "deploy" → "Hanya palet" → "ya lanjut dan hati2". The palette was built on `feat/accounts` (Task 10.26 there) and **cherry-picked alone** onto `main`: 5 files (`components/admin/command-palette.tsx`, `lib/data/search.ts`, new `lib/search-model.ts`, and tests), **no migration, nothing else from that branch**.
 - **What changed for a seller:** Ctrl/Cmd+K shows each sidebar page with its own icon (35 rows used one identical icon), orders with status and total, products with price and "Draf", customers with order count (phones are searchable, never shown), a useful empty state, match highlighting, keyboard/screen-reader support, a phone layout; pages and actions are filtered by role.
@@ -4452,3 +4462,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Conflict:** `package-lock.json` only (main's landing dropped React/GSAP). Resolved by taking main's lockfile and `npm install` to re-add the `apps/docs` workspace; `npm ci` exit 0; landing/storefront on astro 5.18.2, docs 7.3.8.
 - **Guard that caught us:** `packages/lib/src/password.test.ts` file-type census went red on the new `.mdx` and `.conf` types → `.mdx` scanned (MDX compiles to a JS module), `.conf` inert (nginx directives).
 - **Verification on the merged tree:** builds landing/storefront/docs exit 0, admin/super-admin exit 0 (Dockerfile dummy `DATABASE_URL`); `vitest run` 163 files passed / 29 skipped (DB suites skip without a `_test` database), 1452 tests passed; `check:storefront` and `check:landing` 0 errors; `npm run check -w @tokophi/docs` green; `docker build -f apps/docs/Dockerfile .` exit 0; `verify:doc-authority` and `verify:traceability` ok.
+
+### [2026-10-29 UTC] — FIX · CI red on PR #428: `account-credentials.test.ts` tripped the password-mint guard
+
+- **Executor:** Main Session (owner: "rekomendasimu lanjutkan dan kerjakan"). Scope: `fix/auth-hardening-2026-10` (PR #428).
+- **Symptom:** `packages/lib/src/password.test.ts` failed two guards on the PR's own new test file: "a SECOND mint exists" (`tempPassword()` called without a static import from `@tokophi/lib/password`) and "a fixed password is hashed" (`password` bound to `""`). Earlier runs of this PR failed in ~2 s on GitHub billing, which hid it.
+- **Fix:** static `import { hashPassword, tempPassword } from "@tokophi/lib/password"` at the top (the module is not mocked there) and `let password: string` minted per `user()`. No production code touched; the guard is not relaxed.
+- **Files:** `apps/admin/lib/actions/account-credentials.test.ts`, `BUILD-LOG.md`.
+- **Verification:** `password.test.ts` 7/7; `account-credentials.test.ts` 8/8 against real Postgres (`tokophi_authfix_test`, `TEST_DB_REQUIRED=1`); `tsc --noEmit` exit 0 in apps/admin; full `vitest run` 166 files passed / 30 skipped, 1495 tests passed.

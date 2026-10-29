@@ -7,6 +7,11 @@ blockers" had been false since 2026-08-22, and it dropped the N36–N43 disambig
 
 This file is a navigation handoff. It is not a second task board.
 
+> **Newest sweep: `specs/docs/tasks/2026-10-29-overall-review.md`** (2026-10-29) — every finding
+> re-checked in code; 🔴 P0s there: Astro/@astrojs/node Host-header crash (R-10), off-box uptime +
+> Vultr balance alert (R-20). It also lists the stale states in THIS file (R-41) — trust it over the
+> 2026-09-07 notes below where they disagree.
+
 ## 🔴 Open from production — 2026-09-07
 
 Both surfaced by the incident in `BUILD-LOG.md` 2026-09-07 11:53 UTC. Neither is fixable in code.

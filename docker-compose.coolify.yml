@@ -279,6 +279,12 @@ services:
       # superuser: the Host-resolved catalog read needs `bypassrls`, not the right to create tables.
       DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
       DATABASE_RUNTIME_ROLE: owner
+      # The storefront VERIFIES the abandoned-cart recovery link (`?r=`, @tokophi/lib/recovery) and
+      # signs the chat visitor token (src/lib/chat.ts) with this key, and `authSecret()` throws in
+      # production when it is unset. It was missing until 2026-10-29: every WhatsApp recovery link
+      # opened an empty checkout with nothing logged. Same value as admin (which mints those links).
+      # Pinned by test/compose-auth-secret.test.ts.
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
       # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
