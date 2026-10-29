@@ -26,6 +26,23 @@ describe("computeAffiliateCommission (F-A6)", () => {
     expect(r.commissionIdr).toBe(1_309_535);
   });
 
+  it("never throws on a fractional or non-finite amount — it runs inside the order transaction", () => {
+    // BigInt(1000.5) is a RangeError; one of these would roll back the whole order.
+    const frac = () =>
+      computeAffiliateCommission({
+        lines: [{ totalIdr: 100_000.5, rateBps: null }, { totalIdr: Number.NaN, rateBps: 1000 }],
+        subtotalIdr: 100_000.5,
+        goodsProceedsIdr: 99_999.5,
+        defaultRateBps: 1000,
+      });
+    expect(frac).not.toThrow();
+    expect(frac().commissionIdr).toBe(10_000); // 10% of the rounded 100 000 base; the NaN line earns 0
+    expect(Number.isInteger(frac().baseIdr)).toBe(true);
+    expect(() =>
+      computeAffiliateCommission({ lines: [{ totalIdr: 5, rateBps: null }], subtotalIdr: Number.NaN, goodsProceedsIdr: 5, defaultRateBps: 1000 }),
+    ).not.toThrow();
+  });
+
   it("floors once at the end, never per line", () => {
     // Two lines of 15 @ 10% = 3 in total; flooring each line first would give 1 + 1 = 2.
     const r = computeAffiliateCommission({
