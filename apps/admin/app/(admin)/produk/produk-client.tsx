@@ -252,11 +252,11 @@ export function ProdukClient({ products, nowTs }: { products: Product[]; nowTs: 
   }
 
   const toggle = (id: string) =>
-    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleVariants = (id: string) =>
     setExpandedVariants((current) => {
       const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   const clearSel = () => setSelected(new Set());

@@ -50,7 +50,7 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
   const [busy, setBusy] = React.useState<string | null>(null);
 
   const { rows, groups, couriers, counts } = data;
-  const toggle = (n: string) => setSel((s) => { const x = new Set(s); x.has(n) ? x.delete(n) : x.add(n); return x; });
+  const toggle = (n: string) => setSel((s) => { const x = new Set(s); if (x.has(n)) x.delete(n); else x.add(n); return x; });
   const selected = rows.filter((r) => sel.has(r.number));
   const canBook = selected.filter((r) => !r.kaOrderId);
   const canFetch = selected.filter((r) => r.kaOrderId && !r.awb);
@@ -58,7 +58,7 @@ export function MassalClient({ data, filters }: { data: BulkShippingResult; filt
 
   function go(next: Record<string, string | undefined>) {
     const sp = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(next)) v ? sp.set(k, v) : sp.delete(k);
+    for (const [k, v] of Object.entries(next)) if (v) sp.set(k, v); else sp.delete(k);
     router.push(sp.toString() ? `${pathname}?${sp}` : pathname, { scroll: false });
   }
 

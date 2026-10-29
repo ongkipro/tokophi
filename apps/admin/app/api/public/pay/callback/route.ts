@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
-import { and, eq, inArray, ne, notInArray, or } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { rateLimit } from "@tokophi/lib/cache";
 import { addMonths } from "@tokophi/lib/billing";
 import {

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { saveProductCardAspect, saveProductGalleryAspect, saveProductGalleryLayout } from "@/lib/actions/theme";
-import { GALLERY_ASPECTS, type GalleryAspect } from "@tokophi/lib/theme";
+import { type GalleryAspect } from "@tokophi/lib/theme";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
 import { useCan } from "@/components/admin/permissions";
 import { cn } from "@tokophi/ui/lib/utils";
