@@ -3,7 +3,7 @@ import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
 import { BASE_DOMAIN } from "@/lib/data/domain";
 import { resolveFormConfig, type FormConfig } from "@tokophi/lib/form-config";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 // Custom-HTML landings (/lp/<slug>) for the Seller editor. Tenant-scoped reads (withCurrentTenant).
 

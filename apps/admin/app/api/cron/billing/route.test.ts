@@ -21,13 +21,22 @@ const suite = URL_ ? describe : describe.skip;
 const runId = randomUUID().slice(0, 8);
 const SECRET = `cron-${runId}`;
 
-const provider = vi.fn(async (input: { reffId: string; channelCode: string; amount: number; customerEmail: string }) => ({
-  ok: true as const,
-  trxId: `TRX-${input.reffId}`,
-  virtualAccount: "8808123456",
-  amount: input.amount,
-  total: input.amount,
-}));
+// The cron sweeps EVERY store in the shared `_test` database, including stores other test files are
+// creating at that moment. Billing them for real gave those stores an invoice, and their own cleanup
+// (`delete from stores`) then failed on `invoices_store_id_stores_id_fk` — a cross-file flake seen
+// under load (2026-10-29). The invoice row is written only after the provider says ok, so refusing
+// every reference that is not this run's (`SUB-c<runId>-…`) keeps the sweep off other files' stores.
+const provider = vi.fn(async (input: { reffId: string; channelCode: string; amount: number; customerEmail: string }) =>
+  input.reffId.includes(`c${runId}-`)
+    ? {
+        ok: true as const,
+        trxId: `TRX-${input.reffId}`,
+        virtualAccount: "8808123456",
+        amount: input.amount,
+        total: input.amount,
+      }
+    : { ok: false as const, error: "not this test run's store" },
+);
 vi.mock("@tokophi/lib/autolaris", async (orig) => {
   const real = (await orig()) as Record<string, unknown>;
   return { ...real, autolarisConfigured: () => true, alCreateOrder: (i: never) => provider(i) };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, type ComponentType, type KeyboardEvent } from "react";
-import { Search, GitCommit, CheckCircle2, ShieldCheck, Bug, Sparkles, Truck, CreditCard, Filter, ArrowUpRight, CalendarDays, ChevronRight } from "lucide-react";
+import { Search, GitCommit, CheckCircle2, ShieldCheck, Bug, Sparkles, Truck, Filter, CalendarDays, ChevronRight } from "lucide-react";
 import { Input } from "@tokophi/ui/input";
 import { Badge } from "@tokophi/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
