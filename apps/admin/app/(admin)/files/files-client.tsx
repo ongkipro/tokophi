@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@tokophi/ui/pagination";
 import { UploadCloud, Copy, Trash2, ImageIcon } from "lucide-react";
 import { uploadMedia, deleteMedia, type MediaItem } from "@/lib/actions/media";
 import { useCan } from "@/components/admin/permissions";
@@ -12,7 +13,7 @@ import { useCan } from "@/components/admin/permissions";
 const MAX = 2 * 1024 * 1024;
 const kb = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
 
-export function FilesClient({ media }: { media: MediaItem[] }) {
+export function FilesClient({ media, total, page, pageSize }: { media: MediaItem[]; total: number; page: number; pageSize: number }) {
   const router = useRouter();
   const canWrite = useCan("media:write");
   const [pending, start] = React.useTransition();
@@ -29,7 +30,8 @@ export function FilesClient({ media }: { media: MediaItem[] }) {
       fd.append("file", f);
       start(async () => {
         const r = await uploadMedia(fd);
-        if (r.ok) { toast.success(`${f.name} diunggah (WebP).`); router.refresh(); }
+        // Newest first: a fresh upload lives on page 1, so go there to show it.
+        if (r.ok) { toast.success(`${f.name} diunggah (WebP).`); router.push("/files"); router.refresh(); }
         else toast.error(r.error ?? "Gagal mengunggah.");
       });
     }
@@ -41,6 +43,8 @@ export function FilesClient({ media }: { media: MediaItem[] }) {
       else toast.error(r.error ?? "Gagal menghapus file.");
       router.refresh(); // either way: on a refusal this is what clears the row that is already gone
     });
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const go = (p: number) => router.push(p <= 1 ? "/files" : `/files?page=${p}`);
   const copy = (url: string) => { navigator.clipboard?.writeText(url); toast.success("URL disalin."); };
 
   return (
@@ -94,6 +98,34 @@ export function FilesClient({ media }: { media: MediaItem[] }) {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {total > pageSize && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Menampilkan{" "}
+            <span className="font-medium tabular-nums text-foreground">{(page - 1) * pageSize + 1}–{(page - 1) * pageSize + media.length}</span>{" "}
+            dari <span className="font-medium tabular-nums text-foreground">{total}</span> file
+          </p>
+          <Pagination className="mx-0 w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious text="Sebelumnya" aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : undefined} onClick={() => go(page - 1)} />
+              </PaginationItem>
+              {Array.from({ length: pageCount }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === pageCount || Math.abs(p - page) <= 1)
+                .map((p, idx, arr) => (
+                  <PaginationItem key={p}>
+                    {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-muted-foreground">…</span>}
+                    <PaginationLink isActive={p === page} onClick={() => go(p)}>{p}</PaginationLink>
+                  </PaginationItem>
+                ))}
+              <PaginationItem>
+                <PaginationNext text="Berikutnya" aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : undefined} onClick={() => go(page + 1)} />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
     </div>
