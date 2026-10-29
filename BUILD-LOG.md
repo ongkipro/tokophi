@@ -4462,3 +4462,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Conflict:** `package-lock.json` only (main's landing dropped React/GSAP). Resolved by taking main's lockfile and `npm install` to re-add the `apps/docs` workspace; `npm ci` exit 0; landing/storefront on astro 5.18.2, docs 7.3.8.
 - **Guard that caught us:** `packages/lib/src/password.test.ts` file-type census went red on the new `.mdx` and `.conf` types → `.mdx` scanned (MDX compiles to a JS module), `.conf` inert (nginx directives).
 - **Verification on the merged tree:** builds landing/storefront/docs exit 0, admin/super-admin exit 0 (Dockerfile dummy `DATABASE_URL`); `vitest run` 163 files passed / 29 skipped (DB suites skip without a `_test` database), 1452 tests passed; `check:storefront` and `check:landing` 0 errors; `npm run check -w @tokophi/docs` green; `docker build -f apps/docs/Dockerfile .` exit 0; `verify:doc-authority` and `verify:traceability` ok.
+
+### [2026-10-29 UTC] — FIX · CI red on PR #428: `account-credentials.test.ts` tripped the password-mint guard
+
+- **Executor:** Main Session (owner: "rekomendasimu lanjutkan dan kerjakan"). Scope: `fix/auth-hardening-2026-10` (PR #428).
+- **Symptom:** `packages/lib/src/password.test.ts` failed two guards on the PR's own new test file: "a SECOND mint exists" (`tempPassword()` called without a static import from `@tokophi/lib/password`) and "a fixed password is hashed" (`password` bound to `""`). Earlier runs of this PR failed in ~2 s on GitHub billing, which hid it.
+- **Fix:** static `import { hashPassword, tempPassword } from "@tokophi/lib/password"` at the top (the module is not mocked there) and `let password: string` minted per `user()`. No production code touched; the guard is not relaxed.
+- **Files:** `apps/admin/lib/actions/account-credentials.test.ts`, `BUILD-LOG.md`.
+- **Verification:** `password.test.ts` 7/7; `account-credentials.test.ts` 8/8 against real Postgres (`tokophi_authfix_test`, `TEST_DB_REQUIRED=1`); `tsc --noEmit` exit 0 in apps/admin; full `vitest run` 166 files passed / 30 skipped, 1495 tests passed.

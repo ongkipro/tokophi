@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres, { type Sql } from "postgres";
+import { hashPassword, tempPassword } from "@tokophi/lib/password";
 
 /**
  * A SESSION ALONE MUST NOT REWRITE THE LOGIN CREDENTIALS (review 2026-10-29), against real Postgres.
@@ -51,11 +52,10 @@ const run = randomUUID().slice(0, 8);
 let client: Sql;
 let updateProfile: typeof import("./profile").updateProfile;
 let setup2FA: typeof import("./security").setup2FA;
-let password = "";
+let password: string; // minted per user() — never a literal (packages/lib/src/password.test.ts)
 const made: string[] = [];
 
 async function user(opts: { withPassword?: boolean; totp?: boolean } = {}) {
-  const { hashPassword, tempPassword } = await import("@tokophi/lib/password");
   password = tempPassword();
   const email = `cred-${run}-${made.length}@example.test`;
   const [u] = await client<{ id: string }[]>`
