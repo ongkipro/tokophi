@@ -177,7 +177,7 @@ describe("② client.ts logs the ROLE, never the URL", () => {
 describe("② withTenant runs on the restricted pool, behind the gate", () => {
   const rls = codeOnly(readFileSync(new URL("./rls.ts", import.meta.url), "utf8"));
   const AWAITS_GATE = /await\s+assertRestrictedDbIdentity\s*\(\s*\)/;
-  const ON_APP_POOL = /return\s+appDb\s*\.\s*transaction/;
+  const ON_APP_POOL = /return\s+(?:await\s+)?appDb\s*\.\s*transaction/; // `await` since 2026-11: withTenant scrubs the error before it escapes
   const ON_OWNER_POOL = /[^\w]db\s*\.\s*transaction/;
 
   it("the tenant wrapper proves the identity before it opens a transaction", () => {

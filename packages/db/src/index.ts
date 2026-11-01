@@ -1,6 +1,7 @@
 export * from "./schema";
 export { db, appDb, schema, client, appClient, assertRestrictedDbIdentity } from "./client";
 export { withTenant } from "./rls";
+export { scrubQueryError } from "./scrub-error";
 export { resolveAreaCoords, type AreaCoords } from "./area-coords";
 import { registerProviderConfigLoader } from "./provider-config";
 

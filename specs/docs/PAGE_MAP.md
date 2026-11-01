@@ -131,7 +131,7 @@
 | `/api/auth/google/callback` | Google sign-in callback → session cookie. | GET | `apps/admin/app/api/auth/google/callback/route.ts` | — | ✓ | `packages/lib/src/session-cookie.test.ts` |
 | `/api/auth/google/start` | Google sign-in start. | GET | `apps/admin/app/api/auth/google/start/route.ts` | — |  | — |
 | `/api/auth/signout` | Deletes the session cookie (a Server Component cannot). | GET | `apps/admin/app/api/auth/signout/route.ts` | — |  | — |
-| `/api/cron/billing` | Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`). | GET | `apps/admin/app/api/cron/billing/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
+| `/api/cron/billing` | Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`). | GET | `apps/admin/app/api/cron/billing/route.ts` | `cron` | ✓ | `apps/admin/lib/actions/users.test.ts` `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/domains` | Custom-domain verification sweep. | GET | `apps/admin/app/api/cron/domains/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/order-expiry` | Expires unpaid prepaid orders after their window. | GET | `apps/admin/app/api/cron/order-expiry/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/payment-advice` | Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing. | GET | `apps/admin/app/api/cron/payment-advice/route.ts` | `cron` | ✓ | — |

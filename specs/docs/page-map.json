@@ -1324,6 +1324,7 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/lib/actions/users.test.ts",
             "apps/admin/lib/cron-auth.test.ts"
           ],
           "whatItIs": "Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`)."
