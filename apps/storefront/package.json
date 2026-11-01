@@ -12,12 +12,13 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
-    "@astrojs/node": "^9.2.1",
-    "@lucide/astro": "^1.24.0",
+    "@astrojs/node": "^11.1.9",
+    "@lucide/astro": "^1.66.0",
     "@tokophi/db": "*",
     "@tokophi/lib": "*",
     "@tokophi/sections": "*",
-    "astro": "^5.14.1",
+    "astro": "^7.4.4",
+    "cookie": "^2.0.1",
     "jose": "^6.2.3",
     "typescript": "^5.9.3"
   },

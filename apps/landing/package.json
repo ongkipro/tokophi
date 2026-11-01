@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
-    "@astrojs/node": "^9.2.1",
+    "@astrojs/node": "^11.1.9",
     "@tokophi/lib": "*",
-    "astro": "^5.14.1",
+    "astro": "^7.4.4",
+    "cookie": "^2.0.1",
     "typescript": "^5.9.3"
   },
   "devDependencies": {

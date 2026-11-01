@@ -28,6 +28,7 @@
     "verify:guards": "npm run verify:source-size && npm run verify:openapi && npm run verify:doc-authority && npm run verify:traceability && npm run verify-migrations -w @tokophi/db && npm run verify-rls -w @tokophi/db"
   },
   "devDependencies": {
+    "astro": "^7.4.4",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
