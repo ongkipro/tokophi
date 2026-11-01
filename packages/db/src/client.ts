@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { Sql } from "postgres";
 import * as schema from "./schema";
+import { installQueryErrorScrub } from "./scrub-error";
 import { IDENTITY_SQL, factsFromRow, judgeIdentity, planPools } from "./db-identity";
 
 const LOCAL_DEV_URL = "postgresql://tokophi:tokophi@localhost:5433/tokophi";
@@ -97,6 +98,9 @@ if (plan.appUrl) {
  * The OWNER connection. Correct for the paths that have no tenant to scope by — and wrong, silently,
  * for anything a merchant owns. Tenant data goes through `withTenant`/`withCurrentTenant`.
  */
+// Before ANY pool exists: every query error (owner pool included) is scrubbed of bound values.
+installQueryErrorScrub();
+
 export const db = drizzle(client, { schema, casing: "snake_case" });
 
 /** The restricted connection. `withTenant()` is its only caller — do not reach for it directly. */

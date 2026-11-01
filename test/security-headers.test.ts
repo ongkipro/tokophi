@@ -26,6 +26,12 @@ describe("security headers", () => {
       expect(src).not.toMatch(/["']Content-Security-Policy["']\s*,\s*(value\s*:\s*)?ADMIN_CSP/);
     });
   }
+  it("admin's blanket headers EXCLUDE /api/uploads/ — the route's own SVG sandbox CSP must survive", () => {
+    const src = text("apps/admin/next.config.ts");
+    expect(src).toMatch(/\(\?!api\/uploads\/\)/);
+    // and no catch-all rule may carry SECURITY_HEADERS (that is what overwrote the sandbox)
+    expect(/source\s*:\s*"\/:path\*"\s*,\s*headers\s*:[^}]*SECURITY_HEADERS/.test(src)).toBe(false);
+  });
   it("storefront middleware sets the common set and does NOT deny framing (Store Builder preview)", () => {
     const src = text("apps/storefront/src/middleware.ts");
     expect(missing(src, COMMON)).toEqual([]);

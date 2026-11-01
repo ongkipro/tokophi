@@ -1,4 +1,4 @@
-import { MAX_REPORT_BYTES, summariseCspReport } from "@tokophi/lib/csp";
+import { MAX_REPORT_BYTES, readReportBody, summariseCspReport } from "@tokophi/lib/csp";
 
 // Receiver for the Content-Security-Policy-Report-Only header set in next.config.ts.
 //
@@ -12,7 +12,7 @@ import { MAX_REPORT_BYTES, summariseCspReport } from "@tokophi/lib/csp";
 export async function POST(req: Request): Promise<Response> {
   const len = Number(req.headers.get("content-length") ?? "0");
   if (Number.isFinite(len) && len > MAX_REPORT_BYTES) return new Response(null, { status: 413 });
-  const line = summariseCspReport((await req.text()).slice(0, MAX_REPORT_BYTES + 1));
+  const line = summariseCspReport(await readReportBody(req));
   if (line) console.warn(`[csp-report] ${line}`);
   return new Response(null, { status: 204 });
 }

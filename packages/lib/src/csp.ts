@@ -77,7 +77,39 @@ export const CSP_REPORT_ONLY_HEADER = "Content-Security-Policy-Report-Only";
 /** A browser report is attacker-writable input: keep a few short, query-free fields and nothing else. */
 export const MAX_REPORT_BYTES = 8 * 1024;
 
-const clip = (v: unknown, n = 120): string => (typeof v === "string" ? v.slice(0, n) : "");
+// Control characters out: a report field is attacker-writable and ends up in a log line, where a
+// newline or an ANSI escape would forge a `[csp-report] …` line of its own.
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
+const clip = (v: unknown, n = 120): string => (typeof v === "string" ? v.replace(CONTROL, " ").slice(0, n) : "");
+
+/**
+ * The request body as text, never more than `MAX_REPORT_BYTES + 1` bytes held in memory. A chunked
+ * POST has no Content-Length, so checking the header alone lets a client stream gigabytes into
+ * `request.text()`; this stops reading at the cap and cancels the stream.
+ */
+export async function readReportBody(req: Request): Promise<string> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (total <= MAX_REPORT_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.byteLength;
+  }
+  if (total > MAX_REPORT_BYTES) await reader.cancel().catch(() => {});
+  const all = new Uint8Array(Math.min(total, MAX_REPORT_BYTES + 1));
+  let at = 0;
+  for (const c of chunks) {
+    const room = all.length - at;
+    if (room <= 0) break;
+    all.set(c.subarray(0, room), at);
+    at += Math.min(c.byteLength, room);
+  }
+  return new TextDecoder().decode(all);
+}
 
 /** `https://a.example/x?token=1#f` → `https://a.example/x` (query and fragment can carry secrets/PII). */
 function stripUrl(v: unknown): string {

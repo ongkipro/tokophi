@@ -35,7 +35,16 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, ...SECURITY_HEADERS],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+      // ⚠️ NOT /api/uploads/*. That route sets its OWN `Content-Security-Policy: sandbox; default-src
+      // 'none'` on SVGs — the only thing stopping a stored `<svg><script>` from running on this origin
+      // when someone opens the file directly — and a config header with the same key REPLACES it.
+      // Measured 2026-11-02 (independent review): with the blanket rule the SVG came back with only
+      // `frame-ancestors 'none'`. The route also sets its own nosniff.
+      {
+        source: "/((?!api/uploads/).*)",
+        headers: SECURITY_HEADERS,
       },
       // EXCEPTION — merchant-uploaded media. These files live behind the admin app but are embedded
       // on the PUBLIC storefronts (storefront `mediaUrl()` rewrites /api/uploads/* onto the admin

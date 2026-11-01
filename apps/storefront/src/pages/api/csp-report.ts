@@ -4,7 +4,7 @@
 // query-stripped log line per report (summariseCspReport), after a per-IP floor so a hostile page
 // cannot turn this into a log-flood. Always 204: a shopper's browser must never see an error from it.
 import type { APIRoute } from "astro";
-import { MAX_REPORT_BYTES, summariseCspReport } from "@tokophi/lib/csp";
+import { MAX_REPORT_BYTES, readReportBody, summariseCspReport } from "@tokophi/lib/csp";
 
 export const prerender = false;
 
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   if (!allow(ip)) return new Response(null, { status: 204 });
   const len = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(len) && len > MAX_REPORT_BYTES) return new Response(null, { status: 204 });
-  const line = summariseCspReport((await request.text()).slice(0, MAX_REPORT_BYTES + 1));
+  const line = summariseCspReport(await readReportBody(request));
   if (line) console.warn(`[csp-report] ${line}`);
   return new Response(null, { status: 204 });
 };

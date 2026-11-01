@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ADMIN_CSP_REPORT_ONLY, MAX_REPORT_BYTES, STOREFRONT_CSP_REPORT_ONLY, summariseCspReport } from "./csp";
+import { ADMIN_CSP_REPORT_ONLY, MAX_REPORT_BYTES, readReportBody, STOREFRONT_CSP_REPORT_ONLY, summariseCspReport } from "./csp";
 
 describe("CSP policies", () => {
   it("admin: first-party only, no framing, no object, reports to its own origin", () => {
@@ -55,5 +55,30 @@ describe("summariseCspReport", () => {
   it("clips attacker-controlled lengths", () => {
     const l = summariseCspReport(legacy({ "effective-directive": "x".repeat(500), "blocked-uri": "y".repeat(500) }))!;
     expect(l.length).toBeLessThan(260);
+  });
+});
+
+describe("log-injection and memory caps (independent review 2026-11-02)", () => {
+  it("control characters in attacker-written fields cannot forge a second log line or ANSI", () => {
+    const l = summariseCspReport(JSON.stringify({ "csp-report": { "effective-directive": "img-src\n[csp-report] directive=FORGED", "blocked-uri": "\u001b[31mred", "document-uri": "https://x.test/a\r\nb" } }))!;
+    expect(l).not.toMatch(/[\u0000-\u001f\u007f]/);
+    expect(l.split("\n")).toHaveLength(1);
+  });
+  it("readReportBody stops reading a chunked stream at the cap instead of buffering it all", async () => {
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(ctl) {
+        pulled += 4096;
+        ctl.enqueue(new Uint8Array(4096).fill(97));
+        if (pulled > 50 * MAX_REPORT_BYTES) ctl.close();
+      },
+    });
+    const text = await readReportBody(new Request("http://x/", { method: "POST", body: stream, duplex: "half" } as RequestInit));
+    expect(text.length).toBe(MAX_REPORT_BYTES + 1);
+    expect(pulled).toBeLessThan(5 * MAX_REPORT_BYTES); // it did NOT drain the 50x stream
+    expect(summariseCspReport(text)).toBeNull();
+  });
+  it("a small body round-trips", async () => {
+    expect(await readReportBody(new Request("http://x/", { method: "POST", body: '{"a":1}' }))).toBe('{"a":1}');
   });
 });
