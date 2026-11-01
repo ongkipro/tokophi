@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+// Relative on purpose: next.config.ts is loaded before `transpilePackages` applies, so a workspace
+// specifier cannot be resolved here. Pure module, no imports of its own.
+import { ADMIN_CSP_REPORT_ONLY, CSP_REPORT_ONLY_HEADER } from "../../packages/lib/src/csp";
 
 // Browser-side hardening (2026-11 review item 5). None of these is set by Cloudflare, so a live
 // `curl -I` showed only HSTS. Nothing in this app is ever framed by another origin (the theme
@@ -12,6 +15,9 @@ const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  // REPORT-ONLY (blocks nothing): measure what the surface really loads before enforcing. Reports land
+  // in app/api/csp-report. Production only — `next dev` uses eval and would drown the signal.
+  ...(process.env.NODE_ENV === "production" ? [{ key: CSP_REPORT_ONLY_HEADER, value: ADMIN_CSP_REPORT_ONLY }] : []),
 ];
 
 const nextConfig: NextConfig = {

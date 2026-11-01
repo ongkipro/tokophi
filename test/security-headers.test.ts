@@ -20,6 +20,11 @@ describe("security headers", () => {
     it(`${f} denies framing and sets the common set`, () => {
       expect(missing(text(f), [...FRAME, ...COMMON])).toEqual([]);
     });
+    it(`${f} sends the report-only CSP (and only report-only: enforcing is a later, measured step)`, () => {
+      const src = text(f);
+      expect(src).toMatch(/CSP_REPORT_ONLY_HEADER/);
+      expect(src).not.toMatch(/["']Content-Security-Policy["']\s*,\s*(value\s*:\s*)?ADMIN_CSP/);
+    });
   }
   it("storefront middleware sets the common set and does NOT deny framing (Store Builder preview)", () => {
     const src = text("apps/storefront/src/middleware.ts");

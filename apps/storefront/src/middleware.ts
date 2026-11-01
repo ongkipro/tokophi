@@ -4,6 +4,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { getLockedStoreByHost, getStoreByHost, normalizeHost, primaryOrigin } from "./data/store";
 import { getCatalog } from "./data/catalog";
+import { CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP_REPORT_ONLY } from "@tokophi/lib/csp";
 
 const notFoundHtml = (host: string) => `<!doctype html>
 <html lang="id">
@@ -165,6 +166,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     res.headers.set("X-Content-Type-Options", "nosniff");
     res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    // Report-only: measures what shopper pages load (pixels, merchant HTML) before anything is enforced.
+    if (import.meta.env.PROD) res.headers.set(CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP_REPORT_ONLY);
   } catch {
     // immutable Response (e.g. a proxied fetch): serve it unchanged rather than fail the request.
   }
