@@ -45,7 +45,7 @@ export async function Sidebar({ navCounts }: { navCounts?: NavCounts }) {
           </span>
         </Link>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 scrollbar-on-hover">
         <NavLinks counts={navCounts} />
       </div>
       <PanduanCard />

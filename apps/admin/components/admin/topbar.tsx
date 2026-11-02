@@ -176,7 +176,7 @@ export function Topbar({
         <SheetContent side="left" className="flex w-72 flex-col p-0">
           <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
           <div className="flex h-16 shrink-0 items-center border-b px-5"><Brand /></div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 scrollbar-on-hover">
             <NavLinks counts={navCounts} onNavigate={() => setMobileMenu(false)} />
           </div>
           <PanduanCard onNavigate={() => setMobileMenu(false)} />
