@@ -14,6 +14,15 @@
 
 const SELF = "'self'";
 
+// Cloudflare Web Analytics. NOT our code: Cloudflare injects `<script src="https://static.
+// cloudflareinsights.com/beacon.min.js/…">` into every proxied HTML response of the zone — /login
+// included — and the beacon posts to https://cloudflareinsights.com/cdn-cgi/rum. Measured on
+// production 2026-11-02 right after the Report-Only deploy: it was the ONLY violation on all three
+// surfaces, and on Seller/Super Admin /login its report hit the session-gated receiver (401), i.e.
+// one console error per login-page load. Remove both entries only together with the zone setting.
+const CF_BEACON_SCRIPT = "https://static.cloudflareinsights.com";
+const CF_BEACON_CONNECT = "https://cloudflareinsights.com";
+
 /** Seller + Super Admin: everything is first-party; only product photos may come from anywhere https. */
 export const ADMIN_CSP_REPORT_ONLY = [
   `default-src ${SELF}`,
@@ -21,11 +30,11 @@ export const ADMIN_CSP_REPORT_ONLY = [
   "object-src 'none'",
   `form-action ${SELF}`,
   "frame-ancestors 'none'",
-  `script-src ${SELF} 'unsafe-inline'`,
+  `script-src ${SELF} 'unsafe-inline' ${CF_BEACON_SCRIPT}`,
   `style-src ${SELF} 'unsafe-inline'`,
   `img-src ${SELF} data: blob: https:`,
   `font-src ${SELF} data:`,
-  `connect-src ${SELF}`,
+  `connect-src ${SELF} ${CF_BEACON_CONNECT}`,
   `media-src ${SELF} blob: https:`,
   `worker-src ${SELF} blob:`,
   "report-uri /api/csp-report",
@@ -62,11 +71,11 @@ export const STOREFRONT_CSP_REPORT_ONLY = [
   `base-uri ${SELF}`,
   "object-src 'none'",
   `form-action ${SELF}`,
-  `script-src ${SELF} 'unsafe-inline' ${PIXEL_SCRIPTS.join(" ")}`,
+  `script-src ${SELF} 'unsafe-inline' ${CF_BEACON_SCRIPT} ${PIXEL_SCRIPTS.join(" ")}`,
   `style-src ${SELF} 'unsafe-inline'`,
   `img-src ${SELF} data: blob: https:`,
   `font-src ${SELF} data:`,
-  `connect-src ${SELF} ${PIXEL_CONNECT.join(" ")}`,
+  `connect-src ${SELF} ${CF_BEACON_CONNECT} ${PIXEL_CONNECT.join(" ")}`,
   `media-src ${SELF} https:`,
   "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.facebook.com https://td.doubleclick.net",
   "report-uri /api/csp-report",

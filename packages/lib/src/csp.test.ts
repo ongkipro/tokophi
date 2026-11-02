@@ -17,6 +17,14 @@ describe("CSP policies", () => {
     expect(STOREFRONT_CSP_REPORT_ONLY).not.toContain("frame-ancestors");
     expect(STOREFRONT_CSP_REPORT_ONLY).toContain("report-uri /api/csp-report");
   });
+  it("allows the Cloudflare Web Analytics beacon on every surface (measured on production 2026-11-02)", () => {
+    for (const p of [ADMIN_CSP_REPORT_ONLY, STOREFRONT_CSP_REPORT_ONLY]) {
+      const d = (name: string) => p.split("; ").find((x) => x.startsWith(name + " ")) ?? "";
+      expect(d("script-src").split(" ")).toContain("https://static.cloudflareinsights.com");
+      expect(d("connect-src").split(" ")).toContain("https://cloudflareinsights.com");
+    }
+  });
+
   it("neither policy contains a wildcard script source or eval (that is what enforcing would add by mistake)", () => {
     for (const p of [ADMIN_CSP_REPORT_ONLY, STOREFRONT_CSP_REPORT_ONLY]) {
       expect(p).not.toContain("'unsafe-eval'");
