@@ -144,8 +144,24 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Thin, low-contrast scrollbars instead of hidden ones: the page scrollbar is the only cue that a
+     long list continues, and mouse users drag it — so it stays, just quiet. `scrollbar-color` is
+     inherited, so every scroll area follows; `scrollbar-gutter: stable` stops the layout jumping
+     sideways when navigating between a short page and a long one. */
   html {
     @apply font-sans;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+    scrollbar-gutter: stable;
+  }
+}
+/* Sidebar/drawer nav: scrollbar invisible until the pointer or keyboard focus is inside it. */
+@utility scrollbar-on-hover {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  &:hover,
+  &:focus-within {
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
   }
 }
 /* --- TokoΦ brand accent (indigo) --- */
