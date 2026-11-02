@@ -27,7 +27,7 @@
 set -uo pipefail
 
 # ---------------------------------------------------------------------------- config (all via env)
-SSH_TARGET="${TOKOPHI_SSH_TARGET:-root@45.77.33.112}"
+SSH_TARGET="${TOKOPHI_SSH_TARGET:-tokophi-new-ops}"   # owner-workstation alias for the dedicated host (since 2026-11-01)
 SSH_KEY="${TOKOPHI_SSH_KEY:-$HOME/.ssh/tokophi_dev}"
 STATE_DIR="${TOKOPHI_PROBE_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/tokophi-probe}"
 CURL_TIMEOUT="${TOKOPHI_PROBE_TIMEOUT:-15}"
