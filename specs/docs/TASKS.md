@@ -22,6 +22,7 @@
 - [ ] **Shared config** · **S** · still missing: no `packages/config` (2026-09-07); each app carries its own tsconfig/eslint/tailwind.
 
 ## Epic 1 — Admin prototype completeness (still mock)
+- [x] **Menu sidebar Seller tanpa scrollbar (owner ruling 2026-11-02)** · **S** · `@utility scrollbar-none` di `apps/admin/app/globals.css` menggantikan `scrollbar-on-hover` (sidebar + drawer); scrollbar halaman tetap tipis. See BUILD-LOG 2026-11-02 (sidebar no scrollbar).
 - [x] **Scrollbar Seller tipis & halus; scrollbar menu sidebar muncul saat hover** · **S** · `apps/admin/app/globals.css` (`html` thin + `scrollbar-gutter: stable`, `@utility scrollbar-on-hover`), dipakai di `sidebar.tsx` + drawer `topbar.tsx`. Sengaja TIDAK disembunyikan total. See BUILD-LOG 2026-11-02 (scrollbar).
 - [x] **Seller sidebar tetap diam saat halaman di-scroll + kartu Panduan melayang di bawahnya** · **S** · `components/admin/sidebar.tsx` (`sticky top-0 h-dvh self-start`, menu scroll sendiri), `components/admin/panduan-card.tsx` → `https://panduan.tokophi.com` (desktop + drawer mobile). See BUILD-LOG 2026-11-02 (sidebar).
 - [x] **Pesanan detail page** `/pesanan/[id]` — full page (line items+foto, ringkasan→total, linimasa, pelanggan/pengiriman/pembayaran, status actions+toast). Sheet removed; rows navigate.
