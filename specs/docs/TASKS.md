@@ -22,6 +22,7 @@
 - [ ] **Shared config** · **S** · still missing: no `packages/config` (2026-09-07); each app carries its own tsconfig/eslint/tailwind.
 
 ## Epic 1 — Admin prototype completeness (still mock)
+- [x] **Seller sidebar tetap diam saat halaman di-scroll + kartu Panduan melayang di bawahnya** · **S** · `components/admin/sidebar.tsx` (`sticky top-0 h-dvh self-start`, menu scroll sendiri), `components/admin/panduan-card.tsx` → `https://panduan.tokophi.com` (desktop + drawer mobile). See BUILD-LOG 2026-11-02 (sidebar).
 - [x] **Pesanan detail page** `/pesanan/[id]` — full page (line items+foto, ringkasan→total, linimasa, pelanggan/pengiriman/pembayaran, status actions+toast). Sheet removed; rows navigate.
 - [ ] **Draft / pesanan manual** create flow · **M** · still missing (2026-09-07): no `/pesanan/baru` route and no create-order action in `lib/actions/orders.ts` — the only "Buat pesanan" in the admin is the PURCHASE order dialog (`product-editor.tsx:1438`). Orders are created solely by the storefront (`/api/public/order`).
 - [x] **Varian produk (real)** · **L** · DONE — `apps/admin/app/(admin)/produk/[id]/product-editor.tsx` builds the cartesian product of `option1..3` into an editable variant grid persisted to `product_variants` (SKU/harga/stok/berat); per-variant stock updates hardened by root Task 4.5.
