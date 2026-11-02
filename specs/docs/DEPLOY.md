@@ -4,7 +4,83 @@
 > (Vultr → Hetzner) or re-provisioning is exact. Companion: `PROD_PLAN.md` (decisions),
 > `.env.coolify.example` (env). Topology: **Cloudflare edge → Coolify/Traefik (origin) → containers**.
 
-## Current server (2026-07-10; it is PRODUCTION since 2026-07-13) — `volumdev`
+## ✅ Current server — the DEDICATED host (production since 2026-11-01 18:53 UTC)
+
+> Re-verified **2026-11-02 13:30 UTC** after three deploys (#439 `afdb1882`, #440 `b71c3752`, #441 `faa06c4e`)
+> and a disk cleanup. Host identifiers + SSH details are device-local (owner workstation: SSH alias
+> `tokophi-new-ops`, Coolify API wrapper `tokophi-coolify`), not in this repo. Bootstrap history:
+> `specs/docs/tasks/2026-11-01-dedicated-vps-bootstrap.md`. **The `volumdev` section below is the PREVIOUS
+> host — kept for its incident history; its IP, plan and "LIVE on volumdev" claims no longer describe production.**
+
+**Shape:** Vultr `sgp`, `vhp-2c-4gb-amd` (**2 vCPU / 4 GB** + 8 GB swap, 94 GB disk), Ubuntu 24.04, Coolify
+4.5.3, Traefik 3.7, Docker 29 (root `/var/lib/docker`). ONE Coolify application (id 1, uuid
+`qbd85i0yfaugxctv8pb15djw`, build pack `dockercompose`). Containers are named `<svc>-qbd85i0yfaugxctv8pb15djw`
+(no per-deploy hash suffix). Coolify dashboard + API sit behind Cloudflare Access / an SSH tunnel.
+
+### Deploy checklist on this host — do every step, in order
+
+1. **Before merging:** `gh pr checks <PR>` all green · `tokophi-coolify "/api/v1/deployments"` returns `[]`
+   (nothing in flight — merges are serialised) · disk under ~70 % (`ssh tokophi-new-ops 'df -h /'`).
+2. **Merge, then TRIGGER the deploy by hand.** A merge to `main` deploys NOTHING here: GitHub's webhook
+   cannot reach Coolify through Cloudflare Access.
+   `tokophi-coolify "/api/v1/deploy?uuid=qbd85i0yfaugxctv8pb15djw" -X POST` → note the `deployment_uuid`.
+3. **Watch the deployment, not the site:** poll `tokophi-coolify "/api/v1/deployments/<deployment_uuid>"`
+   until `status` is `finished` (or `failed`). Measured 2026-11-02: **~18–20 min** per deploy. During the
+   build the 2-vCPU box sits at **load ≈ 10** — the old containers keep serving 200 the whole time; do not
+   start a second deploy, a `docker prune`, or a heavy SSH job while it runs.
+4. **Verify it landed (the sha must CHANGE):** `ssh tokophi-new-ops 'sudo docker ps --format "{{.Names}} {{.Image}} {{.Status}}"'`
+   → admin, super-admin, storefront, landing, docs all on the new `…:<full merge sha>` AND `(healthy)`;
+   `migrate`/`seed` `Exited (0)`. Then `TOKOPHI_SSH_TARGET=tokophi-new-ops ops/tokophi-probe.sh`
+   (5 hosts + `db_ongkir` + disk) and one `docker logs --since 10m cron-tracking-qbd85i0yfaugxctv8pb15djw`
+   line reading `ok:true … errors:0`.
+5. **Downtime to expect:** only the container swap at the END of the build (compose = stop old → start new,
+   no rolling update). Measured **7–8 s per surface on the previous host** (ADR 0017); **not yet re-measured
+   on this host.** Zero-downtime options are ADR 0017 §5 — owner deferred them on 2026-11-02.
+6. **Rollback:** Coolify keeps **2** previous images per service (`application_settings.docker_images_to_keep = 2`)
+   → redeploy the previous sha from the Coolify UI, or `git revert <sha>` → PR → merge → step 2 (~20 min).
+
+### Disk — what fills it and what cleans it
+
+- **What grows:** Docker **build cache** (25 GB after ~6 deploys in 20 h) and one image set per deploy
+  (admin/migrate/seed ≈ 2.5 GB each, landing/storefront ≈ 2.2 GB — mostly shared layers).
+- **Automatic:** Coolify docker cleanup, daily 00:00, `force_docker_cleanup = true`, threshold 80 %.
+  Between those runs the L1b safety-net below prunes hourly.
+- **Manual cleanup (safe, run ONLY with the deploy queue empty) — done 2026-11-02, 63 GB → 33 GB used (70 % → 37 %):**
+  ```bash
+  sudo docker builder prune -f --max-used-space 8GB      # keeps 8 GB so the next build stays fast
+  sudo docker rmi <svc images of shas older than the newest 3>
+  sudo docker volume ls -qf dangling=true                  # anonymous ones only; check each is empty (du) before rm
+  sudo apt-get clean
+  ```
+  🔴 **Never** remove `qbd85i0yfaugxctv8pb15djw_tokophi-{pgdata,uploads,backups,offsite-state}`, `coolify-db`,
+  `coolify-redis`, and never `docker volume prune` (it would take any of them whose container is down).
+
+### Self-healing + disk safety-net on this host (installed 2026-11-02 13:32 UTC)
+
+- **L1 watchdog — LIVE.** `ops/tokophi-watchdog.sh` → `/usr/local/bin/tokophi-watchdog.sh` (sha256 matches the
+  repo file), every minute from `/etc/cron.d/tokophi-watchdog`. Adapted for this host: uuid
+  `qbd85i0yfaugxctv8pb15djw`, names `<svc>-<uuid>` (old `<svc>-<uuid>-<hash>` still matched), **`docs` added**
+  (5 services), and it **skips while a `coolify-helper` container is up** (a deploy is replacing containers
+  on purpose). Proven from cron: `docker stop docs-…` at 13:32:23 → `HEAL docs: was 'exited' -> started` at
+  13:33:05 → `(healthy)`, `panduan.tokophi.com` 200. Logic covered by a stub-docker run (heal, deploy guard,
+  `super-admin` never matched by `admin`, `<id>_<name>` swap container ignored, `migrate` never touched).
+- **L1b disk safety-net — LIVE.** `ops/tokophi-docker-cleanup.sh` → `/usr/local/bin/tokophi-docker-cleanup.sh`
+  (sha256 matches), hourly at :17 from `/etc/cron.d/tokophi-docker-cleanup`. Same two-stage logic as on
+  `volumdev` (normal: cache > 24 h + unused images > 48 h; pressure ≥ 70 % or < 25 GB free: all cache, then
+  all unused images) **plus a deploy guard**: it exits while `coolify-helper` runs, because a just-built image
+  is "unused" until compose starts it and the pressure-mode `image prune -af` would delete it mid-deploy.
+  Log `/var/log/tokophi-docker-cleanup.log`. Never touches volumes.
+- **`ops/tokophi-probe.sh` now defaults to `tokophi-new-ops`.** Verified 2026-11-02: HTTP ×5, `db_ongkir`, ssh,
+  disk 37 %, `watchdog — L1 heartbeat 46s old`, exit 0.
+
+### 🔴 Still open on this host
+
+- **No alert channel** (L2/L3) — the probe is pulled by a human; nothing pages when it goes red.
+- Downtime per deploy not yet re-measured here (step 5 above).
+- `cron-tracking` is running again: KiriminAja whitelisted this host's IP (owner, 2026-11-02); verified
+  `ok:true scanned:3 errors:0 problems:0` and zero `not allowed` lines in the last 6 h.
+
+## Previous server (2026-07-10 → 2026-11-01; production 2026-07-13 → 2026-11-01) — `volumdev`
 
 > ⚠️ **Billing is a single point of failure on this box — realised 2026-09-04 → 2026-09-07 (~70 h down).** Vultr suspends the instance when the account balance runs out, silently. Runbook below: "Origin unreachable / every host 522".
 
@@ -217,7 +293,7 @@ env name. Swap `tdev.` for `client.` in the probe when `KIRIMINAJA_ENV=productio
 (`PING-…`, channel `QRIS`, `amount: 10000`) and reading `rc=00`. It is an authorised action, not a
 ping. The KiriminAja test is read-only (province list) and safe.
 
-## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
+## L1 self-healing watchdog (LIVE on `volumdev` 2026-07-15; on the dedicated host since 2026-11-02 — see "Current server" above for its adapted naming)
 
 On 2026-07-14 production 503'd because Coolify built the app containers, left them `created`, and moved
 on — nothing started them, nothing told us. The watchdog is the automatic recovery for exactly that

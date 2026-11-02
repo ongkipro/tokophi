@@ -118,6 +118,8 @@ Background work = cron route + DB job table (no worker app, §0.1). Catalog ids 
 - [ ] **Consent gating (privacy)** · **M** · still absent (2026-09-07: 0 matches for `consent` under `apps/storefront/src`). ADR 0012 §15.7 expects marketing tracking to respect consent; there is no banner and no stored preference. Needs its own decision — do not fake it with a `localStorage` flag nobody sets.
 
 ## Epic 8 — Ops, finance & audit shipped 2026-08-24 → 2026-09-07 (unlisted until this sweep)
+- [x] **Dedicated host: review + disk cleanup + deploy-safety record** · **S** · `specs/docs/DEPLOY.md` → "Current server — the DEDICATED host"; disk 70 % → 37 %. See BUILD-LOG 2026-11-02 13:30.
+- [x] **Dedicated host: install L1 watchdog + L1b disk safety-net; point `tokophi-probe.sh` at the new host** · **S** · scripts adapted (new uuid/naming, `docs`, deploy guard), installed + sha-matched, cron HEAL proven, probe exit 0. See BUILD-LOG 2026-11-02 13:35 + `DEPLOY.md` → "Self-healing + disk safety-net on this host".
 Everything here is in `BUILD-LOG.md` under the date shown; this list exists so the epic map matches what shipped.
 - [x] **FIN-01/02/02b/03 — finance overhaul** · **L** · subscription PPN toggle (0101), order fee schedule enforced in checkout with per-fee `base`, seller entitlement view = goods only, legacy ledger correction RUN on production. `specs/docs/FINANCE.md`. BUILD-LOG 2026-08-24.
 - [x] **MKT-01 / ADS-PRECISION** · **M** · advanced matching always on, `value` = goods only on Meta/GA4/TikTok, catalog ids on the fixed numbering; validated against each platform's docs. BUILD-LOG 2026-08-24 · 2026-08-26.
