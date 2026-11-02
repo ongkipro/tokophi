@@ -1,7 +1,7 @@
 import { BookOpen, ArrowUpRight } from "lucide-react";
 
 /** Seller help center (apps/docs) — its own site since 2026-10-12, same URL the landing links. */
-export const PANDUAN_URL = process.env.NEXT_PUBLIC_PANDUAN_URL || "https://panduan.tokophi.com";
+export const PANDUAN_URL = "https://panduan.tokophi.com";
 
 /** Floating guide card pinned to the bottom of the sidebar (desktop) and the mobile drawer.
  *  It sits OUTSIDE the nav's scroll area, so it stays put while the menu scrolls. */
