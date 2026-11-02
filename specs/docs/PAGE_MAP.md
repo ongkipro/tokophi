@@ -50,14 +50,14 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 3 | 19 |
-| Super Admin (platform control plane) | 12 | 2 | 1 |
-| Storefront (multi-tenant shopper site) | 18 | — | 10 |
+| Seller (merchant panel) | 56 | 3 | 20 |
+| Super Admin (platform control plane) | 12 | 2 | 2 |
+| Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 3 layouts · 19 API routes
+56 pages · 3 layouts · 20 API routes
 
 ### Pages
 
@@ -131,12 +131,13 @@
 | `/api/auth/google/callback` | Google sign-in callback → session cookie. | GET | `apps/admin/app/api/auth/google/callback/route.ts` | — | ✓ | `packages/lib/src/session-cookie.test.ts` |
 | `/api/auth/google/start` | Google sign-in start. | GET | `apps/admin/app/api/auth/google/start/route.ts` | — |  | — |
 | `/api/auth/signout` | Deletes the session cookie (a Server Component cannot). | GET | `apps/admin/app/api/auth/signout/route.ts` | — |  | — |
-| `/api/cron/billing` | Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`). | GET | `apps/admin/app/api/cron/billing/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
+| `/api/cron/billing` | Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`). | GET | `apps/admin/app/api/cron/billing/route.ts` | `cron` | ✓ | `apps/admin/lib/actions/users.test.ts` `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/domains` | Custom-domain verification sweep. | GET | `apps/admin/app/api/cron/domains/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/order-expiry` | Expires unpaid prepaid orders after their window. | GET | `apps/admin/app/api/cron/order-expiry/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/payment-advice` | Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing. | GET | `apps/admin/app/api/cron/payment-advice/route.ts` | `cron` | ✓ | — |
 | `/api/cron/tracking-events` | Every 60 s delivers queued conversions (Meta CAPI / GA4 / TikTok) with retries + dead-letter. | GET | `apps/admin/app/api/cron/tracking-events/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/tracking` | Every 15 min pulls KiriminAja tracking for booked orders (`parseKaTracking`: `details` + package `status_code`): fills a REAL `orders.awb` (never `MOCK-<ref>`), the sorting code, and advances status forward-only. | GET | `apps/admin/app/api/cron/tracking/route.ts` | `cron` | ✓ | `apps/admin/lib/cancel-reconcile.test.ts` `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/ka-sorting-code.test.ts` |
+| `/api/csp-report` | CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing. | POST | `apps/admin/app/api/csp-report/route.ts` | — |  | — |
 | `/api/health/env` | Reports which integrations are configured (header-gated), used by the deploy probe. | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill. | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-sorting-code.test.ts` `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/destination-kelurahan.test.ts` |
@@ -149,7 +150,7 @@
 
 ## Super Admin (platform control plane) — `apps/super-admin`
 
-12 pages · 2 layouts · 1 API routes
+12 pages · 2 layouts · 2 API routes
 
 ### Pages
 
@@ -175,10 +176,11 @@
 | URL | what it is | methods | file | gate | owner `db` | tests |
 |---|---|---|---|---|---|---|
 | `/api/auth/signout` | Deletes the operator cookie. | GET | `apps/super-admin/app/api/auth/signout/route.ts` | — |  | — |
+| `/api/csp-report` | CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing. | POST | `apps/super-admin/app/api/csp-report/route.ts` | — |  | — |
 
 ## Storefront (multi-tenant shopper site) — `apps/storefront`
 
-18 pages · 10 endpoints
+18 pages · 11 endpoints
 
 ### Pages
 
@@ -211,6 +213,7 @@
 | `/api/chat/read` | Mark chat read. | POST GET | `apps/storefront/src/pages/api/chat/read.ts` | — | — | ✓ | `rate-limit` | — |
 | `/api/chat/send` | Shopper → store chat message. | POST GET | `apps/storefront/src/pages/api/chat/send.ts` | — | — | ✓ | `rate-limit` | — |
 | `/api/checkout-session` | Progressive checkout capture (debounced beacons; tenant from Host; fails quiet). | POST GET | `apps/storefront/src/pages/api/checkout-session.ts` | — | — | ✓ | `rate-limit` `bot` | — |
+| `/api/csp-report` | CSP Report-Only receiver: per-IP floor, one query-stripped log line per browser report, always 204, writes nothing. | POST | `apps/storefront/src/pages/api/csp-report.ts` | — | — |  | — | — |
 | `/api/search` | Search index for the palette; returns per-row srcset built on the server. | GET | `apps/storefront/src/pages/api/search.ts` | `catalog` | — |  | — | — |
 | `/api/track` | First-party page-view/event tracker → `analytics_events` + conversion queue. | POST GET | `apps/storefront/src/pages/api/track.ts` | — | — | ✓ | `rate-limit` `bot` | — |
 | `/feed/google.xml` | Google Merchant product feed (`<g:id>` = `retailerId()` — same id as the pixels). | GET | `apps/storefront/src/pages/feed/google.xml.ts` | — | `product-feed` |  | — | — |

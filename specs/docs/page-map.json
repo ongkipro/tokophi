@@ -1324,6 +1324,7 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/lib/actions/users.test.ts",
             "apps/admin/lib/cron-auth.test.ts"
           ],
           "whatItIs": "Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`)."
@@ -1434,6 +1435,23 @@
             "apps/admin/lib/ka-sorting-code.test.ts"
           ],
           "whatItIs": "Every 15 min pulls KiriminAja tracking for booked orders (`parseKaTracking`: `details` + package `status_code`): fills a REAL `orders.awb` (never `MOCK-<ref>`), the sorting code, and advances status forward-only."
+        },
+        {
+          "url": "/api/csp-report",
+          "kind": "api",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/admin/app/api/csp-report/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing."
         },
         {
           "url": "/api/health/env",
@@ -2036,6 +2054,23 @@
           "whatItIs": "Deletes the operator cookie."
         },
         {
+          "url": "/api/csp-report",
+          "kind": "api",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/super-admin/app/api/csp-report/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing."
+        },
+        {
           "url": "/",
           "kind": "layout",
           "methods": [],
@@ -2173,6 +2208,23 @@
           "setHtml": false,
           "tests": [],
           "whatItIs": "Progressive checkout capture (debounced beacons; tenant from Host; fails quiet)."
+        },
+        {
+          "url": "/api/csp-report",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/storefront/src/pages/api/csp-report.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "CSP Report-Only receiver: per-IP floor, one query-stripped log line per browser report, always 204, writes nothing."
         },
         {
           "url": "/api/search",

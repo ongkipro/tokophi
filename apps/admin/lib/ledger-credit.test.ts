@@ -308,7 +308,7 @@ suite(
         const one = sql`insert into ledger_entries (store_id, order_id, payment_id, kind, amount_idr) values (${storeId}, ${orderId}, ${payId}, 'sale', 100000)`;
         await tx.execute(one);
         // A second sale for the SAME payment must be refused by ledger_one_sale_per_payment, not by app code.
-        await expect(tx.execute(one)).rejects.toThrow(/unique|duplicate/i);
+        await expect(tx.execute(one)).rejects.toMatchObject({ cause: { code: "23505" } });
       });
     });
   },

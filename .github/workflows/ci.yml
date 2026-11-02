@@ -214,6 +214,18 @@ jobs:
       - run: npx tsc --noEmit
         working-directory: apps/super-admin
 
+      # Seller + Super Admin lint. Re-measured 2026-11-02: 0 errors (14 + 3 warnings), so the
+      # "currently red" note this replaced was stale. Warnings do not fail the step.
+      - run: npm run lint
+
+      # 2026-11 review item 3: nothing in CI looked at known-vulnerable dependencies; on 2026-11-02
+      # `npm audit --omit=dev` reported 3 critical / 19 high. ADVISORY for now (continue-on-error) so
+      # the baseline can be burned down without a red gate nobody reads — flip it to blocking once the
+      # high+critical count is 0 or each leftover has a written "not reachable because…".
+      - name: npm audit (advisory)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
   # ── Task 5.12 / NF-14: every deployable surface BUILDS, not just typechecks ──────────────────
   #
   # Until 2026-09-08 this workflow built exactly ONE of the four surfaces — the storefront, as a
@@ -315,9 +327,6 @@ jobs:
       - run: npm run ${{ matrix.app == 'docs' && 'check' || 'build' }} -w @tokophi/${{ matrix.app }}
 
 # NOT here yet, deliberately:
-#   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it
-#     now would make CI red on day one, which is how a check stops being read. Fix the lint errors,
-#     then add the step.
 #   · `verify-ledger` (N61) — and this one is a DECISION, not a to-do.
 #     ① It answers a question about PRODUCTION DATA: children of `orders` whose parent row is gone,
 #       and what they are worth in a merchant's withdrawable balance. Production carried 48 such rows

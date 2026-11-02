@@ -145,6 +145,11 @@ async function makeStore(label: string): Promise<Fixture> {
 
 async function dropStore(f: Fixture) {
   await db.execute(sql`delete from store_users where store_id = ${f.storeId}`);
+  // The billing cron suite (apps/admin/app/api/cron/billing/route.test.ts) runs the REAL route over
+  // every store in the shared _test database, so it can book a renewal invoice for THIS fixture
+  // while the suites run in parallel — and invoices_store_id_stores_id_fk then blocks the delete
+  // below. A cross-file race that was timing-dependent before and surfaced reliably on 2026-11-02.
+  await db.execute(sql`delete from invoices where store_id = ${f.storeId}`);
   await db.execute(sql`delete from stores where id = ${f.storeId}`);
   await db.execute(sql`delete from accounts where id = ${f.accountId}`);
   await db.execute(sql`delete from users where id = ${f.ownerId}`);

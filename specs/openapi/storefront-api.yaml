@@ -285,6 +285,10 @@ paths:
 # that matches no route on disk, or a route that is not public, is reported as stale.
 x-tokophi-route-exemptions:
   - app: apps/storefront
+    path: /api/csp-report
+    methods: [POST]
+    reason: Browser CSP Report-Only receiver (`report-uri` of the policy in `@tokophi/lib/csp`); the body shape is the browser's, not ours. Logs one query-stripped line, writes nothing, capped body. Internal. Per-IP floor, always 204.
+  - app: apps/storefront
     path: /api/chat/poll
     methods: [GET, POST]
     reason: Same-origin poll used only by the storefront's own inline chat widget on `<slug>.tokophi.com`; tenant from the Host header, rate-limited. POST is a 405 stub. Not a third-party contract.
