@@ -155,14 +155,10 @@
     scrollbar-gutter: stable;
   }
 }
-/* Sidebar/drawer nav: scrollbar invisible until the pointer or keyboard focus is inside it. */
-@utility scrollbar-on-hover {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  &:hover,
-  &:focus-within {
-    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
-  }
+/* Sidebar/drawer nav: no scrollbar at all (owner ruling 2026-11-02). Still scrolls by wheel, touch
+   and keyboard; the page scrollbar stays (thin) because it is the cue a long list continues. */
+@utility scrollbar-none {
+  scrollbar-width: none;
 }
 /* --- TokoΦ brand accent (indigo) --- */
 :root {
