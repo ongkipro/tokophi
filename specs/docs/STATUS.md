@@ -1,5 +1,14 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **Current state — 2026-11-03 09:20 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`d56e631c`** (deploy of PR #443 + #444),
+> all five web containers `(healthy)`. Merges do NOT deploy here — trigger by hand (DEPLOY.md checklist).
+> Host safeguards LIVE: L1 watchdog (every minute) + L1b disk safety-net (hourly), both skip during a deploy —
+> seen working on the 2026-11-03 deploy. Disk 40 %. `ops/tokophi-probe.sh` all green. Last full CI: 1,536 admin
+> tests passed (DB suites skipped locally), CI green on #443/#444. CRM is visible only on the demo store
+> `batiknusantara` (until WABA). Still open: no alert channel; per-deploy downtime not re-measured on this host;
+> logged-in browser checks of #439–#444 pending.
+
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
 > `volumdev` (`45.77.33.112`, the box that runs all 18 containers) was **suspended for an unpaid
