@@ -7,7 +7,7 @@ import {
   PackagePlus, TicketPlus, Truck, ListChecks, PenLine, Zap, type LucideIcon,
 } from "lucide-react";
 import { IDR } from "@tokophi/lib/format";
-import { NAV_GROUPS } from "@/lib/nav";
+import { NAV_GROUPS, navGroupsFor } from "@/lib/nav";
 import {
   buildNavRows, indexRows, isInternalHref, loadRecents, popularPages, pushRecent, quickActionsFor, rank, recentKey,
   recentRows, resultAnnouncement, searchAllOrdersRow, splitHighlight, tokenize, GROUP_CAP,
@@ -34,10 +34,11 @@ const HIT = "relative after:absolute after:-inset-1";
 // `role=option` rows in `role=group`s. Focus never leaves the input; the active row is announced by the
 // browser from `aria-activedescendant`, and a polite live region says how many results there are.
 
-const NAV_ROWS = buildNavRows(NAV_GROUPS);
+// Icons come from the FULL nav (a recent row only needs its icon); the rows a store can open come
+// from `navGroupsFor(slug)` inside the component, so a hidden page never shows up as a result.
 const NAV_ICONS = (() => {
   const m = new Map<string, LucideIcon>();
-  for (const r of NAV_ROWS) if (r.icon && !m.has(r.href)) m.set(r.href, r.icon);
+  for (const r of buildNavRows(NAV_GROUPS)) if (r.icon && !m.has(r.href)) m.set(r.href, r.icon);
   return m;
 })();
 
@@ -100,6 +101,7 @@ export function CommandPalette({ index }: { index: SearchItem[] }) {
   const router = useRouter();
   const storeHref = useStoreHref();
   const slug = useStoreSlug();
+  const navRows = React.useMemo(() => buildNavRows(navGroupsFor(slug)), [slug]);
   const role = useRole();
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -130,14 +132,14 @@ export function CommandPalette({ index }: { index: SearchItem[] }) {
       if (rec.length) groups.push({ key: "Terakhir dibuka", rows: rec, hidden: 0 });
       const actions = quickActionsFor(role).map<Row>((a) => ({ id: a.id, kind: "aksi", label: a.label, sub: a.sub, href: a.href, icon: ACTION_ICON[a.iconKey] }));
       if (actions.length) groups.push({ key: "Aksi cepat", rows: actions, hidden: 0 });
-      groups.push({ key: "Halaman populer", rows: popularPages(NAV_ROWS), hidden: 0 });
+      groups.push({ key: "Halaman populer", rows: popularPages(navRows), hidden: 0 });
       return { groups: place(groups), flat: groups.flatMap((g) => g.rows), noHits: false };
     }
-    const ranked = rank(q, NAV_ROWS, dataRows);
+    const ranked = rank(q, navRows, dataRows);
     const groups: Omit<ViewGroup, "start">[] = ranked.groups.map((g) => ({ key: g.key, rows: g.rows, hidden: g.hidden }));
     groups.push({ key: "Lainnya", rows: [searchAllOrdersRow(q)], hidden: 0 });
     return { groups: place(groups), flat: groups.flatMap((g) => g.rows), noHits: ranked.empty };
-  }, [hasQuery, q, role, recents, dataRows]);
+  }, [hasQuery, q, role, recents, dataRows, navRows]);
 
   const last = Math.max(0, view.flat.length - 1);
   const activeIdx = Math.min(active, last);

@@ -238,6 +238,27 @@
         },
         {
           "url": "/crm",
+          "kind": "layout",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/crm/layout.tsx",
+          "clients": [],
+          "data": [
+            "store"
+          ],
+          "actions": [],
+          "gate": [
+            "session"
+          ],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [
+            "apps/admin/lib/nav-crm.test.ts"
+          ],
+          "whatItIs": "layout"
+        },
+        {
+          "url": "/crm",
           "kind": "page",
           "methods": [],
           "file": "apps/admin/app/(admin)/crm/page.tsx",
@@ -253,7 +274,9 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": [],
+          "tests": [
+            "apps/admin/lib/nav-crm.test.ts"
+          ],
           "whatItIs": "'CRM' landing — redirects/overview of pipeline, follow-ups, templates."
         },
         {
