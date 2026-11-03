@@ -56,6 +56,15 @@ describe("the abandoned-cart recovery link is wired, not merely defined", () => 
     expect(src).toMatch(/waLink\s*\(\s*r\s*\.\s*phone\s*,\s*cartMessage\s*\(/);
   });
 
+  it("gives every cart with a phone a button — the store's template, or the built-in default", () => {
+    // 2026-11-03: `waHref` was `r.phone && tpl ? … : null`. Provisioning writes no templates, so 16/16
+    // non-demo stores had no `keranjang` template, no button, and a row reading "Tidak ada nomor" over a
+    // cart that HAD a number. The only template editor (/crm/template) is now hidden outside the demo
+    // store, so the fallback is the feature. Behaviour of the default itself: `cart-message.test.ts`.
+    expect(src).toMatch(/waHref\s*:\s*r\s*\.\s*phone\s*\?\s*waLink\s*\(/);
+    expect(src).toMatch(/tpl\s*\?\s*\.\s*body\s*\?\s*\?\s*DEFAULT_CART_TEMPLATE/);
+  });
+
   // The fourth claim this file used to make — "cartMessage appends the link when the template has no
   // {{link}}, which is every live store" — was a grep for `templateBody.includes("{{link}}")` and it
   // is GONE, not converted. Two reasons, and the first is the ladder in AGENTS.md: `cart-message.ts`

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cartMessage } from "./cart-message";
+import { cartMessage, DEFAULT_CART_TEMPLATE } from "./cart-message";
 
 // The abandoned-cart WhatsApp message must contain A WAY BACK.
 //
@@ -51,5 +51,22 @@ describe("cartMessage", () => {
 
   it("renders a missing name as empty rather than the word undefined", () => {
     expect(cartMessage("Halo {{nama}}!", null, ITEMS, "T", null)).toBe("Halo !");
+  });
+});
+
+describe("DEFAULT_CART_TEMPLATE — the message for a store with no keranjang template", () => {
+  it("fills the store and product, and carries the recovery link as its own block", () => {
+    const msg = cartMessage(DEFAULT_CART_TEMPLATE, "Sari", ITEMS, "Toko Tani", LINK);
+    expect(msg).toContain("ini dari Toko Tani");
+    expect(msg).toContain("*Dress Batik +1 lainnya*");
+    expect(msg).toMatch(/\n\nLanjutkan pesanan di sini:\n/);
+    expect(msg.endsWith(LINK)).toBe(true);
+    expect(msg).not.toMatch(/\{\{\w+\}\}/);
+  });
+
+  it("reads correctly with no name and no link — no dangling comma, no pointer to a missing link", () => {
+    const msg = cartMessage(DEFAULT_CART_TEMPLATE, null, ITEMS, "Toko Tani", null);
+    expect(msg).not.toMatch(/ ,|\{\{|undefined|link di bawah|di sini:/);
+    expect(msg.startsWith("Halo kak, ini dari Toko Tani.")).toBe(true);
   });
 });
