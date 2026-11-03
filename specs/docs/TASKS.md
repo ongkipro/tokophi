@@ -118,6 +118,7 @@ Background work = cron route + DB job table (no worker app, §0.1). Catalog ids 
 - [ ] **Consent gating (privacy)** · **M** · still absent (2026-09-07: 0 matches for `consent` under `apps/storefront/src`). ADR 0012 §15.7 expects marketing tracking to respect consent; there is no banner and no stored preference. Needs its own decision — do not fake it with a `localStorage` flag nobody sets.
 
 ## Epic 8 — Ops, finance & audit shipped 2026-08-24 → 2026-09-07 (unlisted until this sweep)
+- [x] **Super Admin Update Log: konten diperbarui sampai 2026-11-02 + UI dirapikan** · **S** · `apps/super-admin/lib/data/dev-logs.ts` (+10 catatan v1.8.4–v1.9.4, 28 judul ditulis ulang jadi kalimat biasa, surface `Landing & Panduan`/`Infrastructure`), `app/(platform)/update-log/update-log-client.tsx` (tanpa tile KPI/emoji/garis aksen/kotak berwarna; filter Bagian kini bisa dipakai). See BUILD-LOG 2026-11-03.
 - [x] **Dedicated host: review + disk cleanup + deploy-safety record** · **S** · `specs/docs/DEPLOY.md` → "Current server — the DEDICATED host"; disk 70 % → 37 %. See BUILD-LOG 2026-11-02 13:30.
 - [x] **Dedicated host: install L1 watchdog + L1b disk safety-net; point `tokophi-probe.sh` at the new host** · **S** · scripts adapted (new uuid/naming, `docs`, deploy guard), installed + sha-matched, cron HEAL proven, probe exit 0. See BUILD-LOG 2026-11-02 13:35 + `DEPLOY.md` → "Self-healing + disk safety-net on this host".
 Everything here is in `BUILD-LOG.md` under the date shown; this list exists so the epic map matches what shipped.
