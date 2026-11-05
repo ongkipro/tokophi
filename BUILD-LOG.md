@@ -8,6 +8,11 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 10:40 UTC] — DEPLOY · PR #446 (Mengantar Partner Business API) + #447 live on production (`2a0f7eb7`)
+Executor: Main Session (Claude Code). Owner: "ya jalankan merger" → "jika sudah lanjut deploy".
+- **Before:** CI green on both PRs; no deployment in flight; disk 23 %. #447 merged (`02ebedc0`), then #446 (`2a0f7eb7`; 0116 merged first, so no renumber — #424/#426/#430/#431 renumber after it). Deploy triggered by hand (`deployment_uuid gsrsk7tyodoh2vplrmradz3l`), 10:20:42 → finished 10:38:12 (~17.5 min).
+- **Verified:** admin, super-admin, storefront, landing, docs on `…:2a0f7eb7a3477e9320b2a9a0ca102aaed8d1de9b` `(healthy)` on two consecutive polls; `migrate`/`seed` `Exited (0)`; production `drizzle.__drizzle_migrations` = 117, max stamp `1787545771751` (0116); `shipping_provider_config.active_provider` = `kiriminaja`; `store_mengantar_accounts` = 0; `cron-tracking` `ok:true … errors:0` with the new `mg` block (scanned 0); live `/api/public/ongkir` rates for `batiknusantara` → `ok:true, codEnabled:true, codRequote:false`; `TOKOPHI_SSH_TARGET=tokophi-new-ops ops/tokophi-probe.sh` exit 0 (5 hosts, db_ongkir, disk 31 %, watchdog).
+- **Not done (by design):** `MENGANTAR_ENV` unset and the switch on KiriminAja — Mengantar stays dormant until the production Partner origin, IP allowlist and Terms/Privacy URLs arrive; `load:mengantar-areas` not run on production (owner-approved step).
 ### [2026-11-05 10:50 UTC] — STOREFRONT · article/page lists: a lead-in line above a list no longer collapses into one paragraph
 Executor: Main Session (Claude Code). Owner asked to review the blog/article UI ("/blog/cara-mencuci-batik"). Branch `fix/blog-list-parsing` from main.
 - **Bug (live):** `parseBody` (`apps/storefront/src/data/content.ts`) made a list only when EVERY line of a blank-line block started with "- ". Merchants type a lead-in straight above the list ("Yang perlu dihentikan:" + "- …" lines), so the whole block rendered as ONE paragraph with the dashes inline — measured on `/blog/cara-mencuci-batik` (390 px).

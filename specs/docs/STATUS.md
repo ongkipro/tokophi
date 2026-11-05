@@ -1,13 +1,15 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-03 09:20 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`d56e631c`** (deploy of PR #443 + #444),
-> all five web containers `(healthy)`. Merges do NOT deploy here — trigger by hand (DEPLOY.md checklist).
-> Host safeguards LIVE: L1 watchdog (every minute) + L1b disk safety-net (hourly), both skip during a deploy —
-> seen working on the 2026-11-03 deploy. Disk 40 %. `ops/tokophi-probe.sh` all green. Last full CI: 1,536 admin
-> tests passed (DB suites skipped locally), CI green on #443/#444. CRM is visible only on the demo store
-> `batiknusantara` (until WABA). Still open: no alert channel; per-deploy downtime not re-measured on this host;
-> logged-in browser checks of #439–#444 pending.
+> **Current state — 2026-11-05 10:40 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`2a0f7eb7`** (deploy of PR #446 —
+> Mengantar Partner Business API — plus #447), all five web containers `(healthy)` on two consecutive polls,
+> `migrate`/`seed` `Exited (0)`. **Migrations: 117 on production (head `0116_mengantar_shipping`)**; shipping
+> provider switch stays **KiriminAja**, `MENGANTAR_ENV` unset → Mengantar quoting and seller registration are
+> held by design (no store has a Mengantar account: `store_mengantar_accounts` = 0). Live `/api/public/ongkir`
+> answers with `codRequote:false`. `ops/tokophi-probe.sh` all green, disk 31 %. Merges do NOT deploy here —
+> trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar production needs the Partner
+> origin, IP allowlist and Terms/Privacy URLs from Mengantar; the 99ribu area import (`load:mengantar-areas`)
+> is an owner-approved step not yet run on production.
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
