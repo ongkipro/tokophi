@@ -1,6 +1,6 @@
 "use server";
 import { db, schema } from "@tokophi/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import QRCode from "qrcode";
 import { cookies } from "next/headers";
 import { getSession, verifyPassword, signSession, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/auth";
@@ -87,6 +87,20 @@ export async function disable2FA(code: string): Promise<{ ok: boolean; error?: s
   if (!session) return { ok: false, error: "Sesi berakhir." };
   const [u] = await db.select({ secret: schema.users.totpSecret }).from(schema.users).where(eq(schema.users.id, session.userId)).limit(1);
   if (u?.secret && !verifyTotp(u.secret, code)) return { ok: false, error: "Kode verifikasi salah." };
-  await db.update(schema.users).set({ totpEnabled: false, totpSecret: null }).where(eq(schema.users.id, session.userId));
+  // Bound to what was checked: the verified secret, or — when there was none — still no secret and 2FA
+  // off. Otherwise a stale no-code call could land after a concurrent setup+enable and wipe the new 2FA.
+  const off = await db
+    .update(schema.users)
+    .set({ totpEnabled: false, totpSecret: null })
+    .where(
+      and(
+        eq(schema.users.id, session.userId),
+        u?.secret
+          ? eq(schema.users.totpSecret, u.secret)
+          : and(isNull(schema.users.totpSecret), eq(schema.users.totpEnabled, false)),
+      ),
+    )
+    .returning({ id: schema.users.id });
+  if (!off.length) return { ok: false, error: "Kode verifikasi salah." };
   return { ok: true };
 }

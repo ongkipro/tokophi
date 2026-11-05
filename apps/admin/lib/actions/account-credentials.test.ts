@@ -78,6 +78,7 @@ let client: Sql;
 let updateProfile: typeof import("./profile").updateProfile;
 let setup2FA: typeof import("./security").setup2FA;
 let enable2FA: typeof import("./security").enable2FA;
+let disable2FA: typeof import("./security").disable2FA;
 let password: string; // minted per user() — never a literal (packages/lib/src/password.test.ts)
 const made: string[] = [];
 
@@ -103,7 +104,7 @@ beforeAll(async () => {
   client = postgres(URL_, { max: 2 });
   h.db = drizzle(client, { casing: "snake_case" });
   ({ updateProfile } = await import("./profile"));
-  ({ setup2FA, enable2FA } = await import("./security"));
+  ({ setup2FA, enable2FA, disable2FA } = await import("./security"));
 });
 beforeEach(() => {
   h.imp = undefined;
@@ -215,5 +216,22 @@ suite("2FA enrollment — concurrent setup2FA / enable2FA", () => {
     const { totpAt } = await import("@tokophi/lib/totp");
     expect(await enable2FA(totpAt(secret, Date.now()))).toEqual({ ok: true });
     expect(await row(u.id)).toMatchObject({ totp_secret: secret, totp_enabled: true });
+  });
+
+  it("a stale no-code disable2FA cannot wipe a 2FA that setup+enable completed after its read", async () => {
+    const u = await user(); // no secret, 2FA off: disable2FA("") skips the code check
+    h.beforeUpdate = async () => {
+      await client`update users set totp_secret = 'JBSWY3DPEHPK3PXP', totp_enabled = true where id = ${u.id}`;
+    };
+    const r = await disable2FA("");
+    expect(r.ok).toBe(false);
+    expect(await row(u.id)).toMatchObject({ totp_secret: "JBSWY3DPEHPK3PXP", totp_enabled: true });
+  });
+
+  it("disable2FA with the right code still switches 2FA off", async () => {
+    const u = await user({ totp: true });
+    const { totpAt } = await import("@tokophi/lib/totp");
+    expect(await disable2FA(totpAt("JBSWY3DPEHPK3PXP", Date.now()))).toEqual({ ok: true });
+    expect(await row(u.id)).toMatchObject({ totp_secret: null, totp_enabled: false });
   });
 });
