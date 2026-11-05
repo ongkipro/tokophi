@@ -42,6 +42,7 @@ import {
   formatWeight,
 } from "@/components/admin/pesanan/shipping-label";
 import { createOrderPayment } from "@/lib/actions/payments";
+import { payMengantarShipping } from "@/lib/actions/mengantar";
 import type { OrderDetail as OrderDetailData } from "@/lib/data/order-detail";
 import {
   Dialog,
@@ -369,6 +370,9 @@ export function OrderDetail({
             duration: 8000,
           });
         }
+        // The courier's own pickup slot, when the provider schedules one — the seller has to have the
+        // parcel ready by then.
+        if (r.pickupAt) toast.info(`Kurir dijadwalkan menjemput ${r.pickupAt}.`, { duration: 12000 });
         router.refresh();
       } else if (r.senderIncomplete) {
         // The single most common blocker, and the one the merchant can actually fix. Keep it on
@@ -1089,7 +1093,7 @@ export function OrderDetail({
                   and a shrug is not worth a row. */}
               {booked && shipment.payment.flow !== "unknown" && (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Ongkir ke kurir</span>
+                  <span className="shrink-0 whitespace-nowrap text-muted-foreground">Ongkir ke kurir</span>
                   <span
                     className={
                       shipment.payment.blocking
@@ -1113,6 +1117,27 @@ export function OrderDetail({
                           </a>
                         </>
                       )}
+                    {shipment.mengantarPayable && canWrite && (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          disabled={pending}
+                          className="underline underline-offset-2 disabled:opacity-50"
+                          onClick={() =>
+                            startTransition(async () => {
+                              const r = await payMengantarShipping(order.id.replace("#", ""));
+                              if (r.ok && r.pending) toast.warning(r.message, { duration: 10000 });
+                              else if (r.ok) toast.success(r.message);
+                              else toast.error(r.message, { duration: 10000 });
+                              router.refresh();
+                            })
+                          }
+                        >
+                          Bayar ongkir (saldo Mengantar)
+                        </button>
+                      </>
+                    )}
                   </span>
                 </div>
               )}

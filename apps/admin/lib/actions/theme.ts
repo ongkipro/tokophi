@@ -9,6 +9,7 @@ import type { TemplateType } from "@/lib/data/theme";
 import { SECTION_TYPES, type SectionType } from "@tokophi/sections";
 import { GALLERY_LAYOUTS, type GalleryLayout } from "@/lib/gallery-layout";
 import { FONT_PAIRINGS, GALLERY_ASPECTS, NEUTRAL_TONES } from "@tokophi/lib/theme";
+import { isDefaultBrandColor } from "@tokophi/lib/colors";
 
 // ADR 0009 — Store Builder.
 //
@@ -281,7 +282,9 @@ export async function saveBrandColor(hex: string): Promise<ThemeResult> {
   if (!HEX_COLOR.test(hex)) return { ok: false, error: "Format warna tidak valid — gunakan hex 6 digit, mis. #a85572" };
   try {
     await withTenant(storeId, async (db) => {
-      await db.update(schema.stores).set({ brandColor: hex }).where(eq(schema.stores.id, storeId));
+      // The platform default is "no brand colour", not a colour: store NULL so the store keeps following
+      // the default (and never derives a grey scale from it — `brandShades`).
+      await db.update(schema.stores).set({ brandColor: isDefaultBrandColor(hex) ? null : hex }).where(eq(schema.stores.id, storeId));
     });
   } catch (e) {
     return fail(e);

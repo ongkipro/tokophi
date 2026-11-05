@@ -1,5 +1,5 @@
 import "server-only";
-import { pickKelurahan } from "@/lib/kelurahan-pick";
+import { pickKelurahan, pickMengantarKelurahan } from "@/lib/kelurahan-pick";
 import { db, schema } from "@tokophi/db";
 import { or, ilike, eq, asc, sql } from "drizzle-orm";
 import { kaAddressByName } from "@tokophi/lib/kiriminaja";
@@ -220,4 +220,35 @@ export async function kelurahanWithKaIdForDistrict(districtId: number): Promise<
     .from(schema.kelurahan)
     .where(eq(schema.kelurahan.districtId, districtId))
     .orderBy(schema.kelurahan.name);
+}
+
+/**
+ * SHIP-MENGANTAR — the DESTINATION a Mengantar quote is priced to, from the ids the checkout already
+ * sends (a KiriminAja district id + optionally the kelurahan NAME the shopper picked). Nothing here
+ * comes from the client as a Mengantar id; the browser never sees one.
+ *
+ * Resolution order (analysis §3.5, option a):
+ *   1. the picked kelurahan's own bridge (`kelurahan.mengantar_area_id`, exact name match in THIS district)
+ *   2. the district's deterministic representative (`kiriminaja_areas.mengantar_area_id`)
+ *   3. nothing → `null`, and the caller answers "unavailable". No live fuzzy search, no guess.
+ */
+export async function mengantarDestination(
+  districtId: number,
+  kelurahanName?: string | null,
+): Promise<{ areaId: string; from: "kelurahan" | "district" } | null> {
+  if (!Number.isFinite(districtId) || districtId <= 0) return null;
+  if ((kelurahanName ?? "").trim()) {
+    const rows = await db
+      .select({ name: schema.kelurahan.name, mengantarAreaId: schema.kelurahan.mengantarAreaId })
+      .from(schema.kelurahan)
+      .where(eq(schema.kelurahan.districtId, districtId));
+    const hit = pickMengantarKelurahan(rows, kelurahanName);
+    if (hit) return { areaId: hit, from: "kelurahan" };
+  }
+  const [rep] = await db
+    .select({ areaId: schema.kiriminajaAreas.mengantarAreaId })
+    .from(schema.kiriminajaAreas)
+    .where(eq(schema.kiriminajaAreas.id, districtId))
+    .limit(1);
+  return rep?.areaId ? { areaId: rep.areaId, from: "district" } : null;
 }

@@ -90,39 +90,32 @@ export function Hero(props: HeroConfig) {
       {/* Content column — flex-1 so the trust strip can sit as a real flex child at the bottom, exactly
           like Hero.astro (flex-col: content grows, strip pinned under it). */}
       <div className="relative flex flex-1 items-end md:items-center">
-        <div className="mx-auto w-full max-w-6xl px-6 py-14 md:py-16">
+        <div className="mx-auto w-full max-w-6xl px-6 py-10 md:py-16">
         <div className={`max-w-xl ${centered ? "mx-auto text-center" : "text-left"}`}>
           {badge && (
-            <span className="mb-6 inline-flex rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white ring-1 ring-white/30 backdrop-blur-sm">
-              {badge}
-            </span>
+            <p className="mb-2 text-sm font-medium text-white/85">{badge}</p>
           )}
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight text-white">
+          {/* Same type as Hero.astro's HEADING_CLASS (redesign C): 28 → 40 → 48px, -0.02em. */}
+          <h1 className="font-display text-[1.75rem] font-semibold leading-[1.15] tracking-[-0.02em] text-balance text-white sm:text-4xl lg:text-5xl">
             {active.heading}
           </h1>
-          <p className={`mt-5 max-w-md text-white/85 ${centered ? "mx-auto" : ""}`}>
+          <p className={`mt-3 max-w-md text-base leading-relaxed text-white/90 sm:text-lg ${centered ? "mx-auto" : ""}`}>
             {active.subheading}
           </p>
           {active.ctaLabel && (
-            <div className={`mt-8 flex flex-wrap items-center gap-3 ${centered ? "justify-center" : ""}`}>
-              {/* PRIMARY — arrow-in-circle pill (mirrors Hero.astro): a filled pill with a ringed round
-                  icon hugging the left edge. */}
-              <span className="inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-ink shadow-lg">
-                <span className="flex size-9 items-center justify-center rounded-full text-ink ring-1 ring-ink/15">
-                  <ArrowRightIcon />
-                </span>
+            <div className={`mt-6 flex flex-wrap items-center gap-2 sm:gap-4 ${centered ? "justify-center" : ""}`}>
+              {/* Mirrors Hero.astro (redesign C): ONE solid white button for the slide's CTA, and the
+                  universal "Lihat semua produk" as a quiet text link beside it. */}
+              <span className="inline-flex min-h-12 items-center justify-center rounded-lg bg-white px-6 text-[0.9375rem] font-semibold text-ink">
                 {active.ctaLabel}
               </span>
-              {/* SECONDARY — the universal "Lihat Semua" browse action, as a ghost arrow-pill. */}
-              <span className="inline-flex items-center gap-3 rounded-full border border-white/40 py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-white">
-                <span className="flex size-9 items-center justify-center rounded-full text-white ring-1 ring-white/40">
-                  <ArrowRightIcon />
-                </span>
-                Lihat Semua
+              <span className="inline-flex min-h-12 items-center gap-1.5 px-2 text-[0.9375rem] font-medium text-white">
+                Lihat semua produk
+                <ArrowRightIcon />
               </span>
             </div>
           )}
-          <div className={`mt-9 flex items-center gap-4 ${centered ? "justify-center" : ""}`}>
+          <div className={`mt-6 flex items-center gap-4 ${centered ? "justify-center" : ""}`}>
             {slides.length > 1 && (
               <div ref={dotsRef} className="flex items-center gap-2">
                 {slides.map((slide, i) => (

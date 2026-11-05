@@ -18,12 +18,42 @@
  * is on the roadmap), and the failure mode of guessing wrong is an unexplained 500 on a signup form.
  */
 export const UNIQUE_VIOLATION = "23505";
+export const FOREIGN_KEY_VIOLATION = "23503";
+
+export type PgErrorFields = { code: string; constraint_name?: string };
+
+/**
+ * The driver's own error, found anywhere on a `cause` chain.
+ *
+ * ⚠️ drizzle-orm >= 0.44 WRAPS every failed query in a `DrizzleQueryError` whose `.cause` is the
+ * `PostgresError` — `.code` / `.constraint_name` are no longer on the thrown value, and `.message`
+ * is `Failed query: <sql> params: …` instead of the Postgres text. Measured 2026-11-02 while moving
+ * 0.36 → 0.45: six DB tests went red, and `uniqueViolationConstraint` returned `null` for a real
+ * duplicate email (signup would have reported an unexplained error instead of the conflict).
+ * Every reader of a Postgres error goes through here so the next driver/ORM swap is one file.
+ */
+export function pgError(e: unknown): PgErrorFields | null {
+  for (let cur: unknown = e, hops = 0; cur && typeof cur === "object" && hops < 5; cur = (cur as { cause?: unknown }).cause, hops++) {
+    const c = cur as { code?: unknown; constraint_name?: unknown; constraint?: unknown };
+    // SQLSTATE is exactly five chars of [0-9A-Z]; Node's own `code`s (ENOTFOUND, ECONNRESET…) are not.
+    if (typeof c.code === "string" && /^[0-9A-Z]{5}$/.test(c.code)) {
+      const name = c.constraint_name ?? c.constraint;
+      return { code: c.code, ...(typeof name === "string" ? { constraint_name: name } : {}) };
+    }
+  }
+  return null;
+}
 
 export function uniqueViolationConstraint(e: unknown): string | null {
-  const err = e as { code?: unknown; constraint_name?: unknown; constraint?: unknown } | null;
+  const err = pgError(e);
   if (!err || err.code !== UNIQUE_VIOLATION) return null;
-  const name = err.constraint_name ?? err.constraint;
   // A 23505 with no constraint name is still a 23505 — report it as a conflict rather than as a
   // non-conflict, or the caller falls through to "unexpected error" on the one case it handles.
-  return typeof name === "string" ? name : "";
+  return err.constraint_name ?? "";
+}
+
+/** `23503`; pass `constraint` to require that ONE named foreign key (a bare code can be another FK). */
+export function isForeignKeyViolation(e: unknown, constraint?: string): boolean {
+  const err = pgError(e);
+  return !!err && err.code === FOREIGN_KEY_VIOLATION && (constraint === undefined || err.constraint_name === constraint);
 }

@@ -16,7 +16,7 @@ const articles = await getArticles(store.id);
 
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
-  { name: "Jurnal" },
+  { name: "Blog" },
 ];
 const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 
@@ -38,7 +38,6 @@ const OG_IMAGE = articles.find((a) => a.imageUrl)?.imageUrl ?? undefined;
 >
   <PageHeader
     crumbs={CRUMBS}
-    eyebrow="Jurnal"
     title="Cerita & Inspirasi"
     dek={`Tips merawat kain, inspirasi padu padan, dan kisah di balik koleksi ${store.name}.`}
   />

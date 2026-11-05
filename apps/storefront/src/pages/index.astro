@@ -2,7 +2,7 @@
 // Icons: Lucide, not emoji. Emoji render as full-colour glyphs from the OS font — they ignore the
 // brand palette, look different on every device, and read as decoration. A stroked icon inherits
 // `currentColor`, so it sits inside the brand scale like everything else.
-import { Truck, Banknote, ShieldCheck, QrCode } from "@lucide/astro";
+import { Truck, Banknote, ShieldCheck, QrCode, ImageOff } from "@lucide/astro";
 import Layout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.astro";
 import SectionHeading from "../components/SectionHeading.astro";
@@ -211,7 +211,7 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
           PAY_BADGE,
         ].map((v) => (
           <div class="flex items-center gap-3">
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 ring-1 ring-brand-100">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-mist ring-1 ring-line">
               <v.Icon class="h-[18px] w-[18px] text-brand-600" stroke-width={1.75} aria-hidden="true" />
             </span>
             <div class="min-w-0">
@@ -233,7 +233,6 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
         as well as a fashion label. Say what the links ARE. */}
     <SectionHeading
       align="center"
-      eyebrow="Kategori"
       title="Belanja per Kategori"
       dek="Pilih kategori yang kamu cari."
     />
@@ -245,7 +244,7 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
         collections.map((c) => (
           <a
             href={`/kategori/${c.handle}`}
-            class="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-brand-100 ring-1 ring-line transition-all hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            class="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-mist-strong ring-1 ring-line transition-all hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             {c.image ? (
               <img
@@ -254,10 +253,10 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
                 sizes={imageSrcSet(c.image) ? TILE_SIZES : undefined}
                 alt={c.name}
                 loading="lazy"
-                class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
               />
             ) : (
-              <span class="flex h-full w-full items-center justify-center text-5xl">{c.emoji}</span>
+              <span class="flex h-full w-full items-center justify-center bg-mist" aria-hidden="true"><ImageOff class="size-8 text-muted" stroke-width={1.5} /></span>
             )}
             <div class="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/20 to-transparent" />
             <div class="absolute inset-x-0 bottom-0 p-4 sm:p-5">
@@ -287,7 +286,7 @@ const TEMPLATE_HAS_HEADING = !!HOMEPAGE_TEMPLATE?.content.some(
       {/* Dek is NOT "minggu ini". `bestsellers()` sorts the whole catalog by ALL-TIME units_sold — it
           does not window by date. The registry already carries this exact warning for the Grid Produk
           heading; the fallback homepage was making the claim anyway. Say only what the data does. */}
-      <SectionHeading eyebrow="Favorit" title="Paling Dicari" dek="Produk yang paling banyak dibeli." />
+      <SectionHeading title="Paling Dicari" dek="Produk yang paling banyak dibeli." />
       {/* /produk — the real product listing (pages/produk/index.astro), which every tenant resolves.
           This used to point at `/kategori/semua`, a VIRTUAL collection standing in for a listing page
           that did not exist; before that it pointed at `produk-terlaris`, a REAL but demo-only

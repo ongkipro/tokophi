@@ -39,6 +39,9 @@ export type ProductInput = {
   googleCategoryPath?: string | null;
   gender?: string | null;
   ageGroup?: string | null;
+  /** The editor filled `googleCategoryId` itself (owner 2026-11-05 auto-fill) — treat it like the
+   *  server's own suggestion: FK-checked, dropped (not failed) when the taxonomy row is missing. */
+  googleCategoryAuto?: boolean;
   material?: string | null;
   handle: string;
   price: number;
@@ -82,7 +85,7 @@ async function taxonomySafe<T extends { googleCategoryId: number | null; googleC
   fields: T,
   input: ProductInput,
 ): Promise<T> {
-  const auto = fields.googleCategoryId != null && input.googleCategoryId == null;
+  const auto = fields.googleCategoryId != null && (input.googleCategoryId == null || input.googleCategoryAuto === true);
   if (!auto) return fields;
   const [row] = await db
     .select({ id: schema.productTaxonomy.id })
@@ -90,7 +93,9 @@ async function taxonomySafe<T extends { googleCategoryId: number | null; googleC
     .where(eq(schema.productTaxonomy.id, fields.googleCategoryId!))
     .limit(1);
   if (row) return fields;
-  return { ...fields, googleCategoryId: input.googleCategoryId ?? null, googleCategoryPath: input.googleCategoryPath || null };
+  return input.googleCategoryAuto
+    ? { ...fields, googleCategoryId: null, googleCategoryPath: null }
+    : { ...fields, googleCategoryId: input.googleCategoryId ?? null, googleCategoryPath: input.googleCategoryPath || null };
 }
 
 export async function createProduct(input: ProductInput): Promise<{ id: string; number: number }> {

@@ -133,3 +133,21 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * CRM (Follow-up WA, Pipeline, Template) is shown ONLY on these stores until it runs on WhatsApp
+ * Business (WABA). Owner ruling 2026-11-03: hide it from every merchant except the demo store.
+ * Keyed by slug because that is what the layout already holds for every chrome surface.
+ * To open CRM to everyone later, delete this gate and its two callers (`navGroupsFor`, `crm/layout.tsx`).
+ */
+export const CRM_STORE_SLUGS: ReadonlySet<string> = new Set(["batiknusantara"]);
+
+export function crmEnabled(slug: string | null | undefined): boolean {
+  return !!slug && CRM_STORE_SLUGS.has(slug);
+}
+
+/** `NAV_GROUPS` as one store sees it — the sidebar, the phone drawer and the Ctrl/Cmd+K palette all read this. */
+export function navGroupsFor(slug: string | null | undefined): NavGroup[] {
+  if (crmEnabled(slug)) return NAV_GROUPS;
+  return NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => item.href !== "/crm") }));
+}

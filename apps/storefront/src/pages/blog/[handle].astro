@@ -67,7 +67,7 @@ const PAGE_URL = abs(`/blog/${article.handle}`);
 // them typed out separately until the schema started claiming a crumb the screen never showed.
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
-  { name: "Jurnal", href: "/blog" },
+  { name: "Blog", href: "/blog" },
   { name: article.title },
 ];
 
@@ -126,7 +126,7 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     <div class="flex flex-wrap items-center gap-2 text-sm">
       <a
         href="/blog"
-        class="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium tracking-wide text-brand-700 ring-1 ring-brand-100 transition-colors hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        class="rounded-full bg-mist px-3 py-1 text-xs font-medium tracking-wide text-brand-700 ring-1 ring-line transition-colors hover:bg-mist-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
         {article.blog ?? "Jurnal"}
       </a>
@@ -139,16 +139,18 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       {article.title}
     </h1>
 
+    {/* The lede reads ABOVE the body (18/20px against the body's 16/18px). It once sat at or below the
+         body size — an inverted hierarchy. */}
     {
       article.excerpt && (
-        <p class="mt-3 text-base leading-relaxed text-muted sm:text-lg">{article.excerpt}</p>
+        <p class="mt-4 text-lg leading-[1.55] text-pretty text-muted sm:text-xl">{article.excerpt}</p>
       )
     }
 
     {/* Author row */}
     <div class="mt-8 flex items-center gap-3">
       <span
-        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-lg font-semibold text-brand-700"
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-mist-strong font-display text-lg font-semibold text-brand-700"
         aria-hidden="true"
       >
         {initial}
@@ -171,19 +173,6 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       </div>
     </div>
 
-    {/* Action bar. Hairline top + bottom, exactly where Medium puts the clap/share row.
-         The left slot used to hold a "← Jurnal" back-link; the breadcrumb at the top of the page now
-         does that job, and the slot is a label instead. That is not cosmetic: the share buttons grew
-         from 36px to 44px tap targets, and back-link + five 44px targets overflowed a 320px viewport.
-         Share markup itself lives in components/ShareBar.astro — the PDP renders the same one. */}
-    <div class="mt-8 flex items-center justify-between border-y border-line py-2.5">
-      <span class="text-sm text-muted">Bagikan</span>
-      <ShareBar
-        url={PAGE_URL}
-        title={article.title}
-        image={article.imageUrl ? abs(article.imageUrl) : undefined}
-      />
-    </div>
   </article>
 
   {/* Feature image — LOCKED 3:2. The ratio is fixed, not the photo's: merchant art comes in every
@@ -209,7 +198,7 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           width="1500"
           height="1000"
           fetchpriority="high"
-          class="aspect-[3/2] w-full rounded-sm bg-brand-50 object-cover"
+          class="aspect-[3/2] w-full rounded-sm bg-mist object-cover"
         />
       </figure>
     )
@@ -223,6 +212,19 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <p class="text-muted">Tulisan ini belum memiliki isi.</p>
       )
     }
+
+    {/* Share row — at the END of the article (2026-11-05). Above the body it put five share buttons
+         (one of them wa.me) in the first screen, between the reader and the text (dotuiux
+         contact-placement + primary-actions); a reader shares once they have read. Markup unchanged:
+         components/ShareBar.astro, also used by the PDP. */}
+    <div class="mt-12 flex items-center justify-between border-y border-line py-2.5">
+      <span class="text-sm text-muted">Bagikan artikel ini</span>
+      <ShareBar
+        url={PAGE_URL}
+        title={article.title}
+        image={article.imageUrl ? abs(article.imageUrl) : undefined}
+      />
+    </div>
   </div>
 
   {/* Promoted products. Sits between the body and "Baca juga" ON PURPOSE: a reader who finished the
@@ -237,10 +239,10 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       <section class="border-t border-line">
         <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14">
           <div class="flex flex-wrap items-end justify-between gap-4">
-            <SectionHeading eyebrow="Dari koleksi kami" title="Mungkin kamu suka ini" />
+            <SectionHeading title="Mungkin kamu suka ini" />
             <a
               href="/produk"
-              class="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-ink px-5 text-sm font-medium text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Lihat semua produk
               <svg
@@ -281,7 +283,7 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                 class="group flex flex-col overflow-hidden rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
               >
                 {/* Same 3:2 lock as the feature image, so the cards and the article agree. */}
-                <div class="aspect-[3/2] overflow-hidden rounded-sm bg-brand-50">
+                <div class="aspect-[3/2] overflow-hidden rounded-sm bg-mist">
                   {a.imageUrl && (
                     <img
                       src={a.imageUrl}

@@ -65,6 +65,7 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: "/pencairan", min: "admin", why: "Uang merchant: nomor rekening, nominal, dan persetujuan transfer." },
   { prefix: "/analitik", min: "admin", why: "Pendapatan platform dan kesehatan infrastruktur." },
   { prefix: "/pengaturan", min: "admin", why: "Konfigurasi platform dan daftar operator." },
+  { prefix: "/pengiriman", min: "admin", why: "Akun Mengantar milik setiap toko (status, seller id, galat) dan booking kurir yang hasilnya tidak diketahui. Ganti kunci dan melepas booking tetap OWNER di aksinya." },
   { prefix: "/log-sistem", min: "admin", why: "Jejak tindakan operator di SEMUA toko — reset password, suspend, VIP, konfigurasi platform. Bukan konteks satu toko: itu ada di halaman toko." },
 ];
 

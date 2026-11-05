@@ -78,7 +78,7 @@ export async function getBulkShipping(f: BulkFilters = {}): Promise<BulkShipping
     // so listing it would add a row with every button disabled — noise that teaches sellers to ignore
     // this queue. Without this clause the demo seed (which books nothing) dumped all 39 `dikirim`
     // orders in here and the screen looked broken.
-    const scope = sql`(o.status in ('baru','diproses') or (o.status = 'dikirim' and o.awb is null and o.ka_order_id is not null)) and (o.financial_status = 'dibayar' or exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod'))`;
+    const scope = sql`(o.status in ('baru','diproses') or (o.status = 'dikirim' and o.awb is null and coalesce(o.ka_order_id, o.mg_order_id) is not null)) and (o.financial_status = 'dibayar' or exists (select 1 from payments p where p.order_id = o.id and p.method = 'cod'))`;
 
     const conds = [scope];
     if (f.group) conds.push(sql`s->>'group' = ${f.group}`);
@@ -108,7 +108,7 @@ export async function getBulkShipping(f: BulkFilters = {}): Promise<BulkShipping
       select o.number, coalesce(o.ship_recipient, c.name, '—') as buyer, coalesce(o.city, '—') as city,
              o.total_idr::int as total, o.courier, o.service_type,
              s->>'name' as service_name, s->>'group' as "group",
-             o.awb, o.ka_order_id, o.label_printed_at, li.n as item_count
+             o.awb, coalesce(o.ka_order_id, o.mg_order_code, o.mg_order_id) as ka_order_id, o.label_printed_at, li.n as item_count
       ${from} ${where}
       order by o.placed_at desc nulls last
       limit 200
@@ -134,7 +134,7 @@ export async function getBulkShipping(f: BulkFilters = {}): Promise<BulkShipping
       select count(*)::int as total,
              count(o.label_printed_at)::int as printed,
              count(o.awb)::int as "withResi",
-             count(o.ka_order_id)::int as booked
+             count(coalesce(o.ka_order_id, o.mg_order_id))::int as booked
       from orders o where ${scope}
     `)) as unknown as { total: number; printed: number; withResi: number; booked: number }[];
 

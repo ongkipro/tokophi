@@ -4,6 +4,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { getLockedStoreByHost, getStoreByHost, normalizeHost, primaryOrigin } from "./data/store";
 import { getCatalog } from "./data/catalog";
+import { CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP_REPORT_ONLY } from "@tokophi/lib/csp";
 
 const notFoundHtml = (host: string) => `<!doctype html>
 <html lang="id">
@@ -157,5 +158,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // instead of a hunt through every place a URL is emitted.
   context.locals.origin = primaryOrigin(store, `${scheme}://${rawHost}`);
 
-  return next();
+  const res = await next();
+  // Hardening headers (2026-11 review item 5). Deliberately NO X-Frame-Options / frame-ancestors:
+  // the Seller's Store Builder may frame a storefront preview. CSP waits for a Report-Only rollout
+  // (pixels + merchant landing HTML make a strict policy a project of its own).
+  try {
+    res.headers.set("X-Content-Type-Options", "nosniff");
+    res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    // Report-only: measures what shopper pages load (pixels, merchant HTML) before anything is enforced.
+    if (import.meta.env.PROD) res.headers.set(CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP_REPORT_ONLY);
+  } catch {
+    // immutable Response (e.g. a proxied fetch): serve it unchanged rather than fail the request.
+  }
+  return res;
 });

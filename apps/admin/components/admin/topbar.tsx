@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@tokophi/ui/dropdown-menu";
 import { NavLinks, type NavCounts } from "./nav-links";
+import { PanduanCard } from "./panduan-card";
 import { Brand } from "./brand";
 import { initials } from "./initials";
 import { signOut } from "@/lib/actions/auth";
@@ -175,9 +176,10 @@ export function Topbar({
         <SheetContent side="left" className="flex w-72 flex-col p-0">
           <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
           <div className="flex h-16 shrink-0 items-center border-b px-5"><Brand /></div>
-          <div className="flex-1 overflow-y-auto py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 scrollbar-none">
             <NavLinks counts={navCounts} onNavigate={() => setMobileMenu(false)} />
           </div>
+          <PanduanCard onNavigate={() => setMobileMenu(false)} />
         </SheetContent>
       </Sheet>
 

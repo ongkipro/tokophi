@@ -1,7 +1,7 @@
 ---
-import { ShoppingBag, ArrowRight, Search, ChevronRight, Phone, Mail } from "@lucide/astro";
-import { IDR } from "@tokophi/lib/format";
-import { imageSrcSet, mediaUrl } from "../data/catalog";
+import { ShoppingBag, ShoppingCart, ArrowRight, Search, ChevronRight, MessageCircle } from "@lucide/astro";
+import { IDR, num } from "@tokophi/lib/format";
+import { imageSrcSet, inStock, mediaUrl, storeCodPolicy, storeFreeShip } from "../data/catalog";
 import { getMainNav, type NavItem } from "../data/nav";
 
 // Tenant resolved per-request from the Host header (src/middleware.ts).
@@ -21,13 +21,9 @@ const MAIN_NAV = await getMainNav(store.id, catalog.collections);
 // every store without that one demo handle. `/promo` is now a default MAIN-NAV item instead
 // (data/nav.ts + the seeded menu), which is editable and deletable in Navigasi like any other.
 const terlarisCol = catalog.findCollection("produk-terlaris");
-const showUtilityBar = Boolean(terlarisCol);
 // Merchant logo (stores.logo_url) when set, else the store name as a wordmark.
 const logo = store.logoUrl ? mediaUrl(store.logoUrl) : null;
 const pathname = Astro.url.pathname;
-// The homepage header floats over the hero (transparent → solid on scroll); every other page keeps
-// the sticky solid bar. One flag drives both the positioning and the colour-flip <style> below.
-const isHome = pathname === "/";
 const isActive = (href: string) =>
   href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
@@ -36,29 +32,6 @@ const isItemActive = (item: NavItem) => {
   if (item.href && isActive(item.href)) return true;
   return !!item.children?.some((c) => isActive(c.href));
 };
-
-// --- Mega menu content ---
-//
-// The nav TREE comes from the store's own menu in the DB (getMainNav → the admin's Navigasi editor).
-// What the panel SHOWS on top of it is live per-tenant catalog data: a thumbnail and a real product
-// count per category. The menu decides WHICH categories to list; the catalog decides what they
-// actually contain — so a store whose categories differ from the seed still gets a truthful panel.
-const categoryMeta = (href: string) => {
-  const handle = href.startsWith("/kategori/") ? href.slice("/kategori/".length) : "";
-  if (!handle) return null;
-  const items = catalog.byCollection(handle);
-  const col = catalog.findCollection(handle);
-  // A menu entry pointing at a category with no products is a dead end — the panel says so rather
-  // than sending a shopper to an empty grid with no warning.
-  // No emoji fallback: a category with no photo gets a Lucide glyph (see the panel), which stays
-  // inside the brand palette instead of an OS-coloured pictograph.
-  return { count: items.length, image: items[0]?.image };
-};
-
-// The two collection TILES on the panel's right (owner reference, 2026-08-25 — the Threadheads
-// shape: text-link columns left, two big image tiles right). The first two menu categories that can
-// show a photo; a menu with fewer than two photographed categories simply renders fewer tiles.
-// `MAIN_NAV` is the merchant's own menu, so the merchant curates these by ordering their menu.
 
 // ── THE DRAWER IS SPLIT, NOT LOOPED ──────────────────────────────────────────────────────────────
 // A shop's mobile menu answers one question first: WHAT DO YOU SELL. Rendering the merchant's tree in
@@ -85,10 +58,10 @@ const DRAWER_FEATURED = catalog.bestsellers().slice(0, 2);
 // ⚠️ Each `sizes` is derived from ITS OWN box, because the browser trusts `sizes` completely when it
 // picks a candidate — a wrong one is worse than no srcset at all. Three sites, three derivations:
 //
-//   TILE — a fixed 248 px, and it is fixed BY CONSTRUCTION: the tile column is `md:grid-cols-[1fr_32rem]`
-//     — a hard 512 px, not a fraction, precisely so this number cannot drift with the link column —
-//     holding two tiles in `grid-cols-2 gap-4`: (512 − 16) / 2 = 248 px. The panel only exists where
-//     the nav does (`xl:flex`, ≥1280), where `max-w-7xl` is pinned, so there is no other branch.
+//   TILE — a fixed 140 px, fixed BY CONSTRUCTION: the "Produk terbaru" column is
+//     `grid-cols-[…_38rem]` — a hard 608 px — holding four tiles in `grid-cols-4 gap-4`:
+//     (608 − 48) / 4 = 140 px. The panel only exists where the nav does (`xl:flex`, ≥1280), where
+//     `max-w-7xl` is pinned, so there is no other branch.
 //
 //   DRAWER — `(min-width: 416px) 186px, calc((100vw - 44px) / 2)`:
 //     drawer  `w-full max-w-[26rem]`  → min(100vw, 416)
@@ -98,37 +71,67 @@ const DRAWER_FEATURED = catalog.bestsellers().slice(0, 2);
 //     and cost a whole rung — the cap binds deterministically: the drawer is `w-full` against the
 //     viewport, so above 416 px the tile really is exactly 186 px. A `max-w` is only a `sizes` when
 //     you can say at which viewport it starts binding.
-const TILE_SIZES = "248px";
+const TILE_SIZES = "140px";
 const DRAWER_TILE_SIZES = "(min-width: 416px) 186px, calc((100vw - 44px) / 2)";
 
-// Contact for the drawer's foot. Read straight off the store — no second copy of the footer's
-// normalising, because these two fields need none: `phone` is free text by design (a shop writes its
-// landline the way it writes it on its signage) and `email` is validated at the Seller form.
-// Each renders only when the merchant published it, so an unfilled shop gets a shorter drawer.
-const drawerPhone = (store.phone ?? "").trim() || null;
-const drawerEmail = (store.email ?? "").trim() || null;
+// ── AUTOMATIC MEGA PANEL (owner 2026-11-05: "otomatis dengan kategori dan produk recent") ─────────
+// The panel no longer depends on how the merchant built the menu's children: it lists EVERY published
+// category that has products (with its live count — an empty one is a dead end, so it is left out)
+// and the four newest products. The bestseller collection is a quick link, not a category row.
+const MEGA_CATEGORIES = catalog.collections
+  .filter((c) => c.handle !== "produk-terlaris")
+  .map((c) => ({ handle: c.handle, name: c.name, count: catalog.byCollection(c.handle).length }))
+  .filter((c) => c.count > 0);
+const MEGA_NEW = catalog.products
+  .filter((p) => inStock(p))
+  .slice()
+  .sort((a, b) => b.createdAt - a.createdAt)
+  .slice(0, 4);
+const MEGA_QUICK = [
+  { href: "/produk", label: "Semua produk" },
+  ...(terlarisCol ? [{ href: "/kategori/produk-terlaris", label: terlarisCol.name }] : []),
+  { href: "/promo", label: "Promo" },
+];
+const MEGA_LABEL = "text-sm text-muted";
+const MEGA_LINK =
+  "block rounded-sm py-1.5 text-[0.9375rem] text-ink underline-offset-4 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400";
+
+// ── TRUST STRIP (redesign C, DESIGN.md C1) ─────────────────────────────────────────────────────────
+// One quiet line under the bar that answers the ad-arrived shopper's first three questions. Every
+// claim is READ from this store's own settings, never assumed — the same honesty rule as the hero's
+// trust badges and the WhatsApp button: a store without COD shows no COD claim, and "Gratis ongkir"
+// appears only when the merchant's automatic free-shipping rule is on (with its real threshold).
+// COD restricted to some provinces says so; the order API (apps/admin/lib/cod.ts) stays the boundary.
+const [cod, freeShip] = await Promise.all([storeCodPolicy(store.id), storeFreeShip(store.id)]);
+const rupiahShort = (n: number) => (n >= 1_000_000 ? `Rp${num(n / 1_000_000)}jt` : n >= 1_000 ? `Rp${num(Math.round(n / 1_000))}rb` : IDR(n));
+const TRUST: string[] = [
+  cod.enabled ? (cod.allowedProvinces.length ? "Bisa COD di wilayah tertentu" : "Bisa bayar di tempat (COD)") : null,
+  freeShip.enabled ? (freeShip.minIdr > 0 ? `Gratis ongkir min. ${rupiahShort(freeShip.minIdr)}` : "Gratis ongkir") : "Ongkir dihitung otomatis",
+  "Kirim ke seluruh Indonesia",
+].filter((t): t is string => !!t);
 ---
 
-{/* HOME: the header floats over the hero, transparent, and turns solid on scroll (the
-    Casaio pattern). Elsewhere it is the sticky solid bar it always was. The colour flip
-    lives in the style block at the foot of this file, keyed on `data-solid`, so no child
-    needs to know which state it is in.
-    ⚠️ This comment sat BETWEEN the attributes below. Astro still built it, but its TSX
-    transform read it as an attribute — which is why `astro check` reported 8 errors and
-    typechecked NONE of the storefront's 92 files for eight days. Keep comments outside
-    the tag. */}
+{/* ONE header on every page (redesign C, 2026-11-05): solid, sticky, 56 px bar + the trust strip.
+    The homepage used to float a transparent header over a full-screen hero and flip it solid on
+    scroll; the hero is now a short band under the bar (DESIGN.md C1), so there is nothing to float
+    over. No backdrop blur — an opaque surface reads the same and costs nothing to composite.
+    Keep comments OUTSIDE the tag: one between attributes once made `astro check` skip every file. */}
+{/* ANNOUNCEMENT BAR (owner 2026-11-05) — the trust strip sits ABOVE the header, Dawn-style: it scrolls
+    away with the page while the header below stays sticky, so it costs no permanent screen height. */}
+<div class="bg-ink text-white">
+  <ul class="mx-auto flex max-w-7xl items-center justify-center gap-x-3 overflow-hidden whitespace-nowrap px-4 py-1.5 text-[0.8125rem] leading-5 text-white sm:gap-x-6 sm:px-6" aria-label="Info belanja">
+    {TRUST.map((t, i) => (
+      <li class:list={["flex items-center gap-3 sm:gap-6", i === 2 && "hidden sm:flex"]}>
+        {i > 0 && <span aria-hidden="true" class="text-white/50">·</span>}
+        {t}
+      </li>
+    ))}
+  </ul>
+</div>
 <header
   id="site-header"
   data-header
-  data-overlay={isHome ? "true" : undefined}
-  data-solid="false"
-  class:list={[
-    "z-40 transition-colors duration-300 motion-reduce:transition-none",
-    isHome
-      ? "fixed inset-x-0 top-0 border-b border-transparent"
-      : "sticky top-0 border-b border-line bg-cream/85 backdrop-blur",
-  ]}
->
+  class="sticky top-0 z-40 bg-cream">
   {/* `relative` anchors the mega panel to the header, not to the word that opens it. */}
   {/* A centred logo that does not care how long the merchant's menu is: the left group (search +
       nav) and the right group (cart) sit at the edges via `justify-between`, and the logo is
@@ -143,21 +146,31 @@ const drawerEmail = (store.email ?? "").trim() || null;
       ABSOLUTELY so a longer merchant menu never shoves it off-centre; `relative` on this
       container anchors the mega panel, which drops from `top-full` below the bar. On a phone
       the nav is replaced by the hamburger and lives in the drawer. */}
-  <div class="relative mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+  <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 md:h-[4.5rem]">
     {/* LEFT — hamburger (mobile) · nav (desktop) */}
-    <div class="flex min-w-0 items-center gap-2">
+    <div class="flex min-w-0 items-center gap-0.5 xl:gap-2">
       <button
       type="button"
       id="menu-open"
       aria-expanded="false"
       aria-controls="mobile-drawer"
       aria-label="Buka menu"
-      class="inline-flex items-center justify-center rounded-full border border-line p-2 text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 xl:hidden"
+      class="-ml-2.5 inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none xl:hidden"
       >
       <svg viewBox="0 0 24 24" class="h-5 w-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
       <path d="M3.5 6h17M3.5 12h17M3.5 18h17" stroke-linecap="round" />
       </svg>
       </button>
+      <a
+      href="/cari"
+      data-search-open
+      aria-label="Cari produk"
+      aria-keyshortcuts="Control+K Meta+K"
+      title="Cari — tekan ⌘K"
+      class="inline-flex size-11 xl:hidden items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      >
+      <Search class="size-5" stroke-width={1.8} aria-hidden="true" />
+      </a>
       {/* Inline from `xl`, not `lg`: beside a CENTRED logo the left nav must clear the middle, and a
           merchant menu is variable-length. The demo six-item menu overlaps the logo by 84px at 1024
           (measured); showing the inline nav only where a long menu fits, and using the drawer at
@@ -191,102 +204,71 @@ const drawerEmail = (store.email ?? "").trim() || null;
       {/* `pt-3` instead of `mt-3`: the gap between the trigger and the card must be INSIDE
       the hover target, or moving the pointer down into the panel crosses a dead zone
       and the menu snaps shut. A transparent pad is the bridge. */}
-      <div
-      class="dropdown-panel invisible absolute inset-x-4 top-full z-50 translate-y-1 pt-3 opacity-0 transition-all duration-200 sm:inset-x-6"
-      >
-      <div
-      class="overflow-hidden rounded-2xl border border-line bg-cream shadow-xl"
-      >
-      <div class="grid gap-8 p-6 md:grid-cols-[1fr_32rem] lg:p-7">
-      {/* LINK COLUMNS — plain text, the Threadheads shape. The 44px thumbnail rows are gone:
-      in a panel this wide they read as a second search-results list, and the two TILES to the
-      right now carry all the photography this surface needs. */}
-      <div class="flex min-w-0 flex-col">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Kategori</p>
-      <div class="mt-4 grid gap-x-8 gap-y-0.5 sm:grid-cols-2">
-      {item.children.map((child) => (
-      <a
-      href={child.href}
-      aria-current={isActive(child.href) ? "page" : undefined}
-      class:list={[
-      "block rounded-md px-1.5 py-1.5 text-[0.95rem] leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-      isActive(child.href) ? "font-medium text-brand-700" : "text-ink hover:text-brand-700",
-      ]}
-      >
-      {child.label}
-      </a>
+      {/* MEGA PANEL (redesign C, owner 2026-11-05): full width, flush under the bar — it anchors to
+          the sticky <header> (the bar no longer carries `relative`). Three zones on one baseline:
+          quick links · every category with its live count · up to three photo tiles. A scrim dims
+          the page under it, so the open panel reads as one surface, not a card floating over a grid.
+          Opens on CLICK only, by the owner's earlier ruling (see the <style> note below). */}
+      <div class="dropdown-panel invisible absolute inset-x-0 top-full z-50 opacity-0 transition-[opacity,visibility] duration-200">
+      <div class="relative z-10 bg-cream shadow-[0_24px_32px_-24px_rgb(0_0_0/0.25)]">
+      <div class="mx-auto grid max-w-7xl grid-cols-[11rem_minmax(0,1fr)_38rem] gap-12 px-6 pb-10 pt-6">
+      <div>
+      <p class={MEGA_LABEL}>Belanja</p>
+      <ul class="mt-3 space-y-0.5">
+      {MEGA_QUICK.map((l) => (
+      <li><a href={l.href} class={MEGA_LINK}>{l.label}</a></li>
       ))}
+      </ul>
       </div>
+      <div class="min-w-0">
+      <p class={MEGA_LABEL}>Kategori</p>
+      <ul class:list={["mt-3 gap-x-10 gap-y-0.5", MEGA_CATEGORIES.length > 6 ? "grid grid-cols-2" : "space-y-0.5"]}>
+      {MEGA_CATEGORIES.map((c) => (
+      <li>
       <a
-      href="/produk"
-      class="mt-auto inline-flex items-center gap-1 self-start rounded-sm px-1.5 pt-5 text-sm font-medium text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      href={`/kategori/${c.handle}`}
+      aria-current={isActive(`/kategori/${c.handle}`) ? "page" : undefined}
+      class:list={[MEGA_LINK, "flex items-baseline justify-between gap-3", isActive(`/kategori/${c.handle}`) && "font-medium"]}
       >
-      Lihat semua produk
-      <ArrowRight class="h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
+      <span class="min-w-0 truncate">{c.name}</span>
+      <span class="shrink-0 text-sm text-muted tabular-nums">{c.count}</span>
       </a>
+      </li>
+      ))}
+      </ul>
       </div>
-
-      {/* TWO TILES — big photo, bold name under it, like the reference's "Shop Essentials" /
-      "Heavyweight". The merchant curates them by ordering their menu: first two categories
-      with a photo win. */}
-      {(() => {
-      {/* flatMap, not map+filter: the truthy guard narrows `meta` to non-null INSIDE the branch,
-      so the returned objects are typed with a real `meta` — a .filter() predicate does not
-      narrow the element type, which is the ts(18047) CI caught on its first live run. */}
-      const tiles = item.children
-      .flatMap((child) => {
-      const meta = categoryMeta(child.href);
-      return meta && meta.image ? [{ child, meta }] : [];
-      })
-      .slice(0, 2);
-      return tiles.length > 0 ? (
-      <div class="grid grid-cols-2 gap-4">
-      {tiles.map(({ child, meta }) => (
-      <a
-      href={child.href}
-      class="group/tile flex flex-col rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-      <span class="block aspect-[4/3] w-full overflow-hidden rounded-xl bg-brand-50">
+      {MEGA_NEW.length > 0 && (
+      <div>
+      <div class="flex items-baseline justify-between">
+      <p class={MEGA_LABEL}>Produk terbaru</p>
+      <a href="/produk" class="text-sm text-muted underline-offset-4 hover:text-ink hover:underline">Lihat semua</a>
+      </div>
+      <div class="mt-3 grid grid-cols-4 gap-4">
+      {MEGA_NEW.map((p) => (
+      <a href={`/produk/${p.handle}`} class="group/tile block min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+      <span class="block aspect-[4/5] w-full overflow-hidden rounded-sm bg-mist">
+      {p.image && (
       <img
-      src={meta.image}
-      srcset={imageSrcSet(meta.image)}
-      sizes={imageSrcSet(meta.image) ? TILE_SIZES : undefined}
+      src={p.image}
+      srcset={imageSrcSet(p.image)}
+      sizes={imageSrcSet(p.image) ? TILE_SIZES : undefined}
       alt=""
       loading="lazy"
-      class="h-full w-full object-cover transition-transform duration-500 group-hover/tile:scale-105 motion-reduce:transition-none motion-reduce:group-hover/tile:scale-100"
+      class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/tile:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover/tile:scale-100"
       />
+      )}
       </span>
-      <span class="mt-2.5 block text-center text-[0.95rem] font-semibold text-ink transition-colors group-hover/tile:text-brand-700">
-      {child.label}
-      </span>
-      <span class="block text-center text-xs text-muted tabular-nums">
-      {meta.count > 0 ? `${meta.count} produk` : "Segera hadir"}
-      </span>
+      <span class="mt-2 line-clamp-2 text-sm leading-snug text-ink">{p.name}</span>
+      <span class="mt-0.5 block text-sm font-semibold text-ink tabular-nums">{p.price > 0 ? IDR(p.price) : "Hubungi untuk harga"}</span>
       </a>
       ))}
       </div>
-      ) : null;
-      })()}
-      </div>
-
-      {/* Utility bar: a shortcut to this store's own bestseller collection, shown only when it
-      exists (the handle is a demo one otherwise). The promo shortcut moved to the main nav. */}
-      {showUtilityBar && (
-      <div
-      class="flex items-center justify-between gap-4 border-t border-line bg-brand-50/50 px-6 py-3 text-sm"
-      >
-      {terlarisCol && (
-      <a
-      href="/kategori/produk-terlaris"
-      class="ml-auto hidden rounded-sm text-muted transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:block"
-      >
-      {terlarisCol.name}
-      <ArrowRight class="ml-1 inline h-3.5 w-3.5" stroke-width={2} aria-hidden="true" />
-      </a>
-      )}
       </div>
       )}
       </div>
+      </div>
+      {/* Scrim — dims the page under the open panel; a click on it closes the menu (script below). */}
+      <div data-mega-scrim class="absolute inset-x-0 top-0 h-screen bg-ink/25" aria-hidden="true"></div>
       </div>
       </div>
       ) : (
@@ -321,7 +303,8 @@ const drawerEmail = (store.email ?? "").trim() || null;
     }
     </a>
 
-    {/* RIGHT — search · cart */}
+    {/* RIGHT — search (desktop; phones carry it on the left, Horizon-style, so the centred logo
+        never collides with three icons on a 360 px bar) · chat · cart */}
     <div class="flex items-center gap-0.5 sm:gap-1">
       <a
       href="/cari"
@@ -329,19 +312,29 @@ const drawerEmail = (store.email ?? "").trim() || null;
       aria-label="Cari produk"
       aria-keyshortcuts="Control+K Meta+K"
       title="Cari — tekan ⌘K"
-      class="inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      class="hidden size-11 xl:inline-flex items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
       >
       <Search class="size-5" stroke-width={1.8} aria-hidden="true" />
       </a>
+      <button
+      type="button"
+      data-chat-open
+      aria-expanded="false"
+      aria-controls="chat-panel"
+      aria-label={`Chat dengan ${store.name}`}
+      class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      >
+      <MessageCircle class="size-5" stroke-width={1.8} aria-hidden="true" />
+      <span data-chat-dot class="absolute right-2 top-2 hidden size-2.5 rounded-full bg-brand-600 ring-2 ring-cream"><span class="sr-only">Ada balasan baru</span></span>
+      </button>
       <a
       href="/keranjang"
-      class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+      class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
       >
-      <svg viewBox="0 0 24 24" class="size-5 fill-none stroke-current" stroke-width="1.8" aria-hidden="true">
-      <path d="M2.5 3h1.6l1.5 12.5a1.5 1.5 0 0 0 1.5 1.3h9.3a1.5 1.5 0 0 0 1.47-1.2l1.4-7.3H6" stroke-linecap="round" stroke-linejoin="round" />
-      <circle cx="9" cy="20" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="17" cy="20" r="1.2" fill="currentColor" stroke="none" />
-      </svg>
+      {/* Lucide like its neighbours (Search, MessageCircle): same 24-grid, same stroke. The old hand-drawn
+          cart measured 14.0×15.2 px against the chat's 16.7×16.7 and sat 0.8 grid units left of centre
+          (dotuiux header measure, 2026-11-05) — the one icon in the row that read smaller and off. */}
+      <ShoppingCart class="size-5" stroke-width={1.8} aria-hidden="true" />
       {/* The count is a BADGE now, not a word beside the label — but it is still real text inside
       the link, so the accessible name computes to "Keranjang <n> item". The old note here
       warned that an `aria-label` saying "Keranjang" beside visible text reading "Keranjang 0"
@@ -363,54 +356,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
       </a>
     </div>
   </div>
-  </div>
-  </div>
 </header>
-
-{/* HEADER COLOUR FLIP — transparent over the hero, solid once scrolled. Global (not scoped) and keyed
-    on `#site-header[data-solid]` so a child does not need to know the state. Only the OVERLAY header
-    (homepage) is transparent; the sticky bar on other pages is unaffected. */}
-<style is:global>
-  /* Transparent state: white on the dark hero. Higher specificity than the utility classes it
-     overrides, so nav links, icons and the logo all read white without editing each one. */
-  #site-header[data-overlay][data-solid="false"] { background: transparent; color: #fff; }
-  #site-header[data-overlay][data-solid="false"] a,
-  #site-header[data-overlay][data-solid="false"] button,
-  #site-header[data-overlay][data-solid="false"] nav { color: #fff; }
-  /* The hover wash is for the ICON buttons only (search / cart / hamburger) — NOT the nav links,
-     which use an animated underline, and NOT the logo, which has no hover state at all. */
-  #site-header[data-overlay][data-solid="false"] a:not([data-logo]):not(nav a):hover,
-  #site-header[data-overlay][data-solid="false"] button:not(.dropdown-trigger):hover { background-color: rgb(255 255 255 / 0.14); color: #fff; }
-  /* The mobile menu button keeps a border — make it a soft white one while transparent. */
-  #site-header[data-overlay][data-solid="false"] #menu-open { border-color: rgb(255 255 255 / 0.35); }
-
-  /* Solid state on the homepage: the same cream bar every other page already wears. */
-  #site-header[data-overlay][data-solid="true"] {
-    background: color-mix(in srgb, var(--color-cream) 92%, transparent);
-    border-bottom-color: var(--color-line);
-    backdrop-filter: blur(8px);
-  }
-</style>
-
-<script is:inline>
-  (function () {
-    var header = document.getElementById("site-header");
-    if (!header || header.getAttribute("data-overlay") === null) return; // only the overlay (home) header flips
-    // Solid once the shopper has scrolled past the first ~5rem — transparent while the top of the
-    // hero is what fills the screen, solid as soon as they commit to scrolling. `requestAnimationFrame`
-    // coalesces the scroll storm into one write per frame.
-    var THRESHOLD = 80;
-    var ticking = false;
-    function apply() {
-      header.setAttribute("data-solid", window.scrollY > THRESHOLD ? "true" : "false");
-      ticking = false;
-    }
-    window.addEventListener("scroll", function () {
-      if (!ticking) { ticking = true; requestAnimationFrame(apply); }
-    }, { passive: true });
-    apply(); // a reload partway down the page must start solid, not transparent
-  })();
-</script>
 
 {/* Mobile drawer */}
 <div id="mobile-menu" class="xl:hidden">
@@ -430,7 +376,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
     aria-modal="true"
     aria-label="Menu navigasi"
     inert
-    class="fixed inset-y-0 right-0 z-50 flex w-full max-w-[26rem] translate-x-full flex-col bg-cream shadow-2xl transition-transform duration-300 ease-out"
+    class="fixed inset-y-0 right-0 z-50 flex w-full max-w-[26rem] translate-x-full flex-col bg-cream transition-[transform,box-shadow] duration-300 ease-out [&:not(.translate-x-full)]:shadow-2xl"
   >
     {/* X on the LEFT, borderless — the minimalist reference. No logo in the menu header: the menu is
         the shop's own space and a wordmark repeated from the bar is noise. `size-11` = the 44px floor. */}
@@ -439,7 +385,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
         type="button"
         id="menu-close"
         aria-label="Tutup menu"
-        class="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        class="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
         <svg viewBox="0 0 24 24" class="size-6 fill-none stroke-current" stroke-width="1.6" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
@@ -493,48 +439,21 @@ const drawerEmail = (store.email ?? "").trim() || null;
           </ul>
         </nav>
 
-        {/* Foot strip: contact (when published) + two bestsellers as product cards — the reference's
-            bottom strip, but real data rather than "recently viewed" placeholders. */}
+        {/* Foot strip: two bestsellers as product cards — real data. The phone + email that used to
+            sit here duplicated the footer's "Hubungi kami" on every page (redesign C: a contact link
+            appears once per page; the chat icon in the header is the in-page way to reach the shop). */}
         <div class="mt-auto">
-          {
-            (drawerPhone || drawerEmail) && (
-              <ul class="flex flex-col gap-0.5 border-t border-line px-4 py-3 text-sm">
-                {drawerPhone && (
-                  <li>
-                    <a
-                      href={`tel:${drawerPhone.replace(/[^\d+]/g, "")}`}
-                      class="flex min-h-11 items-center gap-3 rounded-xl px-2 text-ink transition-colors hover:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-                    >
-                      <Phone class="size-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
-                      <span class="tabular-nums">{drawerPhone}</span>
-                    </a>
-                  </li>
-                )}
-                {drawerEmail && (
-                  <li>
-                    <a
-                      href={`mailto:${drawerEmail}`}
-                      class="flex min-h-11 items-center gap-3 rounded-xl px-2 text-ink transition-colors hover:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-                    >
-                      <Mail class="size-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
-                      <span class="truncate">{drawerEmail}</span>
-                    </a>
-                  </li>
-                )}
-              </ul>
-            )
-          }
           {
             DRAWER_FEATURED.length > 0 && (
               <div class="border-t border-line px-4 py-4">
-                <p class="px-1 pb-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">Pilihan untuk kamu</p>
+                <p class="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Pilihan untuk kamu</p>
                 <div class="grid grid-cols-2 gap-3">
                   {DRAWER_FEATURED.map((prod) => (
                     <a
                       href={`/produk/${prod.handle}`}
                       class="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded-lg"
                     >
-                      <span class="block aspect-[3/4] overflow-hidden rounded-lg bg-brand-50 ring-1 ring-line">
+                      <span class="block aspect-[3/4] overflow-hidden rounded-lg bg-mist ring-1 ring-line">
                         {prod.image ? (
                           <img
                             src={prod.image}
@@ -546,7 +465,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
                           />
                         ) : (
                           <span class="flex h-full w-full items-center justify-center">
-                            <ShoppingBag class="size-5 text-brand-300" stroke-width={1.5} aria-hidden="true" />
+                            <ShoppingBag class="size-5 text-muted" stroke-width={1.5} aria-hidden="true" />
                           </span>
                         )}
                       </span>
@@ -579,7 +498,7 @@ const drawerEmail = (store.email ?? "").trim() || null;
           {
             DRAWER_GROUPS.map((group) => (
               <Fragment>
-                <p class="pb-1 pt-3 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">{group.label}</p>
+                <p class="pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{group.label}</p>
                 <ul class="flex flex-col">
                   {group.children!.map((child) => (
                     <li>
@@ -789,7 +708,6 @@ const drawerEmail = (store.email ?? "").trim() || null;
   .dropdown.is-open > .dropdown-panel {
     visibility: visible;
     opacity: 1;
-    transform: translateY(0);
   }
   .dropdown.is-open .dropdown-chevron {
     transform: rotate(180deg);
@@ -842,6 +760,8 @@ const drawerEmail = (store.email ?? "").trim() || null;
     });
 
     document.addEventListener("click", function (e) {
+      // The scrim lives INSIDE the dropdown (so it shares its open/closed state) but means "outside".
+      if (e.target && e.target.closest && e.target.closest("[data-mega-scrim]")) { closeAll(); return; }
       var inside = dropdowns.some(function (dd) { return dd.contains(e.target); });
       if (!inside) closeAll();
     });

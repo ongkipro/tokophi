@@ -15,11 +15,12 @@
 // Defaults (`bawaan` + `netral`) reproduce the current global.css values byte-for-byte-ish
 // (±1/255 from HSL rounding), so every existing live store renders unchanged until its owner
 // actually picks something.
-import { hexToHSL, hslToHex, DEFAULT_BRAND_COLOR, generateBrandShades } from "./colors";
+import { hexToHSL, hslToHex, DEFAULT_BRAND_COLOR, brandShades } from "./colors";
 
 export function generateTenantThemeVariables(brandHex: string | null | undefined, storeTheme: unknown): string {
   const color = brandHex || DEFAULT_BRAND_COLOR;
-  const shades = generateBrandShades(color);
+  // No brand chosen → the explicit neutral scale (black primary), not a derived one; see colors.ts.
+  const shades = brandShades(brandHex);
   const resolved = resolveTheme({ brandColor: color, theme: storeTheme });
   
   const vars: string[] = [];
