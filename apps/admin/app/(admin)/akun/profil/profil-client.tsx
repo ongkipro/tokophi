@@ -17,13 +17,15 @@ export function ProfilClient({ profile }: { profile: Profile }) {
   const [pending, start] = React.useTransition();
   const [name, setName] = React.useState(profile.name);
   const [email, setEmail] = React.useState(profile.email);
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const emailChanged = email.trim().toLowerCase() !== profile.email;
   const initials = (profile.name || profile.email).split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const dirty = name.trim() !== profile.name || email.trim().toLowerCase() !== profile.email;
   const roleLabel = ROLE_LABEL[profile.role as Role] ?? profile.role;
 
   const save = () =>
     start(async () => {
-      const r = await updateProfile({ name, email });
+      const r = await updateProfile({ name, email, currentPassword });
       if (r.ok) toast.success("Profil diperbarui.");
       else toast.error(r.error ?? "Gagal menyimpan.");
     });
@@ -63,6 +65,19 @@ export function ProfilClient({ profile }: { profile: Profile }) {
               <Input id="pf-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
               <p className="text-xs text-muted-foreground">Email dipakai untuk masuk ke Dashboard Seller.</p>
             </div>
+            {emailChanged && (
+              <div className="space-y-1.5">
+                <Label htmlFor="pf-current-password">Kata sandi saat ini</Label>
+                <Input
+                  id="pf-current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <p className="text-xs text-muted-foreground">Mengganti email login perlu konfirmasi kata sandi.</p>
+              </div>
+            )}
             <div className="flex justify-end border-t pt-4">
               <Button disabled={pending || !dirty} onClick={save}>{pending ? "Menyimpan…" : "Simpan perubahan"}</Button>
             </div>
