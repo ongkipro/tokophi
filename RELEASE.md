@@ -1,11 +1,11 @@
 # Release Manifest — tokophi
 
-Release-ID: f5100ac-pr393
-Base: 98f1d5a2219d1e591af0ef1c0f9da39291424c85
+Release-ID: 0e4d950a-pr451
+Base: 0e4d950a4288e196ff3edc608a4e689b73aa9341
 Environment: production
 Declared-Risk: R2
-Rollback-Ref: 98f1d5a2219d1e591af0ef1c0f9da39291424c85
-Rollback-Command: Coolify → application tokophi → Deployments → redeploy commit 98f1d5a (or `git revert -m 1 f5100ac` + push to `main` → webhook; ~10 min measured on deploys 535/536, specs/docs/DEPLOY.md)
+Rollback-Ref: 14bf5d43fc1fc9854199831e6b345427eb01b50a
+Rollback-Command: Coolify (dedicated host) → application tokophi → Deployments → redeploy commit 14bf5d43 (PR #448; its image is retained on the host), or `git revert -m 1 0e4d950a` + push to `main` and then trigger the deploy BY HAND — a merge does not deploy on this host (specs/docs/DEPLOY.md step 2)
 Backup-Proof: NOT_REQUIRED
 Status: DEPLOYED
 
@@ -20,7 +20,24 @@ This file defines the current release boundary. It is repository truth for relea
 - `Backup-Proof` is `NOT_REQUIRED` unless migration risk requires a structured `backup://`, `snapshot://`, or artifact reference.
 - Set `Status: READY` only after the release scope is frozen for production gating.
 
-## This release — `f5100ac` (PR #393, merged 2026-09-10 17:30 UTC; Coolify deploy **537**)
+## This release — `0e4d950a` (PR #451, storefront redesign C; deployed by hand 2026-11-05 11:59 → 12:18 UTC)
+
+- **Host:** the dedicated Vultr host (since the 2026-11-01 cutover; `specs/docs/DEPLOY.md`). Deploys
+  there are manual; the GitHub webhook cannot reach Coolify through Cloudflare Access.
+- **Scope:** storefront redesign C for all tenants (monochrome, header cart icon, footer contact,
+  article typography, list-parser fix). **No migration** — production stays at 117 (`0000`–`0116`),
+  so `Backup-Proof: NOT_REQUIRED`.
+- **Why R2:** every storefront tenant's buying path is re-rendered.
+- **Verified:** five web containers `(healthy)` on two polls, `migrate`/`seed` exited 0, probe exit 0,
+  live storefront at 390 + 1440 px — BUILD-LOG 2026-11-05 12:25 UTC. Re-probed 2026-11-05 19:45 UTC: exit 0.
+- **Shipped but dormant in this release line:** Mengantar Partner API (#446, migration `0116`) —
+  `MENGANTAR_ENV` unset, shipping switch on KiriminAja.
+- **After it:** a data-only production run (monochrome reset, `UPDATE 3`, backup
+  `ops_backup.store_theme_20261105`) and docs-only commits on `main`.
+- Releases between `f5100ac` and this one (deploys 548–550 on `volumdev`, then #439–#448 on the
+  dedicated host) are recorded in `BUILD-LOG.md`, not repeated here.
+
+## Earlier release — `f5100ac` (PR #393, merged 2026-09-10 17:30 UTC; Coolify deploy **537**)
 
 ⚠️ **This release carries MORE than its PR title says, and the error was mine.** `docs/root-contract-refresh`
 was branched from `feat/payment-advice-cron` instead of `main`, so merging #393 ("docs only") also merged
@@ -94,5 +111,6 @@ other field validates (Base is a real ancestor of HEAD, Rollback-Ref resolves, n
 
 ## Next release
 
-Nothing is frozen. Open on GitHub: **#391** (ADR 0004 brand guard; CI re-running after a BUILD-LOG
-merge). It becomes the release this file describes; rewrite the header then, with `Base: f5100ac…`.
+Nothing is frozen. Candidates are the open PRs listed in `STATUS.md` → Active work (#424 and #426 must
+renumber their `0116` migrations first). Whichever deploys next becomes the release this file
+describes; rewrite the header then, with `Base: 0e4d950a…`, and remember the deploy is manual.

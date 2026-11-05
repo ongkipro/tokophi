@@ -28,7 +28,7 @@ The engineering discipline is unusually strong (guards proved red, incident hist
 ## P0 — do first (days)
 
 ### 1. ▶ Production cannot ship parcels: KiriminAja rejects the new egress IP
-**[D]** bootstrap doc, "Open after cutover": `207.148.76.131` gets HTTP 401; `cron-tracking` is **stopped** (restart policy `no`); 3 live orders affected; quotes/bookings/cancels fail.
+**[D]** bootstrap doc, "Open after cutover": the new host IP got HTTP 401; `cron-tracking` is **stopped** (restart policy `no`); 3 live orders affected; quotes/bookings/cancels fail.
 **Do:** owner adds the IP at KiriminAja (same action as 2026-09-09), then re-enable `cron-tracking` as the doc says. Confirm the AutoLaris callback/IP allow-list too.
 **Also from the same doc, still open:** repo `ops/tokophi-custom-domains.yaml` must be `priority: -1` (prod already runs it; the repo would regress the next fresh host); install `retry-global`; Access bypass for the GitHub webhook path.
 **Done when:** `ops/tokophi-probe.sh` `ongkir-rates` passes from off-box and `cron_runs` shows a fresh `cron-tracking` tick.
