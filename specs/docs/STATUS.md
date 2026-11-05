@@ -1,13 +1,15 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-03 09:20 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`d56e631c`** (deploy of PR #443 + #444),
-> all five web containers `(healthy)`. Merges do NOT deploy here — trigger by hand (DEPLOY.md checklist).
-> Host safeguards LIVE: L1 watchdog (every minute) + L1b disk safety-net (hourly), both skip during a deploy —
-> seen working on the 2026-11-03 deploy. Disk 40 %. `ops/tokophi-probe.sh` all green. Last full CI: 1,536 admin
-> tests passed (DB suites skipped locally), CI green on #443/#444. CRM is visible only on the demo store
-> `batiknusantara` (until WABA). Still open: no alert channel; per-deploy downtime not re-measured on this host;
-> logged-in browser checks of #439–#444 pending.
+> **Current state — 2026-11-05 10:40 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`2a0f7eb7`** (deploy of PR #446 —
+> Mengantar Partner Business API — plus #447), all five web containers `(healthy)` on two consecutive polls,
+> `migrate`/`seed` `Exited (0)`. **Migrations: 117 on production (head `0116_mengantar_shipping`)**; shipping
+> provider switch stays **KiriminAja**, `MENGANTAR_ENV` unset → Mengantar quoting and seller registration are
+> held by design (no store has a Mengantar account: `store_mengantar_accounts` = 0). Live `/api/public/ongkir`
+> answers with `codRequote:false`. `ops/tokophi-probe.sh` all green, disk 31 %. Merges do NOT deploy here —
+> trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar production needs the Partner
+> origin, IP allowlist and Terms/Privacy URLs from Mengantar; the 99ribu area import (`load:mengantar-areas`)
+> is an owner-approved step not yet run on production.
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
@@ -38,7 +40,7 @@
 > Docker DB up (the 2026-09-04 block's 137 / 1120 was true on that day — #381 added 2 files / 19
 > tests, and this tree carries one more); `npm run verify-rls -w @tokophi/db` → **54/55 store-scoped
 > tables with RLS** (exception `platform_activity`), **11** un-RLS'd child tables (`inventory_levels`
-> left the list with `0100`); `packages/db/src/schema.ts` → **84 tables**.
+> left the list with `0100`); `packages/db/src/schema.ts` → **87 tables**.
 >
 > **Refreshed 2026-08-21 — PRE-RELEASE, BLOCKED.** The prior `v1.0.0 Release Edition` and “100% remediation closure” claims were invalidated by the 2026-08-16 precision audit. Current evidence is in [`AUDIT-SUMMARY.md`](./AUDIT-SUMMARY.md); accepted contracts are in [`REQUIREMENTS.md`](./REQUIREMENTS.md); root [`TASKS.md`](../../TASKS.md) owns the 42-task remediation queue and release gate.
 >
@@ -66,7 +68,7 @@
 >
 > **Release blockers — recounted 2026-08-24 against evidence, not against stale flags.** **Stage 4 is COMPLETE**: all 13 P0 tasks carry documented completion evidence (BUILD-LOG entries and/or `[x]` flags — reconciled 2026-08-24 after the flags were found under-reporting by 16 tasks). The active queue is now **14 P1 open** (5.1, 5.4–5.9, 5.12–5.15, 5.18–5.20 — of which 5.8/5.19/5.20 are owner-gated decisions/credentials and 5.12 is blocked on GitHub Actions billing) **and 7 P2 open** (6.1, 6.3, 6.4, 6.6–6.9 — 6.1 is blocked on 5.12–5.15). No production release sign-off until the Stage 7 executable gate passes; that gate has not been run.
 >
-> **Data/security status:** the 116-entry migration journal is healthy through `0115_provider_order_prefix`, and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
+> **Data/security status:** the 117-entry migration journal is healthy through `0116_mengantar_shipping`, and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >

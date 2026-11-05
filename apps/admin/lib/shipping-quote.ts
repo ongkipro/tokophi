@@ -1,9 +1,14 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { kaShippingPrice, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
-import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
-import { resolveArea } from "@/lib/data/areas";
+import { mgEstimate, mgCourierCode, type MgRate } from "@tokophi/lib/mengantar";
+import { getProviderConfig, DEFAULT_SHIPPING_PROVIDER, type MengantarConfig, type ShippingProvider } from "@tokophi/lib/provider-config";
+import { openStoreMengantar } from "@tokophi/db/mengantar-account";
+import { cacheGet, cacheSet } from "@tokophi/lib/cache";
+import { courierName, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
+import { resolveArea, mengantarDestination } from "@/lib/data/areas";
 import { getCodPolicy } from "@/lib/cod";
 import { weightForCart, type CartItemRef } from "@/lib/shipping-weight";
 
@@ -48,6 +53,14 @@ export type Quote =
       /** lines whose variant had no weight_grams and fell back to the default (documented, not silent) */
       weightFallback: string[];
       codEnabled: boolean;
+      /**
+       * WHO priced this quote — the platform switch at the moment of quoting. `/api/public/order`
+       * stamps it onto `orders.shipping_provider`, so booking/tracking follow the provider that set
+       * the price, never whatever the switch says later.
+       */
+      provider: ShippingProvider;
+      /** Mengantar only: the destination area `_id` the price was built for (→ `orders.ship_mengantar_area_id`). */
+      destinationAreaId: string | null;
       origin: number;
       /** "pickup" = the seller's saved pickup district · "store-city" = a fuzzy match on the store's city */
       originFrom: "pickup" | "store-city";
@@ -74,6 +87,12 @@ export type QuoteInput = {
   /** stores.city — only used as the fallback origin when no pickup address is set */
   storeCity?: string | null;
   destinationId: number;
+  /**
+   * The kelurahan NAME the shopper picked, when they picked one (the order API has it; the ongkir
+   * route only when the checkout sends it). A claim, re-matched exactly inside `destinationId` —
+   * used by the Mengantar branch only, whose area ids are kelurahan-grain. KiriminAja ignores it.
+   */
+  kelurahan?: string | null;
   items: CartItemRef[];
   /** declared goods value, for insurance. Comes from the SERVER-priced subtotal in the order API. */
   itemValue?: number;
@@ -95,6 +114,12 @@ export type QuoteInput = {
    * dead checkout, not a slow one.
    */
   couriers?: string[];
+  /**
+   * The order is COD. COD ALWAYS quotes (and therefore books) through the default provider (owner
+   * O4/O6: "COD default = KiriminAja"), whatever the switch says. `/api/public/order` sets it from the
+   * payment method it validated; the ongkir route passes the checkout's optional `cod: true` hint.
+   */
+  cod?: boolean;
 };
 
 /**
@@ -117,7 +142,62 @@ export function findRate(rates: QuotedRate[], code?: string | null, type?: strin
   return rates.find((r) => r.code.toLowerCase() === c && String(r.type) === t) ?? null;
 }
 
+/**
+ * Can ANY store quote right now? The public ongkir route asks before it resolves the store. The default
+ * provider is the fallback for every unconnected store (O6), so it is what this answers for — plus "the
+ * switch is on Mengantar" (connected stores quote with their own key).
+ */
+export async function shippingConfigured(): Promise<boolean> {
+  return kiriminajaConfigured() || (await getProviderConfig()).shipping === "mengantar";
+}
+
+/**
+ * THE DISPATCH. Quote and re-quote both come through here, so a checkout's price and the order's
+ * stored price come from the same provider for the same (store, switch, COD) inputs.
+ *
+ *   · switch = Mengantar AND not COD AND the store has a CONNECTED Mengantar account → Mengantar, with
+ *     THE STORE'S OWN seller key (partner model).
+ *   · anything else → the default provider. A store that is not connected FALLS BACK (owner O6); COD
+ *     always goes the default way. The quote's `provider` field says which one actually priced it, and
+ *     `/api/public/order` stamps exactly that onto `orders.shipping_provider`.
+ *
+ *   · a connected store whose Mengantar quote fails or prices nothing → the default provider as well.
+ *
+ * ⚠️ A store's connection can change between the checkout quote and the order re-quote (rare: a
+ * registration finishing in between). The order route then re-quotes on the other provider and refuses
+ * a service id that is not in the fresh quote — "pilih ulang ongkir", never a silent price switch.
+ */
 export async function quoteShipping(input: QuoteInput): Promise<Quote> {
+  const cfg = await getProviderConfig();
+  // The switch is honoured only where THIS process names its Mengantar env: an unset `MENGANTAR_ENV`
+  // reads as sandbox, and quoting real checkouts there would book parcels no courier collects. The
+  // Super Admin switch checks its own process; this is the check that holds where orders are priced
+  // (and it also covers a provider chosen by the `SHIPPING_PROVIDER` env with no DB row).
+  if (cfg.shipping === "mengantar" && !input.cod && cfg.mengantar.envSource !== "env") {
+    console.warn("[shipping/quote] shipping provider is mengantar but MENGANTAR_ENV is not set in this process — quoting the default provider");
+  } else if (cfg.shipping === "mengantar" && !input.cod) {
+    const acc = await openStoreMengantar(input.storeId);
+    if (acc.ok) {
+      const mg = await quoteMengantar(input, acc.cfg);
+      if (mg.ok && mg.rates.length) return mg;
+      // An empty SCOPED answer (the fast pair) is not "Mengantar cannot ship here" while the full list
+      // has rates: falling back for the fast scope alone would paint one provider's prices beside the
+      // other's. Decide on the FULL scope (the estimate is cached per route, so this is no second call).
+      if (mg.ok && input.couriers) {
+        const all = await quoteMengantar({ ...input, couriers: undefined }, acc.cfg);
+        if (all.ok && all.rates.length) return mg;
+      }
+      // A connected store whose Mengantar quote cannot sell anything here (no origin area, a district
+      // with no representative, every courier filtered out, or the provider down) FALLS BACK like an
+      // unconnected one (O6) instead of leaving the shopper with no shipping — and so no order. The
+      // order route re-quotes through this same function, so it lands on the same provider.
+      console.warn("[shipping/quote] mengantar could not quote; falling back to the default provider:", mg.ok ? "no rates" : mg.error);
+    }
+  }
+  return quoteKiriminaja(input, DEFAULT_SHIPPING_PROVIDER);
+}
+
+async function quoteKiriminaja(input: QuoteInput, provider: Exclude<ShippingProvider, "mengantar">): Promise<Quote> {
   if (!kiriminajaConfigured()) return { ok: false, error: "Shipping belum dikonfigurasi." };
   if (!Number.isFinite(input.destinationId) || input.destinationId <= 0) {
     return { ok: false, error: "Tujuan belum dipilih." };
@@ -214,8 +294,183 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
     billableGrams: pkg.billableGrams,
     weightFallback: pkg.missing,
     codEnabled: cod.enabled,
+    provider,
+    destinationAreaId: null,
     origin,
     originFrom,
+    originName: settings?.kecamatanName || input.storeCity || null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MENGANTAR (SHIP-MENGANTAR, phase 1 = NON-COD)
+//
+// Same contract as the KiriminAja branch — same inputs, same `QuotedRate` shape, same "the server
+// prices, the client only says what and where" — with three provider differences made explicit:
+//   · ids    — origin = `store_settings.sender_mengantar_area_id` (the seller's, never the client's;
+//              NO fuzzy store-city fallback: a Mengantar origin we do not hold is "not set up");
+//              destination = `mengantarDestination()` (picked kelurahan → district representative →
+//              unavailable). The checkout keeps sending KiriminAja district ids.
+//   · weight — the SAME `weightForCart` sum of every line, `billableGrams` (1 kg floor), sent as KG.
+//              Mengantar takes no dimensions (analysis §1.3 trap 7).
+//   · COD    — every Mengantar rate is `cod: false` and the quote says `codEnabled: false`, whatever
+//              the provider's `unsupported_cod` says. COD never travels Mengantar (owner O4): a COD
+//              order is quoted by the default provider (`quoteShipping`, `cod: true`).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MG_PRICE_TTL = 10 * 60 * 1000;
+
+/**
+ * The cache key of a Mengantar estimate. The PROVIDER is its first segment (KiriminAja's live under
+ * `ka:price:`), then a one-way fingerprint of host + key (a rotated key is a different account), then
+ * every price input: origin, destination, kg. No dimensions — Mengantar does not take them. No COD
+ * amount — phase 1 never sends `COD_AMOUNT`.
+ */
+export function mgEstimateCacheKey(cfg: Pick<MengantarConfig, "base" | "key">, originId: string, destinationId: string, kg: number): string {
+  // Per SELLER: each store's key is its own account with its own volume discount — never one shared entry.
+  const fp = createHash("sha256").update(`${cfg.base}\n${cfg.key}`).digest("hex").slice(0, 12);
+  return `mengantar:estimate:${fp}:${originId}:${destinationId}:${kg}`;
+}
+
+export type MgScope = {
+  /** platform_couriers enabled (instant excluded). EMPTY = NOTHING is quotable. */
+  platformOn: string[];
+  /** store_settings.couriers — null = the merchant never narrowed it. */
+  merchant: string[] | null;
+  /** the store's ENABLED store_shipping_methods rows (KiriminAja and/or Mengantar keyed). */
+  picked: { courier: string; service: string }[];
+};
+
+/**
+ * MgRate[] → QuotedRate[] under the courier rule (written down in the analysis doc, "Quote/checkout
+ * wiring"). Pure, so it is tested without a database.
+ *
+ *   1. PLATFORM: the rate's TokoΦ courier (`mgCourierCode`) must be platform-enabled. An empty
+ *      platform list means NO rates — never "all allowed" (the KiriminAja branch's `if
+ *      (platformOn.length)` is the backup doc's §9.1 finding; it is not copied here).
+ *   2. STORE courier column: when set, the courier must be in it.
+ *   3. STORE per-service selection (`store_shipping_methods`, keyed courier + service):
+ *      · rows whose `service` is a Mengantar estimate key OF THAT courier exist → only those keys;
+ *      · otherwise, if the store has KiriminAja rows → only the COURIERS those rows name (the merchant
+ *        who ships "JNE + SPX" keeps shipping JNE + SPX after the switch, at every service Mengantar
+ *        offers for them, until they save a Mengantar selection);
+ *      · no rows at all → no further narrowing (rules 1–2 still apply).
+ *   4. Unknown/cargo keys (`mgCourierCode` null) are never quoted.
+ */
+export function mengantarRates(rates: MgRate[], scope: MgScope): QuotedRate[] {
+  const platform = new Set(scope.platformOn);
+  const merchant = scope.merchant ? new Set(scope.merchant) : null;
+  const mgPicked = scope.picked.filter((p) => mgCourierCode(p.service) === p.courier);
+  const services = mgPicked.length ? new Set(mgPicked.map((p) => `${p.courier}:${p.service.toLowerCase()}`)) : null;
+  const kaCouriers = !services && scope.picked.length ? new Set(scope.picked.map((p) => p.courier)) : null;
+  const out: QuotedRate[] = [];
+  for (const r of rates) {
+    const code = mgCourierCode(r.key);
+    if (!code) continue;
+    if (!platform.has(code)) continue;
+    if (merchant && !merchant.has(code)) continue;
+    if (services && !services.has(`${code}:${r.key.toLowerCase()}`)) continue;
+    if (kaCouriers && !kaCouriers.has(code)) continue;
+    out.push({
+      name: /lite$/i.test(r.key) ? `${courierName(code)} Lite` : courierName(code),
+      code,
+      type: r.key,
+      // `price` = the public courier charge, what the SHOPPER pays. `r.cost` (estimatedSpecialPrice,
+      // the integrator discount) is never a shopper price (analysis §1.3 trap 6).
+      cost: r.price,
+      etd: r.etd,
+      cod: false, // phase 1: COD via Mengantar is CLOSED regardless of the provider's flag
+      group: r.group,
+    });
+  }
+  return out;
+}
+
+async function quoteMengantar(input: QuoteInput, mg: MengantarConfig): Promise<Quote> {
+  if (!Number.isFinite(input.destinationId) || input.destinationId <= 0) {
+    return { ok: false, error: "Tujuan belum dipilih." };
+  }
+
+  const platformRows = await db
+    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
+    .from(schema.platformCouriers);
+  const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
+
+  const [settings] = await db
+    .select({
+      kecamatanId: schema.storeSettings.senderKecamatanId,
+      kecamatanName: schema.storeSettings.senderKecamatanName,
+      mengantarAreaId: schema.storeSettings.senderMengantarAreaId,
+      couriers: schema.storeSettings.couriers,
+    })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, input.storeId))
+    .limit(1);
+
+  // ORIGIN — the seller's own Mengantar area id, nothing else. No store-city fuzzy fallback here: a
+  // Mengantar quote from a guessed origin would be a price for a pickup we cannot book.
+  const origin = settings?.mengantarAreaId?.trim();
+  if (!origin) return { ok: false, error: "Alamat pengambilan toko belum diatur." };
+
+  // PRICE vs BOOKING destination (analysis §3.5 option a). The PRICE is always quoted to the kecamatan's
+  // representative area, because the storefront asks for rates before (and often without) a kelurahan,
+  // while /api/public/order re-quotes WITH one: quoting both to the same district area is what keeps
+  // "price shown" == "price charged". The kelurahan (when known) is only the BOOKING address, stamped
+  // on the order as `ship_mengantar_area_id`. Whether Mengantar prices differ by kelurahan inside one
+  // kecamatan is UNVERIFIED — this choice makes the answer irrelevant to what the shopper pays.
+  const priceDest = await mengantarDestination(input.destinationId, null);
+  if (!priceDest) return { ok: false, error: "Ongkir belum tersedia untuk kecamatan ini." };
+  const dest = (await mengantarDestination(input.destinationId, input.kelurahan)) ?? priceDest;
+
+  const picked = await db
+    .select({ courier: schema.storeShippingMethods.courier, service: schema.storeShippingMethods.service })
+    .from(schema.storeShippingMethods)
+    .where(and(eq(schema.storeShippingMethods.storeId, input.storeId), eq(schema.storeShippingMethods.enabled, true)));
+
+  const cart = (input.items ?? []).filter((i) => (i.qty ?? 0) > 0);
+  if (!cart.length) return { ok: false, error: "Keranjang kosong — ongkir tidak bisa dihitung." };
+  const pkg = await weightForCart(db, input.storeId, cart);
+  // Σ of EVERY line (weightForCart), with the 1 kg floor, in KG — never the first line alone
+  // (adsbookcms A1). The booking must send this same figure.
+  const kg = pkg.billableGrams / 1000;
+
+  const cacheKey = mgEstimateCacheKey(mg, origin, priceDest.areaId, kg);
+  let all = cacheGet<MgRate[]>(cacheKey);
+  if (!all) {
+    let r: Awaited<ReturnType<typeof mgEstimate>>;
+    try {
+      r = await mgEstimate({ originId: origin, destinationId: priceDest.areaId, kg }, { cfg: mg });
+    } catch (e) {
+      // Transport failures / 403 refusals are the provider's words — flagged so the public routes
+      // substitute SHIPPING_QUOTE_UNAVAILABLE (ADR 0004).
+      return { ok: false, error: e instanceof Error ? e.message : "Gagal mengambil tarif.", fromProvider: true };
+    }
+    if (!r.ok) return { ok: false, error: r.error || "Gagal mengambil tarif.", fromProvider: true };
+    all = r.data;
+    // Same rule as KiriminAja: an empty answer is not cached.
+    if (all.length > 0) cacheSet(cacheKey, all, MG_PRICE_TTL);
+  }
+
+  let rates = mengantarRates(all, { platformOn, merchant: settings?.couriers ?? null, picked });
+  // `couriers` is a LATENCY scope for KiriminAja. Mengantar answers every courier in one call, so here
+  // it only keeps the response the same shape the checkout expects (fast pair first, the rest on
+  // "Pilih ekspedisi lain"). It narrows; it can never widen past the policy above.
+  if (input.couriers?.length) {
+    const want = new Set(input.couriers.map((c) => c.toLowerCase()));
+    rates = rates.filter((x) => want.has(x.code));
+  }
+
+  return {
+    ok: true,
+    rates,
+    grams: pkg.grams,
+    billableGrams: pkg.billableGrams,
+    weightFallback: pkg.missing,
+    codEnabled: false,
+    provider: "mengantar",
+    destinationAreaId: dest.areaId,
+    origin: settings?.kecamatanId ?? 0,
+    originFrom: "pickup",
     originName: settings?.kecamatanName || input.storeCity || null,
   };
 }

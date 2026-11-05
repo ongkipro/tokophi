@@ -831,6 +831,7 @@
             "orders"
           ],
           "actions": [
+            "mengantar",
             "orders",
             "payments",
             "shipping"
@@ -1541,7 +1542,9 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
-            "apps/admin/lib/destination-kelurahan.test.ts"
+            "apps/admin/app/api/public/ongkir/route.test.ts",
+            "apps/admin/lib/destination-kelurahan.test.ts",
+            "apps/admin/lib/shipping-quote-mengantar.test.ts"
           ],
           "whatItIs": "Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate."
         },
@@ -1570,7 +1573,9 @@
             "apps/admin/lib/destination-kelurahan.test.ts",
             "apps/admin/lib/fee-truth.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
-            "apps/admin/lib/public-guard.test.ts"
+            "apps/admin/lib/public-guard.test.ts",
+            "apps/admin/lib/shipping-quote-mengantar.test.ts",
+            "packages/lib/src/provider-label.test.ts"
           ],
           "whatItIs": "THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment."
         },
@@ -1911,6 +1916,7 @@
           "methods": [],
           "file": "apps/super-admin/app/(platform)/pengaturan/page.tsx",
           "clients": [
+            "mengantar-panel.tsx",
             "pengaturan-client.tsx",
             "provider-keys.tsx"
           ],
@@ -1933,6 +1939,29 @@
             "apps/super-admin/lib/route-roles.test.ts"
           ],
           "whatItIs": "'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators."
+        },
+        {
+          "url": "/pengiriman",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/pengiriman/page.tsx",
+          "clients": [
+            "pengiriman-client.tsx"
+          ],
+          "data": [],
+          "actions": [
+            "actions"
+          ],
+          "gate": [
+            "route:/pengiriman"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/super-admin/lib/route-roles.test.ts"
+          ],
+          "whatItIs": "'Pengiriman' — Mengantar Partner Business API oversight: every store's own Mengantar seller account (state, seller id, last error; admin retries registration, owner rotates the key) and unknown-outcome bookings (owner adopts from a verified pull with the store's key, or releases; reason required)."
         },
         {
           "url": "/tiket/[id]",
@@ -2370,7 +2399,9 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`."
         },
         {
@@ -2948,6 +2979,7 @@
           "areaById",
           "kelurahanForDistrict",
           "kelurahanWithKaIdForDistrict",
+          "mengantarDestination",
           "provinceForDistrict",
           "resolveArea",
           "resolveDestinationKelurahan",
@@ -3433,6 +3465,15 @@
         ]
       },
       {
+        "module": "mengantar.ts",
+        "exports": [
+          "connectMengantar",
+          "getMengantarCard",
+          "payMengantarShipping",
+          "rotateMengantarKey"
+        ]
+      },
+      {
         "module": "menus.ts",
         "exports": [
           "createMenu",
@@ -3668,6 +3709,7 @@
           "markRefundPaid",
           "processPayout",
           "processRefund",
+          "reconcileMengantarBooking",
           "rejectPayout",
           "rejectRefund",
           "removeStoreUser",
@@ -3675,9 +3717,12 @@
           "resetOwnerPassword",
           "resetPlatformAdminPassword",
           "resetStoreUserPassword",
+          "retryStoreMengantar",
+          "rotateStoreMengantar",
           "saveCodAllowed",
           "saveCouriers",
           "saveGateways",
+          "saveMengantarPartner",
           "savePaymentChannels",
           "savePayoutPolicy",
           "saveProviderCredentials",
@@ -3685,6 +3730,7 @@
           "sendPaymentReminder",
           "setInvoiceStatus",
           "setProviderEnv",
+          "setShippingProvider",
           "setStoreComped",
           "setStoreUserRole",
           "setSubscriptionPpn",
@@ -3795,6 +3841,26 @@
           "UPDATE_LOG_PAGE_SIZE",
           "filterChanged",
           "pageSlice"
+        ]
+      },
+      {
+        "module": "mengantar-credentials.ts",
+        "exports": [
+          "SWITCH_REASON_MIN",
+          "isShippingProvider",
+          "mengantarReadiness",
+          "saveMengantarPartnerWith",
+          "switchShippingProviderWith"
+        ]
+      },
+      {
+        "module": "mengantar-ops.ts",
+        "exports": [
+          "RECONCILE_REASON_MIN",
+          "listMengantarAccounts",
+          "listStrandedMengantar",
+          "listUnknownMengantar",
+          "reconcileUnknownBookingWith"
         ]
       },
       {

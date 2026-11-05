@@ -37,7 +37,9 @@ export type Db = typeof rootDb;
  * stored facts, never recomputed: `orders.tax_idr` is the liability, `included_sales_tax_idr` the
  * portion already inside the sticker price, so `tax_idr − included` is exactly the exclusive-mode
  * PPN line the buyer paid on top. Inclusive-mode stores need no add-back — their proceeds already
- * carry the tax. Never shipping, gateway fee, COD fee, or fee VAT.
+ * carry the tax. Never gateway fee, COD fee, or fee VAT — and never shipping, EXCEPT on an order stamped
+ * `shipping_provider = 'mengantar'`: there the seller's own Mengantar wallet paid the courier, so the
+ * buyer-paid shipping is passed through to them (owner O3, FINANCE.md §2). COD never travels Mengantar.
  *
  * LEGACY orders (no order_financials) credit `greatest(orders.subtotal_idr − discount_idr, 0)` —
  * goods only, from the order's own columns. The old fallback was `payments.amount_idr`, which
@@ -59,7 +61,11 @@ export async function creditSaleForPayment(
     insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, available_at)
     select coalesce(p.store_id, o.store_id), o.id, p.id, 'sale',
            case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
-           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0)),
+           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0))
+             -- Mengantar Partner Business API (owner O3): the seller's OWN Mengantar wallet pays the
+             -- courier, so the shipping the buyer paid us is the seller's money. Same expression as
+             -- order_seller_entitlements.shipping_pass_through_idr (0116) — one rule, two readers.
+             + case when o.shipping_provider = 'mengantar' then greatest(coalesce(f.shipping_charged_idr, o.shipping_idr), 0) else 0 end,
            'Penjualan ' || o.number,
            case when o.status in ('selesai', 'retur') then now() end
       from payments p

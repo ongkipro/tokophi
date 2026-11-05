@@ -25,8 +25,15 @@ import {
   writeKiriminajaActiveEnv,
   writeKiriminajaKey,
   writeKiriminajaOrderPrefix,
+  writeActiveShippingProvider,
+  writeMengantarPartner,
 } from "@tokophi/db/provider-config";
+import { partnerListSellers } from "@tokophi/lib/mengantar-partner";
+import { isUuid } from "@tokophi/lib/uuid";
+import { enqueueMengantarConnect, kickMengantarConnect, mengantarAccountStatus, rotateStoreMengantarKey } from "@tokophi/db/mengantar-account";
+import { saveMengantarPartnerWith, switchShippingProviderWith, type MengantarDeps } from "./mengantar-credentials";
 import { planChannelSync } from "./payment-channel-sync";
+import { reconcileUnknownBookingWith, type ReconcileInput } from "./mengantar-ops";
 import { saveCredentials, saveOrderPrefix, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
@@ -304,6 +311,9 @@ export async function approveStore(storeId: string): Promise<SuspensionResult> {
 
   await logStore(storeId, `Pendaftaran DISETUJUI oleh ${admin.email}. Status efektif "${EFFECTIVE_LABEL[res.state.status]}".`);
   revalidateStore(storeId);
+  // Mengantar Partner Business API: the signup queued the store's Mengantar account and held it for
+  // this approval — release it now (background; a provider outage never fails the approval).
+  await kickMengantarConnect(storeId, { source: "operator" });
   return { ok: true, effective: res.state.status, message: `“${res.row.name}” disetujui — panel Seller-nya bisa menulis sekarang.` };
 }
 
@@ -361,6 +371,8 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
     throw e;
   }
   await logStore(storeId, `Toko dibuat oleh platform: ${name} (${slug}), pemilik ${email}`);
+  // The store's own Mengantar seller account (owner O10) — queued, never awaited on the provider.
+  await enqueueMengantarConnect(storeId, { source: "operator" });
   revalidatePath("/toko");
   revalidatePath("/");
   return { ok: true, storeId, password: pw };
@@ -760,6 +772,83 @@ export async function testProviderKey(provider: string, env: string): Promise<{ 
   if (!isProviderId(provider) || !isProviderEnv(env)) return { ok: false, message: "Provider atau lingkungan tidak dikenal." };
   const r = await testStoredKey(credentialDeps, provider, env as ProviderEnv);
   if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+// ---- Mengantar Partner Business API (0116): partner credential + the shipping-provider switch ----
+//
+// The rules (partner credential stored only after a read-only probe when the env has a Partner origin;
+// switch TO Mengantar only with a credential + origin for the active env; a written reason; the audit
+// line reports the re-read outcome) live in `mengantar-credentials.ts` with every side effect injected.
+const mengantarDeps: MengantarDeps = {
+  rows: loadProviderRows,
+  env: () => ({ MENGANTAR_ENV: process.env.MENGANTAR_ENV, MENGANTAR_PARTNER_ID: process.env.MENGANTAR_PARTNER_ID, MENGANTAR_PARTNER_SECRET: process.env.MENGANTAR_PARTNER_SECRET, SHIPPING_PROVIDER: process.env.SHIPPING_PROVIDER }),
+  testPartner: async (cfg) => {
+    try {
+      const r = await partnerListSellers({ size: 1 }, { cfg });
+      return r.ok ? { ok: true } : { ok: false, error: `${r.code}: ${r.message}` };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Partner API tidak bisa dihubungi." };
+    }
+  },
+  writePartner: writeMengantarPartner,
+  writeActiveProvider: writeActiveShippingProvider,
+  log: logPlatform,
+};
+
+/** OWNER only: the Mengantar PARTNER credential for one env (owner O1: swappable; row outranks env on every replica). */
+export async function saveMengantarPartner(env: string, partnerId: string, secret: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await saveMengantarPartnerWith(mengantarDeps, gate.admin.email, env, partnerId, secret);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+/** OWNER only: which provider quotes and books NEW checkouts of connected stores. Reason required; readiness enforced; outcome audited. */
+export async function setShippingProvider(provider: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await switchShippingProviderWith(mengantarDeps, gate.admin.email, provider, reason);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+// ---- Mengantar per-store accounts (oversight + recovery) ----
+
+/** admin: retry a store's Mengantar registration now (queued / failed / email-taken). Never touches a connected account. */
+export async function retryStoreMengantar(storeId: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isUuid(storeId)) return { ok: false, message: "Toko tidak dikenal." };
+  const before = await mengantarAccountStatus(storeId);
+  if (before.state === "connected") return { ok: false, message: "Akun Mengantar toko ini sudah terhubung." };
+  if (before.state === "none") await enqueueMengantarConnect(storeId, { source: "operator" });
+  else await kickMengantarConnect(storeId, { source: "operator" });
+  await logStore(storeId, `Pendaftaran akun Mengantar toko dijalankan ulang oleh ${gate.admin.email} (status sebelumnya: ${before.state}).`);
+  revalidatePath("/pengiriman");
+  return { ok: true, message: "Pendaftaran dijalankan ulang di latar belakang. Muat ulang untuk melihat hasilnya." };
+}
+
+/** OWNER: rotate a store's Mengantar seller key (regenerate once, old key dies). Audited. */
+export async function rotateStoreMengantar(storeId: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isUuid(storeId)) return { ok: false, message: "Toko tidak dikenal." };
+  const r = await rotateStoreMengantarKey(storeId);
+  await logStore(storeId, `Kunci akun Mengantar toko diperbarui oleh ${gate.admin.email}: ${r.state} — ${r.message}`);
+  revalidatePath("/pengiriman");
+  return { ok: r.state === "connected", message: r.message };
+}
+
+// ---- Mengantar operator reconciliation ----
+
+/** OWNER: release an `unknown` Mengantar booking — adopt it from the store's account, or fail it. Reason required. */
+export async function reconcileMengantarBooking(bookingId: string, input: ReconcileInput): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await reconcileUnknownBookingWith({ log: logStore }, gate.admin.email, bookingId, input);
+  revalidatePath("/pengiriman");
   return r;
 }
 

@@ -112,6 +112,8 @@ export type OrderShipment = {
   payment: ShipmentPaymentState;
   /** The same state as merchant-facing Indonesian, formatted server-side. */
   paymentLabel: string;
+  /** A Mengantar booking the store's own wallet has not paid yet — "Bayar ongkir" is offered. */
+  mengantarPayable: boolean;
   city: string | null;
   province: string | null;
   /**
@@ -265,6 +267,11 @@ export async function getOrderDetail(
         kaPickupNumber: schema.orders.kaPickupNumber,
         kaPaymentStatus: schema.orders.kaPaymentStatus,
         kaPaymentUrl: schema.orders.kaPaymentUrl,
+        // SHIP-MENGANTAR: the second provider's booking identity + wallet-paid flag.
+        shippingProvider: schema.orders.shippingProvider,
+        mgOrderId: schema.orders.mgOrderId,
+        mgOrderCode: schema.orders.mgOrderCode,
+        mgIsPaid: schema.orders.mgIsPaid,
         problemAt: schema.orders.problemAt,
         problemNote: schema.orders.problemNote,
         // Address SNAPSHOT (migration 0042) — the address this parcel was BOUGHT with.
@@ -564,8 +571,12 @@ export async function getOrderDetail(
     // which the docs do not define for a COD package.
     const shipmentPayment: ShipmentPaymentState = shipmentPaymentState({
       isCod: payment?.method === "cod",
-      kaPaymentStatus: o.kaPaymentStatus,
-      kaPaymentUrl: o.kaPaymentUrl,
+      // A Mengantar booking is paid from the STORE'S OWN Mengantar wallet: `mg_is_paid=false` is the same
+      // "booked, no waybill until settled" state as KiriminAja's `unpaid`; `null` after a booking = a
+      // "Bayar ongkir" whose outcome is still being confirmed (in flight, not payable again).
+      kaPaymentStatus:
+        o.shippingProvider === "mengantar" ? (!o.mgOrderId ? null : o.mgIsPaid === null ? "pending" : o.mgIsPaid ? "paid" : "unpaid") : o.kaPaymentStatus,
+      kaPaymentUrl: o.shippingProvider === "mengantar" ? null : o.kaPaymentUrl,
     });
 
     return {
@@ -578,12 +589,15 @@ export async function getOrderDetail(
         weightGrams: pkg.billableGrams,
         awb: o.awb ?? null,
         sortingCode: o.sortingCode ?? null,
-        kaOrderId: o.kaOrderId ?? null,
+        // The booking reference the screen shows and keys "booked" on — either provider's.
+        kaOrderId: o.kaOrderId ?? o.mgOrderCode ?? o.mgOrderId ?? null,
         pickupNumber: o.kaPickupNumber ?? null,
         // The COD flag comes from `payments.method` — the same expression lib/cod.ts and the
         // Pesanan tabs partition on — never from the vendor's payment fields.
         payment: shipmentPayment,
         paymentLabel: shipmentPaymentLabel(shipmentPayment),
+        // The seller can pay it themselves from their Mengantar wallet ("Bayar ongkir").
+        mengantarPayable: o.shippingProvider === "mengantar" && !!o.mgOrderId && o.mgIsPaid === false,
         city: o.city ?? null,
         province: o.province ?? null,
         problemAt: o.problemAt ?? null,

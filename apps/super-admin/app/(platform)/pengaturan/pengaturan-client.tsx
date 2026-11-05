@@ -9,6 +9,7 @@ import type { KaProbe, KaProbeState } from "@/lib/ka-probe";
 import type { KaBalanceView } from "@/lib/data";
 import { IDR } from "@tokophi/lib/format";
 import { AutolarisKey, KiriminajaKeys } from "./provider-keys";
+import { MengantarKeys, ShippingProviderSwitch } from "./mengantar-panel";
 
 import {
   Card,
@@ -399,6 +400,9 @@ export function PengaturanClient({
           )}
 
           {section === "kurir" && (
+            <>
+            {/* SHIP-MENGANTAR — which provider NEW checkouts use. Owner-only switch; the action gates. */}
+            <ShippingProviderSwitch shipping={providers.shipping} mengantar={providers.mengantar} canEdit={me.role === "owner"} />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -471,6 +475,7 @@ export function PengaturanClient({
                 {/* Task 8.33 — the keys themselves, per environment, and the switch. Owner-only
                     affordances are drawn only for an owner; the action's gate is the boundary. */}
                 <KiriminajaKeys status={providers.kiriminaja} canEdit={me.role === "owner"} encryptionAvailable={providers.encryptionAvailable} />
+                <MengantarKeys status={providers.mengantar} canEdit={me.role === "owner"} encryptionAvailable={providers.encryptionAvailable} />
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="max-w-xl text-xs text-muted-foreground">
                     Kurir &amp; layanan datang langsung dari <b>KiriminAja</b> — bukan daftar yang kita tulis sendiri.
@@ -545,6 +550,7 @@ export function PengaturanClient({
                 </div>
               </CardContent>
             </Card>
+            </>
           )}
 
           {section === "keuangan" && (

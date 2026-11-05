@@ -42,22 +42,43 @@ export type Page = PageCard & { body: string };
 // ---------- body rendering ----------
 // `body` is PLAIN TEXT typed by the merchant into a textarea (the admin's rich-text editor is still
 // on the backlog). It is NEVER injected as HTML — `set:html` on merchant-authored text would be a
-// stored-XSS hole, and the text isn't HTML anyway. Blocks are separated by a blank line; a block
-// whose every line starts with "- " becomes a list. That is the whole format.
+// stored-XSS hole, and the text isn't HTML anyway. Blocks are separated by a blank line. Inside a
+// block, consecutive lines starting with "- " are a list and the other lines are a paragraph — so a
+// lead-in written straight above its list ("Yang perlu dihentikan:" then "- …" lines, the way
+// merchants actually type it) renders as a paragraph followed by a list. It used to require EVERY
+// line of the block to be an item, so that common shape collapsed into one paragraph with the
+// dashes inline (seen live on /blog/cara-mencuci-batik, 2026-11-05). That is the whole format.
 export type Block = { kind: "p"; text: string } | { kind: "ul"; items: string[] };
 
 export function parseBody(body: string | null | undefined): Block[] {
-  return (body ?? "")
-    .split(/\r?\n\s*\r?\n/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk): Block => {
-      const lines = chunk.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      if (lines.length > 0 && lines.every((l) => l.startsWith("- "))) {
-        return { kind: "ul", items: lines.map((l) => l.slice(2).trim()) };
+  const out: Block[] = [];
+  for (const chunk of (body ?? "").split(/\r?\n\s*\r?\n/)) {
+    let para: string[] = [];
+    let items: string[] = [];
+    const flushPara = () => {
+      if (para.length) out.push({ kind: "p", text: para.join(" ") });
+      para = [];
+    };
+    const flushList = () => {
+      if (items.length) out.push({ kind: "ul", items });
+      items = [];
+    };
+    for (const raw of chunk.split(/\r?\n/)) {
+      const l = raw.trim();
+      if (!l) continue;
+      if (l.startsWith("- ")) {
+        flushPara();
+        const item = l.slice(2).trim();
+        if (item) items.push(item);
+      } else {
+        flushList();
+        para.push(l);
       }
-      return { kind: "p", text: lines.join(" ") };
-    });
+    }
+    flushPara();
+    flushList();
+  }
+  return out;
 }
 
 /** Rough read time, shown on the article header. ~200 wpm, floored at 1 minute. */
