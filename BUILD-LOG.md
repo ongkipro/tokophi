@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 12:20 UTC] — SHIP-MENGANTAR · pre-merge production review of PR #446
+Executor: Main Session (Claude Code). Owner: "ya jalankan merger, review, dan cek jika ada yang perlu di sempurnakan".
+- **Registration held while `MENGANTAR_ENV` is unset** (`packages/db/src/mengantar-account.ts` `connectStoreMengantar`): unset reads as sandbox, so saving sandbox credentials on production would have registered REAL sellers' emails/phones on the sandbox partner. Now `configuration_blocked`, no network — same rule as the switch and the quote dispatch. Test added (`envSource: "default"` → pending, 0 partner calls), proven red by removing the condition.
+- **Production checkout path verified** (KiriminAja-shaped stub: one quote, SPX `cod:true`, `codRequote:false` — what every store gets after deploy, the switch stays on KiriminAja): COD on/off with NO re-quote, totals Rp54.000 → Rp56.775 (COD fee) → Rp54.315 (QRIS fee), 0 console errors.
+- **Production with no Mengantar credentials** (today): auto-registration queues `configuration_blocked` without any network call; tracking sweep has no Mengantar orders; quotes stay KiriminAja.
+- **Migration:** main ends at 0115 (`1787545711751`); 0116 stamp `1787545771751` is above it — #446 merges first, so no renumber here; #424/#426/#430/#431 renumber after it. `verify-migrations` green.
+
 ### [2026-11-05 11:50 UTC] — SHIP-MENGANTAR · CI red on PR #446: checkout size ceiling + PAGE_MAP
 Executor: Main Session (Claude Code). CI run on 02127c50 failed `test/release-guards.test.ts` (checkout.astro 2934 > ceiling 2864) and `test/page-map-fresh.test.ts` — root `test/` had not been part of the local runs (only `apps/*` + `packages/*`).
 - `scripts/verify-source-size.mjs`: checkout ceiling RAISED 2864 → 2959 (the measured size), reason in place: D12 COD re-quote state on a Mengantar store; the split remains Task 6.6.

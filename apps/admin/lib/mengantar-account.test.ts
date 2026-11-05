@@ -18,7 +18,7 @@ const userIds: string[] = [];
 
 const PCFG: MengantarPartnerConfig = {
   env: "sandbox",
-  envSource: "default",
+  envSource: "env", // named — registration is held while MENGANTAR_ENV is unset (see the test below)
   partnerBase: "https://partner.test",
   publicBase: "https://public.test",
   partnerId: "tokophi-test",
@@ -228,6 +228,16 @@ suite("connectStoreMengantar — register with the owner's TokoΦ email, prove o
     expect(r.state).toBe("pending");
     expect(p.calls).toHaveLength(0);
     expect((await row(storeId)).last_error_code).toBe("configuration_blocked");
+  });
+
+  it("an UNSET MENGANTAR_ENV (read as sandbox) holds registration — a real seller is never sent to the sandbox partner", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, { source: "signup", partner: { cfg: { ...PCFG, envSource: "default" }, fetch: p.fetch } });
+    expect(r.state).toBe("pending");
+    expect(p.calls).toHaveLength(0);
+    const got = await row(storeId);
+    expect(got.last_error_code).toBe("configuration_blocked");
   });
 });
 

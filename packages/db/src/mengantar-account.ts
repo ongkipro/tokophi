@@ -315,8 +315,14 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
     }
 
     // Configuration first — no network: a missing origin or credential queues the store, never locks it.
-    if (!popts.cfg.partnerBase || !popts.cfg.partnerId || !popts.cfg.partnerSecret || !encryptionAvailable()) {
-      const why = !popts.cfg.partnerBase
+    // An UNSET MENGANTAR_ENV reads as sandbox: registering a real seller's email and phone on the
+    // SANDBOX partner (say, after sandbox credentials were saved on production) would hand their
+    // identity to an account that ships nothing. Registration needs the env NAMED, like the switch
+    // and the quote dispatch.
+    if (popts.cfg.envSource !== "env" || !popts.cfg.partnerBase || !popts.cfg.partnerId || !popts.cfg.partnerSecret || !encryptionAvailable()) {
+      const why = popts.cfg.envSource !== "env"
+        ? "MENGANTAR_ENV belum diset di server — pendaftaran akun Mengantar ditahan."
+        : !popts.cfg.partnerBase
         ? `Origin Partner API Mengantar (${env}) belum diketahui.`
         : !encryptionAvailable()
           ? "INTEGRATION_TOKEN_KEY belum diset — kunci tidak bisa disimpan terenkripsi."
