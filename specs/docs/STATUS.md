@@ -1,8 +1,8 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-05 11:27 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`14bf5d43`** (deploy of PR #448 — article/page lists —
-> on top of #446 Mengantar Partner Business API + #447), all five web containers `(healthy)` on two consecutive polls,
+> **Current state — 2026-11-05 12:25 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`0e4d950a`** (deploy of PR #451 — storefront redesign C, all tenants —
+> on top of #448 article lists, #446 Mengantar Partner Business API, #447), all five web containers `(healthy)` on two consecutive polls,
 > `migrate`/`seed` `Exited (0)`. **Migrations: 117 on production (head `0116_mengantar_shipping`)**; shipping
 > provider switch stays **KiriminAja**, `MENGANTAR_ENV` unset → Mengantar quoting and seller registration are
 > held by design (no store has a Mengantar account: `store_mengantar_accounts` = 0). Live `/api/public/ongkir`
