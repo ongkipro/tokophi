@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 10:40 UTC] — DEPLOY · PR #446 (Mengantar Partner Business API) + #447 live on production (`2a0f7eb7`)
+Executor: Main Session (Claude Code). Owner: "ya jalankan merger" → "jika sudah lanjut deploy".
+- **Before:** CI green on both PRs; no deployment in flight; disk 23 %. #447 merged (`02ebedc0`), then #446 (`2a0f7eb7`; 0116 merged first, so no renumber — #424/#426/#430/#431 renumber after it). Deploy triggered by hand (`deployment_uuid gsrsk7tyodoh2vplrmradz3l`), 10:20:42 → finished 10:38:12 (~17.5 min).
+- **Verified:** admin, super-admin, storefront, landing, docs on `…:2a0f7eb7a3477e9320b2a9a0ca102aaed8d1de9b` `(healthy)` on two consecutive polls; `migrate`/`seed` `Exited (0)`; production `drizzle.__drizzle_migrations` = 117, max stamp `1787545771751` (0116); `shipping_provider_config.active_provider` = `kiriminaja`; `store_mengantar_accounts` = 0; `cron-tracking` `ok:true … errors:0` with the new `mg` block (scanned 0); live `/api/public/ongkir` rates for `batiknusantara` → `ok:true, codEnabled:true, codRequote:false`; `TOKOPHI_SSH_TARGET=tokophi-new-ops ops/tokophi-probe.sh` exit 0 (5 hosts, db_ongkir, disk 31 %, watchdog).
+- **Not done (by design):** `MENGANTAR_ENV` unset and the switch on KiriminAja — Mengantar stays dormant until the production Partner origin, IP allowlist and Terms/Privacy URLs arrive; `load:mengantar-areas` not run on production (owner-approved step).
+
 ### [2026-11-05 12:20 UTC] — SHIP-MENGANTAR · pre-merge production review of PR #446
 Executor: Main Session (Claude Code). Owner: "ya jalankan merger, review, dan cek jika ada yang perlu di sempurnakan".
 - **Registration held while `MENGANTAR_ENV` is unset** (`packages/db/src/mengantar-account.ts` `connectStoreMengantar`): unset reads as sandbox, so saving sandbox credentials on production would have registered REAL sellers' emails/phones on the sandbox partner. Now `configuration_blocked`, no network — same rule as the switch and the quote dispatch. Test added (`envSource: "default"` → pending, 0 partner calls), proven red by removing the condition.
