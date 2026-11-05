@@ -994,6 +994,17 @@ export const orders = pgTable("orders", {
   // dump — the raw tracking response goes to the cron log, never into this column.
   problemNote: text(),
   kaOrderId: text(),
+  // 0116 (SHIP-MENGANTAR): which provider this order was quoted/booked with — NULL = legacy = KiriminAja.
+  // Tracking, cancel, label and payment follow THIS stamp, never the current platform switch.
+  shippingProvider: text(),
+  shipMengantarAreaId: text(),
+  mgOrderId: text(), // Mengantar shipment _id — what DELETE /order cancels by
+  mgOrderCode: text(), // Mengantar ORDER_ID — polled while cnote_no is still null
+  mgBatchId: text(), // for POST /order/pay-unpaid
+  mgIsPaid: boolean(), // false = booked but unpaid (the seller's Mengantar wallet was short); null = pay requested, unconfirmed
+  mgCourier: text(), // booking courier name (shipmentName of the estimate key)
+  mgEnv: text(), // sandbox | production — the env the shipment was booked in
+  mgSellerId: text(), // Partner sellerId whose key booked it; tracking/cancel/pay use THAT account
   // ── What the COURIER's own booking costs, and who settles it ─────────────────────────────────
   // ONE booking call carries TWO different money flows, and conflating them is how a parcel sits
   // unpaid while every screen reads "dibooking":
@@ -1744,6 +1755,9 @@ export const storeSettings = pgTable("store_settings", {
   senderKecamatanName: text(),
   senderKelurahanId: integer(),
   senderKelurahanName: text(),
+  // 0116 (SHIP-MENGANTAR): the seller's origin as a Mengantar area `_id`. The registered pickup
+  // address lives on `store_mengantar_accounts` (it belongs to ONE seller account in ONE env).
+  senderMengantarAreaId: text(),
   // Postcode of the chosen kelurahan. KiriminAja's `request_pickup` SENDER has no zipcode field
   // (only `destination_zipcode`, for the buyer), so this is NOT sent as its own key — it rides in the
   // written pickup `address` that the rider actually reads, together with the kelurahan name. That is
@@ -1804,6 +1818,9 @@ export const kiriminajaAreas = pgTable("kiriminaja_areas", {
   // address we only know to the district. NULL (~4%: districts with no kelurahan rows) ⇒ omitted.
   lat: doublePrecision(),
   lng: doublePrecision(),
+  // 0116: a deterministic representative Mengantar kelurahan `_id` of this kecamatan — used to QUOTE
+  // when no kelurahan was picked. NULL = not matched (resolved live, never guessed).
+  mengantarAreaId: text(),
 });
 
 // Kelurahan (village) + its postcode, under a KiriminAja district. Migration 0046 created the
@@ -1836,6 +1853,8 @@ export const kelurahan = pgTable(
     // fall back to the district centroid, then omit — never 0,0.
     lat: doublePrecision(),
     lng: doublePrecision(),
+    // 0116: Mengantar area `_id` for this kelurahan, written ONLY on a unique match (load-mengantar-areas.mjs).
+    mengantarAreaId: text(),
   },
   // The ONLY access pattern: "give me the kelurahan of the district the shopper just picked".
   // 78k rows, read on every checkout — without this it is a seq scan (25ms) per selection.
@@ -1877,6 +1896,72 @@ export const shippingAggregator = pgTable("shipping_aggregator", {
   sandboxTestedAt: ts(),
   productionTestedAt: ts(),
 });
+
+// 0116 (SHIP-MENGANTAR): Mengantar's own area catalogue — kelurahan grain, 24-hex `_id`. Reference data
+// imported from 99ribu's harvest (scripts/load-mengantar-areas.mjs), NOT store-scoped (no RLS).
+export const mengantarAreas = pgTable(
+  "mengantar_areas",
+  {
+    id: text().primaryKey(),
+    province: text().notNull(),
+    city: text().notNull(),
+    district: text().notNull(),
+    subdistrict: text().notNull(),
+    postalCode: text().notNull().default(""),
+    datasetVersion: text().notNull(),
+  },
+  (t) => ({
+    postalIdx: index("mengantar_areas_postal_idx").on(t.postalCode),
+    districtIdx: index("mengantar_areas_district_idx").on(t.district, t.city),
+  }),
+);
+
+// 0116: the platform shipping switch (one row, id = 1). `activeProvider` decides who QUOTES new
+// checkouts (stores without a connected Mengantar account fall back to KiriminAja); an existing order
+// follows its own `orders.shipping_provider`. The Mengantar PARTNER credential is per environment, the
+// secret AES-GCM at rest (same helper as shipping_aggregator 0111) — swappable (owner O1).
+export const shippingProviderConfig = pgTable("shipping_provider_config", {
+  id: smallint().primaryKey().default(1),
+  activeProvider: text().notNull().default("kiriminaja"),
+  mengantarSandboxPartnerId: text(),
+  mengantarSandboxPartnerSecretEnc: text(),
+  mengantarProductionPartnerId: text(),
+  mengantarProductionPartnerSecretEnc: text(),
+  updatedAt: ts().notNull().defaultNow(),
+});
+
+// 0116 (Mengantar PARTNER model): one Mengantar seller account per (store, env), registered by TokoΦ
+// with the owner's TokoΦ email. RLS (store_id). `apiKeyEnc` = AES-GCM under
+// `mengantarKeyScope(storeId, env, sellerId, keyVersion)` (packages/db/src/mengantar-account.ts).
+export const storeMengantarAccounts = pgTable(
+  "store_mengantar_accounts",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    env: text().notNull(),
+    externalUserId: text().notNull(),
+    partnerId: text(),
+    sellerId: text(),
+    state: text().notNull().default("pending"),
+    ownerEmail: text(),
+    ownerName: text(),
+    ownerPhone: text(),
+    consentSource: text(),
+    consentBy: uuid(),
+    consentedAt: ts(),
+    apiKeyEnc: text(),
+    keyHint: text(),
+    keyVersion: integer().notNull().default(0),
+    pickupAddressId: text(),
+    attempts: integer().notNull().default(0),
+    lastErrorCode: text(),
+    lastError: text(),
+    retryAfterAt: ts(),
+    connectedAt: ts(),
+    createdAt: ts().notNull().defaultNow(),
+    updatedAt: ts().notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.env], name: "store_mengantar_accounts_pk" })],
+);
 
 export const platformCouriers = pgTable("platform_couriers", {
   id: pk(),

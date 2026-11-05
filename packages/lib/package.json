@@ -8,6 +8,8 @@
     "./format": "./src/format.ts",
     "./kiriminaja": "./src/kiriminaja.ts",
     "./kiriminaja-tracking": "./src/kiriminaja-tracking.ts",
+    "./mengantar": "./src/mengantar.ts",
+    "./mengantar-partner": "./src/mengantar-partner.ts",
     "./autolaris": "./src/autolaris.ts",
     "./cache": "./src/cache.ts",
     "./rate-limit": "./src/rate-limit.ts",

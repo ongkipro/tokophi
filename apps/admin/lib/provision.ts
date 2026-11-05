@@ -5,6 +5,7 @@ import { BILLING } from "@tokophi/lib/billing";
 import { normalizePhone } from "@tokophi/lib/validate";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
+import { enqueueMengantarConnect } from "@tokophi/db/mengantar-account";
 
 // Self-serve onboarding (Daftar + Google auto-provision). Mirrors the super-admin's
 // `createStore` one-txn tenant bootstrap (account → user → store → membership → location →
@@ -207,14 +208,22 @@ export async function provisionStore(input: ProvisionInput): Promise<ProvisionRe
   const slug = await uniqueSlug(base);
   const trialEndsAt = new Date(Date.now() + BILLING.TRIAL_DAYS * 86_400_000);
 
+  let r: ProvisionResult;
   try {
-    return await insertTenant({ input, email, storeName, ownerName, slug, trialEndsAt });
+    r = await insertTenant({ input, email, storeName, ownerName, slug, trialEndsAt });
   } catch (e) {
     // The check-then-insert races, caught where the DB actually decides them.
     const constraint = uniqueViolationConstraint(e);
     if (constraint !== null) throw new ProvisionConflictError(CONFLICT_MESSAGES[constraint] ?? SLUG_TAKEN_MSG);
     throw e;
   }
+  // Mengantar Partner Business API (owner O10): the store's own Mengantar seller account is created
+  // AUTOMATICALLY at signup — queued here, AFTER the commit, and never awaited on the provider: a
+  // Mengantar outage cannot fail or slow store creation. ⚠️ The registration itself waits for the
+  // store's APPROVAL (`connectStoreMengantar` checks `approved_at`): this door proves nothing about
+  // the email, and an account at Mengantar must not be opened in a stranger's name.
+  await enqueueMengantarConnect(r.storeId, { source: "signup", actorUserId: r.userId });
+  return r;
 }
 
 type InsertTenantArgs = {

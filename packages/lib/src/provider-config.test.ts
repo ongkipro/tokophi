@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   KA_BASE,
+  MENGANTAR_ORIGINS,
   PROVIDER_CONFIG_TTL_MS,
   _providerConfigCacheForTests,
   getProviderConfig,
@@ -9,6 +10,9 @@ import {
   providerConfigSync,
   resolveAutolaris,
   resolveKiriminaja,
+  resolveMengantar,
+  resolveProviderConfig,
+  resolveShippingProvider,
   setProviderConfigLoader,
 } from "./provider-config";
 
@@ -172,5 +176,68 @@ describe("resolveKiriminaja — order prefix per env: row > env var > default", 
   it("falls back to KIRIMINAJA_ORDER_PREFIX when the active env's slot is empty, then to the code default", () => {
     expect(resolveKiriminaja({ row: { ...row, productionOrderPrefix: " " }, env })).toMatchObject({ orderPrefix: "ENVPFX", orderPrefixSource: "env" });
     expect(resolveKiriminaja({ row: null, env: { KIRIMINAJA_ENV: "sandbox" } })).toMatchObject({ orderPrefix: "TOKOPHI", orderPrefixSource: "default" });
+  });
+});
+
+// Mengantar Partner Business API (2026-11-05) — the PARTNER credential per env; no platform shipping key.
+describe("resolveMengantar — env from MENGANTAR_ENV (sandbox default), partner pair row > env > none", () => {
+  const row = { sandboxPartnerId: "row-sbx", sandboxPartnerSecret: "row-sbx-secret", productionPartnerId: "row-prd", productionPartnerSecret: "row-prd-secret" };
+
+  it("defaults to the sandbox origins, and a blank/unknown MENGANTAR_ENV is sandbox too", () => {
+    for (const MENGANTAR_ENV of [undefined, "", "staging", " PRODUCTION "]) {
+      const c = resolveMengantar({ row: null, env: { MENGANTAR_ENV } });
+      expect(c.env).toBe("sandbox");
+      expect(c.partnerBase).toBe(MENGANTAR_ORIGINS.sandbox.partner);
+      expect(c.publicBase).toBe("https://sandbox.mengantar.com");
+    }
+  });
+
+  it("production has a Public origin but NO Partner origin yet (onboarding refuses until it is known)", () => {
+    const c = resolveMengantar({ row, env: { MENGANTAR_ENV: "production" } });
+    expect(c).toMatchObject({ env: "production", envSource: "env", partnerBase: null, publicBase: "https://api-public.mengantar.com", partnerId: "row-prd", source: "db" });
+  });
+
+  it("reads ONLY the active env's row slot — a sandbox secret never signs for production", () => {
+    expect(resolveMengantar({ row: { sandboxPartnerId: "a", sandboxPartnerSecret: "b" }, env: { MENGANTAR_ENV: "production" } })).toMatchObject({ partnerId: null, partnerSecret: null, source: "none" });
+    expect(resolveMengantar({ row, env: {} })).toMatchObject({ partnerId: "row-sbx", partnerSecret: "row-sbx-secret", source: "db" });
+  });
+
+  it("the row slot is a PAIR: half a row falls back to the env pair, never mixes", () => {
+    const env = { MENGANTAR_PARTNER_ID: "env-id", MENGANTAR_PARTNER_SECRET: "env-secret" };
+    expect(resolveMengantar({ row: { sandboxPartnerId: "row-only-id" }, env })).toMatchObject({ partnerId: "env-id", partnerSecret: "env-secret", source: "env" });
+    expect(resolveMengantar({ row: null, env: { MENGANTAR_PARTNER_ID: "env-id" } })).toMatchObject({ partnerId: null, partnerSecret: null, source: "none" });
+  });
+});
+
+describe("resolveShippingProvider — row > SHIPPING_PROVIDER > kiriminaja", () => {
+  it.each([
+    [{ activeProvider: "mengantar" }, {}, "mengantar"],
+    [{ activeProvider: "kiriminaja" }, { SHIPPING_PROVIDER: "mengantar" }, "kiriminaja"],
+    [null, { SHIPPING_PROVIDER: "mengantar" }, "mengantar"],
+    [null, { SHIPPING_PROVIDER: " Mengantar " }, "mengantar"],
+    [{ activeProvider: "jne" }, { SHIPPING_PROVIDER: "mengantar" }, "mengantar"],
+    [{ activeProvider: "" }, {}, "kiriminaja"],
+    [null, { SHIPPING_PROVIDER: "autolaris" }, "kiriminaja"],
+    [null, {}, "kiriminaja"],
+    [undefined, { SHIPPING_PROVIDER: "" }, "kiriminaja"],
+  ] as const)("row %j + env %j → %s", (row, env, expected) => {
+    expect(resolveShippingProvider({ row, env })).toBe(expected);
+  });
+});
+
+describe("resolveProviderConfig — Mengantar is additive", () => {
+  it("a loader that predates Mengantar still resolves; KiriminAja is unchanged and stays the default", () => {
+    const env = { KIRIMINAJA_ENV: "production", KIRIMINAJA_API_KEY: "env-key-0000" };
+    const c = resolveProviderConfig({ kiriminaja: null, autolaris: null }, env);
+    expect(c.kiriminaja).toEqual(resolveKiriminaja({ row: null, env }));
+    expect(c.shipping).toBe("kiriminaja");
+    expect(c.mengantar).toMatchObject({ env: "sandbox", partnerId: null, source: "none" });
+  });
+
+  it("reads the partner row and the switch when the loader provides them", () => {
+    const c = resolveProviderConfig({ kiriminaja: null, autolaris: null, mengantar: { sandboxPartnerId: "p", sandboxPartnerSecret: "secret-1234" }, shipping: { activeProvider: "mengantar" } }, {});
+    expect(c.mengantar).toMatchObject({ partnerId: "p", source: "db" });
+    expect(c.shipping).toBe("mengantar");
+    expect(maskKey(c.mengantar.partnerSecret)).toBe("…1234");
   });
 });

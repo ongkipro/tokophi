@@ -82,6 +82,7 @@
     "super-admin:/log-sistem": "'Log Sistem' — the whole `platform_activity` audit log, filtered and paged in the database.",
     "super-admin:/paket": "'Paket' — the single plan's prices/trial (legacy tiers unused).",
     "super-admin:/pencairan": "'Pencairan' — seller payout queue; complete = compare-and-swap `diproses → selesai`.",
+    "super-admin:/pengiriman": "'Pengiriman' — Mengantar Partner Business API oversight: every store's own Mengantar seller account (state, seller id, last error; admin retries registration, owner rotates the key) and unknown-outcome bookings (owner adopts from a verified pull with the store's key, or releases; reason required).",
     "super-admin:/pengaturan": "'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators.",
     "super-admin:/tiket": "'Tiket' — merchant support desk.",
     "super-admin:/tiket/[id]": "One ticket thread (reply, close).",

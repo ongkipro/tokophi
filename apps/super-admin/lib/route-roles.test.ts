@@ -41,6 +41,7 @@ const EXPECTED: Record<string, Record<PlatformRole, boolean>> = {
   "/analitik": { support: false, admin: true, owner: true },
   "/pengaturan": { support: false, admin: true, owner: true },
   "/log-sistem": { support: false, admin: true, owner: true },
+  "/pengiriman": { support: false, admin: true, owner: true },
 };
 
 describe("route floors — the policy", () => {

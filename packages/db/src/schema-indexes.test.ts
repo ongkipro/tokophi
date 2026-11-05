@@ -111,6 +111,12 @@ const INDEX_CENSUS: Record<string, Census> = {
   conversations_store_last_msg_idx: "sql-only: index pencarian polos",
   conversations_store_status_idx: "sql-only: index pencarian polos",
   conversations_store_visitor_idx: "sql-only: index pencarian polos",
+  // 0116 (Mengantar Partner Business API).
+  mengantar_areas_postal_idx: "drizzle",
+  mengantar_areas_district_idx: "drizzle",
+  sma_seller_uniq: "sql-only: unique parsial (env, seller_id) where seller_id is not null — satu seller Mengantar hanya untuk satu toko",
+  sma_ext_uniq: "sql-only: unique (env, external_user_id) — idempotensi pendaftaran Partner per toko",
+  sma_retry_idx: "sql-only: index parsial antrean pendaftaran (state pending/registering) untuk sweep cron",
 };
 
 /** Nama index → tabel, DITURUNKAN dari berkas migrasi. Tidak pernah ditulis tangan. */

@@ -33,7 +33,10 @@ import { join, isAbsolute } from "node:path";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const CEILINGS = {
-  "apps/storefront/src/pages/checkout.astro": 2864,
+  // RAISED 2864 → 2959 (2026-11-05, SHIP-MENGANTAR D12, PR #446): COD on a Mengantar-connected store
+  // needs the checkout to re-quote on a payment switch (codRequote, COD_MODE, stale/coalesce guards,
+  // COD memory across a destination change). The split is still Task 6.6.
+  "apps/storefront/src/pages/checkout.astro": 2959,
   "apps/admin/app/(admin)/produk/[id]/product-editor.tsx": 1582,
 };
 
