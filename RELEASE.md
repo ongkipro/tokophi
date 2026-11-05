@@ -1,11 +1,11 @@
 # Release Manifest — tokophi
 
-Release-ID: 0e4d950a-pr451
-Base: 0e4d950a4288e196ff3edc608a4e689b73aa9341
+Release-ID: f6ba56e8-pr429
+Base: f6ba56e8306ff0ca191a3b077cd147ce2441d76f
 Environment: production
 Declared-Risk: R2
-Rollback-Ref: 14bf5d43fc1fc9854199831e6b345427eb01b50a
-Rollback-Command: Coolify (dedicated host) → application tokophi → Deployments → redeploy commit 14bf5d43 (PR #448; its image is retained on the host), or `git revert -m 1 0e4d950a` + push to `main` and then trigger the deploy BY HAND — a merge does not deploy on this host (specs/docs/DEPLOY.md step 2)
+Rollback-Ref: 8cffdc7e96f07d4c17b0dd4cf28c77b81b505b38
+Rollback-Command: Coolify (dedicated host) → application tokophi → Deployments → redeploy commit 8cffdc7e (PR #428; image retained), or 0e4d950a (pre-#428 baseline) if the auth change is the suspect; or `git revert -m 1 <merge>` + push to `main` and trigger the deploy BY HAND (specs/docs/DEPLOY.md step 2)
 Backup-Proof: NOT_REQUIRED
 Status: DEPLOYED
 
@@ -20,7 +20,16 @@ This file defines the current release boundary. It is repository truth for relea
 - `Backup-Proof` is `NOT_REQUIRED` unless migration risk requires a structured `backup://`, `snapshot://`, or artifact reference.
 - Set `Status: READY` only after the release scope is frozen for production gating.
 
-## This release — `0e4d950a` (PR #451, storefront redesign C; deployed by hand 2026-11-05 11:59 → 12:18 UTC)
+## This release — `f6ba56e8` (PR #429) on top of `8cffdc7e` (PR #428); deployed by hand 2026-11-05/06 UTC
+
+- **#454** `711652cc` (docs only, merged 2026-11-05 ~21:40 UTC; no deploy of its own — carried by the next).
+- **#428** `8cffdc7e` — auth hardening: storefront gets `AUTH_SECRET` (recovery links + chat), login-email change needs the current password (refused under impersonation / Google-only), `setup2FA`/`enable2FA`/`disable2FA` each decide in one conditional UPDATE (three races closed after GPT-6.1 Sol review r1–r3). Deploy `smuq3rfq4jlzts5bqrrgjlnn`, finished 22:04 UTC.
+- **#429** `f6ba56e8` — `/files` 24 media per page; Files + Pesanan pagination keyboard-activatable (guard `test/pagination-keyboard.test.ts`). Deploy `o3jql9puktcwlpabtiv5svba`, finished 22:27 UTC.
+- **No migration** (117 before and after) → `Backup-Proof: NOT_REQUIRED`. Mengantar untouched (`MENGANTAR_ENV` unset).
+- **Verified after each deploy:** five web containers on the new sha `(healthy)`, `migrate`/`seed` exited 0, `ops/tokophi-probe.sh` exit 0 (5 hosts, `db_ongkir`, ssh, disk, watchdog); after #428: storefront `AUTH_SECRET` present (length only), `cron-tracking` `ok:true errors:0`, a failed login with a non-existent email shows "Email atau kata sandi salah." with 0 console errors. Disk 42 % → 49 % → 58 % (two builds; Coolify's daily cleanup runs at 00:00).
+- **Not verified in production:** 2FA setup/enable/disable, the password-gated email change, a recovery link, and Files paging — each needs a logged-in Seller session, which this pass did not have. The failed-login LOCKOUT was not exercised (it would rate-limit the owner's own IP).
+
+## Previous release — `0e4d950a` (PR #451, storefront redesign C; deployed by hand 2026-11-05 11:59 → 12:18 UTC)
 
 - **Host:** the dedicated Vultr host (since the 2026-11-01 cutover; `specs/docs/DEPLOY.md`). Deploys
   there are manual; the GitHub webhook cannot reach Coolify through Cloudflare Access.
