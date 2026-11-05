@@ -144,7 +144,6 @@ Executor: Main Session (Claude Code) + 3 read-only review agents (tenant/auth, o
 - **Fixed — copy:** image picker "Melebihi 5MB" → "2MB" (limit is 2 MB).
 - **Verified:** `apps/admin/lib/actions/account-credentials.test.ts` (real PG, 8 cases) + compose guard: 6 RED against the original files (restored from `git show HEAD:`), 12/12 green after. Full `TEST_DB_REQUIRED=1 vitest` on `tokophi_authfix_test`: 196 files / 1737 tests passed; admin `tsc` 0; lint 0 errors; admin build exit 0. Browser (prod `next start`, scratch clone `tokophi_deps`, throwaway owner user created and deleted): `/akun/profil` hides the password field until the email changes; save without it → "Kata sandi saat ini salah.", with it → "Profil diperbarui."; no console errors.
 - **Not verified:** production (unreachable, OUT-1028) — after deploy, open a recovery link and confirm the cart is restored.
-||||||| 3403e044
 
 ### [2026-10-19 13:30 UTC] — ADMIN · Seller search palette shipped (PR #419, merge `9c1e7240`)
 Executor: Main Session (Claude Code). Owner: "yang pencarian seller kamu implementasikan live" → "deploy" → "Hanya palet" → "ya lanjut dan hati2". The palette was built on `feat/accounts` (Task 10.26 there) and **cherry-picked alone** onto `main`: 5 files (`components/admin/command-palette.tsx`, `lib/data/search.ts`, new `lib/search-model.ts`, and tests), **no migration, nothing else from that branch**.
@@ -4842,4 +4841,3 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Fix:** static `import { hashPassword, tempPassword } from "@tokophi/lib/password"` at the top (the module is not mocked there) and `let password: string` minted per `user()`. No production code touched; the guard is not relaxed.
 - **Files:** `apps/admin/lib/actions/account-credentials.test.ts`, `BUILD-LOG.md`.
 - **Verification:** `password.test.ts` 7/7; `account-credentials.test.ts` 8/8 against real Postgres (`tokophi_authfix_test`, `TEST_DB_REQUIRED=1`); `tsc --noEmit` exit 0 in apps/admin; full `vitest run` 166 files passed / 30 skipped, 1495 tests passed.
-||||||| 3403e044

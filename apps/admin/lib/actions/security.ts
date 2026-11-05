@@ -1,6 +1,6 @@
 "use server";
 import { db, schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import QRCode from "qrcode";
 import { cookies } from "next/headers";
 import { getSession, verifyPassword, signSession, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/auth";
@@ -53,10 +53,15 @@ export async function setup2FA(): Promise<{ ok: boolean; qr?: string; secret?: s
   if (!session) return { ok: false, error: "Sesi berakhir." };
   // Overwriting the secret of an ACTIVE 2FA also switched it off — a way around `disable2FA`'s code
   // check for anyone holding the session. Re-enrolling must go through disable2FA (with a code) first.
-  const [u] = await db.select({ on: schema.users.totpEnabled }).from(schema.users).where(eq(schema.users.id, session.userId)).limit(1);
-  if (u?.on) return { ok: false, error: "2FA sudah aktif. Nonaktifkan dulu dengan kode dari aplikasi autentikator." };
+  // ONE conditional statement decides and writes: a read-then-write let a concurrent `enable2FA` land
+  // between the check and the overwrite, and this call then switched the fresh 2FA off again.
   const secret = generateTotpSecret();
-  await db.update(schema.users).set({ totpSecret: secret, totpEnabled: false }).where(eq(schema.users.id, session.userId));
+  const wrote = await db
+    .update(schema.users)
+    .set({ totpSecret: secret, totpEnabled: false })
+    .where(and(eq(schema.users.id, session.userId), eq(schema.users.totpEnabled, false)))
+    .returning({ id: schema.users.id });
+  if (!wrote.length) return { ok: false, error: "2FA sudah aktif. Nonaktifkan dulu dengan kode dari aplikasi autentikator." };
   const qr = await QRCode.toDataURL(otpauthURL(secret, session.email), { margin: 1, width: 200 });
   return { ok: true, qr, secret };
 }
@@ -66,7 +71,14 @@ export async function enable2FA(code: string): Promise<{ ok: boolean; error?: st
   if (!session) return { ok: false, error: "Sesi berakhir." };
   const [u] = await db.select({ secret: schema.users.totpSecret }).from(schema.users).where(eq(schema.users.id, session.userId)).limit(1);
   if (!u?.secret || !verifyTotp(u.secret, code)) return { ok: false, error: "Kode verifikasi salah." };
-  await db.update(schema.users).set({ totpEnabled: true }).where(eq(schema.users.id, session.userId));
+  // Bound to the secret the code was checked against: if a concurrent setup2FA replaced it in between,
+  // enabling now would switch on a secret this user never proved they hold.
+  const on = await db
+    .update(schema.users)
+    .set({ totpEnabled: true })
+    .where(and(eq(schema.users.id, session.userId), eq(schema.users.totpSecret, u.secret)))
+    .returning({ id: schema.users.id });
+  if (!on.length) return { ok: false, error: "Kode verifikasi salah." };
   return { ok: true };
 }
 

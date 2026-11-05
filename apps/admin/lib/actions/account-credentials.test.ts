@@ -21,11 +21,36 @@ const h = vi.hoisted(() => ({
   db: null as unknown as PostgresJsDatabase,
   userId: "",
   imp: undefined as undefined | { operatorId: string },
+  /** Runs once, right before the action's next UPDATE executes — where a racing request's write lands. */
+  beforeUpdate: null as null | (() => Promise<void>),
 }));
+
+/** `db` whose next `update(...)` first runs `h.beforeUpdate` (drizzle builders are lazy until awaited). */
+function racing(real: PostgresJsDatabase): PostgresJsDatabase {
+  return new Proxy(real, {
+    get(target, prop, receiver) {
+      if (prop !== "update" || !h.beforeUpdate) return Reflect.get(target, prop, receiver);
+      return (...args: Parameters<PostgresJsDatabase["update"]>) => {
+        const builder = target.update(...args);
+        const set = builder.set.bind(builder);
+        const hook = h.beforeUpdate!;
+        h.beforeUpdate = null;
+        // `.set()` creates the executable query; `.where()`/`.returning()` return that same object.
+        return Object.assign(builder, {
+          set: (values: Parameters<typeof set>[0]) => {
+            const query = set(values);
+            const then = query.then.bind(query);
+            return Object.assign(query, { then: (ok: never, err: never) => hook().then(() => then(ok, err)) });
+          },
+        });
+      };
+    },
+  });
+}
 
 vi.mock("@tokophi/db", async () => ({
   get db() {
-    return h.db;
+    return racing(h.db);
   },
   schema: await import("@tokophi/db/schema"),
 }));
@@ -52,6 +77,7 @@ const run = randomUUID().slice(0, 8);
 let client: Sql;
 let updateProfile: typeof import("./profile").updateProfile;
 let setup2FA: typeof import("./security").setup2FA;
+let enable2FA: typeof import("./security").enable2FA;
 let password: string; // minted per user() — never a literal (packages/lib/src/password.test.ts)
 const made: string[] = [];
 
@@ -77,10 +103,11 @@ beforeAll(async () => {
   client = postgres(URL_, { max: 2 });
   h.db = drizzle(client, { casing: "snake_case" });
   ({ updateProfile } = await import("./profile"));
-  ({ setup2FA } = await import("./security"));
+  ({ setup2FA, enable2FA } = await import("./security"));
 });
 beforeEach(() => {
   h.imp = undefined;
+  h.beforeUpdate = null;
 });
 afterAll(async () => {
   if (!client) return;
@@ -150,5 +177,43 @@ suite("setup2FA — never switches an ACTIVE 2FA off", () => {
     const after = await row(u.id);
     expect(after.totp_secret).toBe(r.secret);
     expect(after.totp_enabled).toBe(false);
+  });
+});
+
+// Review 2026-11-06 (GPT-6.1 Sol): the guard was a read-then-write. These inject the racing request's
+// write between the action's check and its UPDATE — exactly where it lands in production.
+suite("2FA enrollment — concurrent setup2FA / enable2FA", () => {
+  it("setup2FA cannot switch off a 2FA that a concurrent enable2FA just activated", async () => {
+    const u = await user();
+    await client`update users set totp_secret = 'JBSWY3DPEHPK3PXP' where id = ${u.id}`;
+    h.beforeUpdate = async () => {
+      await client`update users set totp_enabled = true where id = ${u.id}`; // the enable landed first
+    };
+    const r = await setup2FA();
+    expect(r.ok).toBe(false);
+    expect(r.secret).toBeUndefined(); // no secret disclosed for a write that did not happen
+    expect(await row(u.id)).toMatchObject({ totp_secret: "JBSWY3DPEHPK3PXP", totp_enabled: true });
+  });
+
+  it("enable2FA does not activate a secret that a concurrent setup2FA swapped in after the code was checked", async () => {
+    const u = await user();
+    const verified = "JBSWY3DPEHPK3PXP";
+    await client`update users set totp_secret = ${verified} where id = ${u.id}`;
+    const { totpAt } = await import("@tokophi/lib/totp");
+    h.beforeUpdate = async () => {
+      await client`update users set totp_secret = 'KRSXG5CTMVRXEZLU' where id = ${u.id}`; // re-enrolled
+    };
+    const r = await enable2FA(totpAt(verified, Date.now()));
+    expect(r.ok).toBe(false);
+    expect(await row(u.id)).toMatchObject({ totp_secret: "KRSXG5CTMVRXEZLU", totp_enabled: false });
+  });
+
+  it("enable2FA still activates when nothing raced it", async () => {
+    const u = await user();
+    const secret = "JBSWY3DPEHPK3PXP";
+    await client`update users set totp_secret = ${secret} where id = ${u.id}`;
+    const { totpAt } = await import("@tokophi/lib/totp");
+    expect(await enable2FA(totpAt(secret, Date.now()))).toEqual({ ok: true });
+    expect(await row(u.id)).toMatchObject({ totp_secret: secret, totp_enabled: true });
   });
 });
