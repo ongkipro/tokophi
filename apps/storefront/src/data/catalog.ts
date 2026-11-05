@@ -76,6 +76,8 @@ export type Product = {
   gender?: string; // feed attribute: "female" | "male" | "unisex"
   ageGroup?: string; // feed attribute: "adult" | "kids" | …
   material?: string; // feed attribute
+  productType?: string; // merchant's "Tipe produk" — PDP Spesifikasi "Jenis"
+  weightGrams?: number; // default variant's weight (g) — PDP Spesifikasi "Berat"
   seoTitle?: string; // merchant SEO override; storefront <title> prefers it over `name`
   seoDesc?: string; // merchant meta-description override; prefers it over `description`
   sizes: string[];
@@ -374,6 +376,8 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       gender: schema.products.gender,
       ageGroup: schema.products.ageGroup,
       material: schema.products.material,
+      productType: schema.products.productType,
+      weightGrams: schema.productVariants.weightGrams,
       seoTitle: schema.products.seoTitle,
       seoDesc: schema.products.seoDesc,
       category: schema.products.category,
@@ -574,6 +578,8 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
       gender: r.gender ?? undefined,
       ageGroup: r.ageGroup ?? undefined,
       material: r.material ?? undefined,
+      productType: r.productType ?? undefined,
+      weightGrams: r.weightGrams ?? undefined,
       seoTitle: r.seoTitle ?? undefined,
       seoDesc: r.seoDesc ?? undefined,
       sizes: (r.sizes as string[] | null) ?? [],
@@ -587,7 +593,11 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     };
   });
 
-  // RATINGS — aggregated from the REAL `reviews` table, published rows only.
+  // lazy: every published review up to this cap is rendered into the PDP (five on the page, the rest
+// in the "Semua ulasan" dialog). A product past ~50 text reviews should page them through an API instead.
+const REVIEWS_PER_PRODUCT = 50;
+
+// RATINGS — aggregated from the REAL `reviews` table, published rows only.
   //
   // `products.rating_value` / `rating_count` are written by exactly one thing: the seed. Nothing ever
   // recomputes them from `reviews`, so the PDP was advertising "4.8 · 187 ulasan" on a catalog that
@@ -652,7 +662,7 @@ async function loadCatalog(store: StoreInfo): Promise<Catalog> {
     ratings[r.handle] = { value: Math.round((sum / stars.length) * 10) / 10, count: stars.length };
     starsByHandle[r.handle] = stars;
     const rl = reviewsByProduct.get(r.id);
-    if (rl) reviewsByHandle[r.handle] = rl.sort((a, b) => a.daysAgo - b.daysAgo).slice(0, 12);
+    if (rl) reviewsByHandle[r.handle] = rl.sort((a, b) => a.daysAgo - b.daysAgo).slice(0, REVIEWS_PER_PRODUCT);
   }
 
   // ADR 0009 — all page templates in one query, cached with the catalog: rendering a template
@@ -850,13 +860,16 @@ export async function storeTaxSettings(storeId: string): Promise<StoreTax> {
 // Automatic free shipping (PROMO P1) — the checkout shows ongkir GRATIS when subtotal ≥ minIdr. NOT
 // cached, same reason as tax: /api/public/order re-reads these columns and is the authoritative money.
 export type StoreFreeShip = { enabled: boolean; minIdr: number };
+// Cached like `storeCodPolicy`: the header reads it on EVERY page since the redesign (announcement bar).
 export async function storeFreeShip(storeId: string): Promise<StoreFreeShip> {
-  const [ss] = await db
-    .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
-    .from(schema.storeSettings)
-    .where(eq(schema.storeSettings.storeId, storeId))
-    .limit(1);
-  return { enabled: !!ss?.enabled, minIdr: Number(ss?.minIdr ?? 0) };
+  return cached(`store:freeship:${storeId}`, async () => {
+    const [ss] = await db
+      .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.storeId, storeId))
+      .limit(1);
+    return { enabled: !!ss?.enabled, minIdr: Number(ss?.minIdr ?? 0) };
+  });
 }
 
 // Active voucher codes to SHOWCASE on the /promo hub (PROMO P4). A code shows only while it is usable:

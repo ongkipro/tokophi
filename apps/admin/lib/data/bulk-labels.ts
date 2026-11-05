@@ -51,7 +51,7 @@ export async function bulkLabels(
     // a label cannot be minted for someone else's parcel even by guessing.
     const rows = (await db.execute(sql`
       select o.number, o.awb, o.sorting_code, o.courier, o.service_type, s->>'name' as service_name,
-             o.ka_order_id, o.total_idr::int as total,
+             coalesce(o.ka_order_id, o.mg_order_code) as ka_order_id, o.shipping_provider, o.total_idr::int as total,
              coalesce(o.ship_recipient, c.name, '—') as recipient,
              o.ship_phone, o.ship_address, o.ship_postcode,
              coalesce(o.city, '') as city, coalesce(o.province, '') as province,
@@ -93,7 +93,9 @@ export async function bulkLabels(
     // The label draws the slot as missing; this list is what lets the SCREEN say so before the stack
     // reaches a courier (KiriminAja requires the code for spx/idx/jnt/jtcargo).
     const missingSortingCode = rows
-      .filter((r) => courierNeedsSortingCode(r.courier as string | null) && !(r.sorting_code as string | null)?.trim())
+      // The sorting-code requirement is KiriminAja's; whether Mengantar's couriers need routing codes on
+      // our self-rendered label is UNVERIFIED (analysis R13), so its orders are not flagged on a guess.
+      .filter((r) => r.shipping_provider !== "mengantar" && courierNeedsSortingCode(r.courier as string | null) && !(r.sorting_code as string | null)?.trim())
       .map((r) => String(r.number));
 
     const idr = (n: number) =>

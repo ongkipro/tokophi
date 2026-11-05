@@ -169,13 +169,21 @@
      DEFAULT_BRAND_COLOR; theme.test.ts pins the round-trip). "Hangat" (the old cream) is still
      one Tema click away for any merchant who wants the warm look back. */
 
-  --color-brand-50: #fdf2f5;
-  --color-brand-100: #fbe6ec;
-  --color-brand-200: #f5cdd8;
-  --color-brand-400: #d98aa1;
-  --color-brand-500: #c4708a;
-  --color-brand-600: #a85572;
-  --color-brand-700: #8a445d;
+  /* Brand scale for a store with NO brand colour: the neutral zinc scale (owner 2026-11-05,
+     "minimalist modern, hitam putih abu") — 600 is the near-black primary button. Must equal
+     NEUTRAL_BRAND_SHADES in packages/lib/src/colors.ts, which ThemeTokens emits for the same case. */
+  --color-brand-50: #f4f4f5;
+  --color-brand-100: #ececee;
+  --color-brand-200: #e4e4e7;
+  --color-brand-400: #a1a1aa;
+  --color-brand-500: #52525b;
+  --color-brand-600: #18181b;
+  --color-brand-700: #09090b;
+
+  /* SURFACE TINTS — image frames, placeholders, hover washes, chips. Deliberately NOT brand-derived:
+     a merchant who picks red gets red BUTTONS, never a pink page. */
+  --color-mist: #f4f4f5;
+  --color-mist-strong: #e4e4e7;
 }
 
 /* Smooth scroll only for shoppers who haven't asked for less motion (WCAG 2.3.3). An unguarded
@@ -220,4 +228,34 @@ body {
   :where(input:not([type="radio"]):not([type="checkbox"]), select, textarea):not(#\0) {
     font-size: 16px;
   }
+}
+
+/* Horizontal strips that scroll by swipe (PDP phone gallery) — the scrollbar is noise there; the dots
+   carry the position. Scrolling itself, keyboard included, is untouched. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* SITE CHROME HEIGHT — announcement bar (32px, one nowrap line) + sticky header (h-16 / md:h-[4.5rem]).
+   The hero subtracts it so it fills exactly the rest of the first screen on every device (owner
+   2026-11-05, "responsif dan dinamis menyesuaikan ukuran device"). Change it together with
+   Header.astro's bar heights — they are the same number written twice. */
+:root { --site-chrome: 96px; }
+@media (min-width: 768px) { :root { --site-chrome: 104px; } }
+
+/* FADING RULES (owner 2026-11-05) — a hairline that is solid on the left and fades out to the right,
+   for the PDP's Deskripsi / Spesifikasi / Pengiriman accordion. Drawn as a 1px background, so it adds
+   no box, no border and no layout shift. Uses the tone-aware `line` token. */
+.rule-fade { background: linear-gradient(to right, var(--color-line), transparent) bottom / 100% 1px no-repeat; }
+.rule-fade-top { background: linear-gradient(to right, var(--color-line), transparent) top / 100% 1px no-repeat; }
+
+/* Review dialog: dim the page; from sm it is a centred panel, below sm a full-height sheet. */
+[data-reviews-dialog]::backdrop { background: rgb(0 0 0 / 0.35); }
+
+/* PDP description clamp: three lines, fading out (owner 2026-11-05). Only applied by the script when
+   the text is longer, so short copy and no-JS readers see everything. */
+.desc-body.is-clamped {
+  max-height: calc(1lh * 3);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
 }

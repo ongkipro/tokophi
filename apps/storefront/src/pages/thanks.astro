@@ -139,7 +139,7 @@ const STEPS = [
             {discount > 0 && (
               <div class="flex justify-between px-4 py-3">
                 <dt class="text-stone-600">Diskon promo</dt>
-                <dd class="font-medium text-rose-600">-{IDR(discount)}</dd>
+                <dd class="font-medium text-ink">-{IDR(discount)}</dd>
               </div>
             )}
             <div class="flex justify-between px-4 py-3">
@@ -176,7 +176,7 @@ const STEPS = [
                 <button
                   type="button"
                   data-copy-order={order}
-                  class="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-stone-600 transition hover:bg-stone-50"
+                  class="inline-flex min-h-8 shrink-0 items-center rounded-lg border border-ink px-2.5 text-xs font-medium text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white"
                   aria-live="polite"
                 >Salin</button>
               </dd>

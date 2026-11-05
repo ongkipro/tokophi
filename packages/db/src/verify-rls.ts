@@ -179,6 +179,11 @@ async function main() {
     // — a heartbeat for the platform's own schedulers, read only by super-admin. There is no tenant to
     // scope it to: a cron loop runs across every store, so a `store_id` on it would have to be a lie.
     "cron_runs",
+    // 0116 (Mengantar Partner Business API): `mengantar_areas` is reference data (Mengantar's area
+    // catalogue, same class as kiriminaja_areas); `shipping_provider_config` is the single-row platform
+    // switch + partner credential, written only by super-admin behind platformGate("owner"). Neither has
+    // a tenant. The per-store seller accounts live in `store_mengantar_accounts`, which HAS store_id + RLS.
+    "mengantar_areas", "shipping_provider_config",
   ];
   const noStoreId = await client<{ relname: string }[]>`
     SELECT c.relname FROM pg_class c

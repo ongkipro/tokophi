@@ -201,7 +201,7 @@ suite("refund obligation — a paid prepaid order that is cancelled owes the buy
       await applyOrderStatusChange(tx, { storeId: f.storeId, order: { id: f.orderId, status: "diproses" }, status: "batal" });
       await expect(
         tx.execute(sql`insert into refunds (store_id, order_id, payment_id, amount_idr) values (${f.storeId}, ${f.orderId}, ${f.paymentId}, 1)`),
-      ).rejects.toMatchObject({ code: "23505", constraint_name: "refunds_one_open_per_payment" });
+      ).rejects.toMatchObject({ cause: { code: "23505", constraint_name: "refunds_one_open_per_payment" } });
     });
   });
 

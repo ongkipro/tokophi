@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
+import { brandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
 import { toast } from "sonner";
 import { saveBrandColor } from "@/lib/actions/theme";
 import { useCan } from "@/components/admin/permissions";
@@ -45,7 +45,7 @@ export function BrandColorDialog({
   }
 
   const valid = HEX_RE.test(hex);
-  const shades = valid ? generateBrandShades(hex) : null;
+  const shades = valid ? brandShades(hex) : null;
 
   const preview = React.useCallback((next: string) => {
     setHex(next);

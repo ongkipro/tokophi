@@ -47,6 +47,12 @@ export const ENV_CHECKS: Record<string, { required: boolean; why: string }> = {
   // without it the stored keys cannot be read and the env fallback is all there is.
   KIRIMINAJA_API_KEY: { required: false, why: "Cadangan bila Super Admin belum menyimpan kunci. Tanpa kunci di mana pun: tidak ada tarif ongkir, tidak ada pesanan." },
   KIRIMINAJA_ENV: { required: false, why: "Cadangan bila Super Admin belum memilih lingkungan (default sandbox). Salah setel TIDAK terlihat: booking sandbox berbentuk identik, tapi tak ada kurir yang menjemput." },
+  MENGANTAR_ENV: { required: false, why: "Lingkungan Mengantar Partner Business API: sandbox | production. Memilih origin Partner + Public API dan slot kredensial Partner. WAJIB diset eksplisit agar checkout memakai Mengantar — kosong dibaca sandbox, dan ongkir lalu memakai provider default. Production butuh origin Partner dari Mengantar (belum ada → pendaftaran akun toko diantre)." },
+  MENGANTAR_AREAS_FILE: { required: false, why: "Hanya untuk skrip `load:mengantar-areas` (@tokophi/db): path berkas katalog area Mengantar dari 99ribu. Tidak dibaca saat runtime aplikasi." },
+  MENGANTAR_PARTNER_ID: { required: false, why: "Cadangan Partner ID Mengantar bila Super Admin belum menyimpannya. Tanpa kredensial Partner: toko tidak bisa didaftarkan ke Mengantar dan tetap memakai pengiriman default." },
+  MENGANTAR_PARTNER_SECRET: { required: false, why: "Cadangan Partner secret Mengantar (pasangan MENGANTAR_PARTNER_ID). Dipakai hanya bila keduanya diset." },
+  MENGANTAR_PICKUP_MODE: { required: false, why: "scheduledPickup (default) | dropOff. Sandbox Mengantar tidak menawarkan slot penjemputan — di sana hanya dropOff yang bisa dibooking." },
+  SHIPPING_PROVIDER: { required: false, why: "Cadangan sakelar penyedia pengiriman bila Super Admin belum memilih. Kosong/tidak dikenal = penyedia default (yang lama)." },
   KIRIMINAJA_ORDER_PREFIX: { required: false, why: "CADANGAN (0115): prefix order_id per akun kini tersimpan di kartu Super Admin per env; env ini hanya dipakai bila slot env aktif kosong. Kosong = tanpa prefiks, sah." },
 
   AUTOLARIS_BASE: { required: true, why: "Basis URL PSP. Ada default di compose, tapi kosong berarti pembayaran menunjuk ke mana-mana." },

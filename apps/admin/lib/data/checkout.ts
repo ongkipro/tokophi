@@ -6,7 +6,7 @@ import { waLink } from "@tokophi/lib/format";
 import { getSession } from "@/lib/auth";
 // Pure (no DB import) so it is testable without a DATABASE_URL — see the note in that file.
 // Re-exported below because callers have always imported it from here.
-import { cartMessage } from "@/lib/cart-message";
+import { cartMessage, DEFAULT_CART_TEMPLATE } from "@/lib/cart-message";
 import { getStoreName, getStorefrontHost } from "@/lib/data/store";
 import { recoveryUrl } from "@tokophi/lib/recovery";
 
@@ -218,7 +218,9 @@ export async function getAbandonedCarts(withPhoneLimit = 100, anonymousLimit = 4
           itemsCount: items.reduce((a, i) => a + i.qty, 0),
           subtotal: r.subtotalIdr,
           minutesAgo: Math.max(0, Math.round((Date.now() - last.getTime()) / 60_000)),
-          waHref: r.phone && tpl ? waLink(r.phone, cartMessage(tpl.body, r.name, items, storeName, link)) : null,
+          // The store's own `keranjang` template when it has one, the built-in default otherwise —
+          // so a cart with a phone number ALWAYS gets a button, and `null` means "no number" only.
+          waHref: r.phone ? waLink(r.phone, cartMessage(tpl?.body ?? DEFAULT_CART_TEMPLATE, r.name, items, storeName, link)) : null,
           contactedLabel: contactedAt ? formatContact(contactedAt) : null,
         };
       }),

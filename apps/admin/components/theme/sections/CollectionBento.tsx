@@ -10,7 +10,7 @@ const DESKTOP = [1, 2, 1, 2, 1, 1];
 export function CollectionBento({ heading }: CollectionBentoConfig) {
   return (
     <section className="mx-auto max-w-5xl p-6">
-      {heading ? <h2 className="mb-4 text-2xl font-semibold text-ink">{heading}</h2> : null}
+      {heading ? <h2 className="mb-5 font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">{heading}</h2> : null}
       <div className="grid auto-rows-[8rem] grid-cols-4 gap-3">
         {PLACEHOLDER.map((_, i) => (
           <div
@@ -19,11 +19,11 @@ export function CollectionBento({ heading }: CollectionBentoConfig) {
               (DESKTOP[i % DESKTOP.length] === 2 ? "col-span-2 " : "col-span-1 ") +
               // FRAMELESS + thin radius — mirrors CollectionBento.astro (owner 2026-07-23): `rounded-md`,
               // no `ring-1`. Six tiles = the storefront's two desktop rows (1+2+1 then 2+1+1).
-              "relative overflow-hidden rounded-md bg-gradient-to-br from-brand-100 to-brand-200"
+              "relative overflow-hidden rounded-sm bg-gradient-to-br from-zinc-100 to-zinc-200"
             }
           >
             {/* name chip — the storefront's `bg-cream/95` solid pill, ink text */}
-            <span className="absolute bottom-2 left-2 rounded-lg bg-cream/95 px-2 py-1 text-xs font-medium text-ink">
+            <span className="absolute bottom-3 left-3 rounded-sm bg-cream px-2.5 py-1 text-sm font-medium text-ink">
               Koleksi
             </span>
           </div>

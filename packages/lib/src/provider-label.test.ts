@@ -25,6 +25,16 @@ import { textWithoutComments } from "../../../test/source-code";
 // how a support call gets resolved. Adding it here would be a bug, not a tightening.
 
 const BRAND = /(?<![A-Za-z0-9_/@.])(kirimin\s*aja|autolaris)(?![A-Za-z0-9_])/gi;
+// SHIP-MENGANTAR (2026-11-05): the second shipping vendor. CASE-SENSITIVE on purpose, unlike the
+// line above: lower-case "mengantar" is the Indonesian verb "to deliver", and real copy uses it
+// ("Kurir mengantar ke …" on the success page, "Kurir tidak bisa mengantar tanpa alamat" in a
+// shipping action). The brand is written capitalised or in caps; the verb mid-sentence is not.
+const BRAND_MENGANTAR = /(?<![A-Za-z0-9_/@.])(Mengantar|MENGANTAR)(?![A-Za-z0-9_])/g;
+// OWNER O5 (2026-11-05, Mengantar Partner Business API): every store now OWNS a Mengantar seller
+// account (its email, its login, its wallet), so SELLER copy may name Mengantar. SHOPPERS still never
+// see it: the Mengantar pattern keeps applying to the storefront, the landing site and the Seller app's
+// shopper-facing public API (`apps/admin/app/api/public/**`). KiriminAja / AutoLaris stay hidden everywhere.
+const SHOPPER_FACING = ["apps/storefront/", "apps/landing/", "apps/admin/app/api/public/"];
 
 const CLIENT_SURFACES = ["apps/admin/", "apps/storefront/", "apps/landing/"];
 
@@ -41,12 +51,15 @@ function clientFiles(): string[] {
     .filter((f) => /\.(tsx?|astro)$/.test(f) && !f.includes(".test.") && CLIENT_SURFACES.some((d) => f.startsWith(d)));
 }
 
-function hits(text: string): { index: number; around: string }[] {
+function hits(text: string, file = "apps/storefront/x.ts"): { index: number; around: string }[] {
   const out: { index: number; around: string }[] = [];
-  BRAND.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = BRAND.exec(text))) {
-    out.push({ index: m.index, around: text.slice(Math.max(0, m.index - 60), m.index + 50).replace(/\s+/g, " ") });
+  const patterns = SHOPPER_FACING.some((d) => file.startsWith(d)) ? [BRAND, BRAND_MENGANTAR] : [BRAND];
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      out.push({ index: m.index, around: text.slice(Math.max(0, m.index - 60), m.index + 50).replace(/\s+/g, " ") });
+    }
   }
   return out;
 }
@@ -58,7 +71,7 @@ describe("no provider brand in copy a merchant or shopper can read (ADR 0004)", 
 
   for (const f of files) {
     const text = textWithoutComments(readFileSync(f, "utf8"));
-    for (const h of hits(text)) {
+    for (const h of hits(text, f)) {
       const allowed = ALLOWED.find((a) => h.around.includes(a.snippet));
       if (allowed) seenAllowance.add(allowed.snippet);
       else leaks.push(`${f}: …${h.around}…`);
@@ -90,8 +103,20 @@ describe("no provider brand in copy a merchant or shopper can read (ADR 0004)", 
       'KiriminAja menolak permintaan pelacakan secara permanen',
       '(daftarkan prefix order_id di KiriminAja Dashboard',
       'Pengiriman terdaftar di KiriminAja — belum ada pergerakan',
+      // SHIP-MENGANTAR: the second provider answers to the same rule (risk R15).
+      '"Mengantar belum dikonfigurasi oleh platform."',
+      'Area tujuan tidak ditemukan di Mengantar.',
     ];
     for (const s of shipped) expect(hits(s).length, s).toBeGreaterThan(0);
+  });
+
+  it("O5: Seller copy may name Mengantar; the shopper-facing public API may not", () => {
+    const s = "Toko ini belum terhubung ke akun Mengantar.";
+    expect(hits(s, "apps/admin/lib/mengantar-shipping.ts").length).toBe(0);
+    expect(hits(s, "apps/admin/app/api/public/order/route.ts").length).toBeGreaterThan(0);
+    expect(hits(s, "apps/storefront/src/pages/checkout.astro").length).toBeGreaterThan(0);
+    // KiriminAja stays hidden from the Seller too.
+    expect(hits("Memuat layanan dari KiriminAja…", "apps/admin/lib/x.ts").length).toBeGreaterThan(0);
   });
 
   it("…and stays silent on code that merely names the vendor", () => {
@@ -102,6 +127,13 @@ describe("no provider brand in copy a merchant or shopper can read (ADR 0004)", 
       "schema.kiriminajaAreas.districtName",
       "autolarisConfigured()",
       "alCreatePayment(",
+      'from "@tokophi/lib/mengantar"',
+      "process.env.MENGANTAR_PARTNER_SECRET",
+      "cfg.mengantar.partnerId",
+      "MENGANTAR_WALLET_UNPAID",
+      // …nor on the Indonesian verb the case-sensitive pattern exists to spare.
+      "Kurir mengantar ke alamatmu.",
+      "Kurir tidak bisa mengantar tanpa alamat lengkap",
     ];
     for (const s of code) expect(hits(s).length, s).toBe(0);
   });

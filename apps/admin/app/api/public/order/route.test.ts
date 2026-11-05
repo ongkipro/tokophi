@@ -10,13 +10,17 @@ import {
   vi,
 } from "vitest";
 import type * as ShippingQuote from "@/lib/shipping-quote";
+import { SHIPPING_QUOTE_UNAVAILABLE } from "@/lib/public-guard";
 
 const h = vi.hoisted(() => {
   const state = {
     beforeQuote: null as null | ((storeId: string) => Promise<void>),
+    // SHIP-MENGANTAR: a per-store quote override, so a fixture can be priced "by Mengantar".
+    quotes: new Map<string, unknown>(),
   };
   const quoteShipping = vi.fn(async (input: { storeId: string }) => {
     await state.beforeQuote?.(input.storeId);
+    if (state.quotes.has(input.storeId)) return state.quotes.get(input.storeId);
     return {
       ok: true as const,
       rates: [
@@ -34,6 +38,8 @@ const h = vi.hoisted(() => {
       billableGrams: 1_000,
       weightFallback: [],
       codEnabled: true,
+      provider: "kiriminaja" as const,
+      destinationAreaId: null,
       origin: 1,
       originFrom: "pickup" as const,
       originName: "Gudang Test",
@@ -58,6 +64,19 @@ vi.mock("@/lib/data/areas", () => ({
 vi.mock("@/lib/cod", () => ({
   getCodPolicy: vi.fn(async () => ({ reason: () => null })),
 }));
+// The prepaid path ends at the payment gateway. These suites never reach it: "not configured" makes
+// the route answer 503 `orderCreated` AFTER the order row is written, which is exactly the row the
+// Mengantar stamp test reads. No network, no AutoLaris key.
+vi.mock("@tokophi/lib/autolaris", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    autolarisConfigured: () => false,
+    alCreateOrder: vi.fn(async () => {
+      throw new Error("AutoLaris must not be called from this suite");
+    }),
+  };
+});
 vi.mock("@/lib/shipping-quote", async (importOriginal) => {
   const actual = await importOriginal<typeof ShippingQuote>();
   return { ...actual, quoteShipping: h.quoteShipping };
@@ -69,6 +88,7 @@ const runId = randomUUID().slice(0, 8);
 const handle = `availability-${runId}`;
 const discountCode = `ORDER-${runId}`;
 const sessionId = `checkout-${runId}`;
+const mgChannel = `MGT${runId}`;
 
 let client: Sql;
 let POST: (request: Request) => Promise<Response>;
@@ -237,13 +257,17 @@ async function mutationState(storeId: string) {
   };
 }
 
-function orderRequest(key: string) {
+function orderRequest(
+  key: string,
+  opts: { channelCode?: string; shipping?: { service: string; serviceType: string }; ip?: string } = {},
+) {
   const fixture = fixtures[key]!;
   return new Request("http://localhost/api/public/order", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-forwarded-for": "203.0.113.42",
+      // Own IP per Mengantar case: the route allows 10 orders/min per IP and this file makes more.
+      "x-forwarded-for": opts.ip ?? "203.0.113.42",
     },
     body: JSON.stringify({
       storeSlug: fixture.slug,
@@ -269,11 +293,10 @@ function orderRequest(key: string) {
         kodepos: "40123",
       },
       shipping: {
-        service: "spx",
-        serviceType: "1",
+        ...(opts.shipping ?? { service: "spx", serviceType: "1" }),
         destId: 321,
       },
-      channelCode: "cod",
+      channelCode: opts.channelCode ?? "cod",
       discountCode,
     }),
   });
@@ -314,10 +337,19 @@ beforeAll(async () => {
     approvedAt,
     suspendedAt: null,
   });
+  for (const key of ["mgPrepaid", "mgCod", "mgGone", "mgRefused", "kaStamp"]) {
+    await addStore(key, { status: "active", approvedAt, suspendedAt: null });
+  }
+  // A platform channel only THIS run can name, removed in afterAll — the table is platform-wide.
+  await client`
+    insert into platform_payment_channels (channel, label, kind, enabled, active)
+    values (${mgChannel}, 'QRIS (test)', 'qris', true, true)
+  `;
 });
 
 beforeEach(() => {
   h.state.beforeQuote = null;
+  h.state.quotes.clear();
   h.quoteShipping.mockClear();
 });
 
@@ -400,6 +432,7 @@ afterAll(async () => {
        where store_id in (select id from stores where account_id = ${accountId})
     `;
     await sql`delete from stores where account_id = ${accountId}`;
+    await sql`delete from platform_payment_channels where channel = ${mgChannel}`;
     await sql`delete from accounts where id = ${accountId}`;
   });
   await client.end();
@@ -562,5 +595,91 @@ suite("POST /api/public/order — public store availability", () => {
     });
     expect(h.quoteShipping).toHaveBeenCalledTimes(1);
     expect(await mutationState(fixture.id)).toEqual(before);
+  });
+});
+
+// ── SHIP-MENGANTAR: the order follows the quote it RE-MADE, and phase 1 is NON-COD ────────────────
+// `quoteShipping` is stubbed per store with the shape the Mengantar branch produces (provider,
+// destination area, estimate-key service types, `cod: false`). What is under test is the ROUTE: what
+// it stamps, what it refuses, and that a provider's words never reach the shopper.
+const MG_AREA = "5f1d0c0e2b3a4c5d6e7f8a9b";
+const mgQuote = {
+  ok: true as const,
+  rates: [
+    { name: "JNE", code: "jne", type: "JNE", cost: 18_000, etd: "2-3 hari", cod: false, group: "regular" },
+    { name: "Shopee Express (SPX)", code: "spx", type: "spx", cost: 12_000, etd: "", cod: false, group: "regular" },
+  ],
+  grams: 500,
+  billableGrams: 1_000,
+  weightFallback: [],
+  codEnabled: false,
+  provider: "mengantar" as const,
+  destinationAreaId: MG_AREA,
+  origin: 1,
+  originFrom: "pickup" as const,
+  originName: "Gudang Test",
+};
+
+async function stampOf(storeId: string) {
+  return client<{ shipping_provider: string | null; ship_mengantar_area_id: string | null; courier: string | null; service_type: string | null; shipping_idr: string }[]>`
+    select shipping_provider, ship_mengantar_area_id, courier, service_type, shipping_idr::text
+      from orders where store_id = ${storeId} order by id
+  `;
+}
+
+suite("POST /api/public/order — Mengantar quote (SHIP-MENGANTAR phase 1)", () => {
+  it("stamps shipping_provider + ship_mengantar_area_id from the re-made quote, at OUR price", async () => {
+    const f = fixtures.mgPrepaid!;
+    h.state.quotes.set(f.id, mgQuote);
+    const res = await POST(orderRequest("mgPrepaid", { ip: "203.0.113.71", channelCode: mgChannel, shipping: { service: "jne", serviceType: "JNE" } }));
+    const body = await res.json();
+    // Gateway not configured in this suite → 503 AFTER the order is written (see the autolaris mock).
+    expect(body).toMatchObject({ orderCreated: true, shipping: 18_000 });
+    expect(await stampOf(f.id)).toEqual([
+      { shipping_provider: "mengantar", ship_mengantar_area_id: MG_AREA, courier: "jne", service_type: "JNE", shipping_idr: "18000" },
+    ]);
+  });
+
+  it("refuses a COD request on a Mengantar quote with 403 and writes nothing", async () => {
+    const f = fixtures.mgCod!;
+    // Even a quote that (wrongly) claims COD for the rate must not open COD under Mengantar.
+    h.state.quotes.set(f.id, { ...mgQuote, codEnabled: true, rates: mgQuote.rates.map((r) => ({ ...r, cod: true })) });
+    const before = await mutationState(f.id);
+    const res = await POST(orderRequest("mgCod", { ip: "203.0.113.72", channelCode: "cod", shipping: { service: "spx", serviceType: "spx" } }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ ok: false, code: "cod_not_allowed" });
+    expect(await mutationState(f.id)).toEqual(before);
+  });
+
+  it("rejects a service missing from the fresh Mengantar quote (no silent re-pick)", async () => {
+    const f = fixtures.mgGone!;
+    h.state.quotes.set(f.id, mgQuote);
+    const before = await mutationState(f.id);
+    const res = await POST(orderRequest("mgGone", { ip: "203.0.113.73", channelCode: mgChannel, shipping: { service: "sicepat", serviceType: "SiCepat" } }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/tidak tersedia lagi/);
+    expect(await mutationState(f.id)).toEqual(before);
+  });
+
+  it("never hands the provider's own words to the shopper", async () => {
+    const f = fixtures.mgRefused!;
+    const providerWords = "Mengantar: origin_id 5f1d tidak ditemukan [internal]";
+    h.state.quotes.set(f.id, { ok: false, error: providerWords, fromProvider: true });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await POST(orderRequest("mgRefused", { ip: "203.0.113.74", channelCode: mgChannel, shipping: { service: "jne", serviceType: "JNE" } }));
+    spy.mockRestore();
+    const text = await res.text();
+    expect(text).not.toContain("origin_id");
+    expect(text).not.toMatch(/mengantar/i);
+    expect(JSON.parse(text).error).toBe(SHIPPING_QUOTE_UNAVAILABLE);
+  });
+
+  it("stamps kiriminaja when the KiriminAja branch priced the order", async () => {
+    const f = fixtures.kaStamp!;
+    const res = await POST(orderRequest("kaStamp", { ip: "203.0.113.75" }));
+    expect(res.status).toBe(200);
+    expect(await stampOf(f.id)).toEqual([
+      expect.objectContaining({ shipping_provider: "kiriminaja", ship_mengantar_area_id: null, courier: "spx", service_type: "1" }),
+    ]);
   });
 });

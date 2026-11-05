@@ -12,8 +12,8 @@ export function Faq({ heading, eyebrow, items }: FaqConfig) {
     <section className="p-6">
       {heading && (
         <div className="mb-6 text-center">
-          {eyebrow && <p className="text-xs font-medium tracking-wide text-brand-600 uppercase">{eyebrow}</p>}
-          <h2 className="mt-1 text-xl font-semibold text-ink">{heading}</h2>
+          {eyebrow && <p className="text-sm text-muted-foreground">{eyebrow}</p>}
+          <h2 className="mt-1 font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">{heading}</h2>
         </div>
       )}
 

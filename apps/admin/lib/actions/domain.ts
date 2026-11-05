@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { resolveCname, resolveTxt } from "node:dns/promises";
 import { revalidatePath } from "next/cache";
+import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import {
@@ -113,8 +114,8 @@ export async function addDomain(input: string): Promise<Result> {
     });
   } catch (e: unknown) {
     // The UNIQUE(host) violation is the important one: the host is taken by another store (or this one).
-    const msg = String((e as { message?: string })?.message ?? e);
-    if (/unique|duplicate/i.test(msg)) {
+    // drizzle >= 0.44 hides the Postgres text on `.cause`; matching the message would never fire.
+    if (uniqueViolationConstraint(e) !== null) {
       return { ok: false, error: "Domain ini sudah terdaftar. Hubungi kami jika kamu yakin ini milikmu." };
     }
     return { ok: false, error: "Gagal menambahkan domain. Coba lagi." };
