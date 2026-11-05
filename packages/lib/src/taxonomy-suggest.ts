@@ -155,8 +155,28 @@ export type AutoFillInput = {
 export type AutoFillPatch = {
   gcat?: TaxonomySuggestion | null;
   gender?: "female" | "male" | null;
-  ageGroup?: "adult" | null;
+  ageGroup?: AgeGroup | null;
 };
+
+export type AgeGroup = "infant" | "toddler" | "kids" | "adult";
+// Age is read from WORDS, never assumed from "it is clothing": defaulting apparel to "adult" published
+// a children's-wear shop's every SKU as adult apparel (product-feed.ts forbids exactly that). Youngest
+// signal wins; adult needs its own cue ("wanita", "pria", "dewasa"…); kid AND adult words together
+// ("Set Ibu dan Anak") → nothing. A word list, not a model — no cue, no value.
+const INFANT_KW = ["bayi", "baby", "newborn", "infant"];
+const TODDLER_KW = ["balita", "toddler"];
+const KIDS_KW = ["anak", "anak-anak", "kids", "kid", "children", "child", "bocah", "junior"];
+const ADULT_KW = ["wanita", "pria", "dewasa", "women", "woman", "men", "man", "ladies", "muslimah"];
+
+export function suggestAgeGroup(...texts: Array<string | null | undefined>): AgeGroup | null {
+  const hay = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!hay) return null;
+  const has = (kws: string[]) => kws.some((kw) => wordRe(kw).test(hay));
+  const young: AgeGroup | null = has(INFANT_KW) ? "infant" : has(TODDLER_KW) ? "toddler" : has(KIDS_KW) ? "kids" : null;
+  const adult = has(ADULT_KW);
+  if (young && adult) return null;
+  return young ?? (adult ? "adult" : null);
+}
 
 /**
  * What the editor should fill as the merchant types. Pure: same text → same patch. Keys are present
@@ -169,6 +189,6 @@ export function autoCatalogFill(i: AutoFillInput): AutoFillPatch {
   const path = i.locked.gcat ? i.currentPath : patch.gcat?.path ?? "";
   const apparel = isApparelPath(path);
   if (!i.locked.gender) patch.gender = apparel ? suggestGender(i.title, i.category, i.description) : null;
-  if (!i.locked.age) patch.ageGroup = apparel ? "adult" : null;
+  if (!i.locked.age) patch.ageGroup = apparel ? suggestAgeGroup(i.title, i.category, i.description) : null;
   return patch;
 }

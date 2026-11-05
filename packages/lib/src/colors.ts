@@ -85,3 +85,15 @@ export const NEUTRAL_BRAND_SHADES: BrandShades = {
   600: "#18181b",
   700: "#09090b",
 };
+
+/** Is this the platform default (i.e. "no brand colour")? Case-insensitive; null/empty count too. */
+export const isDefaultBrandColor = (hex: string | null | undefined) => !hex || hex.trim().toLowerCase() === DEFAULT_BRAND_COLOR;
+
+/**
+ * THE one way to turn a stored brand colour into shades. The default colour is NOT a brand: run through
+ * `generateBrandShades` it comes out as a mid-grey primary (600 = #60606c), so the Store Builder showed
+ * grey buttons for a store whose live site is near-black — and saving the untouched picker made the
+ * live store grey too (review 2026-11-05). Default or empty → the neutral scale, everywhere.
+ */
+export const brandShades = (hex: string | null | undefined): BrandShades =>
+  isDefaultBrandColor(hex) ? NEUTRAL_BRAND_SHADES : generateBrandShades(hex!.trim());

@@ -33,27 +33,38 @@ create table if not exists ops_backup.store_theme_20261105 (
   backed_up_at timestamptz not null default now()
 );
 
+-- SCOPE (review 2026-11-05): the ruling is MONOCHROME — colour only. `theme` also holds the store's
+-- `font` and its image ratios (`galleryAspect`, `cardAspect`, e.g. batiknusantara's 4:5 PDP gallery);
+-- those are layout, not colour, and are KEPT. Only `brand_color` and `theme.tone` are cleared.
+-- RE-RUN SAFE (review 2026-11-05): a store already in the backup was reset by an earlier run; after
+-- that, any colour it has is the MERCHANT's new pick — a second run must not wipe it (the backup's
+-- first-snapshot-wins rule would lose it for good). So stores already backed up are skipped.
+create temp table already_reset on commit drop as
+  select store_id from ops_backup.store_theme_20261105;
+
 insert into ops_backup.store_theme_20261105 (store_id, slug, brand_color, theme)
 select id, slug, brand_color, theme
   from stores
  where suspended_at is null
    and slug <> 'tema-platform'
-   and (brand_color is not null or theme is not null)
+   and (brand_color is not null or theme ? 'tone')
 on conflict (store_id) do nothing;
 
 update stores
    set brand_color = null,
-       theme = null
+       theme = nullif(theme - 'tone', '{}'::jsonb)
  where suspended_at is null
    and slug <> 'tema-platform'
-   and (brand_color is not null or theme is not null)
-returning slug;
+   and (brand_color is not null or theme ? 'tone')
+   and id not in (select store_id from already_reset)
+returning slug, theme;
 
 select slug, brand_color, theme from ops_backup.store_theme_20261105 order by slug;
 
 commit;
 
 -- ── RESTORE (one store, or drop the WHERE for all) ────────────────────────────────────────────────
+-- (restores the full snapshot, incl. any font/aspect the merchant changed SINCE — check `theme` first)
 -- update stores s set brand_color = b.brand_color, theme = b.theme
 --   from ops_backup.store_theme_20261105 b where b.store_id = s.id and b.slug = 'petanihandal';
 --

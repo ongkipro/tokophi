@@ -10,7 +10,7 @@ import { IDR, num } from "@tokophi/lib/format";
 import { imageSrcSet, inStock, paymentKindWords, productImages, storeCodPolicy, type Product } from "../../data/catalog";
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
-import { catalogSpecs } from "../../lib/product-feed";
+import { catalogSpecs, feedBrand } from "../../lib/product-feed";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import { itemGroupId, retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 import { resolveGalleryAspect } from "@tokophi/lib/theme";
@@ -253,7 +253,8 @@ const productLd: Record<string, unknown> = {
   description: metaDescription,
   image: gallery.map(abs),
   sku: product.handle,
-  brand: { "@type": "Brand", name: store.name },
+  // Same derivation as the Spesifikasi "Merek" row and the feeds (vendor, else the shop) — one answer.
+  brand: { "@type": "Brand", name: feedBrand(product, store.name) },
   offers,
 };
 // aggregateRating is emitted ONLY when the rating is REAL. `rating` is null when the product has no
@@ -273,13 +274,9 @@ if (rating && rating.count > 0) {
 // text slugified into a `/kategori/…` URL that may not exist.
 // Always THREE levels — Beranda › Kategori › Judul (owner 2026-11-05). A product outside every
 // collection used to drop the middle crumb, so the trail jumped from Beranda straight to a 90-char
-// title. Middle crumb, in order: its home collection; else the merchant's own category label, linked to
-// the search for it (a `/kategori/<label>` page need not exist); else the full catalogue.
-const middleCrumb: Crumb = home
-  ? { name: home.name, href: `/kategori/${home.handle}` }
-  : product.category
-    ? { name: product.category, href: `/cari?q=${encodeURIComponent(product.category)}` }
-    : { name: "Produk", href: "/produk" };
+// title. Middle crumb: its home collection, else the full catalogue. (A label linked to `/cari?q=` was
+// tried: the search page is noindex, and the same crumbs feed the BreadcrumbList JSON-LD — review 2026-11-05.)
+const middleCrumb: Crumb = home ? { name: home.name, href: `/kategori/${home.handle}` } : { name: "Produk", href: "/produk" };
 const CRUMBS: Crumb[] = [{ name: "Beranda", href: "/" }, middleCrumb, { name: product.name }];
 
 const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");

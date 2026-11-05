@@ -206,7 +206,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
   const [vendor, setVendor] = React.useState(product?.vendor || storeName);
 
   // Google category / gender / age fill themselves from the text until touched (use-catalog-autofill.ts).
-  const { auto, runAutoFill, lock, showApparel } = useCatalogAutoFill({ gcatId, gcatPath, gender, ageGroup, setGcatId, setGcatPath, setGender, setAgeGroup });
+  const { auto, runAutoFill, lock, showApparel } = useCatalogAutoFill({ existing: !!product, gcatId, gcatPath, gender, ageGroup, setGcatId, setGcatPath, setGender, setAgeGroup });
 
   const [seoTitle, setSeoTitle] = React.useState(product?.seoTitle ?? "");
   const [metaDesc, setMetaDesc] = React.useState(product?.seoDesc ?? "");

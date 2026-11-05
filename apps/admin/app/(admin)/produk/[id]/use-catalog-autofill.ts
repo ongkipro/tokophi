@@ -14,6 +14,9 @@ type Field = "gcat" | "gender" | "age";
  * The editor keeps OWNING the four values (they are its submit fields); this hook only writes them.
  */
 export function useCatalogAutoFill(s: {
+  /** An EXISTING product: its gender / age are locked on load even when empty — a blank there may be the
+   *  merchant's decision (a children's shop leaving age unset), and editing the title must not fill it. */
+  existing: boolean;
   gcatId: number | null;
   gcatPath: string;
   gender: string;
@@ -23,7 +26,7 @@ export function useCatalogAutoFill(s: {
   setGender: (v: string) => void;
   setAgeGroup: (v: string) => void;
 }) {
-  const locked = React.useRef({ gcat: s.gcatId != null, gender: !!s.gender, age: !!s.ageGroup });
+  const locked = React.useRef({ gcat: s.gcatId != null, gender: s.existing || !!s.gender, age: s.existing || !!s.ageGroup });
   const [auto, setAuto] = React.useState({ gcat: false, gender: false, age: false });
 
   const runAutoFill = (title: string, category: string, description: string) => {

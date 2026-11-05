@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoCatalogFill, feedAgeGroup, feedGender, isApparelPath, suggestGender, suggestGoogleCategory } from "./taxonomy-suggest";
+import { autoCatalogFill, suggestAgeGroup, feedAgeGroup, feedGender, isApparelPath, suggestGender, suggestGoogleCategory } from "./taxonomy-suggest";
 
 const id = (...t: Array<string | null | undefined>) => suggestGoogleCategory(...t)?.id ?? null;
 
@@ -77,6 +77,15 @@ describe("autoCatalogFill — the Seller editor fills what the merchant has not 
     expect(p).not.toHaveProperty("gcat");
     expect(p.gender).toBe("male");
     expect(p.ageGroup).toBe("adult");
+  });
+
+  it("age comes from WORDS, never from 'it is clothing': children's wear is kids, no cue is no value", () => {
+    expect(autoCatalogFill({ ...base, title: "Gamis Anak Perempuan Motif Bunga", locked: open }).ageGroup).toBe("kids");
+    expect(autoCatalogFill({ ...base, title: "Kemeja Batik Anak Laki", locked: open }).ageGroup).toBe("kids");
+    expect(suggestAgeGroup("Baju Bayi Katun Newborn")).toBe("infant");
+    expect(suggestAgeGroup("Setelan Balita")).toBe("toddler");
+    expect(suggestAgeGroup("Kemeja Batik Lengan Panjang")).toBeNull(); // apparel, but no age cue
+    expect(suggestAgeGroup("Set Couple Ibu dan Anak Wanita")).toBeNull(); // kid + adult cue → never guess
   });
 
   it("no match → null, never a guess", () => {

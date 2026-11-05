@@ -860,13 +860,16 @@ export async function storeTaxSettings(storeId: string): Promise<StoreTax> {
 // Automatic free shipping (PROMO P1) — the checkout shows ongkir GRATIS when subtotal ≥ minIdr. NOT
 // cached, same reason as tax: /api/public/order re-reads these columns and is the authoritative money.
 export type StoreFreeShip = { enabled: boolean; minIdr: number };
+// Cached like `storeCodPolicy`: the header reads it on EVERY page since the redesign (announcement bar).
 export async function storeFreeShip(storeId: string): Promise<StoreFreeShip> {
-  const [ss] = await db
-    .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
-    .from(schema.storeSettings)
-    .where(eq(schema.storeSettings.storeId, storeId))
-    .limit(1);
-  return { enabled: !!ss?.enabled, minIdr: Number(ss?.minIdr ?? 0) };
+  return cached(`store:freeship:${storeId}`, async () => {
+    const [ss] = await db
+      .select({ enabled: schema.storeSettings.freeShipEnabled, minIdr: schema.storeSettings.freeShipMinIdr })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.storeId, storeId))
+      .limit(1);
+    return { enabled: !!ss?.enabled, minIdr: Number(ss?.minIdr ?? 0) };
+  });
 }
 
 // Active voucher codes to SHOWCASE on the /promo hub (PROMO P4). A code shows only while it is usable:
