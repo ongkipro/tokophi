@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-06 UTC] — FIX · #429 review: Files + Pesanan pagination keyboard-activatable; main merged in (branch `feat/media-pagination`)
+Executor: Main Session (Claude Code); owner: "rekomendasimu jalankan dan reviews lanjut sempurnakan".
+- **Sync:** `origin/main` merged into the branch (no force-push); BUILD-LOG was the only conflict (both sides kept; the empty diff3 base markers that broke CI's `no-conflict-markers` removed).
+- **Review r1 (GPT-6.1 Sol):** REQUEST_CHANGES — pagination had `onClick` but no `href`, so the `<a>` from the shared `PaginationLink` ignored Enter; keyboard users were stuck on page 1. The same bug was already live on `/pesanan`.
+- **Fix:** `files-client.tsx` + `pesanan-client.tsx` give each enabled control a real href and keep an unmodified left click as `router.push`; `test/pagination-keyboard.test.ts` scans every app `.tsx` for an href-less, key-less pagination control — red on the previous files (6 tags), green now.
+- **Gates:** guard 2/2 · `media-page.test.ts` green · admin `tsc` 0 · lint 0 errors · PAGE_MAP regenerated.
+- **Review r2:** APPROVE. Files: `/data/tmp/tokophi-reviews/pr429-r1.review.md`, `pr429-r2.review.md`.
+- **Not done:** no browser pass of keyboard navigation (admin needs a logged-in session on the production-copy DB).
+
 ### [2026-11-05 12:45 UTC] — DATA · monochrome reset run on production (owner: "ya reset keseluruhan")
 Executor: Main Session (Claude Code). Script `ops/tokophi-storefront-monochrome-reset.sql` (from #451, scoped to colour). Owner chose option (a): reset all three stores that had picked a colour.
 - **Dry-run first** (same script, `commit;` → `rollback;`, production): 3 rows would change, font and image ratios kept; afterwards production was unchanged and no `ops_backup` table remained.
