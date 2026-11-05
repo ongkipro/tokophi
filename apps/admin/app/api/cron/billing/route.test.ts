@@ -28,6 +28,24 @@ const provider = vi.fn(async (input: { reffId: string; channelCode: string; amou
   amount: input.amount,
   total: input.amount,
 }));
+// ⚠️ THE SWEEP WALKS EVERY STORE IN THE DATABASE — and the test database is SHARED by every suite
+// running in parallel. Unscoped, a tick billed (and re-statused) other suites' lapsed test stores, so
+// THEIR cleanup then failed on `invoices_store_id_stores_id_fk` — a flake that moved between
+// unrelated files run to run (users.test, menus.test, ka-sorting-code.test, … seen 2026-11-05).
+// The route, the DB and the invoice creator stay real; only the billing VERDICT for a store this file
+// did not create is pinned to "nothing to do" (its own status, not lapsed), so the sweep leaves it alone.
+const own = vi.hoisted(() => new Set<string>());
+vi.mock("@tokophi/lib/billing", async (orig) => {
+  const real = (await orig()) as typeof import("@tokophi/lib/billing");
+  return {
+    ...real,
+    computeBilling: ((s: Parameters<typeof real.computeBilling>[0] & { id?: string; status?: string }) => {
+      const b = real.computeBilling(s);
+      if (s.id && own.has(s.id)) return b;
+      return { ...b, status: s.status ?? b.status, billingStatus: "active" };
+    }) as typeof real.computeBilling,
+  };
+});
 vi.mock("@tokophi/lib/autolaris", async (orig) => {
   const real = (await orig()) as Record<string, unknown>;
   return { ...real, autolarisConfigured: () => true, alCreateOrder: (i: never) => provider(i) };
@@ -47,6 +65,7 @@ async function store(opts: { periodEnd: Date | null; comped?: boolean; firstPaid
             ${opts.periodEnd}, ${opts.firstPaid ?? true}, ${opts.comped ?? false}, now())
     returning id`;
   stores.push(s.id);
+  own.add(s.id);
   return s.id;
 }
 const invoices = (storeId: string) =>
@@ -81,6 +100,24 @@ afterAll(async () => {
 });
 
 suite("cron/billing — the renewal invoice (Task 8.24)", { timeout: 120_000 }, () => {
+  it("never bills or re-statuses a store this file did not create (the test DB is shared)", async () => {
+    // A lapsed store that belongs to "another suite": exactly the shape the sweep used to bill.
+    const [foreign] = await client<{ id: string }[]>`
+      insert into stores (account_id, name, slug, status, trial_ends_at, current_period_end, first_invoice_paid, comped, approved_at)
+      values (${accountId}, ${`Other ${runId}`}, ${`o${runId}`}, 'active', now() - interval '40 days', now() - interval '1 day', true, false, now())
+      returning id`;
+    try {
+      await tick();
+      expect(await invoices(foreign.id)).toHaveLength(0);
+      const [row] = await client<{ status: string }[]>`select status from stores where id = ${foreign.id}`;
+      expect(row.status).toBe("active");
+    } finally {
+      await client`delete from invoices where store_id = ${foreign.id}`;
+      await client`delete from platform_activity where store_id = ${foreign.id}`;
+      await client`delete from stores where id = ${foreign.id}`;
+    }
+  });
+
   it("creates exactly ONE invoice for a past_due store, on a REAL channel code, at the quoted price with the stored tax", async () => {
     const id = await store({ periodEnd: new Date(Date.now() - 86_400_000) }); // lapsed yesterday → past_due (3-day grace)
     provider.mockClear();
