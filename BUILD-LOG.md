@@ -25,6 +25,15 @@ Executor: Main Session (Claude Code); owner: "rekomendasimu jalankan dan reviews
 - **Tests:** `account-credentials.test.ts` gains a seam that runs the racing write right before the action's UPDATE; all three race tests red on the previous `security.ts`, green now (13/13; with password + compose guards 22/22 at r1). Admin `tsc` 0, lint 0 errors — all through `heavy-run --lock tokophi-env`.
 - **Deploy note (unchanged from the PR):** the storefront container now needs `AUTH_SECRET`; verify a recovery link after deploy.
 
+### [2026-11-06 UTC] — FIX · #429 review: Files + Pesanan pagination keyboard-activatable; main merged in (branch `feat/media-pagination`)
+Executor: Main Session (Claude Code); owner: "rekomendasimu jalankan dan reviews lanjut sempurnakan".
+- **Sync:** `origin/main` merged into the branch (no force-push); BUILD-LOG was the only conflict (both sides kept; the empty diff3 base markers that broke CI's `no-conflict-markers` removed).
+- **Review r1 (GPT-6.1 Sol):** REQUEST_CHANGES — pagination had `onClick` but no `href`, so the `<a>` from the shared `PaginationLink` ignored Enter; keyboard users were stuck on page 1. The same bug was already live on `/pesanan`.
+- **Fix:** `files-client.tsx` + `pesanan-client.tsx` give each enabled control a real href and keep an unmodified left click as `router.push`; `test/pagination-keyboard.test.ts` scans every app `.tsx` for an href-less, key-less pagination control — red on the previous files (6 tags), green now.
+- **Gates:** guard 2/2 · `media-page.test.ts` green · admin `tsc` 0 · lint 0 errors · PAGE_MAP regenerated.
+- **Review r2:** APPROVE. Files: `/data/tmp/tokophi-reviews/pr429-r1.review.md`, `pr429-r2.review.md`.
+- **Not done:** no browser pass of keyboard navigation (admin needs a logged-in session on the production-copy DB).
+
 ### [2026-11-05 12:45 UTC] — DATA · monochrome reset run on production (owner: "ya reset keseluruhan")
 Executor: Main Session (Claude Code). Script `ops/tokophi-storefront-monochrome-reset.sql` (from #451, scoped to colour). Owner chose option (a): reset all three stores that had picked a colour.
 - **Dry-run first** (same script, `commit;` → `rollback;`, production): 3 rows would change, font and image ratios kept; afterwards production was unchanged and no `ops_backup` table remained.
@@ -4858,3 +4867,11 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Fix:** static `import { hashPassword, tempPassword } from "@tokophi/lib/password"` at the top (the module is not mocked there) and `let password: string` minted per `user()`. No production code touched; the guard is not relaxed.
 - **Files:** `apps/admin/lib/actions/account-credentials.test.ts`, `BUILD-LOG.md`.
 - **Verification:** `password.test.ts` 7/7; `account-credentials.test.ts` 8/8 against real Postgres (`tokophi_authfix_test`, `TEST_DB_REQUIRED=1`); `tsc --noEmit` exit 0 in apps/admin; full `vitest run` 166 files passed / 30 skipped, 1495 tests passed.
+
+### [2026-10-29 UTC] — FEAT · Files (Pustaka media) shows 24 files per page (owner request in chat)
+
+- **Executor:** Main Session. Request: "tampilan media batasi, mungkin pakai navigasi biar tidak tampil keseluruhan image biar tidak berat".
+- **Change:** `/files` read every `media` row and rendered every thumbnail. It now reads one page through the existing `getMediaPage` (cap 60, newest first) with `MEDIA_PAGE_SIZE = 24`, the page number in the URL (`/files?page=2`, bookmarkable — the same pattern as Pesanan), a "Menampilkan 25–25 dari 25 file" footer and the shared `Pagination`. A page past the end (last file of the last page deleted) is re-read as the last page that exists (`clampMediaPage`, `apps/admin/lib/media-page.ts`); an upload returns to page 1, where the newest file is. The footer is hidden when the library fits one page.
+- **Files:** `apps/admin/app/(admin)/files/{page,files-client}.tsx`, `apps/admin/lib/media-page.ts` + `.test.ts` (new), `BUILD-LOG.md`.
+- **Verification:** `media-page.test.ts` 4/4, proven red against a mutation (clamp removed → 2 failures); `page-map-fresh` ✓; `tsc --noEmit` exit 0 in apps/admin; `eslint` clean on the four files. Driven in Chromium against a copy of the production DB (batiknusantara, 25 files): page 1 = 24 images, 24/24 loaded, 0 × 404, "1–24 dari 25"; page 2 (`?page=2`) = 1 image, "25–25 dari 25"; 0 console errors. (404s seen once were a missing `public/uploads` in the worktree, not code.)
+- **Not done:** the two other full-library pickers (`produk/kategori/[id]/collection-editor.tsx`, `blog/[id]/article-editor.tsx`) still call `getMedia()` for the whole library; the Store Builder picker already pages. Not in scope here.
