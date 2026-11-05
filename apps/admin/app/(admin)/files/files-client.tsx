@@ -44,7 +44,14 @@ export function FilesClient({ media, total, page, pageSize }: { media: MediaItem
       router.refresh(); // either way: on a refusal this is what clears the row that is already gone
     });
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const go = (p: number) => router.push(p <= 1 ? "/files" : `/files?page=${p}`);
+  const pageHref = (p: number) => (p <= 1 ? "/files" : `/files?page=${p}`);
+  // A real href makes each control a focusable link that Enter activates (an href-less <a> is neither);
+  // a plain click stays a client-side push. Same pattern as `saldo-pager.tsx`.
+  const jump = (e: React.MouseEvent, p: number) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // new tab / window: native
+    e.preventDefault();
+    router.push(pageHref(p));
+  };
   const copy = (url: string) => { navigator.clipboard?.writeText(url); toast.success("URL disalin."); };
 
   return (
@@ -111,18 +118,18 @@ export function FilesClient({ media, total, page, pageSize }: { media: MediaItem
           <Pagination className="mx-0 w-auto justify-end">
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious text="Sebelumnya" aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : undefined} onClick={() => go(page - 1)} />
+                <PaginationPrevious text="Sebelumnya" aria-disabled={page === 1} className={page === 1 ? "pointer-events-none opacity-50" : undefined} href={page === 1 ? undefined : pageHref(page - 1)} onClick={page === 1 ? undefined : (e) => jump(e, page - 1)} />
               </PaginationItem>
               {Array.from({ length: pageCount }, (_, i) => i + 1)
                 .filter((p) => p === 1 || p === pageCount || Math.abs(p - page) <= 1)
                 .map((p, idx, arr) => (
                   <PaginationItem key={p}>
                     {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-muted-foreground">…</span>}
-                    <PaginationLink isActive={p === page} onClick={() => go(p)}>{p}</PaginationLink>
+                    <PaginationLink isActive={p === page} href={pageHref(p)} onClick={(e) => jump(e, p)}>{p}</PaginationLink>
                   </PaginationItem>
                 ))}
               <PaginationItem>
-                <PaginationNext text="Berikutnya" aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : undefined} onClick={() => go(page + 1)} />
+                <PaginationNext text="Berikutnya" aria-disabled={page === pageCount} className={page === pageCount ? "pointer-events-none opacity-50" : undefined} href={page === pageCount ? undefined : pageHref(page + 1)} onClick={page === pageCount ? undefined : (e) => jump(e, page + 1)} />
               </PaginationItem>
             </PaginationContent>
           </Pagination>

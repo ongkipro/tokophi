@@ -4831,4 +4831,3 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Files:** `apps/admin/app/(admin)/files/{page,files-client}.tsx`, `apps/admin/lib/media-page.ts` + `.test.ts` (new), `BUILD-LOG.md`.
 - **Verification:** `media-page.test.ts` 4/4, proven red against a mutation (clamp removed → 2 failures); `page-map-fresh` ✓; `tsc --noEmit` exit 0 in apps/admin; `eslint` clean on the four files. Driven in Chromium against a copy of the production DB (batiknusantara, 25 files): page 1 = 24 images, 24/24 loaded, 0 × 404, "1–24 dari 25"; page 2 (`?page=2`) = 1 image, "25–25 dari 25"; 0 console errors. (404s seen once were a missing `public/uploads` in the worktree, not code.)
 - **Not done:** the two other full-library pickers (`produk/kategori/[id]/collection-editor.tsx`, `blog/[id]/article-editor.tsx`) still call `getMedia()` for the whole library; the Store Builder picker already pages. Not in scope here.
-||||||| 3403e044

@@ -398,7 +398,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": [],
+          "tests": [
+            "test/pagination-keyboard.test.ts"
+          ],
           "whatItIs": "'File' — media library (uploads under `/api/uploads`)."
         },
         {
@@ -894,7 +896,8 @@
             "apps/admin/lib/search-model.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts",
-            "packages/lib/src/autolaris-submit.test.ts"
+            "packages/lib/src/autolaris-submit.test.ts",
+            "test/pagination-keyboard.test.ts"
           ],
           "whatItIs": "'Pesanan' — orders list with status tabs; URL params validated before any enum cast."
         },
