@@ -2,12 +2,12 @@
 // Public affiliate application (Task 9.5, F-A1/F-A2, specs/AFFILIATE_SPEC.md). A plain HTML form that
 // POSTs to itself — works with JS off. The store comes from the Host header (Astro.locals.store),
 // never from the form. Creates a `menunggu` row; the merchant approves it in the Seller panel.
-import { normalizePhone } from "@tokophi/lib/validate";
 import PageHeader from "../components/PageHeader.astro";
 import Layout from "../layouts/Layout.astro";
 import { storeAffiliateEnabled } from "../data/catalog";
 import { applyAffiliate } from "../data/affiliate";
 import { clientIp, rateLimit } from "../lib/chat";
+import { handleAffiliateApplication, type AffiliateFormValues } from "../lib/affiliate-apply";
 
 const store = Astro.locals.store;
 if (!(await storeAffiliateEnabled(store.id))) return new Response(null, { status: 404, statusText: "Not Found" }); // F-A1
@@ -17,45 +17,15 @@ if (!(await storeAffiliateEnabled(store.id))) return new Response(null, { status
 const accountBase = (process.env.ACCOUNT_APP_URL ?? "").trim().replace(/\/+$/, "");
 const accountJoin = /^https?:\/\/[^/\s]+$/.test(accountBase) ? `${accountBase}/affiliate/gabung?toko=${encodeURIComponent(store.slug)}` : null;
 
-const clip = (v: FormDataEntryValue | null, n: number) => String(v ?? "").trim().slice(0, n);
 let outcome: "form" | "ok" | "exists" = "form";
 let error = "";
-let values = { name: "", phone: "", email: "", channel: "", bankName: "", bankAccount: "", bankHolder: "" };
+let values: AffiliateFormValues = { name: "", phone: "", email: "", channel: "", bankName: "", bankAccount: "", bankHolder: "" };
 
 if (Astro.request.method === "POST") {
-  const f = await Astro.request.formData();
-  values = {
-    name: clip(f.get("name"), 80),
-    phone: clip(f.get("phone"), 32),
-    email: clip(f.get("email"), 120),
-    channel: clip(f.get("channel"), 300),
-    bankName: clip(f.get("bankName"), 60),
-    bankAccount: clip(f.get("bankAccount"), 40),
-    bankHolder: clip(f.get("bankHolder"), 80),
-  };
-  const phone = normalizePhone(values.phone);
-  if (clip(f.get("website"), 100)) {
-    outcome = "ok"; // honeypot filled: a bot. Answer like a success so it learns nothing.
-  } else if (!rateLimit(`affiliate:apply:${clientIp(Astro.request, Astro.clientAddress)}`, 5, 3_600_000)) {
-    error = "Terlalu banyak pendaftaran dari jaringan ini. Coba lagi nanti.";
-  } else if (!values.name) {
-    error = "Nama wajib diisi.";
-  } else if (!phone) {
-    error = "Nomor WhatsApp tidak valid.";
-  } else {
-    const r = await applyAffiliate(store.id, {
-      name: values.name,
-      phone,
-      email: values.email || null,
-      channel: values.channel || null,
-      bankName: values.bankName || null,
-      bankAccount: values.bankAccount || null,
-      bankHolder: values.bankHolder || null,
-    });
-    if (r === "created") outcome = "ok";
-    else if (r === "exists") outcome = "exists";
-    if (outcome === "form") error = "Gagal menyimpan pendaftaran, coba lagi.";
-  }
+  ({ outcome, error, values } = await handleAffiliateApplication(await Astro.request.formData(), {
+    allow: () => rateLimit(`affiliate:apply:${clientIp(Astro.request, Astro.clientAddress)}`, 5, 3_600_000),
+    apply: (a) => applyAffiliate(store.id, a),
+  }));
 }
 
 const input =
