@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 11:10 UTC] — TEST · cron/billing test no longer bills other suites' stores (shared-test-DB flake)
+Executor: Main Session (Claude Code). Owner: "ya jalankan" (fix the flake on its own branch). Branch `fix/cron-billing-test-scope` from main a2388bae.
+- **Cause:** `apps/admin/app/api/cron/billing/route.test.ts` drives the REAL sweep, which walks EVERY store in the database — and the test DB is shared by every suite running in parallel. Each tick billed (and re-statused) other suites' lapsed test stores, so their `delete from stores` cleanup failed on `invoices_store_id_stores_id_fk`. The failure moved between unrelated files run to run (`users.test`, `menus.test`, `ka-sorting-code.test`).
+- **Fix (test only, no production code):** the file wraps `computeBilling` so a store it did not create gets "nothing to do" (its own status, not lapsed); the route, DB and invoice creator stay real for its own stores. New test: a lapsed store the file did not register is neither billed nor re-statused — proven red by removing the scope.
+- **Verified:** the file 7/7; full `vitest apps/admin packages/lib apps/super-admin packages/db` on an isolated `tokophi_billingflake_test` twice: 176 files / 1572 tests passed both runs; `tsc` admin clean.
+
 ### [2026-10-19 13:30 UTC] — ADMIN · Seller search palette shipped (PR #419, merge `9c1e7240`)
 Executor: Main Session (Claude Code). Owner: "yang pencarian seller kamu implementasikan live" → "deploy" → "Hanya palet" → "ya lanjut dan hati2". The palette was built on `feat/accounts` (Task 10.26 there) and **cherry-picked alone** onto `main`: 5 files (`components/admin/command-palette.tsx`, `lib/data/search.ts`, new `lib/search-model.ts`, and tests), **no migration, nothing else from that branch**.
 - **What changed for a seller:** Ctrl/Cmd+K shows each sidebar page with its own icon (35 rows used one identical icon), orders with status and total, products with price and "Draf", customers with order count (phones are searchable, never shown), a useful empty state, match highlighting, keyboard/screen-reader support, a phone layout; pages and actions are filtered by role.
