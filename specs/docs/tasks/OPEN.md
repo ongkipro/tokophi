@@ -40,6 +40,11 @@ production origin, allow-lists the host IP there, and gives Terms/Privacy URLs.
   delete it afterwards (BUILD-LOG 2026-10-29).
 - Local only: worktree `~/Projects/tokophi-consolidate`, branch `demo/affiliate-media` (unpushed, clean).
 
+> **Newest sweep: `specs/docs/tasks/2026-10-29-overall-review.md`** (2026-10-29) — every finding
+> re-checked in code; 🔴 P0s there: Astro/@astrojs/node Host-header crash (R-10), off-box uptime +
+> Vultr balance alert (R-20). It also lists the stale states in THIS file (R-41) — trust it over the
+> 2026-09-07 notes below where they disagree.
+
 ## 🔴 Open from production — 2026-09-07
 
 Both surfaced by the incident in `BUILD-LOG.md` 2026-09-07 11:53 UTC. Neither is fixable in code.
