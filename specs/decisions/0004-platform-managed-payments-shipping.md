@@ -21,3 +21,12 @@ The **merchant admin** only **toggles which methods to accept**; everything arri
 - **Shipping via aggregator:** the platform connects ONE shipping **aggregator** (KiriminAja (Mitra API)) that exposes all couriers + services + live rates. Merchant just **picks couriers and which services (ekspedisi)** to offer (JNE Reguler/YES/OKE, SiCepat REG/BEST/GOKIL, …); resi & tarif are automatic.
 - **Backend (see SCHEMA):** gateway/courier/COD config + the aggregator connection live at **platform/account level**; per-store rows carry only an `enabled` flag (per courier **and per service**). Money flow: platform collects → settles/payouts to merchant.
 - Consequence: platform bears integration + settlement responsibility (and can charge fees/margin).
+
+## Addendum 2026-11-05 — Mengantar Partner Business API (Seller surface only)
+
+Owner decision O5 (`specs/docs/tasks/2026-11-05-shipping-mengantar-decisions.md`, D10): under the Mengantar
+partner model every store OWNS a Mengantar seller account (registered by TokoΦ with the owner's email; its
+login, wallet and emails are the seller's). Hiding that brand from the seller would hide their own account,
+so **Seller copy may name "Mengantar"**. Everything else in this ADR stands: **shoppers never see a provider
+brand** (storefront, landing, and the shopper-facing `apps/admin/app/api/public/**`), and KiriminAja /
+AutoLaris stay hidden from sellers too. Enforced by `packages/lib/src/provider-label.test.ts`.

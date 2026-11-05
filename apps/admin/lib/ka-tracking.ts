@@ -193,7 +193,10 @@ export async function syncOrderFromKa(
         await tx
           .update(schema.orders)
           // The sorting code belongs to the waybill being voided — it goes with it (0110).
-          .set({ awb: null, kaOrderId: null, sortingCode: null, problemAt: null, problemNote: null })
+          // SHIP-MENGANTAR: a voided Mengantar booking drops its provider ids the same way, so the
+          // order can be re-booked and the poller stops pulling a shipment that no longer exists.
+          // `shipping_provider` stays — a re-book follows the provider that priced the order.
+          .set({ awb: null, kaOrderId: null, sortingCode: null, problemAt: null, problemNote: null, mgOrderId: null, mgOrderCode: null, mgBatchId: null, mgIsPaid: null, mgCourier: null })
           .where(eq(schema.orders.id, order.id));
         changed.push("cancel:voided");
         if (order.status === "dikirim") {

@@ -51,7 +51,7 @@
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
 | Seller (merchant panel) | 56 | 4 | 20 |
-| Super Admin (platform control plane) | 12 | 2 | 2 |
+| Super Admin (platform control plane) | 13 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
@@ -101,7 +101,7 @@
 | `/pelanggan/ulasan` | 'Ulasan' — product reviews moderation. | page | `apps/admin/app/(admin)/pelanggan/ulasan/page.tsx` | `ulasan-client.tsx` | `reviews` | `reviews` | — | — | ✓ | — |
 | `/pemasaran` | 'Pemasaran' — ad channels (Meta/Google/TikTok) connection, catalog id scheme, conversion queue health; 'dari pesanan toko Anda', never 'menurut Meta'. | page | `apps/admin/app/(admin)/pemasaran/page.tsx` | `feed-card.tsx` `pemasaran-client.tsx` | `feed` `marketing` `tracking` | `tracking` | `session` | — | ✓ | — |
 | `/pengaturan` | 'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision). | page | `apps/admin/app/(admin)/pengaturan/page.tsx` | — | — | — | — | — |  | `apps/admin/lib/actions/users.test.ts` |
-| `/pesanan/[id]` | Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking. | page | `apps/admin/app/(admin)/pesanan/[id]/page.tsx` | `order-detail.tsx` | `order-detail` `orders` | `orders` `payments` `shipping` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
+| `/pesanan/[id]` | Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking. | page | `apps/admin/app/(admin)/pesanan/[id]/page.tsx` | `order-detail.tsx` | `order-detail` `orders` | `mengantar` `orders` `payments` `shipping` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
 | `/pesanan/massal` | 'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'. | page | `apps/admin/app/(admin)/pesanan/massal/page.tsx` | `massal-client.tsx` | `bulk-shipping` | `bulk-shipping` | — | — | ✓ | `apps/admin/lib/search-model.test.ts` |
 | `/pesanan` | 'Pesanan' — orders list with status tabs; URL params validated before any enum cast. | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/search-model.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
 | `/produk/[id]` | Product editor — variants grid, media (upload/drag), dimensions (they price ongkir), taxonomy. | page | `apps/admin/app/(admin)/produk/[id]/page.tsx` | `product-editor.tsx` `taxonomy-field.tsx` | `products` | `media` `products` `purchases` `taxonomy` | — | — | ✓ | `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/uuid-guard.test.ts` |
@@ -141,8 +141,8 @@
 | `/api/csp-report` | CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing. | POST | `apps/admin/app/api/csp-report/route.ts` | — |  | — |
 | `/api/health/env` | Reports which integrations are configured (header-gated), used by the deploy probe. | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill. | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-sorting-code.test.ts` `apps/admin/lib/ka-webhook.test.ts` |
-| `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/destination-kelurahan.test.ts` |
-| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` |
+| `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/ongkir/route.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` |
+| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
 | `/api/public/pay/callback` | PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`. | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/fee-truth.test.ts` |
 | `/api/public/promo` | Voucher check for the checkout (deliberately specific error copy). | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
 | `/api/uploads/[name]` | Serves merchant uploads with `?w=` resizing. | GET | `apps/admin/app/api/uploads/[name]/route.ts` | — |  | `apps/admin/lib/image-content.test.ts` |
@@ -151,7 +151,7 @@
 
 ## Super Admin (platform control plane) — `apps/super-admin`
 
-12 pages · 2 layouts · 2 API routes
+13 pages · 2 layouts · 2 API routes
 
 ### Pages
 
@@ -163,7 +163,8 @@
 | `/` | Platform dashboard (MRR, revenue, merchant float, latest invoices) — `admin` rank; support is forwarded to its landing. | page | `apps/super-admin/app/(platform)/page.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `route:/` | — | ✓ | — |
 | `/paket` | 'Paket' — the single plan's prices/trial (legacy tiers unused). | page | `apps/super-admin/app/(platform)/paket/page.tsx` | `paket-client.tsx` | `data` | `actions` | `route:/paket` | — | ✓ | `apps/super-admin/lib/invoice-flip-is-bookkeeping.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/pencairan` | 'Pencairan' — seller payout queue; complete = compare-and-swap `diproses → selesai`. | page | `apps/super-admin/app/(platform)/pencairan/page.tsx` | `pencairan-client.tsx` `refund-queue.tsx` | `data` | `actions` | `route:/pencairan` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
-| `/pengaturan` | 'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators. | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `pengaturan-client.tsx` `provider-keys.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/aggregator-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/pengaturan` | 'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators. | page | `apps/super-admin/app/(platform)/pengaturan/page.tsx` | `mengantar-panel.tsx` `pengaturan-client.tsx` `provider-keys.tsx` | `data` | `actions` | `route:/pengaturan` | — | ✓ | `apps/super-admin/lib/aggregator-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/gateway-enabled-is-not-a-gate.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/pengiriman` | 'Pengiriman' — Mengantar Partner Business API oversight: every store's own Mengantar seller account (state, seller id, last error; admin retries registration, owner rotates the key) and unknown-outcome bookings (owner adopts from a verified pull with the store's key, or releases; reason required). | page | `apps/super-admin/app/(platform)/pengiriman/page.tsx` | `pengiriman-client.tsx` | — | `actions` | `route:/pengiriman` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
 | `/tiket/[id]` | One ticket thread (reply, close). | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/tiket` | 'Tiket' — merchant support desk. | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/toko/[id]` | Store detail: billing, users (add/reset — credential shown once), suspend with a reason, comp a month, 'Buka Dashboard Seller'. | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` |
@@ -191,7 +192,7 @@
 | `/blog/[handle]` | One article. | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
-| `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` | ✓ |  | — |
+| `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
 | `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | — | ✓ |  | — |
 | `/halaman/[handle]` | Static page. | `apps/storefront/src/pages/halaman/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/` | Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction. | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
@@ -254,7 +255,7 @@
 |---|---|
 | `activity.ts` | `getActivityFeed` |
 | `analytics.ts` | `SERIES_DAYS` `dailyStatsRows` `getCategorySales` `getChannelSalesDaily` `getCustomerMix` `getDailyStats` `getHourlyStats` `getOrderStats` `getProductSalesDaily` `getRegionSales` `hourlyStatsRows` |
-| `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `provinceForDistrict` `resolveArea` `resolveDestinationKelurahan` `searchAreaLocal` |
+| `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `mengantarDestination` `provinceForDistrict` `resolveArea` `resolveDestinationKelurahan` `searchAreaLocal` |
 | `articles.ts` | `getArticle` `getArticles` `getBlogs` |
 | `billing.ts` | `getBilling` `getFaktur` `getMyInvoices` |
 | `bulk-labels.ts` | `bulkLabels` `getBulkLabels` |
@@ -316,6 +317,7 @@
 | `landing.ts` | `deleteLanding` `saveLanding` |
 | `ledger.ts` | `fetchExportRows` `fetchInvoiceDetail` `requestPayout` `saveBankAccount` |
 | `media.ts` | `deleteMedia` `deleteProductImage` `getMedia` `getMediaPage` `uploadMedia` `uploadProductImage` |
+| `mengantar.ts` | `connectMengantar` `getMengantarCard` `payMengantarShipping` `rotateMengantarKey` |
 | `menus.ts` | `createMenu` `saveMenu` |
 | `orders.ts` | `setOrderStatus` |
 | `pages.ts` | `createPage` `deletePage` `updatePage` |
@@ -346,7 +348,7 @@
 
 | module | exports |
 |---|---|
-| `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `saveCodAllowed` `saveCouriers` `saveGateways` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `saveProviderOrderPrefix` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
+| `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `reconcileMengantarBooking` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `retryStoreMengantar` `rotateStoreMengantar` `saveCodAllowed` `saveCouriers` `saveGateways` `saveMengantarPartner` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `saveProviderOrderPrefix` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setShippingProvider` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
 | `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
 | `comp-invoice.ts` | `buildCompInvoice` |
 | `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getKiriminajaBalance` `getKiriminajaProbe` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getProviderStatus` `getRefundSummary` `getRefunds` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
@@ -354,6 +356,8 @@
 | `health.ts` | `getHealthMap` `getStoreHealth` `healthFromSignals` |
 | `ka-probe.ts` | `classifyKaProbe` |
 | `list-page.ts` | `UPDATE_LOG_PAGE_SIZE` `filterChanged` `pageSlice` |
+| `mengantar-credentials.ts` | `SWITCH_REASON_MIN` `isShippingProvider` `mengantarReadiness` `saveMengantarPartnerWith` `switchShippingProviderWith` |
+| `mengantar-ops.ts` | `RECONCILE_REASON_MIN` `listMengantarAccounts` `listUnknownMengantar` `reconcileUnknownBookingWith` |
 | `nav.ts` | `NAV` `NAV_GROUPS` `navFor` |
 | `payment-channel-sync.ts` | `planChannelSync` |
 | `payout-transition.ts` | `markPayoutPaidInTxn` |

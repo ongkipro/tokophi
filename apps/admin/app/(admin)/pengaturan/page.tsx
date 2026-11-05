@@ -29,6 +29,7 @@ import { Separator } from "@tokophi/ui/separator"
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
+import { MengantarCard } from "@/components/admin/pengaturan/mengantar-card"
 import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
 import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-card"
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
@@ -203,7 +204,8 @@ export default function Page() {
               Rp250.000" — that were plain useState with NO column and NO action behind them: the
               merchant set them and nothing whatsoever happened. Removed rather than left lying. */}
           {section === "pengiriman" && (
-            <div className="max-w-3xl">
+            <div className="max-w-3xl space-y-5">
+              <MengantarCard />
               <JasaKirimCard />
             </div>
           )}

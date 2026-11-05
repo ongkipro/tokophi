@@ -660,6 +660,11 @@ async function handle(req: Request) {
     storeId: store.id,
     storeCity: store.city,
     destinationId: destId,
+    // The kelurahan NAME the shopper picked (a claim, re-matched exactly inside `destId`). Only the
+    // Mengantar branch reads it — its area ids are kelurahan-grain; KiriminAja prices per district.
+    kelurahan: addr.kelurahan ?? null,
+    // COD always quotes (and so books) through the default provider (owner O4/O6), never Mengantar.
+    cod: isCod,
     items: resolved.map((r) => ({
       variantId: r.variantId,
       handle: r.handle,
@@ -782,6 +787,19 @@ async function handle(req: Request) {
   // any row is written. The province is the one DERIVED from the district id (above), and `total` is
   // the one WE priced — both were client claims once, and both were the hole.
   if (isCod) {
+    // COD never travels Mengantar (owner O4): the quote above was made with `cod: true`, which always
+    // routes to the default provider. This names the rule at the boundary as well, so a future change
+    // to the quote dispatch cannot quietly open it.
+    if (quote.provider === "mengantar") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "COD tidak tersedia untuk layanan dan tujuan ini.",
+          code: "cod_not_allowed",
+        },
+        { status: 403, headers: CORS },
+      );
+    }
     // `rate.cod` is the EFFECTIVE flag for THIS destination — KiriminAja's live answer for this
     // actual route (shipping-quote.ts) × the platform's `codAllowed` × the store's switch. It was
     // computed here and then never read: the gate below consults `policy.reason()`, which is built
@@ -1020,6 +1038,11 @@ async function handle(req: Request) {
           // pair or nothing for exactly that reason.
           shipKelurahanName: kel?.name ?? null,
           shipKelurahanId: kel?.kaKelurahanId ?? null,
+          // SHIP-MENGANTAR: WHO priced this order — taken from the quote re-made above, never from the
+          // request and never from the switch as it reads later. Booking, tracking, cancel and label
+          // follow this stamp. The Mengantar destination area is the one that quote was built for.
+          shippingProvider: quote.provider,
+          shipMengantarAreaId: quote.provider === "mengantar" ? quote.destinationAreaId : null,
 
           // 🔴 THE IDEMPOTENCY CLAIM (Task 4.8). This column carries a PARTIAL UNIQUE INDEX on
           // (store_id, checkout_session_id) — `orders_one_per_checkout_session`, migration 0097 —

@@ -1416,13 +1416,17 @@ const RECOVER = recovered && {
     function syncCod() {
       if (!codOption || !codRadio) return;
       var shipEl = form.querySelector('input[name="shipping"]:checked');
+      // The COD quote is in flight (the rate list is a placeholder): keep the shopper's COD pick.
+      if (COD_MODE && !shipEl) return;
       var base = subtotal + selectedShipping() + ppnAdd(taxableGoods()) - totalDisc(selectedShipping());
       var cod = codCharges(base);
       var total = base + cod.fee + cod.vat;
+      // D12: rates that came through a route which never carries COD (`codRequote`) say nothing about
+      // COD — picking it re-quotes with `cod: true`, and the rules below then judge the COD rates.
+      var serviceOk = shipEl && (shipEl.getAttribute("data-cod") === "1" || (COD_REQUOTE && !COD_MODE && destId.value !== CODLESS_DEST));
       var allowed =
         !!COD_ENABLED &&
-        !!shipEl &&
-        shipEl.getAttribute("data-cod") === "1" &&
+        !!serviceOk &&
         (!COD_MAX || total <= COD_MAX) &&
         codProvinceOk();
       if (allowed) {
@@ -1435,6 +1439,9 @@ const RECOVER = recovered && {
         codRadio.checked = false;
         var first = form.querySelector('input[name="payment"]:not([disabled])');
         if (first) first.checked = true;
+        // No change event fires for a programmatic switch — leave the COD quote here, or the rates on
+        // screen would belong to a payment method the shopper no longer has.
+        if (COD_MODE) leaveCodQuote();
       }
       codRadio.disabled = true;
       codOption.hidden = true;
@@ -2035,6 +2042,28 @@ const RECOVER = recovered && {
     // full set arrives.
     var FAST_RATES = null;
     var ALL_RATES = null;
+    // ── D12: COD on a store whose prepaid rates travel a route without COD ──────────────────────
+    // `/api/public/ongkir` answers `codRequote: true` for such a quote. Picking COD then re-quotes the
+    // SAME destination with `cod: true` (the route `/api/public/order` will re-make for a COD order);
+    // leaving COD re-quotes without it. The rate list on screen always matches the payment method.
+    var COD_REQUOTE = false; // from the last NON-COD quote
+    var COD_MODE = false;    // the rates on screen are the COD quote
+    var CODLESS_DEST = null; // a destination whose COD quote came back with no COD service
+    function leaveCodQuote() {
+      // The COD quote had no COD-capable service: stop offering COD for this destination, so the row
+      // does not reappear the moment the prepaid rates are back (codReason explains it instead).
+      if (!form.querySelector('input[name="shipping"][data-cod="1"]')) CODLESS_DEST = destId.value;
+      COD_MODE = false;
+      setTimeout(loadRates, 0); // outside syncCod/recompute, which loadRates re-enters
+    }
+    form.addEventListener("change", function (e) {
+      if (!e.target || e.target.name !== "payment") return;
+      var wantCod = !!(codRadio && codRadio.checked);
+      if (wantCod === COD_MODE) return;
+      if (wantCod && !COD_REQUOTE) return; // the rates on screen already carry their COD flags
+      COD_MODE = wantCod;
+      loadRates();
+    });
     var keyOf = function (s) { return s.code + "-" + s.type; };
     var byCost = function (a, b) { return a.cost - b.cost; };
 
@@ -2199,9 +2228,11 @@ const RECOVER = recovered && {
         moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">Mengambil ekspedisi lain…</p>';
       }
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
-      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destAtCall), items: rateItems, itemValue: subtotal, all: true })
+      var codAtCall = COD_MODE;
+      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destAtCall), items: rateItems, itemValue: subtotal, all: true, cod: COD_MODE })
         .then(function (res) {
           if (destAtCall !== destId.value) return; // stale route — the shopper moved on
+          if (codAtCall !== COD_MODE) return; // the payment method changed mid-flight; loadRates() re-asked
           if (!res.ok || !res.rates || !res.rates.length) {
             moreState = "idle"; // let the next click retry rather than leave a dead control
             if (open) moreBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada ekspedisi lain untuk rute ini.") + "</p>";
@@ -2253,7 +2284,12 @@ const RECOVER = recovered && {
       // not get to state it.
       var rateItems = cart.map(function (l) { return { handle: l.handle, variant: l.variant, qty: l.qty }; });
       // No `all` flag = the fast couriers only (see the server: FAST_COURIERS).
-      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal }).then(function (res) {
+      var destAtCall = destId.value;
+      var codAtCall = COD_MODE;
+      api({ op: "rates", storeSlug: STORE_SLUG, destinationId: Number(destId.value), items: rateItems, itemValue: subtotal, cod: COD_MODE }).then(function (res) {
+        // A reply for an older destination or payment method must not paint over the current one.
+        if (destAtCall !== destId.value || codAtCall !== COD_MODE) return;
+        if (!codAtCall) COD_REQUOTE = !!(res && res.codRequote);
         if (!res.ok) {
           expressBox.innerHTML = '<p class="px-4 py-3 text-sm text-[var(--co-muted)]">' + esc(res.error || "Tidak ada layanan untuk rute ini.") + "</p>";
           recompute();

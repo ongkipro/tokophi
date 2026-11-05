@@ -14,10 +14,25 @@ import { isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, provinceForDistrict, kelurahanForDistrict, kelurahanWithKaIdForDistrict } from "@/lib/data/areas";
 import { composePickupAddress } from "@/lib/pickup-address";
 import { stackedDims } from "@/lib/shipping-weight";
-import { applyOrderStatusChange, type OrderStatus } from "@/lib/order-status";
+import { applyOrderStatusChange, shipmentLocked, type OrderStatus } from "@/lib/order-status";
 import { outcomeFromTrackingCode, syncOrderFromKa } from "@/lib/ka-tracking";
 import { realWaybill } from "@tokophi/lib/kiriminaja-tracking";
 import { activeKaEnv } from "@tokophi/lib/provider-config";
+import { bookMengantar, cancelMengantar, mengantarOrderRates, orderShippingProvider } from "@/lib/mengantar-shipping";
+import { trackMengantar } from "@/lib/mengantar-tracking";
+import { mengantarDestination } from "@/lib/data/areas";
+
+// SHIP-MENGANTAR phase 3 — every shipment action below DISPATCHES BY THE ORDER'S OWN STAMP
+// (`orders.shipping_provider`, NULL = legacy = KiriminAja), never by the platform switch: a parcel is
+// tracked, cancelled and re-quoted by the provider that priced it. The capability gate stays here, in
+// the server action; `lib/mengantar-shipping.ts` / `lib/mengantar-tracking.ts` take the session's store.
+const isMengantarOrder = async (storeId: string, orderNumber: string | undefined) =>
+  !!orderNumber && (await orderShippingProvider(storeId, orderNumber)) === "mengantar";
+/** Revalidate the order screen after a Mengantar action, as every KiriminAja branch does. */
+const finishMengantar = <T>(orderNumber: string, result: T): T => {
+  revalidatePath(`/pesanan/${orderNumber}`);
+  return result;
+};
 
 // `codFee` = what the aggregator charges for collecting cash on this service (N31). It is deducted
 // from the merchant's COD payout, so wherever a merchant sees a COD-capable rate they see this too.
@@ -55,7 +70,7 @@ export type Rate = {
 // Widening the machine's guard to include `selesai` would silently kill the return path; narrowing
 // this one to match the machine would re-open the un-completion hole. The difference is deliberate —
 // so it lives in ONE helper with this note, not copied into four `if`s.
-const shipmentLocked = (status: string | null | undefined): boolean => status === "selesai" || status === "batal" || status === "retur";
+// (`shipmentLocked` now lives in `lib/order-status.ts` so the second provider shares it.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The SAME two-level filter the storefront applies (/api/public/ongkir): the platform (super-admin)
@@ -168,6 +183,7 @@ export async function getShippingRates(input: { orderNumber: string }): Promise<
   // other shipping action, could loop it over the store's order numbers. It is also the read that
   // `createShipment` is paired with, so the two should demand the same capability.
   const session = await requireCapability("orders:write");
+  if (await isMengantarOrder(session.storeId, input.orderNumber)) return mengantarOrderRates(session.storeId, input.orderNumber);
   if (!kiriminajaConfigured())
     return {
       ok: false,
@@ -395,16 +411,49 @@ export async function saveSenderAddress(input: { name: string; phone: string; ad
     senderKecamatanName: input.kecamatanName,
     senderKelurahanId: kelurahanId,
     senderKelurahanName: input.kelurahanName ?? "",
+    // SHIP-MENGANTAR: the same pickup as the second provider's area id — the picked kelurahan's
+    // bridge, else the kecamatan's representative (the loader's rule, `load-mengantar-areas.ts` §4).
+    // NULL when unmatched: a Mengantar quote/booking then says "alamat belum diatur", never guesses.
+    senderMengantarAreaId: input.kecamatanId ? ((await mengantarDestination(input.kecamatanId, input.kelurahanName ?? null))?.areaId ?? null) : null,
   };
-  await withTenant(storeId, (db) =>
-    db
+  await withTenant(storeId, async (db) => {
+    // The registered provider pickup address (`store_mengantar_accounts.pickup_address_id`) describes THIS address.
+    // When anything the courier reads changes, forget it so the next booking registers the new one —
+    // otherwise every later pickup is sent to the old door. Unchanged saves keep it (no duplicate
+    // registrations). Compared inside the same transaction as the write.
+    const [cur] = await db
+      .select({
+        name: schema.storeSettings.senderName,
+        phone: schema.storeSettings.senderPhone,
+        address: schema.storeSettings.senderAddress,
+        kel: schema.storeSettings.senderKelurahanName,
+        postcode: schema.storeSettings.senderPostcode,
+        area: schema.storeSettings.senderMengantarAreaId,
+      })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.storeId, storeId))
+      .limit(1);
+    const moved =
+      !cur ||
+      cur.name !== values.senderName ||
+      cur.phone !== values.senderPhone ||
+      cur.address !== values.senderAddress ||
+      (cur.kel ?? "") !== values.senderKelurahanName ||
+      (cur.postcode ?? null) !== values.senderPostcode ||
+      (cur.area ?? null) !== values.senderMengantarAreaId;
+    const set = values;
+    if (moved) {
+      // Same tenant txn, explicit store filter: every env's registered address is the old door now.
+      await db.update(schema.storeMengantarAccounts).set({ pickupAddressId: null, updatedAt: new Date() }).where(eq(schema.storeMengantarAccounts.storeId, storeId));
+    }
+    await db
       .insert(schema.storeSettings)
-      .values({ storeId, ...values })
+      .values({ storeId, ...set })
       .onConflictDoUpdate({
         target: schema.storeSettings.storeId,
-        set: values,
-      }),
-  );
+        set,
+      });
+  });
   revalidatePath("/pengaturan");
   return { ok: true };
 }
@@ -631,10 +680,13 @@ export type CreateShipmentResult = {
    * never succeed quietly.
    */
   destinationGuessed?: string;
+  /** When the courier will come — the provider's own pickup slot (second provider only). Seller-facing text. */
+  pickupAt?: string;
 };
 
 export async function createShipment(input: { orderNumber: string; service: string; serviceType: string; serviceName: string; cost: number; insurance?: boolean; cod?: boolean }): Promise<CreateShipmentResult> {
   const { storeId } = await requireCapability("orders:write");
+  if (await isMengantarOrder(storeId, input.orderNumber)) return finishMengantar(input.orderNumber, await bookMengantar(storeId, input));
   if (!kiriminajaConfigured())
     return {
       ok: false,
@@ -1308,6 +1360,7 @@ export async function createShipment(input: { orderNumber: string; service: stri
 // pickup nobody knows about.
 export async function cancelShipment(orderNumber: string, reason = "Dibatalkan oleh penjual"): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
   const { storeId } = await requireCapability("orders:write");
+  if (await isMengantarOrder(storeId, orderNumber)) return finishMengantar(orderNumber, await cancelMengantar(storeId, orderNumber));
   const o = await withTenant(storeId, async (db) => {
     const [row] = await db
       .select({
@@ -1486,6 +1539,7 @@ export type TrackResult = {
 
 export async function trackShipment(orderNumber: string): Promise<TrackResult> {
   const { storeId } = await requireCapability("orders:write");
+  if (await isMengantarOrder(storeId, orderNumber)) return finishMengantar(orderNumber, await trackMengantar(storeId, orderNumber));
   const row = await withTenant(storeId, async (db) => {
     const [o] = await db.select({ kaOrderId: schema.orders.kaOrderId, awb: schema.orders.awb }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
     return o ?? null;
@@ -1566,8 +1620,15 @@ export async function fillDemoResi(orderNumber: string): Promise<{ ok: boolean; 
       .slice(-10)
       .toUpperCase();
   const res = await withTenant(storeId, async (db) => {
-    const [row] = await db.select({ id: schema.orders.id, courier: schema.orders.courier }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1);
+    const [row] = await db
+      .select({ id: schema.orders.id, courier: schema.orders.courier, provider: schema.orders.shippingProvider })
+      .from(schema.orders)
+      .where(eq(schema.orders.number, orderNumber))
+      .limit(1);
     if (!row) return { ok: false as const, error: "Pesanan tidak ditemukan." };
+    // A Mengantar order is tracked BY its waybill once it has one (`pullMengantar`): a DEMO waybill there
+    // would be polled forever and block the real one — and the KiriminAja env says nothing about it.
+    if (row.provider === "mengantar") return { ok: false as const, error: "Resi contoh tidak tersedia untuk pengiriman lewat akun Mengantar toko." };
     await db
       .update(schema.orders)
       .set({ awb: demoAwb, courier: row.courier ?? "spx" })

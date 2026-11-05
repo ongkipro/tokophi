@@ -4,8 +4,9 @@ import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "
 import { kaCreditBalance, kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
 import { cached } from "@tokophi/lib/cache";
 import { classifyKaProbe, type KaProbe } from "./ka-probe";
+import { isShippingProvider, mengantarReadiness } from "./mengantar-credentials";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
-import { getProviderConfig, maskKey, resolveAutolaris, resolveKiriminaja, type ProviderEnv } from "@tokophi/lib/provider-config";
+import { getProviderConfig, maskKey, resolveAutolaris, resolveKiriminaja, resolveMengantar, resolveShippingProvider, type ProviderEnv, type ShippingProvider } from "@tokophi/lib/provider-config";
 import { encryptionAvailable } from "@tokophi/lib/crypto";
 import { autolarisRow, kiriminajaRow, loadProviderRows } from "@tokophi/db/provider-config";
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
@@ -486,6 +487,18 @@ export type ProviderStatus = {
     production: ProviderKeyStatus;
   };
   autolaris: ProviderKeyStatus;
+  /**
+   * Mengantar Partner Business API (0116): the PARTNER credential per env (no shipping key — every store
+   * has its own seller account) + readiness of the ACTIVE env for the switch.
+   */
+  mengantar: {
+    env: ProviderEnv;
+    slots: Record<ProviderEnv, { partnerId: string | null; secretMasked: string; source: "db" | "env" | "none"; originKnown: boolean }>;
+    ready: boolean;
+    why: string | null;
+  };
+  /** Which provider quotes NEW checkouts, and which side decided it. */
+  shipping: { active: ShippingProvider; source: "db" | "env" | "default" };
 };
 export async function getProviderStatus(): Promise<ProviderStatus> {
   const [rows, ka, al] = await Promise.all([loadProviderRows(), kiriminajaRow(), autolarisRow()]);
@@ -495,6 +508,10 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
     KIRIMINAJA_ORDER_PREFIX: process.env.KIRIMINAJA_ORDER_PREFIX,
     AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
     AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+    MENGANTAR_ENV: process.env.MENGANTAR_ENV,
+    MENGANTAR_PARTNER_ID: process.env.MENGANTAR_PARTNER_ID,
+    MENGANTAR_PARTNER_SECRET: process.env.MENGANTAR_PARTNER_SECRET,
+    SHIPPING_PROVIDER: process.env.SHIPPING_PROVIDER,
   };
   const active = resolveKiriminaja({ row: rows.kiriminaja, env });
   // Each slot is resolved AS IF it were the active env, so a slot shows the same key the platform
@@ -513,10 +530,22 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
     };
   };
   const alCfg = resolveAutolaris({ row: rows.autolaris, env });
+  // Each slot resolved AS IF it were the active env, so the card shows what that env would use.
+  const mgSlot = (e: ProviderEnv) => {
+    const c = resolveMengantar({ row: rows.mengantar, env: { ...env, MENGANTAR_ENV: e } });
+    return { partnerId: c.partnerId, secretMasked: maskKey(c.partnerSecret), source: c.source, originKnown: !!c.partnerBase };
+  };
+  const mgReady = mengantarReadiness(rows, env);
+  const shippingActive = resolveShippingProvider({ row: rows.shipping, env });
+  // Same order and same normalisation as `resolveShippingProvider` (an unrecognised value is skipped).
+  const valid = (v: string | null | undefined) => isShippingProvider((v ?? "").trim().toLowerCase());
+  const shippingSource: "db" | "env" | "default" = valid(rows.shipping?.activeProvider) ? "db" : valid(env.SHIPPING_PROVIDER) ? "env" : "default";
   return {
     encryptionAvailable: encryptionAvailable(),
     kiriminaja: { activeEnv: active.env, envSource: active.envSource, sandbox: slot("sandbox"), production: slot("production") },
     autolaris: { present: !!alCfg.key, source: alCfg.keySource, masked: maskKey(alCfg.key), testedAt: alCfg.keySource === "db" ? (al?.testedAt?.toISOString() ?? null) : null },
+    mengantar: { env: mgReady.cfg.env, slots: { sandbox: mgSlot("sandbox"), production: mgSlot("production") }, ready: mgReady.ready, why: mgReady.why },
+    shipping: { active: shippingActive, source: shippingSource },
   };
 }
 

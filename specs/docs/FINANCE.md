@@ -21,8 +21,8 @@ where the figure is stored and where it is shown — so a number on a screen can
 | COD fee | same — `max(Rp2.500, 3% × (omset + ongkir))` + PPN 11% on the fee (8.29) | same | `order_financials.cod_fee_*` — **inside `orders.total_idr`** | checkout "Biaya COD" + "PPN biaya COD" |
 | Gateway fee (QRIS/VA/e-wallet/retail) | `payment-fees.ts` `paymentFee` (`base` is part of the fee) | **computed and BILLED by us** (8.25 a): `/api/public/order` and the seller re-bill `createOrderPayment` both submit `order payable + fee` via `alCreateOrder`; the provider's fee nets against settlement | `payments.{amount_idr, admin_fee, total}` — all ours; `order_financials.expected_gateway_fee_idr` | checkout "Biaya admin", `/checkout/sukses`, `/keuangan/rekonsiliasi` |
 | Goods PPN | `tax.ts` `computeTax` (store `tax_enabled`, inclusive/exclusive) | order API | `orders.tax_idr`, `order_financials.included_sales_tax_idr` | checkout, order detail |
-| Shipping | `shipping-quote.ts` (one price producer) → `createShipment` re-quotes; delta reconciled | booking | `shipment_bookings.{charged,actual,seller_debit,platform_margin}` + ledger `shipping-*-debit` | order detail "Cek Ongkir" refusal, `/saldo` |
-| Seller entitlement | view `order_seller_entitlements` (0102/0104) = goods + added PPN − shipping debit | — | derived | `/keuangan`, `/keuangan/penghasilan` — **collected money only** (`financial_status='dibayar'`, 8.28) |
+| Shipping | `shipping-quote.ts` (one price producer) → `createShipment` re-quotes; delta reconciled | booking | `shipment_bookings.{charged,actual,seller_debit,platform_margin}` + ledger `shipping-*-debit` (KiriminAja only — a Mengantar booking is paid from the seller's own Mengantar wallet, §2a) | order detail "Cek Ongkir" refusal, `/saldo` |
+| Seller entitlement | view `order_seller_entitlements` (0102/0104/0116) = goods + added PPN − shipping debit (+ buyer-paid shipping on a Mengantar order, §2a) | — | derived | `/keuangan`, `/keuangan/penghasilan` — **collected money only** (`financial_status='dibayar'`, 8.28) |
 | Ledger | `ledger-credit.ts` (`sale` on `payments.berhasil`; COD at `selesai`; release at `platform_payout.release_on`; `retur`/`batal` claw back the sale entry) | `applyOrderStatusChange` → `settleOrderLedger` | `ledger_entries` (balance = Σ by status; 3 partial unique indexes) | `/saldo`, Super Admin float |
 | Refund to the buyer (8.31) | `refund-transition.ts` (CAS `menunggu → diproses → selesai/gagal`, never the ledger) | `applyOrderStatusChange` on `batal`/`retur` writes one open row per `berhasil` non-COD payment, same txn as the claw-back | `refunds` (0112, partial unique `refunds_one_open_per_payment`) | order detail "Pengembalian dana", Super Admin `/pencairan` refund queue, dashboard "Refund ke pembeli" tile |
 | Payout | `payout.ts` (min from `platform_payout` — Rp200.000 on production, advisory lock, negative `payout` entry at request) → Super Admin `processPayout` → `markPayoutPaidInTxn` (CAS `diproses→selesai`) → `rejectPayout` (exact reversal) | Super Admin | `payouts`, `ledger_entries` | `/saldo`, `/pencairan` |
@@ -82,7 +82,30 @@ output is frozen into `order_financials` at order creation.
 - `sellerEntitlementIdr = goodsProceeds + salesTaxAdded − sellerShippingDebit` (the debit is the
   merchant-absorbed gap when actual courier cost exceeds what the buyer was charged).
 - Shipping charged to the buyer, any shipping margin, the COD fee (+ its VAT), and every gateway
-  fee **never** enter seller proceeds.
+  fee **never** enter seller proceeds — **except the Mengantar case below**.
+
+### 2a. Mengantar Partner Business API orders — shipping is passed THROUGH to the seller (owner O3, 2026-11-05)
+
+Under the Mengantar partner model every store has its own Mengantar seller account, and **the seller's
+own Mengantar wallet pays the courier** (`POST /order` debits that wallet; a short wallet leaves the
+booking unpaid until the seller presses "Bayar ongkir"). So on an order stamped
+`orders.shipping_provider = 'mengantar'`:
+
+- **No TokoΦ ledger debit** at booking: `shipment_bookings.seller_debit_idr = 0`, `platform_margin_idr = 0`,
+  no `shipping-order-debit` / `shipping-balance-debit` rows (`apps/admin/lib/mengantar-shipping.ts`). A debit
+  would charge the seller twice.
+- **The buyer-paid shipping is the seller's money**: `creditSaleForPayment` credits
+  goods + added PPN **+ `coalesce(order_financials.shipping_charged_idr, orders.shipping_idr)`**, and the view
+  `order_seller_entitlements` carries the same figure as `shipping_pass_through_idr` (0116) inside
+  `seller_entitlement_idr`. One expression, two readers — `ledger-credit.test.ts` pins them together.
+- What Mengantar charges the seller (its own price / volume discount) is between the seller and Mengantar;
+  the difference to what the buyer paid is the seller's, not the platform's.
+- **COD never travels Mengantar** (owner O4): a COD order is always quoted and booked through the default
+  provider (KiriminAja), so the COD fee / remittance rules above are unchanged.
+- KiriminAja orders (and every store without a connected Mengantar account — owner O6 fallback) keep the
+  rule above: shipping is platform money, the service delta is debited from the seller.
+- A cancelled / returned Mengantar order reverses the WHOLE sale credit (goods + shipping) like any other
+  order; whether Mengantar refunds the seller's wallet on cancel is UNVERIFIED (sandbox E2E step 8).
 
 ## 3. Payment-admin fee schedule (buyer → platform)
 
