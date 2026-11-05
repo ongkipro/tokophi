@@ -34,6 +34,11 @@ Executor: Main Session (Claude Code). Owner: "desktop 20 artikel bukannya standa
 - **Open — warnings:** home 9 sections (> 8); home repeats `/kategori/semua` ×4 and `/kategori/dress` ×3 (360); body copy 13–14px on listing/cart/category; same product photo reused across home sections (demo catalogue size); contrast NOT CHECKED on 11 routes (the gate could not measure them).
 - **Checked, not defects:** closed-drawer "Shop"/"Kembali" buttons (inert, off-screen, not in Tab order); chat "Ada balasan baru" (inside a `hidden` dot, the button's `aria-label` speaks); pagination "Berikutnya"/"Halaman berikutnya" (mutually exclusive per breakpoint); blank hero images in dev (upload host not running locally).
 - **Live bug found by the same review:** article lists with a lead-in line collapsed into one paragraph — fixed separately on main, PR #448.
+### [2026-11-05 11:27 UTC] — DEPLOY · PR #448 (article/page lists) live on production (`14bf5d43`)
+Executor: Main Session (Claude Code). Owner: "3. jalankan".
+- Merged #448 (`14bf5d43`), deploy triggered by hand (`deployment_uuid qbugtudxqg5erdoebjvno8nb`), 10:58 → finished 11:25:57. #449 (docs) merged during the build (Markdown only, no deploy).
+- **Verified:** admin, super-admin, storefront, landing, docs on `…:14bf5d43…` `(healthy)` on two consecutive polls, `migrate` `Exited (0)`; live `https://batiknusantara.tokophi.id/blog/cara-mencuci-batik` renders two lists of 4 items, no inline dashes, 0 page errors (Playwright, 390 px); `ops/tokophi-probe.sh` exit 0.
+
 ### [2026-11-05 10:40 UTC] — DEPLOY · PR #446 (Mengantar Partner Business API) + #447 live on production (`2a0f7eb7`)
 Executor: Main Session (Claude Code). Owner: "ya jalankan merger" → "jika sudah lanjut deploy".
 - **Before:** CI green on both PRs; no deployment in flight; disk 23 %. #447 merged (`02ebedc0`), then #446 (`2a0f7eb7`; 0116 merged first, so no renumber — #424/#426/#430/#431 renumber after it). Deploy triggered by hand (`deployment_uuid gsrsk7tyodoh2vplrmradz3l`), 10:20:42 → finished 10:38:12 (~17.5 min).
