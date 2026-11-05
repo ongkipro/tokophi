@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedAgeGroup, feedGender, suggestGender, suggestGoogleCategory } from "./taxonomy-suggest";
+import { autoCatalogFill, feedAgeGroup, feedGender, isApparelPath, suggestGender, suggestGoogleCategory } from "./taxonomy-suggest";
 
 const id = (...t: Array<string | null | undefined>) => suggestGoogleCategory(...t)?.id ?? null;
 
@@ -46,5 +46,42 @@ describe("feed enum guards", () => {
     expect(feedGender("")).toBeNull();
     expect(feedAgeGroup("adult")).toBe("adult");
     expect(feedAgeGroup("dewasa")).toBeNull();
+  });
+});
+
+describe("autoCatalogFill — the Seller editor fills what the merchant has not set, never what they have", () => {
+  const open = { gcat: false, gender: false, age: false };
+  const base = { category: "", description: "", currentPath: "" };
+
+  it("apparel title → Google category + gender + adult", () => {
+    const p = autoCatalogFill({ ...base, title: "Gamis Syari Katun Wanita", locked: open });
+    expect(isApparelPath(p.gcat?.path)).toBe(true);
+    expect(p.gender).toBe("female");
+    expect(p.ageGroup).toBe("adult");
+  });
+
+  it("a non-apparel product gets its category, and NO gender / age (a fertiliser has neither)", () => {
+    const p = autoCatalogFill({ ...base, title: "Pupuk Organik Cair 1 Liter", locked: open });
+    expect(isApparelPath(p.gcat?.path)).toBe(false);
+    expect(p.gender).toBeNull();
+    expect(p.ageGroup).toBeNull();
+  });
+
+  it("locked fields are left out of the patch entirely — the merchant's value is never touched", () => {
+    const p = autoCatalogFill({ ...base, title: "Gamis Wanita", locked: { gcat: true, gender: true, age: true }, currentPath: "Apparel & Accessories > Clothing > Dresses" });
+    expect(p).toEqual({});
+  });
+
+  it("a locked apparel category still drives the unlocked gender / age", () => {
+    const p = autoCatalogFill({ ...base, title: "Kemeja Pria", locked: { gcat: true, gender: false, age: false }, currentPath: "Apparel & Accessories > Clothing > Shirts & Tops" });
+    expect(p).not.toHaveProperty("gcat");
+    expect(p.gender).toBe("male");
+    expect(p.ageGroup).toBe("adult");
+  });
+
+  it("no match → null, never a guess", () => {
+    const p = autoCatalogFill({ ...base, title: "Xyz 123", locked: open });
+    expect(p.gcat).toBeNull();
+    expect(p.gender).toBeNull();
   });
 });

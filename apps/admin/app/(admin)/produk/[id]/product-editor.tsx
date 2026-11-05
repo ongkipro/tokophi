@@ -26,7 +26,8 @@ import { toast } from "sonner";
 import { IDR, NO_FIGURE, num, share } from "@tokophi/lib/format";
 import { useCan } from "@/components/admin/permissions";
 import { useStoreName } from "@/components/admin/store-context";
-import { GoogleCategoryField } from "./taxonomy-field";
+import { AutoTag, GoogleCategoryField } from "./taxonomy-field";
+import { useCatalogAutoFill } from "./use-catalog-autofill";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
@@ -204,6 +205,9 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
   const [productType, setProductType] = React.useState(product?.productType ?? "");
   const [vendor, setVendor] = React.useState(product?.vendor || storeName);
 
+  // Google category / gender / age fill themselves from the text until touched (use-catalog-autofill.ts).
+  const { auto, runAutoFill, lock, showApparel } = useCatalogAutoFill({ gcatId, gcatPath, gender, ageGroup, setGcatId, setGcatPath, setGender, setAgeGroup });
+
   const [seoTitle, setSeoTitle] = React.useState(product?.seoTitle ?? "");
   const [metaDesc, setMetaDesc] = React.useState(product?.seoDesc ?? "");
   const [handle, setHandle] = React.useState(
@@ -331,6 +335,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
       seoDesc: metaDesc.trim() || undefined,
       googleCategoryId: gcatId,
       googleCategoryPath: gcatPath || undefined,
+      googleCategoryAuto: auto.gcat || undefined,
       gender: gender || undefined,
       ageGroup: ageGroup || undefined,
       material: material || undefined,
@@ -679,7 +684,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                   id="p-judul"
                   value={name}
                   maxLength={100}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => { setName(e.target.value); runAutoFill(e.target.value, category, description); }}
                   placeholder="Contoh: Kaos Polos Premium Cotton"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -721,7 +726,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                 <Textarea
                   id="p-desc"
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(e) => { setDescription(e.target.value); runAutoFill(name, category, e.target.value); }}
                   placeholder="Ceritakan keunggulan produk ini…"
                   className="min-h-40"
                 />
@@ -1270,7 +1275,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                   value={category}
                   maxLength={100}
                   placeholder="mis. Pupuk Organik"
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={(e) => { setCategory(e.target.value); runAutoFill(name, e.target.value, description); }}
                 />
                 <datalist id="product-category-options">
                   {categoryOptions.map((c) => <option key={c} value={c} />)}
@@ -1282,42 +1287,47 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
                 title={name}
                 category={category}
                 description={description}
-                onChange={(id, p) => { setGcatId(id); setGcatPath(p); }}
+                onChange={(id, p) => { setGcatId(id); setGcatPath(p); lock("gcat"); }}
+                auto={auto.gcat}
               />
 
               {/* Feed attributes (ADR 0011 Phase 2). Optional overrides — kondisi = Baru and warna/ukuran come
                   from variants; gender and usia are emitted ONLY when set here (product-feed.ts never
                   invents them), so the empty state reads "Pilih", never a value nobody chose. */}
               <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
-                <p className="text-xs font-medium text-muted-foreground">Atribut feed iklan <span className="font-normal">(Google/Meta — opsional)</span></p>
+                <p className="text-xs font-medium text-muted-foreground">Atribut katalog <span className="font-normal">(Google/Meta — opsional; juga tampil di tab Spesifikasi halaman produk)</span></p>
+                {showApparel ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
-                    <Label className="text-xs">Gender</Label>
+                    <Label className="text-xs">Gender {auto.gender && <AutoTag />}</Label>
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between font-normal" />}>
                         {gender ? labelOf(GENDER_OPTS, gender) : <span className="text-muted-foreground">Pilih</span>}
                         <ChevronDown className="text-muted-foreground" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="w-(--anchor-width)">
-                        <DropdownMenuItem onClick={() => setGender("")}>—</DropdownMenuItem>
-                        {GENDER_OPTS.map((o) => <DropdownMenuItem key={o.value} onClick={() => setGender(o.value)}>{o.label}</DropdownMenuItem>)}
+                        <DropdownMenuItem onClick={() => { setGender(""); lock("gender"); }}>—</DropdownMenuItem>
+                        {GENDER_OPTS.map((o) => <DropdownMenuItem key={o.value} onClick={() => { setGender(o.value); lock("gender"); }}>{o.label}</DropdownMenuItem>)}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs">Usia</Label>
+                    <Label className="text-xs">Usia {auto.age && <AutoTag />}</Label>
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between font-normal" />}>
                         {ageGroup ? labelOf(AGE_OPTS, ageGroup) : <span className="text-muted-foreground">Pilih</span>}
                         <ChevronDown className="text-muted-foreground" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="w-(--anchor-width)">
-                        <DropdownMenuItem onClick={() => setAgeGroup("")}>—</DropdownMenuItem>
-                        {AGE_OPTS.map((o) => <DropdownMenuItem key={o.value} onClick={() => setAgeGroup(o.value)}>{o.label}</DropdownMenuItem>)}
+                        <DropdownMenuItem onClick={() => { setAgeGroup(""); lock("age"); }}>—</DropdownMenuItem>
+                        {AGE_OPTS.map((o) => <DropdownMenuItem key={o.value} onClick={() => { setAgeGroup(o.value); lock("age"); }}>{o.label}</DropdownMenuItem>)}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Gender &amp; usia muncul otomatis bila kategori Google-nya pakaian.</p>
+                )}
                 <div className="grid gap-1.5">
                   <Label htmlFor="p-material" className="text-xs">Bahan / Material</Label>
                   <Input id="p-material" value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="mis. Katun, Rayon" className="h-9" />
@@ -1395,7 +1405,7 @@ export function ProductEditor({ product, categoryOptions = [] }: { product?: Pro
               value={category}
               maxLength={100}
               placeholder="mis. Pupuk Organik"
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) => { setCategory(e.target.value); runAutoFill(name, e.target.value, description); }}
             />
           </div>
           <DialogFooter>

@@ -137,3 +137,38 @@ export const feedAgeGroup = (v: string | null | undefined) => {
   const a = v?.trim().toLowerCase() ?? "";
   return AGE_GROUPS.has(a) ? a : null;
 };
+
+// --- auto-fill for the Seller product editor (owner 2026-11-05) -----------------------------------------
+/** Google's apparel root. Gender / age group are apparel attributes — a fertiliser has neither. */
+export const isApparelPath = (path: string | null | undefined) => !!path && path.startsWith("Apparel & Accessories");
+
+export type AutoFillInput = {
+  title: string;
+  category: string;
+  description: string;
+  /** The current Google category path (used when the category itself is locked). */
+  currentPath: string;
+  /** A field is LOCKED once the merchant set it — on load (it already had a value) or by hand. A
+   *  locked field is never overwritten; only unlocked (empty or auto-filled) ones follow the text. */
+  locked: { gcat: boolean; gender: boolean; age: boolean };
+};
+export type AutoFillPatch = {
+  gcat?: TaxonomySuggestion | null;
+  gender?: "female" | "male" | null;
+  ageGroup?: "adult" | null;
+};
+
+/**
+ * What the editor should fill as the merchant types. Pure: same text → same patch. Keys are present
+ * only for UNLOCKED fields; `null` means "clear the value you auto-filled earlier" (the title changed
+ * and no longer supports it). Never invents: no category match → no category; unclear gender → none.
+ */
+export function autoCatalogFill(i: AutoFillInput): AutoFillPatch {
+  const patch: AutoFillPatch = {};
+  if (!i.locked.gcat) patch.gcat = suggestGoogleCategory(i.title, i.category, i.description);
+  const path = i.locked.gcat ? i.currentPath : patch.gcat?.path ?? "";
+  const apparel = isApparelPath(path);
+  if (!i.locked.gender) patch.gender = apparel ? suggestGender(i.title, i.category, i.description) : null;
+  if (!i.locked.age) patch.ageGroup = apparel ? "adult" : null;
+  return patch;
+}

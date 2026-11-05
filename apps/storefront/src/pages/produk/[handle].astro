@@ -2,13 +2,15 @@
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
-import { Check, ChevronDown, ImageOff, RotateCcw, Truck, Zap } from "@lucide/astro";
+import { Banknote, CalendarDays, Check, ChevronDown, ChevronRight, ImageOff, MessageCircle, RotateCcw, ShoppingBag, Truck, Wallet, X, Zap } from "@lucide/astro";
 import Stars from "../../components/Stars.astro";
+import ReviewItem from "../../components/ReviewItem.astro";
 import SectionRenderer from "../../components/sections/SectionRenderer.astro";
-import { IDR } from "@tokophi/lib/format";
-import { imageSrcSet, inStock, productImages, type Product } from "../../data/catalog";
+import { IDR, num } from "@tokophi/lib/format";
+import { imageSrcSet, inStock, paymentKindWords, productImages, storeCodPolicy, type Product } from "../../data/catalog";
 import Breadcrumb from "../../components/Breadcrumb.astro";
 import ShareBar from "../../components/ShareBar.astro";
+import { catalogSpecs } from "../../lib/product-feed";
 import { breadcrumbLd, ldScript, type Crumb } from "../../lib/breadcrumb";
 import { itemGroupId, retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 import { resolveGalleryAspect } from "@tokophi/lib/theme";
@@ -78,76 +80,40 @@ const galleryAspectClass = GALLERY_ASPECT_CLASS[resolveGalleryAspect(store.theme
 // shown here either: it is the legacy display-only column that used to be the Ukuran picker in the buy
 // box, and it names sizes this shop cannot actually pick or ship separately (see the picker note
 // below). Gender is mapped to a shopper-facing word, not the feed code ("female").
-const genderLabel =
-  product.gender === "female" ? "Wanita" : product.gender === "male" ? "Pria" : product.gender === "unisex" ? "Unisex" : undefined;
-const specs = [
-  product.category ? { label: "Kategori", value: product.category } : null,
-  product.material ? { label: "Bahan", value: product.material } : null,
-  genderLabel ? { label: "Untuk", value: genderLabel } : null,
-].filter((s): s is { label: string; value: string } => s !== null);
+// Specifications = the SAME facts the Google/Meta/TikTok feed sends (lib/product-feed.ts
+// `catalogSpecs`), in Indonesian — one derivation, so the PDP can never claim what the catalogue does not.
+const specs = catalogSpecs(product, store.name);
+
+// Pengiriman & pembayaran lines — ONE short line each (owner 2026-11-05), and only what this store
+// really offers: payment kinds from its enabled channels, COD only when the store + platform allow it.
+const [payWords, cod] = await Promise.all([paymentKindWords("sentence"), storeCodPolicy(store.id)]);
+const payLine = (() => {
+  const kinds = payWords.slice(0, 2).map((w) => w.replace(/^transfer bank$/i, "transfer"));
+  if (cod.enabled) kinds.push("COD");
+  if (!kinds.length) return null;
+  return `Bisa bayar lewat ${kinds.length > 1 ? `${kinds.slice(0, -1).join(", ")}, atau ${kinds[kinds.length - 1]}` : kinds[0]}`;
+})();
 
 // ── `sizes` for the main gallery image — derived from the real classes ────────────────────────────
 //
-// This is the LCP element of the most important page in the shop, and it is the one image where the
-// full 2000px upload was most obviously wasted. Layout, reading outward from the <img>:
-//
-//   wrapper  `flex flex-col gap-4 sm:flex-row-reverse` — below sm the main image is the FULL column;
-//            from sm a 5rem (w-20) thumbnail rail + gap-4 (16px) sits beside it, so subtract 96px.
-//   column   `grid grid-cols-1 gap-10 md:grid-cols-2 lg:gap-14` — one column below md, two above.
-//   section  `mx-auto max-w-7xl px-4 sm:px-6` — 32px padding below sm, 48px above; capped at 1280.
-//
-//   <640      100vw - 32                                    = calc(100vw - 2rem)
-//   640-767   100vw - 48 - 96                               = calc(100vw - 9rem)
-//   768-1023  (100vw - 48 - 40)/2 - 96      [gap-10 = 40]   = calc(50vw - 140px)
-//   1024-1279 (100vw - 48 - 56)/2 - 96      [gap-14 = 56]   = calc(50vw - 148px)
-//   >=1280    (1280 - 48 - 56)/2 - 96                       = 492px
-//
-// The 768-1023 and 1024-1279 rows differ by 8px — inside the noise of a 4-step width ladder — so
-// they are collapsed into the tighter (larger-subtraction) of the two, which never over-claims.
-const GALLERY_SIZES =
-  "(min-width: 1280px) 492px, (min-width: 768px) calc(50vw - 148px), (min-width: 640px) calc(100vw - 9rem), calc(100vw - 2rem)";
+// Redesign C (DESIGN.md C3): below `md` the gallery is FULL-BLEED (`-mx-4 sm:-mx-6`, no rail — the
+// thumbnails only exist from md up), so the image box IS the viewport: `100vw` is arithmetic there.
+// From md the two-column grid is unchanged:
+//   column   `md:grid-cols-2 lg:gap-14` inside `max-w-7xl px-6`, minus the 5rem rail + gap-4 (96px)
+//   768-1279 (100vw - 48 - 56)/2 - 96                       = calc(50vw - 148px)
+//   >=1280   (1280 - 48 - 56)/2 - 96                        = 492px
+// thumbnail-bottom has no rail beside it, so those two rows under-declare by 96px there — the
+// tighter of the two layouts, kept deliberately (never over-claim the LCP image).
+const GALLERY_SIZES = "(min-width: 1280px) 492px, (min-width: 768px) calc(50vw - 148px), 100vw";
 // `undefined` for seeded /products/*.webp and impossible to reach when the gallery is empty — the
 // no-photo branch below renders the tinted ImageOff frame and no <img> at all.
 const mainSrcSet = gallery.length > 0 ? imageSrcSet(gallery[0]) : undefined;
 
-// ── `sizes` for the THUMBNAIL rail — same derivation, from that button's own classes ──────────────
-//
-// The `<button data-thumb>` has carried a full `data-srcset` ladder all along (the switcher promotes
-// it onto the main image on click), but the visible `<img>` INSIDE the button rendered with a bare
-// `src`: the browser was handed the full-size original for a 66px box. Same family as the hero
-// `data-srcset` that was never promoted (#119/#120) — markup valid, `astro check` green, bytes wrong.
-// Only what the browser actually requests shows it, which is why `scripts/check-pdp-srcset.mjs` is a
-// browser check.
-//
-// Derived from the button's OWN classes, and it needs the THUMBNAIL COUNT — which is why `112px`
-// alone would have been wrong. `flex-1 basis-0` divides the row between all n tiles and `max-w-[7rem]`
-// only CAPS the result, so the tile is 112px at n=1 and 66px at n=5 on a 412px phone (measured, not
-// assumed). Declaring the cap over-claims by 1.7x and costs a whole rung of the ladder.
-//
-//   row (all sizes in thumbnail-bottom; below 640px in thumbnail-left)
-//     container `mx-auto max-w-7xl px-4` = 100vw - 32px, minus `gap-3` x (n-1)
-//     tile      = (100vw - 32 - 12(n-1)) / n   ...until `max-w-[7rem]` binds
-//     the cap binds from  112n + 32 + 12(n-1)  px up, so that is the breakpoint (n=5 -> 640px)
-//   rail (thumbnail-left, 640px up)  `sm:w-20` — a fixed 80px column.
-//
-// Above the cap breakpoint we declare 112px, which is exactly the `max-w` — so the thumbnail-bottom
-// layout inside the md+ two-column grid (narrower than the calc, still capped) is over-declared at
-// worst to the true maximum, never under. NOT `100vw`: the browser trusts `sizes` completely, so an
-// over-claim re-orders the ladder and hands back the bytes this fixes, and an under-claim is a blurry
-// thumbnail — which is why every branch here errs upward, never down.
-const THUMB_GAP = 12; // gap-3
-const THUMB_MAX = 112; // max-w-[7rem]
-const thumbCount = Math.max(1, gallery.length);
-const rowInset = 32 + THUMB_GAP * (thumbCount - 1); // px-4 both sides + the gaps between tiles
-const capFrom = THUMB_MAX * thumbCount + rowInset; // viewport width at which max-w-[7rem] starts binding
-const THUMB_SIZES = [
-  thumbsBeside ? "(min-width: 640px) 80px" : null,
-  // Unreachable (and so omitted) once the cap only binds above the rail breakpoint — n=5 lands exactly there.
-  !thumbsBeside || capFrom < 640 ? `(min-width: ${capFrom}px) ${THUMB_MAX}px` : null,
-  `calc((100vw - ${rowInset}px) / ${thumbCount})`,
-]
-  .filter(Boolean)
-  .join(", ");
+// ── `sizes` for the THUMBNAIL rail ─────────────────────────────────────────────────────────────────
+// Thumbnails render from `md` up only (phones swipe the full-bleed strip instead, DESIGN.md C3). There
+// the rail beside the image is a fixed `md:w-20` (80px) column, and the row under it caps every tile
+// at `max-w-[7rem]` (112px) — declaring the cap is the true maximum, never an under-claim.
+const THUMB_SIZES = thumbsBeside ? "80px" : "112px";
 
 // `null` = no published reviews. The page then shows no stars and no review block at all — see
 // data/catalog.ts: the old code invented "4.8 · 187 ulasan" on a catalog holding 5 published reviews.
@@ -157,6 +123,19 @@ const maxBucket = Math.max(...breakdown, 1);
 // The written testimonials (reviews with text), newest first. Each is a real buyer who received a
 // `selesai` order for this product — see packages/db/src/seed-reviews.ts.
 const reviews = rating ? catalog.productReviews(product) : [];
+const REVIEWS_ON_PAGE = 3;
+// The page shows the three BEST (owner 2026-11-05): highest stars, then the fullest text (a sentence
+// beats "Mantap"), then the newest. The dialog keeps the honest order — newest first, every review.
+const bestReviews = [...reviews]
+  .sort((a, b) => b.rating - a.rating || b.body.length - a.body.length || a.daysAgo - b.daysAgo)
+  .slice(0, REVIEWS_ON_PAGE);
+// Star chips for the dialog — only stars that actually have reviews, plus "Semua".
+const REVIEW_CHIPS = [
+  { value: "all", label: "Semua", count: reviews.length },
+  ...[5, 4, 3, 2, 1]
+    .map((n) => ({ value: String(n), label: `${n} ★`, count: reviews.filter((r) => Math.round(r.rating) === n).length }))
+    .filter((c) => c.count > 0),
+];
 
 // ADR 0009 — Store Builder: this product's own template → the store's default `product` template
 // → null = today's page, unchanged.
@@ -292,11 +271,16 @@ if (rating && rating.count > 0) {
 // schema claimed a third crumb (the product name) that the trail on screen never showed.
 // The middle crumb is the product's real collection (`homeCollection`), or absent — never the label
 // text slugified into a `/kategori/…` URL that may not exist.
-const CRUMBS: Crumb[] = [
-  { name: "Beranda", href: "/" },
-  ...(home ? [{ name: home.name, href: `/kategori/${home.handle}` }] : []),
-  { name: product.name },
-];
+// Always THREE levels — Beranda › Kategori › Judul (owner 2026-11-05). A product outside every
+// collection used to drop the middle crumb, so the trail jumped from Beranda straight to a 90-char
+// title. Middle crumb, in order: its home collection; else the merchant's own category label, linked to
+// the search for it (a `/kategori/<label>` page need not exist); else the full catalogue.
+const middleCrumb: Crumb = home
+  ? { name: home.name, href: `/kategori/${home.handle}` }
+  : product.category
+    ? { name: product.category, href: `/cari?q=${encodeURIComponent(product.category)}` }
+    : { name: "Produk", href: "/produk" };
+const CRUMBS: Crumb[] = [{ name: "Beranda", href: "/" }, middleCrumb, { name: product.name }];
 
 const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
 ---
@@ -308,12 +292,12 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
   type="product"
   head={HEAD}
 >
-  <section class="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
+  <section class="mx-auto max-w-7xl px-4 pb-10 sm:px-6 md:py-12">
     {/* `grid-cols-1` is not decoration. Without an explicit template below `md`, the single column
          is an IMPLICIT `auto` track — and an auto track is sized from its CONTENT, so it may exceed
          the container. The gallery's thumbnail strip made it do exactly that and the page scrolled
          sideways on a 320-360px phone. `grid-cols-1` = `1fr`, bounded by the available space. */}
-    <div class="flex flex-col gap-10 md:grid md:grid-cols-2 md:items-start lg:gap-14">
+    <div class="flex flex-col gap-6 md:grid md:grid-cols-2 md:items-start md:gap-10 lg:gap-14">
       {/* Two columns on md+: LEFT = gallery + reviews, RIGHT = buy box + the long Deskripsi Produk (the
           reference's shape — reviews under the thumbnail, the description filling the column beside them).
           `md:items-start` is load-bearing: without it the grid stretched the gallery to match the taller
@@ -329,7 +313,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         <div class="order-1 grid grid-cols-2 gap-3 md:order-none">
           {gallery.length > 0 ? (
             gallery.map((src, i) => (
-              <div class:list={["relative overflow-hidden rounded-lg bg-brand-50", galleryAspectClass]}>
+              <div class:list={["relative overflow-hidden rounded-sm bg-mist", galleryAspectClass]}>
                 <img
                   src={src}
                   srcset={imageSrcSet(src)}
@@ -343,22 +327,26 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                   class="h-full w-full object-cover"
                 />
                 {i === 0 && product.badge && (
-                  <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
+                  <span class="absolute left-3 top-3 rounded-sm bg-ink px-2 py-0.5 text-xs font-semibold text-white">
                     {product.badge}
                   </span>
                 )}
               </div>
             ))
           ) : (
-            <div class="relative col-span-2 flex aspect-[3/2] items-center justify-center rounded-lg bg-brand-50" aria-hidden="true">
-              <ImageOff class="size-12 text-brand-300" stroke-width={1.5} />
+            <div class="relative col-span-2 flex aspect-[3/2] items-center justify-center rounded-lg bg-mist" aria-hidden="true">
+              <ImageOff class="size-12 text-muted" stroke-width={1.5} />
             </div>
           )}
         </div>
       ) : (
-        <div class:list={["order-1 flex flex-col gap-4 md:order-none", thumbsBeside && "sm:flex-row-reverse"]}>
+        <div class:list={["order-1 -mx-4 flex flex-col gap-4 sm:-mx-6 md:order-none md:mx-0", thumbsBeside && "md:flex-row-reverse"]}>
           {/* Main image */}
-          <div class:list={["relative flex-1 overflow-hidden rounded-lg bg-brand-50", galleryAspectClass]}>
+          <div class:list={["relative flex-1 overflow-hidden bg-mist md:rounded-sm", galleryAspectClass]}>
+            {/* PHONES: a swipeable strip of every photo (scroll-snap, no library) — the Horizon PDP.
+                Image 0 is `#gallery-main`, which the md+ thumbnail switcher keeps driving; images 1..n
+                are phone-only (`md:hidden`) and lazy, so desktop never downloads them twice. */}
+            <div id="gallery-strip" class="no-scrollbar absolute inset-0 flex snap-x snap-mandatory overflow-x-auto md:overflow-hidden">
             {/* This is the LCP element of the most important page in the shop and it had no priority
                 hint at all — while the thumbnails BELOW it were `loading="lazy"`, i.e. backwards.
                 `width`/`height` describe the intrinsic ratio; the `aspect-square` wrapper does the
@@ -368,6 +356,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                 with no media, so a merchant product without a photo gets the tinted frame instead of a
                 broken image. */}
             {gallery.length > 0 ? (
+              <Fragment>
               <img
                 id="gallery-main"
                 src={gallery[0]}
@@ -379,16 +368,39 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                 loading="eager"
                 fetchpriority="high"
                 decoding="async"
-                class="h-full w-full object-cover transition-opacity duration-200"
+                class="h-full w-full shrink-0 snap-center object-cover transition-opacity duration-200"
               />
+              {gallery.slice(1).map((src, i) => (
+                <img
+                  src={src}
+                  srcset={imageSrcSet(src)}
+                  sizes={imageSrcSet(src) ? "100vw" : undefined}
+                  alt={`${product.name} — tampilan ${i + 2}`}
+                  width="900"
+                  height="1200"
+                  loading="lazy"
+                  fetchpriority="low"
+                  decoding="async"
+                  class="h-full w-full shrink-0 snap-center object-cover md:hidden"
+                />
+              ))}
+              </Fragment>
             ) : (
               <div class="flex h-full w-full items-center justify-center" aria-hidden="true">
-                <ImageOff class="size-12 text-brand-300" stroke-width={1.5} />
+                <ImageOff class="size-12 text-muted" stroke-width={1.5} />
+              </div>
+            )}
+            </div>
+            {gallery.length > 1 && (
+              <div id="gallery-dots" class="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5 md:hidden" aria-hidden="true">
+                {gallery.map((_, i) => (
+                  <span data-dot={i} class:list={["size-1.5 rounded-full transition-colors", i === 0 ? "bg-ink" : "bg-ink/25"]} />
+                ))}
               </div>
             )}
             {
               product.badge && (
-                <span class="absolute left-4 top-4 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
+                <span class="absolute left-3 top-3 rounded-sm bg-ink px-2 py-0.5 text-xs font-semibold text-white">
                   {product.badge}
                 </span>
               )
@@ -398,7 +410,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           {/* Thumbnails — a vertical rail beside the image (thumbnail-left) or a scrollable row under it */}
           <div
             id="gallery-thumbs"
-            class:list={["flex gap-3 overflow-visible pb-1", thumbsBeside && "sm:w-20 sm:flex-col sm:pb-0"]}
+            class:list={["hidden gap-3 overflow-visible pb-1 md:flex", thumbsBeside && "md:w-20 md:flex-col md:pb-0"]}
           >
             {
               gallery.map((src, i) => (
@@ -416,9 +428,9 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                     // Selection state is driven entirely by `aria-pressed` (the switcher JS only flips that):
                     // clean minimalist — no border at rest, a subtle brand ring on hover, and an offset
                     // brand ring when active (the Shopify-pro selected look).
-                    "gallery-thumb relative aspect-square min-w-0 flex-1 basis-0 max-w-[7rem] overflow-hidden rounded-md bg-brand-50 ring-1 ring-transparent transition-all aria-[pressed=false]:hover:ring-brand-300 aria-[pressed=true]:ring-2 aria-[pressed=true]:ring-brand-500 aria-[pressed=true]:ring-offset-2 aria-[pressed=true]:ring-offset-cream",
+                    "gallery-thumb relative aspect-square min-w-0 flex-1 basis-0 max-w-[7rem] overflow-hidden rounded-sm bg-mist ring-1 ring-transparent transition-shadow aria-[pressed=false]:hover:ring-line aria-[pressed=true]:ring-2 aria-[pressed=true]:ring-ink aria-[pressed=true]:ring-offset-2 aria-[pressed=true]:ring-offset-cream",
                     // thumbnail-left on sm+: fixed vertical rail (fills the w-20 column, no grow).
-                    thumbsBeside && "sm:w-full sm:max-w-none sm:flex-none sm:basis-auto",
+                    thumbsBeside && "md:w-full md:max-w-none md:flex-none md:basis-auto",
                   ]}
                 >
                   <img
@@ -442,84 +454,83 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             score + histogram are COUNTED from verified-purchase reviews (seed-reviews.ts), never fitted to
             a seed column — a product with no reviews shows no section (a new product is not a bad one). */}
         {rating && (
-          <div id="ulasan" class="order-4 scroll-mt-24 border-t border-line pt-10 md:order-none">
+          <div id="ulasan" class="order-4 scroll-mt-24 rule-fade-top pt-10 md:order-none">
             {/* Centred on mobile (the review summary reads as a unit under the gallery), left-aligned from
                 sm+ where it sits beside the histogram. */}
-            <SectionHeading eyebrow="Ulasan Pembeli" title="Apa kata pelanggan" align="center" class="sm:mx-0 sm:max-w-none sm:text-left" />
+            <SectionHeading title="Apa kata pelanggan" />
 
-            <div class="mt-8 grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-12">
-              {/* Average — Judge.me/Loox shape: a big score with "/ 5,0", the stars, and a verified-ratings
-                  line. Centred on mobile, left from sm+. No card: it sits inside the section's own border-t. */}
-              <div class="flex flex-col items-center text-center sm:items-start sm:text-left">
-                <div class="flex items-end gap-2">
-                  <span class="font-display text-5xl font-semibold leading-none text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
-                  <span class="pb-1 text-lg text-muted">/ 5,0</span>
-                </div>
-                <Stars value={rating.value} size="md" showValue={false} class="mt-3" />
-                <p class="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
-                  Dari {rating.count} ulasan terverifikasi
-                </p>
+            {/* SUMMARY (owner 2026-11-05, "rapikan"): one compact row at every width — the score with its
+                stars and count on the left, a thin five-row histogram on the right. No "/ 5,0" (the five
+                stars already say out of what), no centred hero number. */}
+            <div class="mt-5 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-6 sm:gap-10">
+              <div>
+                <p class="text-[2.5rem] font-semibold leading-none tracking-[-0.02em] text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</p>
+                <Stars value={rating.value} size="sm" showValue={false} class="mt-2" />
+                <p class="mt-1.5 text-sm text-muted">{rating.count} ulasan</p>
               </div>
-
-              <div class="space-y-2">
+              <div class="space-y-1.5" role="img" aria-label={`Sebaran bintang: ${breakdown.map((n, i) => `${5 - i} bintang ${n}`).join(", ")}`}>
                 {breakdown.map((n, i) => (
-                  <div class="flex items-center gap-3 text-sm">
-                    <span class="flex w-10 shrink-0 items-center gap-1 tabular-nums text-muted">
-                      {5 - i}
-                      <svg viewBox="0 0 20 20" class="h-3 w-3 fill-brand-500">
-                        <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
-                      </svg>
-                    </span>
-                    <div class="h-2 flex-1 overflow-hidden rounded-full bg-brand-50">
-                      <div class="h-full rounded-full bg-brand-500" style={`width:${(n / maxBucket) * 100}%`} />
+                  <div class="flex items-center gap-2.5 text-xs text-muted" aria-hidden="true">
+                    <span class="w-3 shrink-0 text-right tabular-nums">{5 - i}</span>
+                    <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-mist-strong">
+                      <div class="h-full rounded-full bg-ink" style={`width:${maxBucket ? (n / maxBucket) * 100 : 0}%`} />
                     </div>
-                    <span class="w-10 shrink-0 text-right tabular-nums text-muted">{n}</span>
+                    <span class="w-4 shrink-0 tabular-nums">{n}</span>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* REVIEWS (owner 2026-11-05): the five newest on the page; the rest one tap away in a dialog
+                that scrolls inside itself, with star chips to narrow it. Both lists are the SAME
+                <ReviewItem>, so a review never reads differently in the two places. */}
             {reviews.length > 0 && (
-              /* No dividers between rows — whitespace separates them (the "fewer lines" the brief asks
-                 for). Each review is a quiet block, not a ruled table row. */
               <ul class="mt-8 space-y-7">
-                {reviews.map((rev) => (
-                  <li>
-                    <div class="flex items-start justify-between gap-4">
-                      <div class="flex min-w-0 items-center gap-3">
-                        <span
-                          class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-semibold text-brand-700"
-                          aria-hidden="true"
-                        >
-                          {rev.author.trim().charAt(0).toUpperCase()}
-                        </span>
-                        <div class="min-w-0">
-                          <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <span class="font-medium text-ink">{rev.author}</span>
-                            <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                              <svg viewBox="0 0 20 20" class="size-3.5 fill-current" aria-hidden="true">
-                                <path d="M10 1.6a8.4 8.4 0 1 0 0 16.8 8.4 8.4 0 0 0 0-16.8Zm4.1 6.2-4.9 4.9a.9.9 0 0 1-1.3 0L5.9 10.6a.9.9 0 1 1 1.3-1.3l1.4 1.4 4.3-4.3a.9.9 0 1 1 1.3 1.3Z" />
-                              </svg>
-                              Terverifikasi
-                            </span>
-                          </div>
-                          <p class="text-xs text-muted">
-                            {rev.daysAgo === 0 ? "Hari ini" : `${rev.daysAgo} hari lalu`}
-                          </p>
-                        </div>
-                      </div>
-                      <Stars value={rev.rating} size="sm" showValue={false} class="mt-1 shrink-0" />
-                    </div>
-                    <p class="mt-3 text-sm leading-relaxed text-muted">{rev.body}</p>
-                    {rev.reply && (
-                      <div class="mt-3 rounded-lg border-l-2 border-brand-300 bg-brand-50 px-3 py-2">
-                        <p class="text-xs font-semibold text-brand-600">Balasan penjual</p>
-                        <p class="mt-1 text-sm leading-relaxed text-ink">{rev.reply}</p>
-                      </div>
-                    )}
-                  </li>
-                ))}
+                {bestReviews.map((rev) => <ReviewItem rev={rev} />)}
               </ul>
+            )}
+            {reviews.length > REVIEWS_ON_PAGE && (
+              <Fragment>
+                {/* No frame (owner 2026-11-05): a stack of reviewer initials + a text link — social proof
+                    that reads as "more people said this", not as another button competing with Beli. */}
+                <button type="button" data-reviews-open class="group mt-8 inline-flex min-h-11 items-center gap-3 rounded-sm text-[0.9375rem] font-medium text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+                  <span class="flex -space-x-2" aria-hidden="true">
+                    {reviews.slice(REVIEWS_ON_PAGE, REVIEWS_ON_PAGE + 4).map((r) => (
+                      <span class="flex size-8 items-center justify-center rounded-full bg-mist-strong text-xs font-semibold text-ink ring-2 ring-cream">{r.author.trim().charAt(0).toUpperCase()}</span>
+                    ))}
+                  </span>
+                  <span class="underline-offset-4 group-hover:underline">Lihat semua {reviews.length} ulasan</span>
+                  <ChevronRight class="size-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" stroke-width={2} aria-hidden="true" />
+                </button>
+                <dialog data-reviews-dialog aria-labelledby="reviews-title" class="m-0 h-[100dvh] max-h-none w-full max-w-none bg-cream p-0 text-ink sm:m-auto sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:rounded-lg sm:shadow-[0_24px_48px_-24px_rgb(0_0_0/0.35)]">
+                  <div class="flex h-full max-h-[inherit] flex-col">
+                    <div class="shrink-0 px-5 pb-3 pt-4 sm:px-6">
+                      <div class="flex items-center justify-between gap-3">
+                        <p id="reviews-title" class="text-base font-semibold">Ulasan pembeli</p>
+                        <button type="button" data-reviews-close aria-label="Tutup" class="-mr-2 inline-flex size-11 items-center justify-center rounded-full hover:bg-mist">
+                          <X class="size-5" stroke-width={1.8} aria-hidden="true" />
+                        </button>
+                      </div>
+                      <div class="mt-1 flex items-center gap-2 text-sm">
+                        <Stars value={rating.value} size="sm" showValue={false} />
+                        <span class="font-semibold tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
+                        <span class="text-muted">· {reviews.length} ulasan</span>
+                      </div>
+                      <div class="no-scrollbar -mx-5 mt-3 flex gap-2 overflow-x-auto px-5 sm:-mx-6 sm:px-6" role="group" aria-label="Saring menurut bintang">
+                        {REVIEW_CHIPS.map((c) => (
+                          <button type="button" data-review-filter={c.value} aria-pressed={c.value === "all" ? "true" : "false"} class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm text-ink transition-colors hover:border-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-white">
+                            {c.label}
+                            <span class="tabular-nums opacity-70">{c.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <ul data-reviews-list class="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+                      {reviews.map((rev) => <ReviewItem rev={rev} />)}
+                    </ul>
+                  </div>
+                </dialog>
+              </Fragment>
             )}
           </div>
         )}
@@ -530,7 +541,9 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           single flow and take their order slots (2 and 3), between the gallery (1) and the reviews (4). */}
       <div class="contents md:block">
         <div class="order-2 md:order-none">
-        <Breadcrumb items={CRUMBS} />
+        {/* Desktop only: on a phone the gallery runs flush under the header (C3) and the breadcrumb's
+            job is done by the header + back gesture. Its JSON-LD stays in <head> for every width. */}
+        <div class="hidden md:block"><Breadcrumb items={CRUMBS} /></div>
 
         {/* No category eyebrow above the title — the breadcrumb right above already names the category, and
             stacking a second near-identical label on top of it was pure repetition.
@@ -540,17 +553,24 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             title wrap into a tidy 2-4 lines while a short one still reads as the page's heading. The
             FULL name always shows — this is the product's identity, so it is never clamped here (cards
             and the breadcrumb clamp/truncate; the PDP does not). */}
-        <h1 class="mt-4 font-display text-2xl font-semibold leading-snug text-pretty text-ink sm:text-[1.75rem]">{product.name}</h1>
+        <h1 class="font-display text-[1.375rem] font-semibold leading-snug text-pretty text-ink sm:text-[1.75rem] md:mt-4">{product.name}</h1>
 
-        {
-          rating && (
-            <a href="#ulasan" class="mt-3 inline-flex items-center gap-2 py-0.5 text-sm transition-colors hover:text-brand-700">
-              <Stars value={rating.value} size="md" showValue={false} />
-              <span class="font-semibold text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
-              <span class="text-muted underline decoration-line underline-offset-4">{rating.count} ulasan</span>
-            </a>
-          )
-        }
+        {/* Rating + sold count on ONE line under the title (C3) — the two numbers that make a cold ad
+            visitor believe the photo. "terjual" moved here from the grid cards: beside the reviews it
+            is evidence, on every card it was noise. Either half renders only when it is real. */}
+        {(rating || product.unitsSold > 0) && (
+          <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            {rating && (
+              <a href="#ulasan" class="inline-flex min-h-6 items-center gap-1.5 transition-colors hover:text-brand-700">
+                <Stars value={rating.value} size="sm" showValue={false} />
+                <span class="font-semibold text-ink tabular-nums">{rating.value.toFixed(1).replace(".", ",")}</span>
+                <span class="text-muted underline decoration-line underline-offset-4">({rating.count} ulasan)</span>
+              </a>
+            )}
+            {rating && product.unitsSold > 0 && <span class="text-muted" aria-hidden="true">·</span>}
+            {product.unitsSold > 0 && <span class="text-muted tabular-nums">{num(product.unitsSold)} terjual</span>}
+          </div>
+        )}
 
         {/* FLASH SALE — shown only while a sale is live (catalog sets product.flashEndsAt, and already
             makes product.price the sale price with compareAt = the original). This banner adds the
@@ -578,7 +598,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                row, which a price-on-request product does not render at all — so no ViewContent fired for
                a page a shopper is very much viewing. The buy BUTTONS carry their own copy, kept in step
                with the variant picker; the pixel prefers those and falls back to this one. */}
-          <span id="pdp-price" data-catalog-id={catalogId} data-catalog-type={catalogType} class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-2xl tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
+          <span id="pdp-price" data-catalog-id={catalogId} data-catalog-type={catalogType} class:list={["font-semibold text-ink", unpriced ? "text-xl sm:text-2xl" : "text-[1.625rem] tabular-nums sm:text-3xl"]}>{unpriced ? "Hubungi untuk harga" : IDR(product.price)}</span>
           {/* Both are ALWAYS in the DOM, hidden when they do not apply, so the variant picker can
               reveal them for a variant that carries a cut the base one does not. Rendering them
               conditionally meant JS had nothing to show and the shopper saw a price drop with no
@@ -587,7 +607,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           {!unpriced && (
             <span
               id="pdp-compare"
-              class="text-lg text-muted line-through tabular-nums"
+              class="text-base text-muted line-through tabular-nums"
               style={product.compareAt ? undefined : "display:none"}
             >
               {product.compareAt ? IDR(product.compareAt) : ""}
@@ -596,7 +616,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
           {!unpriced && (
             <span
               id="pdp-discount"
-              class="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700"
+              class="rounded-sm bg-ink px-2 py-0.5 text-xs font-semibold text-white tabular-nums"
               style={discount > 0 ? undefined : "display:none"}
             >
               -{discount}%
@@ -625,7 +645,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             description used to push Ukuran + Tambah ke Keranjang under the fold). Empty = nothing here;
             the crawler still gets a real sentence from `metaDescription`. */}
         {product.shortDescription && (
-          <p class="mt-6 text-base leading-relaxed text-ink/80">{product.shortDescription}</p>
+          <p class="mt-4 text-base leading-relaxed text-ink/80">{product.shortDescription}</p>
         )}
 
         {/* Variant picker (real product_variants: Warna, Ukuran).
@@ -649,13 +669,13 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
              writes `product_options` alongside them), not a text column. */}
         {
           product.options && product.options.length > 0 ? (
-            <div id="variant-picker" class="mt-8 flex flex-col gap-6" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, compareAt: v.compareAt, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
+            <div id="variant-picker" class="mt-6 flex flex-col gap-5" data-variants={JSON.stringify((product.variants ?? []).map((v, i) => ({ option1: v.option1, option2: v.option2, price: v.price, compareAt: v.compareAt, stock: v.stock, catalogId: variantCatalogIds[i] })))}>
               {product.options.map((opt, oi) => (
                 <div>
                   <p class="text-sm font-medium text-ink">
                     {opt.name}: <span class="text-muted" data-opt-label={oi}>{opt.values[0]}</span>
                   </p>
-                  <div class="opt-group mt-3 flex flex-wrap gap-2" data-opt={oi}>
+                  <div class="opt-group mt-2 flex flex-wrap gap-2" data-opt={oi}>
                     {opt.values.map((val, vi) => (
                       <button
                         type="button"
@@ -663,10 +683,8 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                         data-value={val}
                         aria-pressed={vi === 0 ? "true" : "false"}
                         class:list={[
-                          "opt-btn rounded-lg border px-4 py-2 text-sm font-medium transition-colors",
-                          vi === 0
-                            ? "border-brand-600 bg-brand-600 text-white"
-                            : "border-line bg-white text-ink hover:border-brand-400",
+                          "opt-btn min-h-11 min-w-11 rounded-lg border bg-white px-4 text-sm font-medium text-ink transition-colors",
+                          vi === 0 ? "border-ink ring-1 ring-ink" : "border-line hover:border-muted",
                         ]}
                       >
                         {val}
@@ -680,45 +698,34 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         }
 
         {/* Quantity */}
-        <div class="mt-6">
+        <div class="mt-5">
           <p class="text-sm font-medium text-ink">Jumlah</p>
-          <div class="mt-3 inline-flex items-center rounded-lg border border-line bg-white">
-            <button type="button" id="qty-dec" class="px-4 py-2 text-lg text-muted hover:text-ink" aria-label="Kurangi">−</button>
+          <div class="mt-2 inline-flex items-center rounded-lg border border-line bg-white">
+            <button type="button" id="qty-dec" class="min-h-11 min-w-11 text-lg text-muted hover:text-ink" aria-label="Kurangi">−</button>
             <span id="qty-val" class="w-10 text-center text-sm font-medium tabular-nums">1</span>
-            <button type="button" id="qty-inc" class="px-4 py-2 text-lg text-muted hover:text-ink" aria-label="Tambah">+</button>
+            <button type="button" id="qty-inc" class="min-h-11 min-w-11 text-lg text-muted hover:text-ink" aria-label="Tambah">+</button>
           </div>
         </div>
 
         {/* Actions. An unpriced product does NOT get "Tambah ke Keranjang"/"Beli Sekarang" at all —
              see the `unpriced` note above: there is no price to cart, so it routes to the merchant
-             ("Tanya Harga") instead, which is what "Hubungi untuk harga" promised. */}
+             ("Tanya Harga") instead, which is what "Hubungi untuk harga" promised.
+            ONE filled action (redesign C): Beli Sekarang is the primary — first in the DOM, so it is
+            first on a phone and, with `sm:flex-row-reverse`, on the right from sm up. The cart is the
+            outlined secondary. `#buy-actions` is what the sticky bar at the foot of the page watches. */}
         {unpriced ? (
           <div class="mt-8">
             <a
               href={askHref}
               target={store.whatsapp ? "_blank" : undefined}
               rel={store.whatsapp ? "noopener" : undefined}
-              class="inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream sm:w-auto"
+              class="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-brand-600 px-6 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream sm:w-auto"
             >
               Tanya Harga
             </a>
           </div>
         ) : (
-        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            id="add-to-cart"
-            disabled={!available}
-            data-handle={product.handle}
-            data-catalog-id={catalogId}
-            data-catalog-type={catalogType}
-            data-name={product.name}
-            data-price={product.price}
-            data-image={product.image}
-            class="flex-1 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-brand-600"
-          >
-            Tambah ke Keranjang
-          </button>
+        <div id="buy-actions" class="mt-6 flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
           <button
             type="button"
             id="buy-now"
@@ -729,14 +736,28 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             data-name={product.name}
             data-price={product.price}
             data-image={product.image}
-            class="flex-1 rounded-full border border-brand-600 px-6 py-3.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            class="inline-flex min-h-12 flex-1 items-center justify-center rounded-lg bg-brand-600 px-6 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-600"
           >
             Beli Sekarang
+          </button>
+          <button
+            type="button"
+            id="add-to-cart"
+            disabled={!available}
+            data-handle={product.handle}
+            data-catalog-id={catalogId}
+            data-catalog-type={catalogType}
+            data-name={product.name}
+            data-price={product.price}
+            data-image={product.image}
+            class="inline-flex min-h-12 flex-1 items-center justify-center rounded-lg border border-ink px-6 text-[0.9375rem] font-semibold text-ink transition-colors enabled:hover:bg-ink enabled:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Tambah ke Keranjang
           </button>
         </div>
         )}
 
-        <p id="cart-toast" class="mt-4 hidden rounded-lg bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p id="cart-toast" role="status" class="fixed inset-x-4 bottom-20 z-30 hidden rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white shadow-lg md:static md:mt-4 md:bg-mist md:text-brand-700 md:shadow-none">
           <Check class="inline h-4 w-4" stroke-width={2.5} aria-hidden="true" /> Ditambahkan ke keranjang.
           <a href="/keranjang" class="ml-1 underline">Lihat keranjang</a>
         </p>
@@ -747,7 +768,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
              Below the buy buttons on purpose — it is the second thing you might do here, never the
              first. Pinterest gets the main gallery image (absolute, as it requires); a product with
              no photo passes none and the Pinterest button is simply not rendered. */}
-        <div class="mt-8 flex items-center gap-2 border-t border-line pt-6">
+        <div class="mt-6 flex items-center gap-2">
           <span class="text-sm text-muted">Bagikan</span>
           <ShareBar
             url={PAGE_URL}
@@ -768,14 +789,17 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             siblings, not one-off blocks. Deskripsi + Spesifikasi ship OPEN (primary content, and open
             keeps them visible for SEO — the copy stays in the DOM either way); Pengiriman folds. A single
             hairline per row is the only rule; nothing is boxed. `pdp-acc` styles the reveal in one place. */}
-        <div class="order-3 border-t border-line md:order-none md:mt-10">
+        <div class="order-3 rule-fade-top md:order-none md:mt-10">
           {product.description.trim() && (
-            <details open class="pdp-acc group border-b border-line">
-              <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
+            <details open class="pdp-acc group rule-fade">
+              <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-[0.9375rem] font-semibold text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
                 Deskripsi
                 <ChevronDown class="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
               </summary>
-              <div class="space-y-4 pb-6 leading-relaxed text-muted">
+              {/* Three lines that fade out, then "Selengkapnya" (owner 2026-11-05). The clamp is added by
+                  the script only when the text is really longer than three lines, so with JS off — or a
+                  short description — everything simply shows. The copy stays in the DOM for search. */}
+              <div data-desc class="desc-body space-y-4 leading-relaxed text-muted">
                 {product.description
                   .split(/\n{2,}/)
                   .map((para) => para.trim())
@@ -784,19 +808,23 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
                     <p class="whitespace-pre-line">{para}</p>
                   ))}
               </div>
+              <button type="button" data-desc-toggle hidden aria-expanded="false" class="mb-6 mt-2 inline-flex min-h-9 items-center gap-1 text-sm font-medium text-ink underline underline-offset-4">
+                Selengkapnya
+              </button>
+              <div class="pb-6" data-desc-pad></div>
             </details>
           )}
 
           {specs.length > 0 && (
-            <details open class="pdp-acc group border-b border-line">
-              <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
+            <details class="pdp-acc group rule-fade">
+              <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-[0.9375rem] font-semibold text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
                 Spesifikasi
                 <ChevronDown class="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
               </summary>
               {/* Zebra rows, no borders — the frameless table in the reference. */}
               <dl class="overflow-hidden rounded-lg pb-6 text-sm">
                 {specs.map((s, i) => (
-                  <div class:list={["grid grid-cols-[7rem_1fr] gap-4 px-3 py-2.5", i % 2 === 0 && "bg-brand-50/70"]}>
+                  <div class:list={["grid grid-cols-[7rem_1fr] gap-4 px-3 py-2.5", i % 2 === 0 && "bg-mist/70"]}>
                     <dt class="text-muted">{s.label}</dt>
                     <dd class="font-medium text-ink">{s.value}</dd>
                   </div>
@@ -805,21 +833,18 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             </details>
           )}
 
-          <details class="pdp-acc group border-b border-line">
-            <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-semibold uppercase tracking-[0.14em] text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
+          <details open class="pdp-acc group rule-fade">
+            <summary class="flex cursor-pointer list-none items-center justify-between py-4 text-[0.9375rem] font-semibold text-ink transition-colors hover:text-brand-700 [&::-webkit-details-marker]:hidden">
               Pengiriman &amp; Pengembalian
               <ChevronDown class="size-4 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" />
             </summary>
-            <div class="space-y-3 pb-6 text-sm leading-relaxed text-muted">
-              <p class="flex gap-2.5">
-                <Truck class="mt-0.5 size-4 shrink-0 text-brand-500" stroke-width={1.75} />
-                <span>{store.city ? `Dikirim dari ${store.city}. ` : ""}Ongkir dihitung otomatis saat checkout sesuai alamat dan kurir yang kamu pilih.</span>
-              </p>
-              <p class="flex gap-2.5">
-                <RotateCcw class="mt-0.5 size-4 shrink-0 text-brand-500" stroke-width={1.75} />
-                <span>Untuk penukaran atau pengembalian, hubungi {store.name}{store.whatsapp ? " lewat WhatsApp" : ""}.</span>
-              </p>
-            </div>
+            <ul class="space-y-2.5 pb-6 text-sm text-muted">
+              <li class="flex items-start gap-2.5"><Truck class="mt-0.5 size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />Ongkir dihitung dari alamat dan berat paket</li>
+              <li class="flex items-start gap-2.5"><CalendarDays class="mt-0.5 size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />Pesanan tidak diproses pada hari libur</li>
+              {payLine && <li class="flex items-start gap-2.5"><Wallet class="mt-0.5 size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />{payLine}</li>}
+              {cod.enabled && <li class="flex items-start gap-2.5"><Banknote class="mt-0.5 size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />Biaya &amp; ketersediaan COD dicek di checkout</li>}
+              <li class="flex items-start gap-2.5"><RotateCcw class="mt-0.5 size-4 shrink-0" stroke-width={1.75} aria-hidden="true" />Ingin tukar atau retur? Hubungi kami</li>
+            </ul>
           </details>
         </div>
       </div>
@@ -829,7 +854,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
     {
       !TEMPLATE && related.length > 0 && (
         <div class="mt-20 border-t border-line pt-14">
-          <SectionHeading eyebrow="Rekomendasi" title="Kamu mungkin suka" />
+          <SectionHeading title="Kamu mungkin suka" />
           <div class="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-y-14 sm:grid-cols-3 lg:grid-cols-4">
             {related.map((p) => (
               <ProductCard product={p} />
@@ -845,6 +870,52 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       <SectionRenderer data={TEMPLATE} context={{ kind: "product", product }} />
     )
   }
+  {/* STICKY BUY BAR — phones only (DESIGN.md C4). Appears once the real buy buttons have scrolled up
+      out of view, so a shopper reading the description or the reviews is one tap from buying. It owns
+      NO logic: each button forwards a click to `#buy-now` / `#add-to-cart`, so the variant check, the
+      quantity, the cart write and the marketing pixel all run through exactly the code they always did.
+      Unpriced products have no buy buttons, so they get no bar. Chat lives here (owner 2026-11-05),
+      replacing the floating bubble. */}
+  {!unpriced && (
+    <Fragment>
+      <div class="h-20 md:hidden" aria-hidden="true"></div>
+      <div
+        id="sticky-buy"
+        class="fixed inset-x-0 bottom-0 z-30 translate-y-full border-t border-line bg-cream px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 transition-[transform,visibility] duration-200 ease-out motion-reduce:transition-none invisible md:hidden data-[show]:visible data-[show]:translate-y-0"
+        inert
+      >
+        <div class="flex items-center gap-2">
+          <p id="sticky-price" class="min-w-0 flex-1 whitespace-nowrap text-[0.9375rem] font-semibold text-ink tabular-nums">{IDR(product.price)}</p>
+          <button
+            type="button"
+            data-chat-open
+            aria-expanded="false"
+            aria-controls="chat-panel"
+            aria-label={`Chat dengan ${store.name}`}
+            class="relative inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-ink text-ink transition-colors hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            <MessageCircle class="size-5" stroke-width={1.8} aria-hidden="true" />
+            <span data-chat-dot class="absolute right-1.5 top-1.5 hidden size-2.5 rounded-full bg-brand-600 ring-2 ring-cream"><span class="sr-only">Ada balasan baru</span></span>
+          </button>
+          <button
+            type="button"
+            data-proxy="add-to-cart"
+            aria-label="Tambah ke Keranjang"
+            class="inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-ink text-ink transition-colors enabled:hover:bg-ink enabled:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-50"
+          >
+            <ShoppingBag class="size-5" stroke-width={1.8} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            data-proxy="buy-now"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-brand-600 px-4 text-[0.9375rem] font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-50"
+          >
+            Beli Sekarang
+          </button>
+        </div>
+      </div>
+    </Fragment>
+  )}
 </Layout>
 
 <style is:global>
@@ -968,12 +1039,13 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         if (!btn) return;
         var g = btn.closest(".opt-group");
         g.querySelectorAll(".opt-btn").forEach(function (b) {
-          b.classList.remove("border-brand-600", "bg-brand-600", "text-white");
-          b.classList.add("border-line", "bg-white", "text-ink", "hover:border-brand-400");
+          b.classList.remove("border-ink", "ring-1", "ring-ink");
+          b.classList.add("border-line", "hover:border-muted");
           b.setAttribute("aria-pressed", "false");
         });
-        btn.classList.add("border-brand-600", "bg-brand-600", "text-white");
-        btn.classList.remove("border-line", "bg-white", "text-ink", "hover:border-brand-400");
+        // Selected = an ink outline, not a filled chip: the page keeps ONE filled control, Beli Sekarang.
+        btn.classList.add("border-ink", "ring-1", "ring-ink");
+        btn.classList.remove("border-line", "hover:border-muted");
         btn.setAttribute("aria-pressed", "true");
         selected[Number(btn.dataset.opt)] = btn.dataset.value;
         var lbl = picker.querySelector("[data-opt-label='" + btn.dataset.opt + "']");
@@ -1115,6 +1187,87 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
         clearTimeout(toast._t);
         toast._t = setTimeout(function () { toast.classList.add("hidden"); }, 4000);
       }
+    }
+
+    // ---- description: clamp to three lines only when it is longer -------------------------------
+    var desc = document.querySelector("[data-desc]");
+    var descBtn = document.querySelector("[data-desc-toggle]");
+    var descPad = document.querySelector("[data-desc-pad]");
+    if (desc && descBtn) {
+      var line = parseFloat(getComputedStyle(desc).lineHeight) || 26;
+      if (desc.scrollHeight > line * 3 + 4) {
+        desc.classList.add("is-clamped");
+        descBtn.hidden = false;
+        if (descPad) descPad.hidden = true;
+        descBtn.addEventListener("click", function () {
+          var open = desc.classList.toggle("is-clamped") === false;
+          descBtn.setAttribute("aria-expanded", open ? "true" : "false");
+          descBtn.textContent = open ? "Lebih sedikit" : "Selengkapnya";
+        });
+      }
+    }
+
+    // ---- all reviews: native modal <dialog> (focus trap, Esc, inert page) + star chips ---------
+    var rvDialog = document.querySelector("[data-reviews-dialog]");
+    var rvOpen = document.querySelector("[data-reviews-open]");
+    if (rvDialog && rvOpen && rvDialog.showModal) {
+      rvOpen.addEventListener("click", function () { rvDialog.showModal(); });
+      rvDialog.querySelectorAll("[data-reviews-close]").forEach(function (b) { b.addEventListener("click", function () { rvDialog.close(); }); });
+      rvDialog.addEventListener("click", function (e) { if (e.target === rvDialog) rvDialog.close(); }); // backdrop
+      var rvList = rvDialog.querySelector("[data-reviews-list]");
+      rvDialog.querySelectorAll("[data-review-filter]").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+          var want = chip.getAttribute("data-review-filter");
+          rvDialog.querySelectorAll("[data-review-filter]").forEach(function (c) { c.setAttribute("aria-pressed", c === chip ? "true" : "false"); });
+          rvList.querySelectorAll("li[data-rating]").forEach(function (li) { li.hidden = want !== "all" && li.getAttribute("data-rating") !== want; });
+          rvList.scrollTop = 0;
+        });
+      });
+    }
+
+    // ---- phone gallery strip: dots follow the swipe -------------------------------------------
+    var strip = document.getElementById("gallery-strip");
+    var dotsWrap = document.getElementById("gallery-dots");
+    if (strip && dotsWrap) {
+      var dots = dotsWrap.querySelectorAll("[data-dot]");
+      var lastDot = 0;
+      strip.addEventListener("scroll", function () {
+        var i = Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth));
+        if (i === lastDot || !dots[i]) return;
+        dots[lastDot].classList.replace("bg-ink", "bg-ink/25");
+        dots[i].classList.replace("bg-ink/25", "bg-ink");
+        lastDot = i;
+      }, { passive: true });
+    }
+
+    // ---- sticky buy bar (phones): show once #buy-actions has scrolled ABOVE the viewport ------
+    var bar = document.getElementById("sticky-buy");
+    var actions = document.getElementById("buy-actions");
+    if (bar && actions && "IntersectionObserver" in window) {
+      var stickyPrice = document.getElementById("sticky-price");
+      var proxies = bar.querySelectorAll("[data-proxy]");
+      var syncBar = function () {
+        if (stickyPrice && priceEl) stickyPrice.textContent = priceEl.textContent;
+        proxies.forEach(function (p) {
+          var target = document.getElementById(p.getAttribute("data-proxy"));
+          p.disabled = !target || target.disabled;
+        });
+      };
+      new IntersectionObserver(function (entries) {
+        var e = entries[0];
+        var past = !e.isIntersecting && e.boundingClientRect.top < 0;
+        if (past) { syncBar(); bar.setAttribute("data-show", ""); bar.removeAttribute("inert"); }
+        else { bar.removeAttribute("data-show"); bar.setAttribute("inert", ""); }
+      }).observe(actions);
+      proxies.forEach(function (p) {
+        p.addEventListener("click", function () {
+          var target = document.getElementById(p.getAttribute("data-proxy"));
+          if (target && !target.disabled) target.click();
+        });
+      });
+      // The variant picker re-prices and re-enables the real buttons; keep the bar in step.
+      if (buyBtn) new MutationObserver(syncBar).observe(buyBtn, { attributes: true, attributeFilter: ["disabled"] });
+      if (priceEl) new MutationObserver(syncBar).observe(priceEl, { childList: true, characterData: true, subtree: true });
     }
     addBtn?.addEventListener("click", function () { if (addBtn.disabled) return; addToCart(addBtn.dataset, false); });
     buyBtn?.addEventListener("click", function () { if (buyBtn.disabled) return; addToCart(buyBtn.dataset, true); });

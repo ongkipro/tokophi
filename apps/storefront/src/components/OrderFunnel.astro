@@ -101,7 +101,7 @@ const funnelCatalogId = funnelProduct
     <div class="flex items-center justify-between gap-4 bg-brand-700 px-5 py-3 text-white">
       {countdownMinutes > 0 ? (
         <div>
-          <div class="text-[11px] uppercase tracking-wide text-brand-100">Promo berakhir dalam</div>
+          <div class="text-[11px] uppercase tracking-wide text-muted">Promo berakhir dalam</div>
           <div class="font-mono text-xl font-bold tabular-nums"><span id="cd-min">--</span>:<span id="cd-sec">--</span></div>
         </div>
       ) : (
@@ -109,7 +109,7 @@ const funnelCatalogId = funnelProduct
       )}
       {showScarcity && (
         <div class="text-right">
-          <div class="text-[11px] uppercase tracking-wide text-brand-100">Sisa stok</div>
+          <div class="text-[11px] uppercase tracking-wide text-muted">Sisa stok</div>
           <div class="text-xl font-bold tabular-nums"><span id="scarcity">{packages[0].stock}</span> pcs</div>
         </div>
       )}
@@ -133,9 +133,9 @@ const funnelCatalogId = funnelProduct
               <span class="block font-semibold text-ink">{p.label}</span>
               <span class="text-brand-700 font-bold">{IDR(p.price)}</span>
               {p.compareAt > 0 && <span class="ml-2 text-sm text-stone-400 line-through">{IDR(p.compareAt)}</span>}
-              {p.stock <= 0 && <span class="ml-2 text-sm font-medium text-rose-600">Stok habis</span>}
+              {p.stock <= 0 && <span class="ml-2 text-sm font-medium text-muted">Stok habis</span>}
             </span>
-            {i === 0 && <span class="rounded bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white">PALING LARIS</span>}
+            {i === 0 && <span class="rounded-sm bg-ink px-2 py-0.5 text-xs font-semibold text-white">Paling laris</span>}
           </label>
         ))}
       </div>
@@ -145,11 +145,11 @@ const funnelCatalogId = funnelProduct
       <div class="flex items-center justify-between">
         <label class="text-sm font-medium text-ink">Jumlah</label>
         <div class="flex items-center gap-3">
-          <button type="button" id="qty-dec" class="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink disabled:opacity-40" aria-label="Kurangi">
+          <button type="button" id="qty-dec" class="flex size-10 items-center justify-center rounded-lg border border-ink text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink" aria-label="Kurangi">
             <Minus class="h-4 w-4" />
           </button>
           <span id="qty-val" class="w-8 text-center text-lg font-bold tabular-nums">1</span>
-          <button type="button" id="qty-inc" class="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-ink" aria-label="Tambah">
+          <button type="button" id="qty-inc" class="flex size-10 items-center justify-center rounded-lg border border-ink text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white" aria-label="Tambah">
             <Plus class="h-4 w-4" />
           </button>
         </div>
@@ -157,18 +157,18 @@ const funnelCatalogId = funnelProduct
     )}
 
     <div>
-      <label for="f-nama" class="mb-1 block text-sm font-medium text-ink">Nama lengkap <span class="text-rose-500">*</span></label>
+      <label for="f-nama" class="mb-1 block text-sm font-medium text-ink">Nama lengkap <span class="text-muted">*</span></label>
       <input id="f-nama" name="nama" type="text" autocomplete="name" placeholder="Contoh: Pak Budi Santoso"
         class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
-      <p class="err mt-1 hidden text-sm text-rose-600" data-err="nama"></p>
+      <p class="err mt-1 hidden text-sm text-red-700" data-err="nama"></p>
     </div>
 
     <div>
-      <label for="f-wa" class="mb-1 block text-sm font-medium text-ink">Nomor WhatsApp <span class="text-rose-500">*</span></label>
+      <label for="f-wa" class="mb-1 block text-sm font-medium text-ink">Nomor WhatsApp <span class="text-muted">*</span></label>
       <input id="f-wa" name="whatsapp" type="tel" inputmode="numeric" autocomplete="tel" placeholder="08xxxxxxxxxx / 62xxxxxxxxxx"
         class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
       <p class="mt-1 text-xs text-stone-400">Format nomor otomatis disesuaikan ke 62.</p>
-      <p class="err mt-1 hidden text-sm text-rose-600" data-err="whatsapp"></p>
+      <p class="err mt-1 hidden text-sm text-red-700" data-err="whatsapp"></p>
     </div>
 
     {fc.email && (
@@ -176,19 +176,19 @@ const funnelCatalogId = funnelProduct
         <label for="f-email" class="mb-1 block text-sm font-medium text-ink">Email <span class="text-stone-400">(opsional)</span></label>
         <input id="f-email" name="email" type="email" autocomplete="email" placeholder="nama@email.com"
           class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" />
-        <p class="err mt-1 hidden text-sm text-rose-600" data-err="email"></p>
+        <p class="err mt-1 hidden text-sm text-red-700" data-err="email"></p>
       </div>
     )}
 
     <div>
-      <label for="f-alamat" class="mb-1 block text-sm font-medium text-ink">Alamat lengkap <span class="text-rose-500">*</span></label>
+      <label for="f-alamat" class="mb-1 block text-sm font-medium text-ink">Alamat lengkap <span class="text-muted">*</span></label>
       <textarea id="f-alamat" name="alamat" rows="3" autocomplete="street-address" placeholder="Nama jalan, RT/RW, desa, dan patokan…"
         class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required></textarea>
-      <p class="err mt-1 hidden text-sm text-rose-600" data-err="alamat"></p>
+      <p class="err mt-1 hidden text-sm text-red-700" data-err="alamat"></p>
     </div>
 
     <div>
-      <label for="f-kec" class="mb-1 block text-sm font-medium text-ink">Kecamatan / area <span class="text-rose-500">*</span></label>
+      <label for="f-kec" class="mb-1 block text-sm font-medium text-ink">Kecamatan / area <span class="text-muted">*</span></label>
       <input id="f-kec" name="kecamatan" type="text" autocomplete="off" placeholder="Ketik minimal 3 huruf…"
         class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
       <input type="hidden" id="dest-id" name="destId" />
@@ -196,7 +196,7 @@ const funnelCatalogId = funnelProduct
       <input type="hidden" id="dest-prov" name="provinsi" />
       <div id="kec-results" class="mt-1 hidden divide-y divide-line overflow-hidden rounded-xl border border-line bg-white shadow-lg"></div>
       <p id="kec-hint" class="mt-1 text-xs text-stone-400">Ketik minimal 3 huruf untuk mencari kecamatan.</p>
-      <p class="err mt-1 hidden text-sm text-rose-600" data-err="kecamatan"></p>
+      <p class="err mt-1 hidden text-sm text-red-700" data-err="kecamatan"></p>
     </div>
 
     {/* 🔴 KODE POS. Its absence here rejected EVERY order from /promo and /lp for eighteen days.
@@ -213,12 +213,12 @@ const funnelCatalogId = funnelProduct
          types it, because ~4% of KiriminAja's districts have no kelurahan data and this number gets
          printed on a real parcel. */}
     <div>
-      <label for="f-kodepos" class="mb-1 block text-sm font-medium text-ink">Kode pos <span class="text-rose-500">*</span></label>
+      <label for="f-kodepos" class="mb-1 block text-sm font-medium text-ink">Kode pos <span class="text-muted">*</span></label>
       <input id="f-kodepos" name="kodepos" type="text" inputmode="numeric" autocomplete="postal-code"
         maxlength="5" placeholder="5 digit"
         class="w-full rounded-xl border border-line px-3 py-2.5 text-ink outline-none focus:border-brand-600" required />
       <p id="kodepos-hint" class="mt-1 text-xs text-stone-400">Terisi otomatis kalau kecamatannya hanya punya satu kode pos.</p>
-      <p class="err mt-1 hidden text-sm text-rose-600" data-err="kodepos"></p>
+      <p class="err mt-1 hidden text-sm text-red-700" data-err="kodepos"></p>
     </div>
 
     {fc.summary && (
@@ -240,7 +240,7 @@ const funnelCatalogId = funnelProduct
     )}
     {!fc.summary && <p id="ongkir-note" class="text-xs text-stone-400">Ongkir muncul setelah kecamatan dipilih.</p>}
 
-    <p id="form-error" class="hidden rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+    <p id="form-error" class="hidden rounded-lg bg-mist px-3 py-2 text-sm text-red-700"></p>
 
     <button id="submit-btn" type="submit" disabled
       class="w-full rounded-xl bg-brand-600 px-4 py-3.5 text-center font-bold text-white transition disabled:cursor-not-allowed disabled:bg-stone-300">
@@ -421,7 +421,7 @@ const funnelCatalogId = funnelProduct
       timer = setTimeout(function () {
         api({ op: "search", q: q }).then(function (res) {
           if (!res.ok) {
-            results.innerHTML = '<p class="px-3 py-2 text-sm text-rose-600">' + esc(res.error || "Gagal mencari kecamatan.") + '</p>';
+            results.innerHTML = '<p class="px-3 py-2 text-sm text-red-700">' + esc(res.error || "Gagal mencari kecamatan.") + '</p>';
             results.classList.remove("hidden"); return;
           }
           if (!res.results || !res.results.length) {

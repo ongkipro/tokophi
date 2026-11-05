@@ -33,8 +33,8 @@ import { join, isAbsolute } from "node:path";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const CEILINGS = {
-  "apps/storefront/src/pages/checkout.astro": 2864,
-  "apps/admin/app/(admin)/produk/[id]/product-editor.tsx": 1582,
+  "apps/storefront/src/pages/checkout.astro": 2853, // lowered 2026-11-05: the redesign removed 11 lines
+  "apps/admin/app/(admin)/produk/[id]/product-editor.tsx": 1580, // lowered 2026-11-05: catalogue auto-fill EXTRACTED to use-catalog-autofill.ts
 };
 
 const args = process.argv.slice(2);

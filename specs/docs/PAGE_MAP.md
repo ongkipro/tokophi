@@ -200,7 +200,7 @@
 | `/keranjang` | Cart (client-side lines; the server prices everything at order time). | `apps/storefront/src/pages/keranjang.astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/kontak` | Contact + WhatsApp. | `apps/storefront/src/pages/kontak.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
 | `/lp/[slug]` | Merchant landing page (raw HTML EXECUTES here) with the COD order form. | `apps/storefront/src/pages/lp/[slug].astro` | `LandingLayout` | `catalog` `landing` | `packages` | ✓ | ✓ | — |
-| `/produk/[handle]` | Product page — gallery, variant picker, buy box, reviews; `product` template renders the tail. | `apps/storefront/src/pages/produk/[handle].astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | `apps/storefront/src/components/product-ratio-locked.test.ts` |
+| `/produk/[handle]` | Product page — gallery, variant picker, buy box, reviews; `product` template renders the tail. | `apps/storefront/src/pages/produk/[handle].astro` | `Layout` | `catalog` | `breadcrumb` `product-feed` | ✓ |  | `apps/storefront/src/components/product-ratio-locked.test.ts` |
 | `/produk` | Catalogue with server-side sort + pagination ('Daftar Produk'). | `apps/storefront/src/pages/produk/index.astro` | `Layout` | — | `breadcrumb` | ✓ |  | `apps/storefront/src/components/product-ratio-locked.test.ts` |
 | `/promo/[handle]` | One promo/flash sale. | `apps/storefront/src/pages/promo/[handle].astro` | `LandingLayout` | `catalog` `promo` | `packages` | ✓ |  | — |
 | `/promo` | Promo hub — live vouchers and flash sales (`nonaktif` + date window). | `apps/storefront/src/pages/promo/index.astro` | `Layout` | `catalog` | — | ✓ |  | `apps/storefront/src/lib/order-forms-post-kodepos.test.ts` `apps/storefront/src/lib/safe-href.test.ts` |
@@ -395,7 +395,7 @@
 | `cart-variant.ts` | `noVariantChoice` |
 | `chat.ts` | `CHAT_COOKIE` `LIMITS` `MAX_BODY` `MAX_NAME` `MAX_OPEN_CONVERSATIONS` `clientIp` `cursorOf` `ipHash` `json` `mintVisitorCookie` `parseCursor` `rateLimit` `readVisitorToken` |
 | `packages.ts` | `buildPackages` |
-| `product-feed.ts` | `PROFILES` `feedDocument` `feedItems` `xml` |
+| `product-feed.ts` | `PROFILES` `catalogSpecs` `colourSizeIndexes` `feedBrand` `feedDocument` `feedItems` `xml` |
 | `recovery.ts` | — |
 | `safe-href.ts` | `safeHref` |
 | `text.ts` | `clamp` |

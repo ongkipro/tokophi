@@ -11,13 +11,13 @@
     "audit:responsive": "node scripts/audit-responsive.mjs"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.9",
+    "@astrojs/check": "^0.9.12",
     "@astrojs/node": "^11.1.9",
     "@lucide/astro": "^1.66.0",
     "@tokophi/db": "*",
     "@tokophi/lib": "*",
     "@tokophi/sections": "*",
-    "astro": "^7.4.4",
+    "astro": "^7.4.5",
     "cookie": "^2.0.1",
     "jose": "^6.2.3",
     "typescript": "^5.9.3"

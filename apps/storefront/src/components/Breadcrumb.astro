@@ -1,4 +1,5 @@
 ---
+import { ChevronRight } from "@lucide/astro";
 // The visible trail. Pair it with `breadcrumbLd()` from the same array so the schema can never drift
 // from what is on screen — see src/lib/breadcrumb.ts.
 //
@@ -29,23 +30,23 @@ const light = tone === "light";
 ---
 
 <nav aria-label="Breadcrumb" class={className}>
-  <ol class:list={["flex items-center gap-x-2 text-sm", light ? "text-white/70" : "text-muted"]}>
+  {/* ONE LINE, always (owner 2026-11-05): no wrap; the trailing crumb (the page) truncates with "…" and
+      every earlier crumb keeps its full width. Separator is a chevron, the same on every page. */}
+  <ol class:list={["flex min-w-0 flex-nowrap items-center gap-x-1.5 whitespace-nowrap text-sm", light ? "text-white/75" : "text-muted"]}>
     {
       items.map((crumb, i) => {
         const isLast = i === items.length - 1;
         return (
-          <li class:list={["flex items-center gap-2", isLast ? "min-w-0" : "shrink-0"]}>
+          <li class:list={["flex items-center gap-1.5", isLast ? "min-w-0" : "shrink-0"]}>
             {i > 0 && (
-              <span aria-hidden="true" class:list={["shrink-0", light ? "text-white/40" : "text-line"]}>
-                /
-              </span>
+              <ChevronRight aria-hidden="true" class:list={["size-3.5 shrink-0", light ? "text-white/50" : "text-muted"]} stroke-width={2} />
             )}
             {crumb.href && !isLast ? (
               <a
                 href={crumb.href}
                 class:list={[
                   "shrink-0 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2",
-                  light ? "hover:text-white focus-visible:ring-white/60" : "hover:text-brand-600 focus-visible:ring-brand-400",
+                  light ? "hover:text-white focus-visible:ring-white/60" : "hover:text-ink hover:underline hover:underline-offset-4 focus-visible:ring-brand-400",
                 ]}
               >
                 {crumb.name}

@@ -65,7 +65,23 @@ export function generateBrandShades(brandHex: string): BrandShades {
   return out;
 }
 
-// Fallback used when a store hasn't picked a brand colour yet — matches the original
-// hand-picked rose palette in apps/storefront/src/styles/global.css so existing stores
-// (e.g. the Batik Nusantara demo) look identical until they change it.
-export const DEFAULT_BRAND_COLOR = "#a85572";
+// Fallback used when a store hasn't picked a brand colour yet. Since 2026-11-05 (owner: "minimalist
+// modern, hitam putih abu") the platform default is NEUTRAL — near-black, the zinc-900 below — not
+// the old rose. It is the colour the Tema picker opens on and the hue `generateNeutrals` tints text
+// with when no brand is set.
+export const DEFAULT_BRAND_COLOR = "#18181b";
+
+// ⚠️ A brand-less store cannot simply run DEFAULT_BRAND_COLOR through `generateBrandShades`: the
+// steps above fix LIGHTNESS per shade (600 = 40%), so a black brand comes out as a mid-grey button.
+// The neutral scale is written out instead — 600 IS near-black, the primary button the owner asked
+// for — and `generateTenantThemeVariables` emits it whenever `brand_color` is null. Mirrored in
+// apps/storefront/src/styles/global.css as the no-override default.
+export const NEUTRAL_BRAND_SHADES: BrandShades = {
+  50: "#f4f4f5",
+  100: "#ececee",
+  200: "#e4e4e7",
+  400: "#a1a1aa",
+  500: "#52525b",
+  600: "#18181b",
+  700: "#09090b",
+};
