@@ -3857,6 +3857,7 @@
         "exports": [
           "RECONCILE_REASON_MIN",
           "listMengantarAccounts",
+          "listStrandedMengantar",
           "listUnknownMengantar",
           "reconcileUnknownBookingWith"
         ]

@@ -357,7 +357,7 @@
 | `ka-probe.ts` | `classifyKaProbe` |
 | `list-page.ts` | `UPDATE_LOG_PAGE_SIZE` `filterChanged` `pageSlice` |
 | `mengantar-credentials.ts` | `SWITCH_REASON_MIN` `isShippingProvider` `mengantarReadiness` `saveMengantarPartnerWith` `switchShippingProviderWith` |
-| `mengantar-ops.ts` | `RECONCILE_REASON_MIN` `listMengantarAccounts` `listUnknownMengantar` `reconcileUnknownBookingWith` |
+| `mengantar-ops.ts` | `RECONCILE_REASON_MIN` `listMengantarAccounts` `listStrandedMengantar` `listUnknownMengantar` `reconcileUnknownBookingWith` |
 | `nav.ts` | `NAV` `NAV_GROUPS` `navFor` |
 | `payment-channel-sync.ts` | `planChannelSync` |
 | `payout-transition.ts` | `markPayoutPaidInTxn` |

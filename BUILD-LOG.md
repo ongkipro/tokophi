@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 11:50 UTC] — SHIP-MENGANTAR · CI red on PR #446: checkout size ceiling + PAGE_MAP
+Executor: Main Session (Claude Code). CI run on 02127c50 failed `test/release-guards.test.ts` (checkout.astro 2934 > ceiling 2864) and `test/page-map-fresh.test.ts` — root `test/` had not been part of the local runs (only `apps/*` + `packages/*`).
+- `scripts/verify-source-size.mjs`: checkout ceiling RAISED 2864 → 2959 (the measured size), reason in place: D12 COD re-quote state on a Mengantar store; the split remains Task 6.6.
+- `specs/docs/PAGE_MAP.md` + `page-map.json` regenerated (`node scripts/gen-page-map.mjs`; `--check` fresh).
+- **Verified:** full `npm test` (what CI runs) on `tokophi_shipping_test`: 212 files / 2071 tests passed, `check:storefront` + `check:landing` 0 errors.
+
 ### [2026-11-05 11:30 UTC] — SHIP-MENGANTAR · checkout keeps the shopper's COD choice across a destination change
 Executor: Main Session (Claude Code) + a fork (checkout only). Owner: "ya jalankan". Branch `feat/shipping-mengantar` (PR #446).
 - **Before:** retyping the kecamatan cleared the province, `syncCod` dropped COD, and after the new pick the shopper sat on prepaid rates and had to choose COD again.
