@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 12:25 UTC] — DEPLOY · PR #451 (storefront redesign C, all tenants) live on production (`0e4d950a`) + server cleanup
+Executor: Main Session (Claude Code). Owner: "ya lanjut sempurnakan jika sudah dan bersihkan file2 yang sudah tidak terpakai".
+- **Deploy:** #451 merged (`0e4d950a`; CI green, no deployment in flight, disk 38 %); triggered by hand (`deployment_uuid ovknejtpg9fhiifoi6sgy85e`), 11:59:48 → finished 12:18:53 (~19 min).
+- **Verified:** admin, super-admin, storefront, landing, docs on `…:0e4d950a…` `(healthy)` on two consecutive polls, `migrate`/`seed` `Exited (0)`; production migrations still 117 (no migration in this release); `ops/tokophi-probe.sh` exit 0; live `batiknusantara.tokophi.id` home/PDP/article/cart at 390 + 1440 px: 200, header icons 20 px, 0 page errors, no horizontal overflow; the store keeps its own colour/font (the monochrome reset has NOT been run).
+- **Server cleanup:** disk 46 % → 42 % (images 38 → 31, ~4.3 GB) with the sanctioned `tokophi-docker-cleanup.sh` (never touches volumes); current + two rollback images (`14bf5d43`, `2a0f7eb7`) retained; all five web containers still healthy. Build cache (13.4 GB, < 24 h old) is kept on purpose — the script keeps 24 h for fast rebuilds and turns aggressive at ≥ 70 % / < 25 GB free. Not touched: three empty anonymous volumes (4 KB each; DEPLOY.md: never prune volumes), the `coolify-helper` image (used by every deploy), `/usr/src` kernel headers (system-wide change).
+- **Local cleanup:** my merged worktrees/branches (`billing-flake`, `blog-lists`), the throwaway test DB `tokophi_billingflake_test`, the redesign dev/prod-preview/Brotli processes (by PID), storefront `dist/`. Storefront scan for unreferenced components/lib files (65 files, validated with a positive and a negative control): none.
+- **Still open (owner):** run `ops/tokophi-storefront-monochrome-reset.sql` (dry-run with `rollback;` first); Mengantar production prerequisites (Partner origin, IP allowlist, Terms/Privacy URLs); area import `load:mengantar-areas`.
+
 ### [2026-11-05 13:10 UTC] — STOREFRONT redesign · independent review fixes before merge
 Executor: Main Session (Claude Code) + one read-only reviewer agent (213 test files + a browser run of PDP → cart → checkout: buying path clean). Owner: "review dan sempurnakan … jika sudah jalankan merge dan deploy". Branch `feat/storefront-redesign` after merging origin/main (c6d8a026).
 - **Auto-fill no longer calls children's wear "adult"** (`packages/lib/src/taxonomy-suggest.ts`): age comes from words (`suggestAgeGroup`: infant/toddler/kids/adult cues; kid + adult words → none; no cue → none), never from "it is clothing" — the default `product-feed.ts` forbids. Existing products lock gender/age on load even when empty (`use-catalog-autofill.ts` `existing`).
