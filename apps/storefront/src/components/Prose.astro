@@ -13,13 +13,15 @@ const { body, size = "page" } = Astro.props;
 const blocks = parseBody(body);
 
 const article = size === "article";
-// Article: 18px (phone) / 20px (≥640px) at a 1.65 line-height — measured 2026-11-05: 1.85 put 33px
-// between 18px lines and 37px between 20px ones, loose enough that a paragraph read as separate
-// lines; 1.65 keeps lines distinct without the drift. Paragraph spacing follows the tighter rhythm.
-const text = article ? "text-lg leading-[1.65] sm:text-xl sm:leading-[1.65]" : "leading-[1.8]";
+// Article: 16px (phone) / 18px (≥640px) at 1.7. Measured 2026-11-05 against the DESIGN.md references'
+// own articles: Dawn 15px/27 (phone) and 16px/28.8 (desktop), Horizon 14px — a shop's journal, not a
+// magazine. Inter's tall x-height reads a size larger than Dawn's Assistant, so 16/18 sits at the same
+// visual weight with room for long reading: ~41 chars/line at 390 px, ~64 at the 624 px column.
+// (It was 18/20px at 1.85 — 37px between desktop lines, which the owner rightly called too big.)
+const text = article ? "text-base leading-[1.7] sm:text-lg sm:leading-[1.7]" : "leading-[1.8]";
 ---
 
-<div class:list={[article ? "space-y-6" : "space-y-5"]}>
+<div class:list={[article ? "space-y-5 sm:space-y-6" : "space-y-5"]}>
   {
     blocks.map((b) =>
       b.kind === "ul" ? (

@@ -16,7 +16,7 @@ const articles = await getArticles(store.id);
 
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
-  { name: "Jurnal" },
+  { name: "Blog" },
 ];
 const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 

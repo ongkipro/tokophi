@@ -67,7 +67,7 @@ const PAGE_URL = abs(`/blog/${article.handle}`);
 // them typed out separately until the schema started claiming a crumb the screen never showed.
 const CRUMBS: Crumb[] = [
   { name: "Beranda", href: "/" },
-  { name: "Jurnal", href: "/blog" },
+  { name: "Blog", href: "/blog" },
   { name: article.title },
 ];
 
@@ -139,11 +139,11 @@ const HEAD = [articleLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       {article.title}
     </h1>
 
-    {/* The lede reads ABOVE the body (19/22px against the body's 18/20px). It was 16/18px —
-         smaller than the text it introduces, an inverted hierarchy. */}
+    {/* The lede reads ABOVE the body (18/20px against the body's 16/18px). It once sat at or below the
+         body size — an inverted hierarchy. */}
     {
       article.excerpt && (
-        <p class="mt-4 text-[1.1875rem] leading-[1.5] text-pretty text-muted sm:text-[1.375rem]">{article.excerpt}</p>
+        <p class="mt-4 text-lg leading-[1.55] text-pretty text-muted sm:text-xl">{article.excerpt}</p>
       )
     }
 
