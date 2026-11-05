@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-06 UTC] — SEC · #428 review: 2FA enrollment races closed; main merged in (branch `fix/auth-hardening-2026-10`)
+Executor: Main Session (Claude Code); owner: "rekomendasimu jalankan dan reviews lanjut sempurnakan".
+- **Sync:** `origin/main` merged in (no force-push); BUILD-LOG the only conflict (both kept; empty diff3 base markers removed).
+- **Review r1 (GPT-6.1 Sol):** REQUEST_CHANGES — `setup2FA`'s active-2FA guard was read-then-write (a racing `enable2FA` could be undone by a session-only caller) and `enable2FA` could activate a secret swapped in after the code was checked. **Fix:** setup = one `UPDATE … WHERE totp_enabled = false RETURNING`; enable bound to the verified secret.
+- **Review r2:** REQUEST_CHANGES — same shape in `disable2FA` (a stale no-code call could wipe a fresh 2FA). **Fix:** bound to the verified secret, or to (no secret AND off).
+- **Review r3:** APPROVE. Files: `/data/tmp/tokophi-reviews/pr428-r1.review.md`, `pr428-r2.review.md`, `pr428-r3.review.md`.
+- **Tests:** `account-credentials.test.ts` gains a seam that runs the racing write right before the action's UPDATE; all three race tests red on the previous `security.ts`, green now (13/13; with password + compose guards 22/22 at r1). Admin `tsc` 0, lint 0 errors — all through `heavy-run --lock tokophi-env`.
+- **Deploy note (unchanged from the PR):** the storefront container now needs `AUTH_SECRET`; verify a recovery link after deploy.
+
 ### [2026-11-05 12:45 UTC] — DATA · monochrome reset run on production (owner: "ya reset keseluruhan")
 Executor: Main Session (Claude Code). Script `ops/tokophi-storefront-monochrome-reset.sql` (from #451, scoped to colour). Owner chose option (a): reset all three stores that had picked a colour.
 - **Dry-run first** (same script, `commit;` → `rollback;`, production): 3 rows would change, font and image ratios kept; afterwards production was unchanged and no `ops_backup` table remained.
