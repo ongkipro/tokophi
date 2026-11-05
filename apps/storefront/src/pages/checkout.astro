@@ -1394,6 +1394,11 @@ const RECOVER = recovered && {
     // nothing (no courier picked yet, or COD is actually available). Mirrors the gate in syncCod exactly.
     function codReason(shipEl, total) {
       if (!shipEl) return ""; // no courier chosen yet — nothing to explain
+      // Mid-edit of the kecamatan (no district picked): no claim about a destination that does not exist yet.
+      if (destId && !destId.value) return "";
+      // The region outranks the service: a province off the allow-list has no COD whatever the courier
+      // (and on a re-quote store the prepaid rates say nothing about COD services at all).
+      if (!codProvinceOk()) return "COD belum tersedia untuk wilayah tujuan ini.";
       if (shipEl.getAttribute("data-cod") !== "1") {
         // COD rides SPX only. If an SPX rate exists in the list, nudge toward it; if none does, SPX
         // simply doesn't serve this route — say so rather than tell them to pick something absent.
@@ -1402,7 +1407,6 @@ const RECOVER = recovered && {
           ? "COD hanya untuk pengiriman SPX — pilih kurir SPX untuk bayar di tempat."
           : "COD hanya tersedia lewat pengiriman SPX, yang belum melayani rute ini.";
       }
-      if (!codProvinceOk()) return "COD belum tersedia untuk wilayah tujuan ini.";
       if (COD_MAX && total > COD_MAX) return "COD hanya untuk pesanan di bawah " + idr.format(COD_MAX) + ".";
       return "";
     }
@@ -1433,6 +1437,8 @@ const RECOVER = recovered && {
         codOption.hidden = false;
         codRadio.disabled = false;
         showCodHint(""); // available → the row IS the message, no hint needed
+        // The shopper chose COD and a destination change dropped it: give it back here, where it is legal.
+        if (WANT_COD && !codRadio.checked) restoreCodSoon();
         return;
       }
       if (codRadio.checked) {
@@ -2052,6 +2058,24 @@ const RECOVER = recovered && {
     var CARRY_KEY = null;    // the shopper's courier, carried across a COD ⇄ prepaid re-quote
     var RATES_INFLIGHT = null; // "dest|cod|cart" of the fast quote in flight — the same ask is not sent twice
     var leaveTimer = null;
+    // The shopper CHOSE COD (their own click). Survives a destination change: typing a new kecamatan
+    // clears the province, which drops COD — the choice must not go with it. Only an explicit pick of
+    // another method forgets it; programmatic switches (syncCod, leaveCodQuote) fire no change event.
+    var WANT_COD = false;
+    var restoreTimer = null;
+    /** Re-select COD once the new destination's rates are on screen. A real change event, so the COD
+     * re-quote, the fee recompute and the bank-panel sync all run exactly as on a click. */
+    function restoreCodSoon() {
+      if (restoreTimer) return;
+      restoreTimer = setTimeout(function () {
+        restoreTimer = null;
+        if (!WANT_COD || !codRadio || codRadio.checked || codRadio.disabled || codOption.hidden) return;
+        // Still the placeholder (rates loading): the syncCod after they render asks again.
+        if (!form.querySelector('input[name="shipping"]:checked')) return;
+        codRadio.checked = true;
+        codRadio.dispatchEvent(new Event("change", { bubbles: true }));
+      }, 0);
+    }
     /**
      * Leave the COD quote and re-quote prepaid. `codless` = the COD quote itself failed or came back
      * empty: there is no COD to offer for this destination, so stop offering it (the row does not
@@ -2073,6 +2097,7 @@ const RECOVER = recovered && {
     form.addEventListener("change", function (e) {
       if (!e.target || e.target.name !== "payment") return;
       var wantCod = !!(codRadio && codRadio.checked);
+      WANT_COD = wantCod; // only a change EVENT reaches here: the shopper's own pick (or restoreCodSoon)
       if (wantCod === COD_MODE) return;
       if (wantCod && !COD_REQUOTE) return; // the rates on screen already carry their COD flags
       COD_MODE = wantCod;

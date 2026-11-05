@@ -8,6 +8,12 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 11:30 UTC] — SHIP-MENGANTAR · checkout keeps the shopper's COD choice across a destination change
+Executor: Main Session (Claude Code) + a fork (checkout only). Owner: "ya jalankan". Branch `feat/shipping-mengantar` (PR #446).
+- **Before:** retyping the kecamatan cleared the province, `syncCod` dropped COD, and after the new pick the shopper sat on prepaid rates and had to choose COD again.
+- **Now (`checkout.astro`):** `WANT_COD` remembers a COD choice made by the SHOPPER (only real change events write it; programmatic switches do not); when the new destination is COD-eligible, `restoreCodSoon()` re-checks COD through a real change event (so the COD re-quote, fees and bank panel run as on a click). An explicit other method clears it. `codReason` stays silent while the kecamatan is being typed and names the REGION before the service for an off-list province.
+- **Browser (stub, three destinations incl. an NTT one, 390 px):** A → COD → retype → B: QRIS while typing (no quote), then COD + SPX Rp12.000 COD after the pick; COD → NTT: QRIS Rp9.000 + "COD belum tersedia untuk wilayah tujuan ini." → back to B: COD restored; COD → QRIS → change destination: stays QRIS; prepaid → COD → leave unchanged. 0 app console errors (re-run independently by the main session). `astro check` 0 errors / 0 warnings.
+
 ### [2026-11-05 10:30 UTC] — SHIP-MENGANTAR · second independent review: 10 findings fixed (checkout COD state, stale pulls, provider consistency, env at dispatch)
 Executor: Main Session (Claude Code) + a read-only reviewer agent + a fork (checkout only), in parallel. Owner: "review yang perlu dan sempurnakan yang masih bermasalah, jalankan paralel". On top of commit 8378fed2.
 - **Checkout (`checkout.astro`, fork):** a failed/empty COD quote now leaves COD (unchecks it, picks the first prepaid method, marks the destination COD-less, re-quotes prepaid); the shopper's courier survives a COD switch (COD mode prefers a COD-capable rate); `loadRates().catch` drops stale replies (destination + payment method); re-quotes are coalesced (one fast + one full per pick, was two). Browser (stub ongkir): failed COD quote → QRIS + Rp9.000 + hint; JNE kept across COD on/off; a late 500 for an old destination no longer overwrites the current list; prepaid → COD → back regression unchanged; no-COD route still drops COD with the hint. `astro check` 0 errors / 0 warnings.
