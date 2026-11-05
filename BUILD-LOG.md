@@ -8,6 +8,13 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 10:50 UTC] — STOREFRONT · article/page lists: a lead-in line above a list no longer collapses into one paragraph
+Executor: Main Session (Claude Code). Owner asked to review the blog/article UI ("/blog/cara-mencuci-batik"). Branch `fix/blog-list-parsing` from main.
+- **Bug (live):** `parseBody` (`apps/storefront/src/data/content.ts`) made a list only when EVERY line of a blank-line block started with "- ". Merchants type a lead-in straight above the list ("Yang perlu dihentikan:" + "- …" lines), so the whole block rendered as ONE paragraph with the dashes inline — measured on `/blog/cara-mencuci-batik` (390 px).
+- **Fix:** inside a block, consecutive "- " lines are a list and the other lines a paragraph, in order. Plain text only, still never `set:html`.
+- **Tests:** `apps/storefront/src/data/content-body.test.ts` (lead-in + list, list-only, soft wraps, text after a list, a mid-sentence dash is not an item, empty input) — 2 of 4 red against the old parser.
+- **Verified:** the article renders 2 lists × 4 items, no inline dashes, 0 page errors (Playwright, storefront dev on a local DB copy); `astro check` 0 errors.
+
 ### [2026-11-05 12:20 UTC] — SHIP-MENGANTAR · pre-merge production review of PR #446
 Executor: Main Session (Claude Code). Owner: "ya jalankan merger, review, dan cek jika ada yang perlu di sempurnakan".
 - **Registration held while `MENGANTAR_ENV` is unset** (`packages/db/src/mengantar-account.ts` `connectStoreMengantar`): unset reads as sandbox, so saving sandbox credentials on production would have registered REAL sellers' emails/phones on the sandbox partner. Now `configuration_blocked`, no network — same rule as the switch and the quote dispatch. Test added (`envSource: "default"` → pending, 0 partner calls), proven red by removing the condition.
