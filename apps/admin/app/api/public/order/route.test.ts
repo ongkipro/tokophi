@@ -70,6 +70,10 @@ const runId = randomUUID().slice(0, 8);
 const handle = `availability-${runId}`;
 const discountCode = `ORDER-${runId}`;
 const sessionId = `checkout-${runId}`;
+const AFF_CODE = `MITRA${runId.slice(0, 4).toUpperCase()}`;
+const SELF_CODE = `SELF${runId.slice(0, 4).toUpperCase()}`;
+/** The canonical form of the request's "0812 3456 7890" — what the route must hand to attribution. */
+const BUYER_PHONE = "6281234567890";
 
 let client: Sql;
 let POST: (request: Request) => Promise<Response>;
@@ -238,17 +242,21 @@ async function mutationState(storeId: string) {
   };
 }
 
-function orderRequest(key: string) {
+type OrderOverrides = { sessionId?: string; ip?: string; affiliateCode?: string; refCode?: string };
+
+function orderRequest(key: string, o: OrderOverrides = {}) {
   const fixture = fixtures[key]!;
   return new Request("http://localhost/api/public/order", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-forwarded-for": "203.0.113.42",
+      "x-forwarded-for": o.ip ?? "203.0.113.42",
     },
     body: JSON.stringify({
+      ...(o.affiliateCode === undefined ? {} : { affiliateCode: o.affiliateCode }),
+      ...(o.refCode === undefined ? {} : { refCode: o.refCode }),
       storeSlug: fixture.slug,
-      sessionId,
+      sessionId: o.sessionId ?? sessionId,
       items: [
         {
           handle,
@@ -315,6 +323,20 @@ beforeAll(async () => {
     approvedAt,
     suspendedAt: null,
   });
+  // Affiliate wiring (F-A1/F-A4/F-A5): one store with the programme ON, one with it OFF.
+  for (const [key, enabled] of [["aff", true], ["affoff", false]] as const) {
+    await addStore(key, { status: "active", approvedAt, suspendedAt: null });
+    const storeId = fixtures[key]!.id;
+    await client`
+      insert into store_settings (store_id, affiliate_enabled, affiliate_rate_bps, affiliate_hold_days)
+      values (${storeId}, ${enabled}, 1000, 3)
+    `;
+    await client`
+      insert into affiliates (store_id, code, name, phone, status) values
+        (${storeId}, ${AFF_CODE}, 'Mitra', '6281111111111', 'aktif'),
+        (${storeId}, ${SELF_CODE}, 'Pembeli Sendiri', ${BUYER_PHONE}, 'aktif')
+    `;
+  }
 });
 
 beforeEach(() => {
@@ -329,6 +351,18 @@ afterAll(async () => {
     await sql`set local session_replication_role = 'replica'`;
     await sql`
       delete from ledger_entries
+       where store_id in (select id from stores where account_id = ${accountId})
+    `;
+    await sql`
+      delete from affiliate_commissions
+       where store_id in (select id from stores where account_id = ${accountId})
+    `;
+    await sql`
+      delete from affiliates
+       where store_id in (select id from stores where account_id = ${accountId})
+    `;
+    await sql`
+      delete from store_settings
        where store_id in (select id from stores where account_id = ${accountId})
     `;
     await sql`
@@ -588,5 +622,59 @@ suite("POST /api/public/order — public store availability", () => {
     });
     expect(h.quoteShipping).toHaveBeenCalledTimes(1);
     expect(await mutationState(fixture.id)).toEqual(before);
+  });
+});
+
+suite("POST /api/public/order — affiliate attribution wiring (F-A1, F-A4, F-A5)", () => {
+  let n = 0;
+  /** A fresh checkout session + client IP per order, so idempotency and the per-IP limit stay out of the way. */
+  async function place(key: string, o: Omit<OrderOverrides, "sessionId" | "ip"> = {}) {
+    n += 1;
+    const res = await POST(orderRequest(key, { ...o, sessionId: `aff-${runId}-${n}`, ip: `198.51.100.${n}` }));
+    const body = (await res.json()) as { ok?: boolean; orderNumber?: string };
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    const [order] = await client<{ id: string }[]>`
+      select id from orders where store_id = ${fixtures[key]!.id} and number = ${body.orderNumber ?? ""}
+    `;
+    expect(order).toBeDefined();
+    const commissions = await client<{ code: string; source: string; commission_idr: string }[]>`
+      select a.code, c.source, c.commission_idr::text
+        from affiliate_commissions c join affiliates a on a.id = c.affiliate_id
+       where c.order_id = ${order!.id}
+    `;
+    return commissions;
+  }
+
+  it("a typed code attaches a commission to the order the route created", async () => {
+    const rows = await place("aff", { affiliateCode: AFF_CODE.toLowerCase() });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ code: AFF_CODE });
+    expect(Number(rows[0]!.commission_idr)).toBeGreaterThan(0);
+  });
+
+  it("a typed code beats the captured ?ref=", async () => {
+    const rows = await place("aff", { affiliateCode: AFF_CODE, refCode: SELF_CODE });
+    expect(rows.map((r) => r.code)).toEqual([AFF_CODE]);
+  });
+
+  it("an unknown typed code falls back to the captured ?ref= (refCode reaches attribution)", async () => {
+    const rows = await place("aff", { affiliateCode: "TIDAKADA", refCode: AFF_CODE });
+    expect(rows.map((r) => r.code)).toEqual([AFF_CODE]);
+  });
+
+  it("a bad code never costs the sale: the order is created, with no commission", async () => {
+    expect(await place("aff", { affiliateCode: "TIDAKADA" })).toEqual([]);
+    expect(await place("aff", { affiliateCode: "x".repeat(500), refCode: "<script>" })).toEqual([]);
+  });
+
+  it("self-referral is caught from the RAW checkout phone (the route passes the canonical 62… form)", async () => {
+    // The request types "0812 3456 7890"; the affiliate row holds 6281234567890. If the route passed the
+    // raw string, the two would differ and the buyer would earn commission on their own order.
+    expect(await place("aff", { affiliateCode: SELF_CODE })).toEqual([]);
+  });
+
+  it("programme OFF: a valid code is ignored and the order still goes through", async () => {
+    expect(await place("affoff", { affiliateCode: AFF_CODE })).toEqual([]);
   });
 });

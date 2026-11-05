@@ -2127,6 +2127,7 @@
             "catalog"
           ],
           "lib": [
+            "affiliate-apply",
             "chat"
           ],
           "locals": true,
@@ -4520,6 +4521,12 @@
       }
     ],
     "apps/storefront/src/lib": [
+      {
+        "module": "affiliate-apply.ts",
+        "exports": [
+          "handleAffiliateApplication"
+        ]
+      },
       {
         "module": "breadcrumb.ts",
         "exports": [

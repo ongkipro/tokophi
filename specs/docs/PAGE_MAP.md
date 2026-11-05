@@ -187,7 +187,7 @@
 | URL | what it is | file | layout | src/data | src/lib | locals | set:html | tests |
 |---|---|---|---|---|---|---|---|---|
 | `/404` | Not found (also what a wrong Host resolves to). | `apps/storefront/src/pages/404.astro` | `Layout` | — | — | ✓ |  | — |
-| `/affiliate` | 'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5). | `apps/storefront/src/pages/affiliate.astro` | `Layout` | `affiliate` `catalog` | `chat` | ✓ |  | — |
+| `/affiliate` | 'Program Affiliate' — public application form (POST to itself, honeypot, 5/hour/IP); 404 while the store's programme is off (Task 9.5). | `apps/storefront/src/pages/affiliate.astro` | `Layout` | `affiliate` `catalog` | `affiliate-apply` `chat` | ✓ |  | — |
 | `/blog/[handle]` | One article. | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
@@ -432,6 +432,7 @@
 
 | module | exports |
 |---|---|
+| `affiliate-apply.ts` | `handleAffiliateApplication` |
 | `breadcrumb.ts` | `breadcrumbLd` `ldScript` |
 | `cart-variant.ts` | `noVariantChoice` |
 | `chat.ts` | `CHAT_COOKIE` `LIMITS` `MAX_BODY` `MAX_NAME` `MAX_OPEN_CONVERSATIONS` `clientIp` `cursorOf` `ipHash` `json` `mintVisitorCookie` `parseCursor` `rateLimit` `readVisitorToken` |
