@@ -69,7 +69,7 @@ Executor: Main Session (Claude Code). Branch `feat/shipping-mengantar`. Owner 20
 - **Tests** (`apps/admin/lib/mengantar-shipping.test.ts`): confirmed cancel → booking `voided`, ids null, second click sends nothing; new: no readable `deletedCount` → stays `cancellation_requested`. Proven red by feeding `outcome: null` instead of `canceled` (1 failed), restored.
 - **Verified:** `vitest apps/admin packages/lib apps/super-admin` on `tokophi_shipping_test` 163 files / 1705 tests passed (one earlier run had `ka-sorting-code.test.ts` fail at FILE level with 0 failing tests; passes alone and on the full rerun — intermittent, not touched by this change). `tsc --noEmit` admin + super-admin clean.
 - **Not done:** `idempotencyKey` on POST /order still unproven (not exercised); sandbox order #2 got no waybill even after DELIVERED (sandbox behaviour, recorded); browser checks of the Seller card, Bayar ongkir and Super Admin `/pengiriman` still open; the sealed sandbox key uses a throwaway `INTEGRATION_TOKEN_KEY` kept outside the repo.
-||||||| a2388bae
+
 ### [2026-11-05 11:10 UTC] — TEST · cron/billing test no longer bills other suites' stores (shared-test-DB flake)
 Executor: Main Session (Claude Code). Owner: "ya jalankan" (fix the flake on its own branch). Branch `fix/cron-billing-test-scope` from main a2388bae.
 - **Cause:** `apps/admin/app/api/cron/billing/route.test.ts` drives the REAL sweep, which walks EVERY store in the database — and the test DB is shared by every suite running in parallel. Each tick billed (and re-statused) other suites' lapsed test stores, so their `delete from stores` cleanup failed on `invoices_store_id_stores_id_fk`. The failure moved between unrelated files run to run (`users.test`, `menus.test`, `ka-sorting-code.test`).
