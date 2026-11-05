@@ -133,7 +133,7 @@ suite("release of an `unknown` booking", () => {
 
   it("refuses to adopt a shipment the provider says belongs to ANOTHER order, or one it does not have", async () => {
     const b = await unknownBooking();
-    const other = provider({ track: () => ({ body: { success: true, data: [row(b.number, { destinationMark: "INV-SOMEONE-ELSE" })] } }) });
+    const other = provider({ track: () => ({ body: { success: true, data: [row(b.number, { ORDER_ID: "MGO-X", destinationMark: "INV-SOMEONE-ELSE" })] } }) });
     const r1 = await ops.reconcileUnknownBookingWith(other.deps, "o@test.invalid", b.bookingId, { reference: "MGO-X", reason: "alasan cukup panjang" });
     expect(r1.ok).toBe(false);
     expect(r1.message).toMatch(/milik pesanan INV-SOMEONE-ELSE/);
@@ -142,5 +142,35 @@ suite("release of an `unknown` booking", () => {
     expect(r2.ok).toBe(false);
     expect(none.calls.map((c) => c.path)).toEqual(["/order?order_id=MGO-Y", "/order?tracking_id=MGO-Y"]);
     expect((await booking(b.bookingId)).status).toBe("unknown");
+  });
+});
+
+suite("stranded Mengantar orders — the operator sees what no account can serve", () => {
+  const order = async (sid: string, n: string, over: { status?: string; mgOrderId?: string | null; mgSeller?: string | null } = {}) =>
+    client`insert into orders (store_id, number, status, shipping_provider, courier, service_type, mg_order_id, mg_seller_id, mg_env)
+           values (${sid}, ${n}, ${over.status ?? "diproses"}::order_status, 'mengantar', 'jne', 'JNE', ${over.mgOrderId ?? null}, ${over.mgSeller ?? null}, ${over.mgOrderId ? "sandbox" : null})`;
+
+  it("lists blocked / missing / seller-changed accounts; never a healthy one or a finished order", async () => {
+    const mine = (rows: { orderNumber: string }[]) => rows.filter((r) => r.orderNumber.startsWith(`STR-${runId}`)).map((r) => r.orderNumber).sort();
+    // Healthy store (the suite's connected account): unbooked + booked-by-this-seller → not stranded.
+    await order(storeId, `STR-${runId}-ok-unbooked`);
+    await order(storeId, `STR-${runId}-ok-booked`, { mgOrderId: `m-${runId}-1`, mgSeller: `ops-seller-${runId}` });
+    // Same store, booked by a seller account it no longer holds.
+    await order(storeId, `STR-${runId}-old-seller`, { mgOrderId: `m-${runId}-2`, mgSeller: "some-old-seller" });
+    // Finished orders never show.
+    await order(storeId, `STR-${runId}-done`, { status: "selesai", mgOrderId: `m-${runId}-3`, mgSeller: "some-old-seller" });
+    const rows = await ops.listStrandedMengantar("sandbox");
+    expect(mine(rows)).toEqual([`STR-${runId}-old-seller`]);
+    expect(rows.find((r) => r.orderNumber === `STR-${runId}-old-seller`)).toMatchObject({ booked: true, sellerChanged: true, accountState: "connected" });
+
+    // The store's account gets blocked → its unbooked AND booked orders are stranded.
+    await client`update store_mengantar_accounts set state = 'blocked' where store_id = ${storeId} and env = 'sandbox'`;
+    try {
+      const blocked = await ops.listStrandedMengantar("sandbox");
+      expect(mine(blocked)).toEqual([`STR-${runId}-ok-booked`, `STR-${runId}-ok-unbooked`, `STR-${runId}-old-seller`].sort());
+      expect(blocked.find((r) => r.orderNumber === `STR-${runId}-ok-unbooked`)).toMatchObject({ booked: false, accountState: "blocked", sellerChanged: false });
+    } finally {
+      await client`update store_mengantar_accounts set state = 'connected' where store_id = ${storeId} and env = 'sandbox'`;
+    }
   });
 });

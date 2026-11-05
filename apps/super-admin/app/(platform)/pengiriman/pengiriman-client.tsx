@@ -14,7 +14,7 @@ import { Textarea } from "@tokophi/ui/textarea";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@tokophi/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@tokophi/ui/dialog";
 
-import type { StoreAccountRow, UnknownBookingRow } from "@/lib/mengantar-ops";
+import type { StoreAccountRow, StrandedOrderRow, UnknownBookingRow } from "@/lib/mengantar-ops";
 import { reconcileMengantarBooking, retryStoreMengantar, rotateStoreMengantar } from "@/lib/actions";
 
 const RECONCILE_REASON_MIN = 10;
@@ -30,7 +30,7 @@ const STATE_LABEL: Record<string, string> = {
   rotating: "Ganti kunci",
 };
 
-export function PengirimanClient({ accounts, unknown, isOwner }: { accounts: StoreAccountRow[]; unknown: UnknownBookingRow[]; isOwner: boolean }) {
+export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { accounts: StoreAccountRow[]; unknown: UnknownBookingRow[]; stranded: StrandedOrderRow[]; isOwner: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [rotating, setRotating] = useState<StoreAccountRow | null>(null);
@@ -154,6 +154,50 @@ export function PengirimanClient({ accounts, unknown, isOwner }: { accounts: Sto
                         Rekonsiliasi
                       </Button>
                     </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pesanan Mengantar tanpa akun aktif</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Pesanan ini sudah dihitung lewat Mengantar (ongkirnya milik seller), tetapi akun Mengantar tokonya tidak bisa dipakai — belum
+            bisa dibooking, atau tidak bisa dilacak. Pulihkan akun tokonya di atas (daftar ulang / perbarui kunci); jangan pindahkan
+            pesanannya ke provider lain.
+          </p>
+        </CardHeader>
+        {stranded.length === 0 ? (
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">Tidak ada pesanan yang tertahan.</CardContent>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Toko · pesanan</TableHead>
+                  <TableHead>Akun Mengantar</TableHead>
+                  <TableHead>Pengiriman</TableHead>
+                  <TableHead>Sejak</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stranded.map((r) => (
+                  <TableRow key={r.orderNumber}>
+                    <TableCell>
+                      <Link href={`/toko/${r.storeId}`} className="font-medium hover:underline">
+                        {r.storeName}
+                      </Link>
+                      <div className="font-mono text-xs text-muted-foreground">{r.orderNumber}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {r.sellerChanged ? "Dibooking dengan akun lama" : r.accountState ? (STATE_LABEL[r.accountState] ?? r.accountState) : "Belum ada akun"}
+                    </TableCell>
+                    <TableCell className="text-sm">{r.booked ? "Sudah dibooking — pelacakan berhenti" : "Belum dibooking"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{when(r.placedAt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -337,5 +337,7 @@ describe("sellerConnectRefusal — the Seller button cannot spend the shared par
     expect(sellerConnectRefusal({ state: "email_taken", updatedAt: ago(SELLER_CONNECT_COOLDOWN_MS - 1) }, now)).toMatch(/1 detik/);
     expect(sellerConnectRefusal({ state: "failed", updatedAt: ago(SELLER_CONNECT_COOLDOWN_MS) }, now)).toBeNull();
     expect(sellerConnectRefusal({ state: "none", updatedAt: null }, now)).toBeNull();
+    // A key rotation in progress is not a registration to retry.
+    expect(sellerConnectRefusal({ state: "rotating", updatedAt: ago(10 * 60_000) }, now)).toMatch(/sedang diperbarui/);
   });
 });

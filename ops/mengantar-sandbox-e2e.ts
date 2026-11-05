@@ -32,6 +32,8 @@
 // The sandbox can serve Cloudflare 502 pages for minutes: steps 1–3 are safe to re-run; step 7 is NOT
 // blindly re-runnable — an unclear booking answer is left `unknown` and must be reconciled first.
 
+import { isReservedSlug, slugify } from "@tokophi/lib/store-slug"; // pure — safe before the env checks
+
 const args = process.argv.slice(2);
 const arg = (name: string) => {
   const i = args.indexOf(`--${name}`);
@@ -86,7 +88,9 @@ async function main() {
   if (PHONE && !partnerPhone(PHONE)) refuse("--phone must be an Indonesian mobile number (08…/62…)");
 
   // ── Test store (idempotent by slug) ─────────────────────────────────────────────────────────
-  const slug = `mg-sbx-${TAG}`;
+  // The shared slug rule (store-slug.test.ts: every writer of stores.slug goes through it).
+  const slug = slugify(`mg-sbx-${TAG}`);
+  if (!slug || isReservedSlug(slug)) refuse(`test store slug ${JSON.stringify(slug)} is empty or reserved`);
   const ORIGIN_DISTRICT = 2103; // Cilandak, Jakarta Selatan (sandbox couriers want a Jakarta pickup)
   const DEST_DISTRICT = 2105; // Kebayoran Baru, Jakarta Selatan
   const area = async (d: number) =>

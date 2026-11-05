@@ -169,11 +169,24 @@ export async function shippingConfigured(): Promise<boolean> {
  */
 export async function quoteShipping(input: QuoteInput): Promise<Quote> {
   const cfg = await getProviderConfig();
-  if (cfg.shipping === "mengantar" && !input.cod) {
+  // The switch is honoured only where THIS process names its Mengantar env: an unset `MENGANTAR_ENV`
+  // reads as sandbox, and quoting real checkouts there would book parcels no courier collects. The
+  // Super Admin switch checks its own process; this is the check that holds where orders are priced
+  // (and it also covers a provider chosen by the `SHIPPING_PROVIDER` env with no DB row).
+  if (cfg.shipping === "mengantar" && !input.cod && cfg.mengantar.envSource !== "env") {
+    console.warn("[shipping/quote] shipping provider is mengantar but MENGANTAR_ENV is not set in this process — quoting the default provider");
+  } else if (cfg.shipping === "mengantar" && !input.cod) {
     const acc = await openStoreMengantar(input.storeId);
     if (acc.ok) {
       const mg = await quoteMengantar(input, acc.cfg);
       if (mg.ok && mg.rates.length) return mg;
+      // An empty SCOPED answer (the fast pair) is not "Mengantar cannot ship here" while the full list
+      // has rates: falling back for the fast scope alone would paint one provider's prices beside the
+      // other's. Decide on the FULL scope (the estimate is cached per route, so this is no second call).
+      if (mg.ok && input.couriers) {
+        const all = await quoteMengantar({ ...input, couriers: undefined }, acc.cfg);
+        if (all.ok && all.rates.length) return mg;
+      }
       // A connected store whose Mengantar quote cannot sell anything here (no origin area, a district
       // with no representative, every courier filtered out, or the provider down) FALLS BACK like an
       // unconnected one (O6) instead of leaving the shopper with no shipping — and so no order. The

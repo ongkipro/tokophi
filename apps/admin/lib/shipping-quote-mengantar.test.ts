@@ -118,6 +118,7 @@ function answer(body: unknown, status = 200) {
 }
 
 beforeEach(() => {
+  process.env.MENGANTAR_ENV = "sandbox"; // the switch is honoured only where the env is NAMED
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   answer({ success: true, data: ESTIMATE });
@@ -126,6 +127,7 @@ beforeEach(() => {
   seed();
 });
 afterEach(() => {
+  delete process.env.MENGANTAR_ENV;
   vi.unstubAllGlobals();
   setProviderConfigLoader(null);
 });
@@ -262,6 +264,19 @@ describe("quoteShipping — switch = mengantar", () => {
     expect(q).toMatchObject({ ok: true, provider: "kiriminaja", destinationAreaId: null, codEnabled: true });
   });
 
+  it("an UNSET MENGANTAR_ENV in the pricing process never quotes Mengantar (it would read as sandbox) — default provider, account not even opened", async () => {
+    config("mengantar", true);
+    delete process.env.MENGANTAR_ENV;
+    h.kaShippingPrice.mockResolvedValue(KA_SPX);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const q = await quoteShipping({ storeId: STORE, destinationId: 337, items: CART });
+    expect(warn.mock.calls.flat().join(" ")).toMatch(/MENGANTAR_ENV is not set/);
+    warn.mockRestore();
+    expect(h.open).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(q).toMatchObject({ ok: true, provider: "kiriminaja" });
+  });
+
   it("O4/O6: a COD quote ALWAYS goes to KiriminAja, even for a connected store, without opening its account", async () => {
     config("mengantar", true);
     h.kaShippingPrice.mockResolvedValue(KA_SPX);
@@ -302,6 +317,19 @@ describe("quoteShipping — switch = mengantar", () => {
     const q = await quoteShipping({ storeId: STORE, destinationId: 335, items: CART, couriers: ["spx", "jne", "jnt"] });
     if (!q.ok) throw new Error(q.error);
     expect(q.rates.map((r) => r.code)).toEqual(["jne"]);
+  });
+
+  it("an EMPTY fast scope stays on Mengantar while the full list has rates — never one provider beside the other", async () => {
+    config("mengantar");
+    seed({ platform: ["jnt"] }); // the fast pair (spx, jne) prices nothing; J&T does
+    h.kaShippingPrice.mockResolvedValue(KA_SPX);
+    const fast = await quoteShipping({ storeId: STORE, destinationId: 338, items: CART, couriers: ["spx", "jne"] });
+    expect(fast).toMatchObject({ ok: true, provider: "mengantar", rates: [] });
+    expect(h.kaShippingPrice).not.toHaveBeenCalled();
+    const all = await quoteShipping({ storeId: STORE, destinationId: 338, items: CART });
+    expect(all).toMatchObject({ ok: true, provider: "mengantar" });
+    if (all.ok) expect(all.rates.map((r) => r.code)).toEqual(["jnt"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // one estimate per route, cached
   });
 });
 

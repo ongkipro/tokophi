@@ -883,8 +883,15 @@ async function track(param: "tracking_id" | "order_id", value: string, opts?: Mg
   if (!v) return refuse(`${param} kosong.`);
   const r = await mg("GET", `/order?${new URLSearchParams({ [param]: v })}`, opts);
   if (!r.ok) return fail(r);
-  const row = Array.isArray(r.body.data) ? r.body.data.find(isObj) : undefined;
-  return { ok: true, data: row ? parseMgTracking(row) : null };
+  const rows = Array.isArray(r.body.data) ? r.body.data.filter(isObj) : [];
+  // An EMPTY answer is "no such shipment". A NON-empty answer must name the shipment we asked for
+  // (waybill or ORDER_ID): taking "the first row" of an answer about something else would map another
+  // parcel's status onto this order — and an answer we cannot match is unknown, never "not found".
+  if (!rows.length) return { ok: true, data: null };
+  const want = v.toUpperCase();
+  const row = rows.find((x) => [x.cnote_no, x.ORDER_ID].some((id) => str(id)?.toUpperCase() === want));
+  if (!row) return { ok: false, error: "Jawaban pelacakan Mengantar tidak menyebut pengiriman yang diminta.", httpStatus: r.httpStatus };
+  return { ok: true, data: parseMgTracking(row) };
 }
 
 /** `GET /order?tracking_id=` — by waybill. `data: null` = no such shipment. */

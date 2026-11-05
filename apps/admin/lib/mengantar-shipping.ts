@@ -1,6 +1,6 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/lib/tenant";
 import { openFailureMessage, openStoreMengantar, storePickupAddressId, type MgOpen } from "@tokophi/db/mengantar-account";
 import {
@@ -22,7 +22,7 @@ import {
   type MgRate,
   type MgResult,
 } from "@tokophi/lib/mengantar";
-import type { MengantarConfig } from "@tokophi/lib/provider-config";
+import { DEFAULT_SHIPPING_PROVIDER, type MengantarConfig, type ShippingProvider } from "@tokophi/lib/provider-config";
 import { cacheGet, cacheSet } from "@tokophi/lib/cache";
 import { isInstantCourier } from "@tokophi/lib/couriers";
 import { mengantarRates, type QuotedRate } from "@/lib/shipping-quote";
@@ -31,7 +31,7 @@ import { weightForOrder } from "@/lib/shipping-weight";
 import { composePickupAddress } from "@/lib/pickup-address";
 import { applyOrderStatusChange, shipmentLocked, type OrderStatus } from "@/lib/order-status";
 import { syncOrderFromKa } from "@/lib/ka-tracking";
-import { pullMengantar } from "@/lib/mengantar-tracking";
+import { MG_VANISH_MIN_AGE_MS, pullMengantar } from "@/lib/mengantar-tracking";
 import type { CreateShipmentResult, Rate } from "@/lib/actions/shipping";
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -107,12 +107,12 @@ const callFor = (cfg: MengantarConfig, opts: MgShippingOptions) => ({ cfg, fetch
 type Call = ReturnType<typeof callFor>;
 
 /** The order's provider stamp, read through RLS. `null` = no such order in this store. */
-export async function orderShippingProvider(storeId: string, orderNumber: string): Promise<"kiriminaja" | "mengantar" | null> {
+export async function orderShippingProvider(storeId: string, orderNumber: string): Promise<ShippingProvider | null> {
   const [o] = await withTenant(storeId, (tx) =>
     tx.select({ p: schema.orders.shippingProvider }).from(schema.orders).where(eq(schema.orders.number, orderNumber)).limit(1),
   );
   if (!o) return null;
-  return o.p === "mengantar" ? "mengantar" : "kiriminaja";
+  return o.p === "mengantar" ? "mengantar" : DEFAULT_SHIPPING_PROVIDER;
 }
 
 type OrderCtx = Awaited<ReturnType<typeof loadOrder>>;
@@ -664,7 +664,7 @@ export async function cancelMengantar(storeId: string, orderNumber: string, opts
   const intent = await withTenant(storeId, async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${storeId})::bigint)`);
     const [booking] = await tx
-      .select({ id: schema.shipmentBookings.id, status: schema.shipmentBookings.status })
+      .select({ id: schema.shipmentBookings.id, status: schema.shipmentBookings.status, acceptedAt: schema.shipmentBookings.acceptedAt })
       .from(schema.shipmentBookings)
       .where(sql`${schema.shipmentBookings.orderId} = ${o.id} and ${schema.shipmentBookings.status} in ('accepted', 'cancellation_requested')`)
       .limit(1)
@@ -675,7 +675,7 @@ export async function cancelMengantar(storeId: string, orderNumber: string, opts
       .update(schema.shipmentBookings)
       .set({ status: "cancellation_requested", failureNote: "Pembatalan sedang diminta ke kurir; jawaban kurir belum tercatat." })
       .where(eq(schema.shipmentBookings.id, booking.id));
-    return { kind: "recorded" as const, bookingId: booking.id };
+    return { kind: "recorded" as const, bookingId: booking.id, acceptedAt: booking.acceptedAt };
   });
   if (intent.kind === "pending") return { ok: false, error: "Permintaan pembatalan sebelumnya masih diproses kurir." };
   // Every booking this file makes has a row; an order with provider ids and no active booking is not
@@ -700,8 +700,10 @@ export async function cancelMengantar(storeId: string, orderNumber: string, opts
     try {
       const pull = pullMengantar({ number: o.number, awb: o.awb, mgOrderId: o.mgOrderId, mgOrderCode: o.mgOrderCode, mgIsPaid: o.mgIsPaid }, call);
       const back = pull ? await pull : null;
-      if (back?.ok && back.data === null) {
-        const s = await syncOrderFromKa(orderNumber, null, null, null, { kind: "tracked", outcome: "canceled" });
+      // Only for a booking old enough to be indexed: a fresh one that "is not there yet" is not gone.
+      const age = intent.acceptedAt ? Date.now() - new Date(intent.acceptedAt).getTime() : Infinity;
+      if (back?.ok && back.data === null && age >= MG_VANISH_MIN_AGE_MS) {
+        const s = await syncOrderFromKa(orderNumber, null, null, null, { kind: "tracked", outcome: "canceled" }, null, { mgOrderId: o.mgOrderId });
         if (s.changed.includes("cancel:voided")) return { ok: true };
       }
     } catch (error) {
@@ -712,7 +714,7 @@ export async function cancelMengantar(storeId: string, orderNumber: string, opts
   }
   await recordMgCancelAnswer(storeId, intent.bookingId, { status: "cancellation_requested", failureNote: "Pembatalan diterima kurir; menunggu konfirmasi lewat pelacakan." });
   try {
-    const s = await syncOrderFromKa(orderNumber, null, null, null, { kind: "tracked", outcome: "canceled" });
+    const s = await syncOrderFromKa(orderNumber, null, null, null, { kind: "tracked", outcome: "canceled" }, null, { mgOrderId: o.mgOrderId });
     if (s.changed.includes("cancel:voided")) return { ok: true };
   } catch (error) {
     // The DELETE landed; tracking still closes it (as `attention` at worst). Never report a failure here.
@@ -747,12 +749,19 @@ export async function payMengantarUnpaid(storeId: string, orderNumber: string, o
   if (!acc.ok) return { ok: false, message: openFailureMessage(acc.reason) };
   const batchId = o.batchId;
   const sameBatch = and(eq(schema.orders.mgBatchId, batchId), eq(schema.orders.shippingProvider, "mengantar"), eq(schema.orders.mgSellerId, acc.sellerId));
+  // Orders of this batch ALREADY in flight (an earlier pay whose answer was lost): Mengantar may pay them
+  // in this call too, so its count can no longer be matched to OUR claim — read before claiming.
+  const inFlight = await withTenant(storeId, (tx) => tx.select({ number: schema.orders.number }).from(schema.orders).where(and(sameBatch, isNull(schema.orders.mgIsPaid))));
   const claimed = await withTenant(storeId, (tx) =>
     tx.update(schema.orders).set({ mgIsPaid: null }).where(and(sameBatch, eq(schema.orders.mgIsPaid, false))).returning({ number: schema.orders.number }),
   );
   if (!claimed.length) return { ok: false, message: "Ongkir pesanan ini tidak lagi berstatus belum dibayar — sudah dibayar, atau pembayarannya sedang dikonfirmasi." };
+  const mine = claimed.map((c) => c.number);
+  // Settles exactly the rows THIS click claimed — never another click's in-flight row.
   const settle = (to: boolean) =>
-    withTenant(storeId, (tx) => tx.update(schema.orders).set({ mgIsPaid: to }).where(and(sameBatch, isNull(schema.orders.mgIsPaid))).returning({ number: schema.orders.number }));
+    withTenant(storeId, (tx) =>
+      tx.update(schema.orders).set({ mgIsPaid: to }).where(and(sameBatch, isNull(schema.orders.mgIsPaid), inArray(schema.orders.number, mine))).returning({ number: schema.orders.number }),
+    );
 
   let r: MgResult<{ paid: number; cnotes: string[] }>;
   try {
@@ -770,7 +779,7 @@ export async function payMengantarUnpaid(storeId: string, orderNumber: string, o
   // A SHORT pay (the wallet covered only part of the batch): the reply counts, it does not name which
   // orders were paid. Guessing would mark an unpaid shipment paid — so every claimed order stays
   // `null` (in flight, not re-payable) and tracking settles each one (waybill → paid; isPaid:false → payable).
-  if (r.data.paid < claimed.length) {
+  if (r.data.paid < claimed.length || inFlight.length > 0) {
     return {
       ok: true,
       pending: true,

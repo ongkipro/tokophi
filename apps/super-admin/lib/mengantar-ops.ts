@@ -183,3 +183,44 @@ export async function listMengantarAccounts(env: string): Promise<StoreAccountRo
     .orderBy(sql`${schema.storeMengantarAccounts.state} = 'connected'`, schema.storeMengantarAccounts.updatedAt);
   return rows.map((r) => ({ ...r, updatedAt: new Date(r.updatedAt) }));
 }
+
+export type StrandedOrderRow = {
+  storeId: string;
+  storeName: string;
+  orderNumber: string;
+  status: string;
+  /** Has a Mengantar shipment already (tracking cannot run) vs still waiting to be booked (cannot ship). */
+  booked: boolean;
+  /** The store's account state in the order's env — `null` = no account row at all. */
+  accountState: string | null;
+  /** The order was booked on a seller account the store no longer holds. */
+  sellerChanged: boolean;
+  placedAt: Date;
+};
+
+/**
+ * Live Mengantar-stamped orders whose store's seller account cannot serve them: no row, a state other
+ * than `connected`, or a different seller than the one that booked it. Such an order cannot be booked
+ * (and a booked one cannot be tracked) — and it must NOT be moved to the default provider: its buyer-paid
+ * shipping is already the seller's money (`shipping_pass_through_idr`, owner O3). The way out is to
+ * restore the store's account (retry / rotate above), so the operator has to SEE them. `rotating` is a
+ * seconds-long state and is not listed.
+ */
+export async function listStrandedMengantar(env: string): Promise<StrandedOrderRow[]> {
+  const rows = (await db.execute(sql`
+    select o.store_id::text as "storeId", s.name as "storeName", o.number as "orderNumber", o.status::text as status,
+           (o.mg_order_id is not null) as booked, a.state::text as "accountState",
+           (o.mg_seller_id is not null and a.seller_id is distinct from o.mg_seller_id) as "sellerChanged",
+           o.placed_at as "placedAt"
+      from orders o
+      join stores s on s.id = o.store_id
+      left join store_mengantar_accounts a on a.store_id = o.store_id and a.env = coalesce(o.mg_env, ${env})
+     where o.shipping_provider = 'mengantar'
+       and o.status in ('baru', 'diproses', 'dikirim')
+       and (a.state is null or a.state not in ('connected', 'rotating')
+            or (o.mg_seller_id is not null and a.seller_id is distinct from o.mg_seller_id))
+     order by o.placed_at
+     limit 200
+  `)) as unknown as (Omit<StrandedOrderRow, "placedAt"> & { placedAt: string | Date })[];
+  return rows.map((r) => ({ ...r, placedAt: new Date(r.placedAt) }));
+}

@@ -28,7 +28,18 @@ import type { TrackResult } from "@/lib/actions/shipping";
 
 export const MG_PER_STORE_BATCH = 5;
 
-type Pollable = { number: string; awb: string | null; mgOrderId: string | null; mgOrderCode: string | null; mgIsPaid: boolean | null };
+type Pollable = {
+  number: string;
+  awb: string | null;
+  mgOrderId: string | null;
+  mgOrderCode: string | null;
+  mgIsPaid: boolean | null;
+  /** When the active booking was accepted — a "not found" younger than MG_VANISH_MIN_AGE_MS is not trusted. */
+  bookedAt?: Date | string | null;
+};
+
+/** A shipment booked less than this long ago may simply not be indexed yet: "not found" is not news. */
+export const MG_VANISH_MIN_AGE_MS = 30 * 60_000;
 /** Transport only — the account is never chosen by the caller. */
 export type MgPullOptions = Omit<MgCallOptions, "cfg">;
 
@@ -57,10 +68,13 @@ export const MG_VANISHED_NOTE =
  * order VANISHES (sandbox E2E 2026-11-05) — so the order is flagged instead of polled in silence. The
  * flag is self-healing: the next real status clears `problem_at` (`syncOrderFromKa`).
  */
-export async function applyMengantarPull(o: Pollable, t: MgTracking | null, pendingCancel: boolean): Promise<string[]> {
+export async function applyMengantarPull(o: Pollable, t: MgTracking | null, pendingCancel: boolean, now: number = Date.now()): Promise<string[]> {
+  const guard = { mgOrderId: o.mgOrderId };
   if (!t) {
-    if (!pendingCancel) return (await syncOrderFromKa(o.number, "problem", null, MG_VANISHED_NOTE)).changed;
-    return (await syncOrderFromKa(o.number, null, null, null, { kind: "not_found" })).changed;
+    if (pendingCancel) return (await syncOrderFromKa(o.number, null, null, null, { kind: "not_found" }, null, guard)).changed;
+    const age = o.bookedAt ? now - new Date(o.bookedAt).getTime() : Infinity;
+    if (!(age >= MG_VANISH_MIN_AGE_MS)) return [];
+    return (await syncOrderFromKa(o.number, "problem", null, MG_VANISHED_NOTE, undefined, null, guard)).changed;
   }
   const cnote = realCnote(t, o);
   const outcome = t.outcome;
@@ -69,7 +83,7 @@ export async function applyMengantarPull(o: Pollable, t: MgTracking | null, pend
     outcome === "problem"
       ? `Kurir melaporkan kendala pengiriman (${(t.flags[0] ?? "status tidak dikenal").slice(0, 60)}). Hubungi kurir atau pembeli untuk memastikan paket.`
       : null;
-  const s = await syncOrderFromKa(o.number, outcome, cnote, note);
+  const s = await syncOrderFromKa(o.number, outcome, cnote, note, undefined, null, guard);
   // A waybill only exists once the shipment is paid for: an unpaid booking (`false`), or one whose
   // pay-unpaid outcome is still unknown (`null`, Super Admin claim), that now has one WAS paid.
   if (cnote && o.mgIsPaid !== true) {
@@ -105,7 +119,11 @@ export async function sweepMengantarTracking(opts?: MgPullOptions): Promise<MgSw
       select number, awb, mg_order_id as "mgOrderId", mg_order_code as "mgOrderCode", mg_is_paid as "mgIsPaid",
              store_id::text as "storeId", mg_env as "mgEnv", mg_seller_id as "mgSellerId",
              exists (select 1 from shipment_bookings b where b.order_id = orders.id and b.status = 'cancellation_requested') as "pendingCancel",
-             row_number() over (partition by store_id order by (problem_at is not null), (awb is not null), placed_at, id) as poll_round
+             (select max(b.accepted_at) from shipment_bookings b where b.order_id = orders.id) as "bookedAt",
+             -- ROTATING order (a per-minute hash), not placed_at: with a fixed order a store with more
+             -- than MG_PER_STORE_BATCH live shipments never re-polls the tail, so a flagged order would
+             -- never be re-read (and never cleared). Every order comes round within a few ticks.
+             row_number() over (partition by store_id order by md5(id::text || to_char(now(), 'YYYYMMDDHH24MI'))) as poll_round
         from orders
        where shipping_provider = 'mengantar'
          and mg_order_id is not null
@@ -113,7 +131,7 @@ export async function sweepMengantarTracking(opts?: MgPullOptions): Promise<MgSw
          -- through the booking's own baru → diproses; the first tracked status moves it, via the state machine.
          and status in ('baru', 'diproses', 'dikirim')
     )
-    select number, awb, "mgOrderId", "mgOrderCode", "mgIsPaid", "storeId", "mgEnv", "mgSellerId", "pendingCancel"
+    select number, awb, "mgOrderId", "mgOrderCode", "mgIsPaid", "storeId", "mgEnv", "mgSellerId", "pendingCancel", "bookedAt"
       from ranked where poll_round <= ${MG_PER_STORE_BATCH}
      order by poll_round, "storeId"
   `)) as unknown as (Pollable & { storeId: string; mgEnv: string | null; mgSellerId: string | null; pendingCancel: boolean })[];

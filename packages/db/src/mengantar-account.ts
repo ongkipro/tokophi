@@ -98,7 +98,7 @@ export function openFailureMessage(reason: MgOpenFailure): string {
     case "seller_mismatch":
       return "Pengiriman ini dibuat dengan akun Mengantar toko yang lama. Hubungi dukungan TokoΦ.";
     default:
-      return "Toko ini belum terhubung ke akun Mengantar.";
+      return "Akun Mengantar toko belum terhubung atau sedang tidak aktif, jadi pengiriman ini belum bisa diproses. Hubungkan di Pengaturan → Pengiriman; kalau tombolnya tidak membantu, hubungi dukungan TokoΦ.";
   }
 }
 
@@ -489,6 +489,7 @@ export async function enqueueMengantarConnect(storeId: string, o: ConnectOptions
  * Pure, so the rule is testable; null = go ahead. Operator retries (Super Admin) are not gated here. */
 export const SELLER_CONNECT_COOLDOWN_MS = 60_000;
 export function sellerConnectRefusal(st: Pick<MgAccountStatus, "state" | "updatedAt">, now: number): string | null {
+  if (st.state === "rotating") return "Kunci akun Mengantar toko sedang diperbarui. Coba lagi sebentar.";
   if (st.state === "blocked") return "Pendaftaran Mengantar toko ini perlu ditinjau tim TokoΦ. Hubungi dukungan TokoΦ — mencoba lagi dari sini tidak mengubah hasilnya.";
   if (st.state === "none" || !st.updatedAt) return null;
   const wait = SELLER_CONNECT_COOLDOWN_MS - (now - new Date(st.updatedAt).getTime());

@@ -1093,7 +1093,7 @@ export function OrderDetail({
                   and a shrug is not worth a row. */}
               {booked && shipment.payment.flow !== "unknown" && (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Ongkir ke kurir</span>
+                  <span className="shrink-0 whitespace-nowrap text-muted-foreground">Ongkir ke kurir</span>
                   <span
                     className={
                       shipment.payment.blocking

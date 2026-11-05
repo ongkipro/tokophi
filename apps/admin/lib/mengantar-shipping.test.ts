@@ -521,6 +521,12 @@ suite("cancelMengantar", () => {
     const store = await newStore();
     const o = await newOrder(store, { status: "diproses", mg: { id: `c5-${runId}`, code: `C5-${runId}`, courier: "JT", booking: "accepted" } });
     const p = fakeProvider({ cancel: () => ({ body: { success: true, deletedCount: 0 } }) }); // default track: not found
+    // A FRESH booking that "is not there yet" may only be unindexed: refused, stays accepted.
+    const fresh = await mod.cancelMengantar(store, o.number, opts(p.fetch));
+    expect(fresh.ok).toBe(false);
+    expect((await bookings(o.id)).map((x) => x.status)).toEqual(["accepted"]);
+    // Booked an hour ago and still not there → it is gone.
+    await client`update shipment_bookings set accepted_at = now() - interval '1 hour' where order_id = ${o.id}`;
     const r = await mod.cancelMengantar(store, o.number, opts(p.fetch));
     expect(r).toEqual({ ok: true });
     expect((await bookings(o.id)).map((x) => x.status)).toEqual(["voided"]);
@@ -548,6 +554,35 @@ suite("cancelMengantar", () => {
     expect((await order(o.id)).problem_at).toBeNull();
   });
 
+  it("a 'not found' for a shipment booked MINUTES ago is not news (indexing lag) — no flag", async () => {
+    const store = await newStore();
+    const o = await newOrder(store, { status: "diproses", mg: { id: `c7-${runId}`, code: `C7-${runId}`, courier: "JT", booking: "accepted" } });
+    const po = { number: o.number, awb: null, mgOrderId: `c7-${runId}`, mgOrderCode: `C7-${runId}`, mgIsPaid: true, bookedAt: new Date(Date.now() - 5 * 60_000) };
+    expect(await trk.applyMengantarPull(po, null, false)).toEqual([]);
+    expect((await order(o.id)).problem_at).toBeNull();
+    // Old enough → flagged.
+    expect(await trk.applyMengantarPull({ ...po, bookedAt: new Date(Date.now() - trk.MG_VANISH_MIN_AGE_MS - 1000) }, null, false)).toContain("problem:set");
+  });
+
+  it("a pull that started BEFORE a void/re-book never lands on the order afterwards (stale shipment id)", async () => {
+    const store = await newStore();
+    const o = await newOrder(store, { status: "diproses", mg: { id: `c8-new-${runId}`, code: `C8N-${runId}`, courier: "JT", booking: "accepted" } });
+    // The sweep snapshotted the OLD shipment; the order now holds a new one.
+    const stale = { number: o.number, awb: null, mgOrderId: `c8-old-${runId}`, mgOrderCode: `C8O-${runId}`, mgIsPaid: true };
+    expect(await trk.applyMengantarPull(stale, null, false)).toEqual([]);
+    const p = fakeProvider({ track: () => ({ body: { success: true, data: [{ ORDER_ID: `C8O-${runId}`, cnote_no: `JTOLD${runId}`, status: JSON.stringify({ "PICKED UP": true }) }] } }) });
+    const r = await trk.pullMengantar(stale, pullOpts(p.fetch))!;
+    if (!r.ok) throw new Error(r.error);
+    expect(await trk.applyMengantarPull(stale, r.data, false)).toEqual([]);
+    expect(await order(o.id)).toMatchObject({ status: "diproses", awb: null, problem_at: null });
+  });
+
+  it("an answer that names ANOTHER shipment is refused (unknown), never read as this one's status or as 'not found'", async () => {
+    const p = fakeProvider({ track: () => ({ body: { success: true, data: [{ ORDER_ID: "SOMEONE-ELSE", cnote_no: "JTX", status: JSON.stringify({ DELIVERED: true }) }] } }) });
+    const r = await trk.pullMengantar({ number: "n/a", awb: null, mgOrderId: "a", mgOrderCode: `C9-${runId}`, mgIsPaid: true }, pullOpts(p.fetch))!;
+    expect(r.ok).toBe(false);
+  });
+
   it("tracking CANCELED on a pending cancel voids the booking and drops the provider ids (re-bookable)", async () => {
     const store = await newStore();
     const o = await newOrder(store, { status: "diproses", mg: { id: `c3-${runId}`, code: `C3-${runId}`, courier: "JNE", awb: `JNEC3${runId}`, booking: "cancellation_requested" } });
@@ -563,18 +598,18 @@ suite("cancelMengantar", () => {
 });
 
 suite("tracking — status comes from the provider's STATUS, never from a waybill existing", () => {
-  const trackAnswer = (status: Record<string, boolean>, cnote: string | null) => () => ({ body: { success: true, data: [{ cnote_no: cnote, ORDER_ID: "x", status: JSON.stringify(status), history: [] }] } });
-  const pollable = (o: { number: string }, over: Partial<{ awb: string | null; mgOrderCode: string | null; mgIsPaid: boolean | null }> = {}) => ({
-    number: o.number,
-    awb: null,
-    mgOrderId: `t-${o.number}`,
-    mgOrderCode: `T-${o.number}`,
-    mgIsPaid: true,
-    ...over,
+  // The row ECHOES what was asked (order_id → ORDER_ID): an answer about another shipment is refused (track()).
+  const trackAnswer = (status: Record<string, boolean>, cnote: string | null) => (c: Call) => ({
+    body: { success: true, data: [{ cnote_no: cnote, ORDER_ID: new URLSearchParams(c.path.split("?")[1]).get("order_id") ?? "x", status: JSON.stringify(status), history: [] }] },
   });
-  async function pullAndApply(o: { number: string }, status: Record<string, boolean>, cnote: string | null, over = {}) {
+  // The pollable mirrors the ROW (the sync applies only while the order holds the pulled shipment).
+  const pollable = async (o: { id: string; number: string }, over: Partial<{ awb: string | null; mgOrderCode: string | null; mgIsPaid: boolean | null }> = {}) => {
+    const [r] = await client<{ mg_order_id: string | null; mg_order_code: string | null }[]>`select mg_order_id, mg_order_code from orders where id = ${o.id}`;
+    return { number: o.number, awb: null, mgOrderId: r.mg_order_id, mgOrderCode: r.mg_order_code, mgIsPaid: true, ...over };
+  };
+  async function pullAndApply(o: { id: string; number: string }, status: Record<string, boolean>, cnote: string | null, over = {}) {
     const p = fakeProvider({ track: trackAnswer(status, cnote) });
-    const po = pollable(o, over);
+    const po = await pollable(o, over);
     const r = await trk.pullMengantar(po, pullOpts(p.fetch))!;
     if (!r.ok) throw new Error(r.error);
     return { changed: await trk.applyMengantarPull(po, r.data, false), calls: p.calls };
@@ -768,6 +803,17 @@ suite("Bayar ongkir — the seller pays from THEIR OWN Mengantar wallet", () => 
     expect(r.message).toMatch(/1 dari 2/);
     expect((await order(o.id)).mg_is_paid).toBeNull();
     expect((await order(o2.id)).mg_is_paid).toBeNull();
+  });
+
+  it("a batch with an order ALREADY in flight: the count cannot be matched to this claim → none marked paid, the in-flight one untouched", async () => {
+    const { s, o } = await unpaidOrder();
+    const lost = await newOrder(s, { status: "diproses", mg: { id: `pu3-${runId}-${seq}`, code: `PU3-${runId}-${seq}`, courier: "JT" } });
+    await client`update orders set mg_is_paid = null, mg_batch_id = ${`batch-pu-${o.number}`} where id = ${lost.id}`;
+    const p = fakeProvider({ pay: () => ({ body: { success: true, data: 1, cnote_no: [] } }) });
+    const r = await mod.payMengantarUnpaid(s, o.number, opts(p.fetch));
+    expect(r).toMatchObject({ ok: true, pending: true });
+    expect((await order(o.id)).mg_is_paid).toBeNull();
+    expect((await order(lost.id)).mg_is_paid).toBeNull();
   });
 }
 );

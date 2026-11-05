@@ -121,6 +121,12 @@ export async function syncOrderFromKa(
    * (`sortingCodeFromHint`). Normalised again here, because this is the column's only writer.
    */
   sortingCode?: string | null,
+  /**
+   * The provider shipment this fact was pulled FOR. When given, the sync applies only while the order
+   * still holds that shipment (`orders.mg_order_id`, re-read under the row lock): a pull that started
+   * before a void/re-book must not land on the order afterwards (Mengantar; reviewer 2026-11-05).
+   */
+  expect?: { mgOrderId: string | null },
 ): Promise<KaSyncResult> {
   const code = normalizeSortingCode(sortingCode);
   const changed: string[] = [];
@@ -143,6 +149,7 @@ export async function syncOrderFromKa(
         awb: schema.orders.awb,
         sortingCode: schema.orders.sortingCode,
         problemAt: schema.orders.problemAt,
+        mgOrderId: schema.orders.mgOrderId,
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, orderNumber))
@@ -152,6 +159,7 @@ export async function syncOrderFromKa(
       found = false;
       return;
     }
+    if (expect && order.mgOrderId !== expect.mgOrderId) return; // stale pull: the shipment changed under it
 
     // ── A PENDING CANCELLATION IS RECONCILED BEFORE ANYTHING ELSE (Task 5.1 / F-S12) ─────────
     // `cancelShipment` recorded the merchant's intent as `shipment_bookings.status =

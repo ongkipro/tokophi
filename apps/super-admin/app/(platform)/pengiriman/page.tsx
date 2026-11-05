@@ -1,6 +1,6 @@
 import { platformRouteGate } from "@/lib/platform-auth";
 import { RouteDenied } from "@/components/route-denied";
-import { listMengantarAccounts, listUnknownMengantar } from "@/lib/mengantar-ops";
+import { listMengantarAccounts, listStrandedMengantar, listUnknownMengantar } from "@/lib/mengantar-ops";
 import { getProviderConfig } from "@tokophi/lib/provider-config";
 import { PengirimanClient } from "./pengiriman-client";
 
@@ -15,7 +15,7 @@ export default async function PengirimanPage() {
   const gate = await platformRouteGate("/pengiriman");
   if (!gate.ok) return <RouteDenied need={gate.need} role={gate.role} reason={gate.reason} landing={gate.landing} />;
   const env = (await getProviderConfig()).mengantar.env;
-  const [accounts, unknown] = await Promise.all([listMengantarAccounts(env), listUnknownMengantar()]);
+  const [accounts, unknown, stranded] = await Promise.all([listMengantarAccounts(env), listUnknownMengantar(), listStrandedMengantar(env)]);
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       <div>
@@ -25,7 +25,7 @@ export default async function PengirimanPage() {
           dibayar dari saldo Mengantar toko itu sendiri. Booking “belum diketahui” memblokir pesanannya sampai direkonsiliasi.
         </p>
       </div>
-      <PengirimanClient accounts={accounts} unknown={unknown} isOwner={gate.admin.role === "owner"} />
+      <PengirimanClient accounts={accounts} unknown={unknown} stranded={stranded} isOwner={gate.admin.role === "owner"} />
     </div>
   );
 }
