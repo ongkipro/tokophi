@@ -7,6 +7,39 @@ blockers" had been false since 2026-08-22, and it dropped the N36–N43 disambig
 
 This file is a navigation handoff. It is not a second task board.
 
+## ▶ Resume here — 2026-11-06
+
+Production: dedicated host since 2026-11-01, release `0e4d950a`, probe green — `STATUS.md`. Deploys are
+MANUAL on this host (`DEPLOY.md` step 2). Mengantar is dormant until the owner sends the Partner
+production origin, allow-lists the host IP there, and gives Terms/Privacy URLs.
+
+**Open PRs (none merged; merging is owner-gated and serialised):**
+
+| PR | Branch | Base | What |
+|---|---|---|---|
+| #421 | `docs/split-agents-md` | `main` | AGENTS.md split + stale reference docs |
+| #424 | `feat/accounts-consolidated` | `main` | store affiliate + buyer account (`0116`–`0121`) |
+| #426 | `feat/fk-indexes-main` | `main` | FK lookup indexes (`0116`) + catalog guard |
+| #428 | `fix/auth-hardening-2026-10` | `main` | auth hardening |
+| #429 | `feat/media-pagination` | `main` | `/files` 24 media per page, `?page=` in the URL |
+| #430 | `feat/affiliate-visibility` | `feat/accounts-consolidated` | affiliate badge, commission chip, order-detail card |
+| #431 | `fix/affiliate-audit` | `feat/accounts-consolidated` | `isUuid` + size limits, commission rounding, first action tests |
+
+- 🔴 **Migration clash:** `main` already shipped `0116_mengantar_shipping`; #424 and #426 both use `0116`.
+  Each renumbers AND re-stamps before merge (`specs/docs/rules/migrations.md`). Merge #424 before #430/#431.
+- **Test gaps from the 2026-10-29 affiliate audit:** `/api/public/order` ↔ `attachAffiliateCommission`
+  (typed code beats `?ref=`, a bad code never costs the sale, self-referral, programme off); storefront
+  `applyAffiliate` / `/affiliate` form (honeypot, rate limit, dupe phone); a browser pass of both.
+- **Known, not fixed:** no unique `(store_id, phone)` on `affiliates`; "Nomor ini sudah terdaftar" is a
+  phone-enumeration oracle (5/h/IP); no CHECK `commission_idr >= 0`; no composite FK tying `affiliate_id`
+  to the same `store_id`; two media pickers still load the full library (`collection-editor.tsx`,
+  `article-editor.tsx`).
+- **Owner decision:** 283 commits on `main` carry an AI `Co-authored-by` trailer (DEC-014: not rewritten);
+  the repo is public now. A rewrite is a force-push and needs approval of the exact command.
+- ⚠️ **Never rewrite a shared account's credentials to test** — mint a throwaway `store_users` row and
+  delete it afterwards (BUILD-LOG 2026-10-29).
+- Local only: worktree `~/Projects/tokophi-consolidate`, branch `demo/affiliate-media` (unpushed, clean).
+
 > **Newest sweep: `specs/docs/tasks/2026-10-29-overall-review.md`** (2026-10-29) — every finding
 > re-checked in code; 🔴 P0s there: Astro/@astrojs/node Host-header crash (R-10), off-box uptime +
 > Vultr balance alert (R-20). It also lists the stale states in THIS file (R-41) — trust it over the
