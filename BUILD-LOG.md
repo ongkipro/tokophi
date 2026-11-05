@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-05 12:45 UTC] — DATA · monochrome reset run on production (owner: "ya reset keseluruhan")
+Executor: Main Session (Claude Code). Script `ops/tokophi-storefront-monochrome-reset.sql` (from #451, scoped to colour). Owner chose option (a): reset all three stores that had picked a colour.
+- **Dry-run first** (same script, `commit;` → `rollback;`, production): 3 rows would change, font and image ratios kept; afterwards production was unchanged and no `ops_backup` table remained.
+- **Run:** `UPDATE 3`, `COMMIT`. Stores: `atthario-shop` (#80ff00), `batiknusantara` (#910311 + tone hangat; font `elegan`, 4:5 ratios kept), `petanihandal` (#1B5E20). Production now: 17 of 17 stores without a brand colour of their own; backup `ops_backup.store_theme_20261105` holds the 3 old rows.
+- **Verified live** (no cache wait; `--color-brand-600` read from the served page): all three `<slug>.tokophi.id` answer 200 with `#18181b`; `batiknusantara` also `--color-cream` `#fafafa` and display font still Playfair; 390 px, no overflow, 0 page errors.
+- **Restore one store** (check `theme` first — it restores the full old snapshot): `update stores s set brand_color = b.brand_color, theme = b.theme from ops_backup.store_theme_20261105 b where b.store_id = s.id and b.slug = '<slug>';`. **Cleanup** once the owner is satisfied (the backup is the only copy of the old values): `drop table ops_backup.store_theme_20261105; drop schema if exists ops_backup;`.
+- **Re-running the script is safe:** stores already in the backup are skipped, so a colour a merchant picks again is never wiped.
+
 ### [2026-11-05 12:25 UTC] — DEPLOY · PR #451 (storefront redesign C, all tenants) live on production (`0e4d950a`) + server cleanup
 Executor: Main Session (Claude Code). Owner: "ya lanjut sempurnakan jika sudah dan bersihkan file2 yang sudah tidak terpakai".
 - **Deploy:** #451 merged (`0e4d950a`; CI green, no deployment in flight, disk 38 %); triggered by hand (`deployment_uuid ovknejtpg9fhiifoi6sgy85e`), 11:59:48 → finished 12:18:53 (~19 min).
