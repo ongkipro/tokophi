@@ -61,11 +61,11 @@ const CRUMBS: Crumb[] = [
   description={`Keranjang belanja di ${store.name}.`}
   robots="noindex,follow"
 >
-  <section class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
+  <section class="mx-auto max-w-6xl px-4 pb-10 pt-5 sm:px-6 sm:pt-8">
     <Breadcrumb items={CRUMBS} />
 
-    <div class="mt-5 flex flex-wrap items-baseline justify-between gap-3">
-      <h1 class="font-display text-3xl font-semibold text-ink">Keranjang Belanja</h1>
+    <div class="mt-3 flex flex-wrap items-baseline justify-between gap-3">
+      <h1 class="font-display text-[1.625rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-4xl">Keranjang Belanja</h1>
       <a
         href="/produk"
         class="inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-brand-700 transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
@@ -82,11 +82,11 @@ const CRUMBS: Crumb[] = [
       class="mt-8 py-20 text-center"
     >
       <ShoppingCart class="mx-auto h-10 w-10 text-brand-400" stroke-width={1.5} aria-hidden="true" />
-      <h2 class="mt-4 font-display text-2xl font-semibold text-ink">Keranjangmu masih kosong</h2>
+      <h2 class="mt-4 font-display text-[1.375rem] font-semibold leading-tight text-ink sm:text-[1.75rem]">Keranjangmu masih kosong</h2>
       <p class="mt-2 text-muted">Yuk jelajahi koleksi dan temukan busana favoritmu.</p>
       <a
         href="/produk"
-        class="mt-6 inline-block rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        class="mt-6 inline-flex min-h-12 items-center justify-center rounded-lg bg-brand-600 px-6 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
       >
         Mulai Belanja
       </a>
@@ -94,13 +94,13 @@ const CRUMBS: Crumb[] = [
 
     {/* Cart body */}
     <div id="cart-body" hidden class="mt-8 grid gap-8 lg:grid-cols-[1fr_21rem] lg:items-start">
-      <div class="rounded-2xl border border-line bg-white">
+      <div class="rounded-sm border border-line bg-white">
         {/* Column headers: desktop only. On a phone each row is a card, and headers for a
              one-column list are noise. */}
         <div
-          class="hidden grid-cols-[1fr_auto_7rem] gap-4 border-b border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted sm:grid"
+          class="hidden grid-cols-[5rem_minmax(0,1fr)_8rem_7rem] gap-x-4 border-b border-line px-5 py-3 text-sm text-muted sm:grid"
         >
-          <span>Produk</span>
+          <span class="col-span-2">Produk</span>
           <span class="text-center">Jumlah</span>
           <span class="text-right">Total</span>
         </div>
@@ -109,7 +109,7 @@ const CRUMBS: Crumb[] = [
 
       {/* Order summary. `sticky` is the point of the two-column layout: on a long cart the
            checkout button must never scroll out of reach. */}
-      <aside class="rounded-2xl border border-line bg-white p-5 lg:sticky lg:top-24">
+      <aside class="rounded-sm border border-line bg-white p-5 lg:sticky lg:top-28">
         <h2 class="font-display text-lg font-semibold text-ink">Ringkasan pesanan</h2>
 
         <dl class="mt-4 space-y-3 text-sm">
@@ -136,24 +136,25 @@ const CRUMBS: Crumb[] = [
 
         <a
           href="/checkout"
-          class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-brand-200/50 transition-all hover:-translate-y-0.5 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+          class="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none"
         >
           Lanjut ke Checkout
           <ArrowRight class="h-4 w-4" stroke-width={2} aria-hidden="true" />
         </a>
 
-        <ul class="mt-5 space-y-2 border-t border-line pt-4 text-xs text-muted">
+        {/* 14px: these are sentences a hesitant buyer reads before paying, not labels (was 12px). */}
+        <ul class="mt-5 space-y-2 border-t border-line pt-4 text-sm text-muted">
           <li class="flex items-start gap-2">
-            <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
+            <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
             <span>{PAY_TRUST}</span>
           </li>
           <li class="flex items-start gap-2">
-            <Truck class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
+            <Truck class="mt-0.5 h-4 w-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
             <span>Dikirim se-Indonesia lewat kurir terpercaya.</span>
           </li>
           {returnPage && (
           <li class="flex items-start gap-2">
-            <RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-brand-500" stroke-width={1.75} aria-hidden="true" />
+            <RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-muted" stroke-width={1.75} aria-hidden="true" />
             <span>
               Pengembalian mudah — lihat{" "}
               <a
@@ -176,7 +177,7 @@ const CRUMBS: Crumb[] = [
     recommended.length > 0 && (
       <section class="border-t border-line">
         <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-          <h2 class="font-display text-2xl font-semibold text-ink">Produk terlaris</h2>
+          <h2 class="font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[1.75rem]">Produk terlaris</h2>
           {/* `grid="2-4"`: no 3-col sm tier here either — see the note in ProductCard. */}
           <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-y-14 lg:grid-cols-4">
             {recommended.map((p) => (
@@ -251,41 +252,45 @@ const CRUMBS: Crumb[] = [
       // re-check a size or the fabric had to navigate out and search for it again.
       var href = item.handle ? "/produk/" + encodeURIComponent(item.handle) : null;
       var title = esc(item.name);
+      var THUMB_BOX = "relative row-span-3 block h-24 w-20 shrink-0 overflow-hidden rounded-sm bg-mist sm:row-span-1";
 
       // ONE stepper and ONE remove button per line, placed into the right cell by grid at each
       // breakpoint. Rendering a mobile copy and a desktop copy would double every interactive
       // control — two elements sharing an index, two click handlers, and a hidden duplicate that
       // still sits in the tab order. Only the line-total TEXT is duplicated (static, no handler).
       return (
-        '<div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 border-b border-line p-4 last:border-b-0 sm:grid-cols-[auto_1fr_auto_8rem] sm:items-center sm:px-5">' +
+        '<div class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 border-b border-line p-4 last:border-b-0 sm:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem] sm:items-center sm:px-5">' +
         // The thumbnail duplicates the title link that sits right next to it, so it is hidden from
         // assistive tech and taken out of the tab order rather than given a second, identical name —
         // two adjacent links reading the same thing is its own bug. Without this the link had NO
         // accessible name at all ("link, blank") on every line of the cart.
         (href
-          ? '<a href="' + href + '" tabindex="-1" aria-hidden="true" class="row-span-3 shrink-0 rounded-lg sm:row-span-1">'
-          : '<span class="row-span-3 shrink-0 sm:row-span-1">') +
-        '<img src="' + esc(item.image) + '"' + srcsetAttr(item.image, THUMB_SIZES) + ' alt="" loading="lazy" class="h-24 w-20 rounded-lg bg-brand-50 object-cover" />' +
+          ? '<a href="' + href + '" tabindex="-1" aria-hidden="true" class="' + THUMB_BOX + '">'
+          : '<span class="' + THUMB_BOX + '">') +
+        // The tinted frame is the WRAPPER (THUMB_BOX), the photo sits inside it: ImageFallback hides an
+        // <img> that fails to load, and with the tint on the img itself the whole thumbnail vanished
+        // (owner 2026-11-05). A missing or broken photo now leaves the 80×96 tile in place.
+        (item.image ? '<img src="' + esc(item.image) + '"' + srcsetAttr(item.image, THUMB_SIZES) + ' alt="" width="80" height="96" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />' : "") +
         (href ? "</a>" : "</span>") +
         // Product info
         '<div class="min-w-0">' +
         (href
-          ? '<a href="' + href + '" class="rounded-sm font-medium text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">' + title + "</a>"
-          : '<p class="font-medium text-ink">' + title + "</p>") +
+          ? '<a href="' + href + '" title="' + title + '" class="line-clamp-2 break-words rounded-sm text-[0.9375rem] font-normal leading-snug text-ink transition-colors hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">' + title + "</a>"
+          : '<p class="line-clamp-2 break-words text-[0.9375rem] font-normal leading-snug text-ink">' + title + "</p>") +
         (variant
-          ? '<p class="mt-1 inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700">' + esc(variant) + "</p>"
+          ? '<p class="mt-1 truncate text-sm text-muted">' + esc(variant) + "</p>"
           : "") +
         '<p class="mt-1 text-sm text-muted tabular-nums">' + idr.format(item.price) + " / item</p>" +
         "</div>" +
         // Qty — under the title on mobile, its own column on desktop.
-        '<div class="col-start-2 flex items-center justify-between gap-4 sm:col-start-3 sm:justify-center">' +
+        '<div class="col-start-2 flex items-center justify-between gap-2 sm:col-start-3 sm:justify-center sm:gap-4">' +
         stepper(idx, item.qty) +
-        '<span class="font-semibold text-ink tabular-nums sm:hidden">' + idr.format(sub) + "</span>" +
+        '<span class="whitespace-nowrap font-semibold text-ink tabular-nums sm:hidden">' + idr.format(sub) + "</span>" +
         "</div>" +
         // Line total + remove.
         '<div class="col-start-2 sm:col-start-4 sm:text-right">' +
         '<p class="hidden font-semibold text-ink tabular-nums sm:block">' + idr.format(sub) + "</p>" +
-        '<button type="button" data-remove="' + idx + '" class="rounded-sm text-sm text-muted underline transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:mt-1">Hapus</button>' +
+        '<button type="button" data-remove="' + idx + '" class="inline-flex min-h-6 items-center rounded-sm text-sm text-muted underline underline-offset-2 transition-colors hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:mt-1">Hapus</button>' +
         "</div>" +
         "</div>"
       );
@@ -293,10 +298,10 @@ const CRUMBS: Crumb[] = [
 
     function stepper(idx, qty) {
       return (
-        '<div class="inline-flex items-center rounded-full border border-line">' +
-        '<button type="button" data-dec="' + idx + '" class="flex h-9 w-9 items-center justify-center rounded-l-full text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400" aria-label="Kurangi jumlah">−</button>' +
+        '<div class="inline-flex items-center rounded-lg border border-line">' +
+        '<button type="button" data-dec="' + idx + '" class="flex size-11 items-center justify-center rounded-l-lg text-muted transition-colors hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400" aria-label="Kurangi jumlah">−</button>' +
         '<span class="w-9 text-center text-sm font-medium tabular-nums" aria-live="polite">' + qty + "</span>" +
-        '<button type="button" data-inc="' + idx + '" class="flex h-9 w-9 items-center justify-center rounded-r-full text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400" aria-label="Tambah jumlah">+</button>' +
+        '<button type="button" data-inc="' + idx + '" class="flex size-11 items-center justify-center rounded-r-lg text-muted transition-colors hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400" aria-label="Tambah jumlah">+</button>' +
         "</div>"
       );
     }

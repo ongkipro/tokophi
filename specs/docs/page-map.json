@@ -2622,7 +2622,8 @@
             "catalog"
           ],
           "lib": [
-            "breadcrumb"
+            "breadcrumb",
+            "product-feed"
           ],
           "locals": true,
           "db": false,
@@ -4130,6 +4131,9 @@
         "module": "product-feed.ts",
         "exports": [
           "PROFILES",
+          "catalogSpecs",
+          "colourSizeIndexes",
+          "feedBrand",
           "feedDocument",
           "feedItems",
           "xml"

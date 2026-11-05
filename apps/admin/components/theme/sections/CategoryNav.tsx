@@ -11,7 +11,7 @@ export function CategoryNav({ items }: CategoryNavConfig) {
         {items.map((item, i) => (
           <div
             key={i}
-            className="group relative block aspect-[4/5] overflow-hidden rounded-md bg-gradient-to-br from-brand-100 to-brand-200"
+            className="group relative block aspect-[4/5] overflow-hidden rounded-sm bg-gradient-to-br from-zinc-100 to-zinc-200"
           >
             {item.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- editor preview of an arbitrary URL
@@ -20,7 +20,7 @@ export function CategoryNav({ items }: CategoryNavConfig) {
             {/* name over a bottom scrim, white — the same treatment as the storefront banner */}
             <span className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/10 to-transparent" />
             <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-4">
-              <span className="text-lg font-semibold text-white drop-shadow-sm">{item.label}</span>
+              <span className="font-display text-lg font-semibold text-white drop-shadow-sm sm:text-xl">{item.label}</span>
               <svg
                 viewBox="0 0 24 24"
                 className="size-5 shrink-0 fill-none stroke-white/90"
