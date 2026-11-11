@@ -86,9 +86,13 @@ function SaveFooter() {
   )
 }
 
-export default function Page() {
-  // Navigasi
-  const [section, setSection] = React.useState<Section>("profil")
+export default function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // Navigasi. Deep link `/pengaturan?section=alamat` (the Dashboard's Mengantar banner): the page's own
+  // `searchParams` prop read with React `use()` (Next 16 page.md, "Client Component pages"), so server
+  // and client start on the same section — no effect, no hydration mismatch. An unknown value is
+  // ignored, never trusted as a Section.
+  const wanted = React.use(searchParams).section
+  const [section, setSection] = React.useState<Section>(() => SECTIONS.find((s) => s.id === wanted)?.id ?? "profil")
   const storeName = useStoreName()
 
 

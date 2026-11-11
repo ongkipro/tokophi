@@ -14,7 +14,8 @@ import { mengantarStoreBalance, payMengantarUnpaid } from "@/lib/mengantar-shipp
 import { getProviderConfig } from "@tokophi/lib/provider-config";
 import { schema } from "@tokophi/db";
 import { withTenant } from "@/lib/tenant";
-import { mengantarReadiness, type MengantarReadiness } from "@/lib/mengantar-readiness";
+import { mengantarNotice, mengantarReadiness, type MengantarNotice, type MengantarReadiness } from "@/lib/mengantar-readiness";
+import { can } from "@/lib/rbac-policy";
 
 // Mengantar Partner Business API — the Seller's own actions. The store's Mengantar account is created
 // AUTOMATICALLY (signup / approval) with the owner's TokoΦ email; the seller never sees or pastes a key
@@ -58,6 +59,19 @@ export async function getShippingViaMengantar(): Promise<boolean> {
   if (!session) return false;
   const s = await mengantarAccountStatus(session.storeId);
   return (await readinessFor(session.storeId, s.state)).active;
+}
+
+/**
+ * The Dashboard banner: `null` unless the platform quotes through Mengantar, THIS store is not on it,
+ * and the viewer holds `settings:write` (both fixes need it). Read-only; called by the server page.
+ */
+export async function getMengantarDashboardNotice(): Promise<MengantarNotice | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const canFix = can(session.role, "settings:write");
+  if (!canFix) return null; // nobody to act → skip the reads entirely
+  const s = await mengantarAccountStatus(session.storeId);
+  return mengantarNotice(await readinessFor(session.storeId, s.state), canFix);
 }
 
 /** Read for the Pengaturan card (owner-only screen section; the read itself names no secret). */

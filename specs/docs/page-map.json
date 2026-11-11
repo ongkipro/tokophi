@@ -658,7 +658,9 @@
             "store",
             "support"
           ],
-          "actions": [],
+          "actions": [
+            "mengantar"
+          ],
           "gate": [
             "session"
           ],
@@ -816,7 +818,8 @@
           "dynamic": false,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/actions/users.test.ts"
+            "apps/admin/lib/actions/users.test.ts",
+            "apps/admin/lib/mengantar-readiness.test.ts"
           ],
           "whatItIs": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision)."
         },
@@ -3472,6 +3475,7 @@
         "exports": [
           "connectMengantar",
           "getMengantarCard",
+          "getMengantarDashboardNotice",
           "getShippingViaMengantar",
           "payMengantarShipping",
           "rotateMengantarKey"

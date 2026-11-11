@@ -42,3 +42,29 @@ export function mengantarReadiness(i: MengantarReadinessInput): MengantarReadine
   }
   return { active: true, reason: null, fix: null };
 }
+
+/** The dashboard banner for a store that is NOT on Mengantar while the platform is. `null` = no banner. */
+export type MengantarNotice = { title: string; body: string; href: string; cta: string };
+
+/**
+ * Shown only when there is something THIS viewer can fix: the platform already quotes through Mengantar
+ * (`fix !== null` — a platform-level reason has `fix: null`) and the viewer may change Pengaturan
+ * (`settings:write`, the capability both fixes require). An active store, a platform still on the
+ * default provider, or a viewer who cannot act → no banner: a warning nobody can act on is noise.
+ */
+export function mengantarNotice(r: MengantarReadiness, canFix: boolean): MengantarNotice | null {
+  if (r.active || r.fix === null || !canFix) return null;
+  return r.fix === "akun"
+    ? {
+        title: "Hubungkan akun Mengantar toko",
+        body: "Pengiriman non-COD TokoΦ kini lewat Mengantar, tapi toko ini belum terhubung — ongkirnya masih memakai pengiriman standar.",
+        href: "/pengaturan?section=pengiriman",
+        cta: "Buka Pengaturan Pengiriman",
+      }
+    : {
+        title: "Periksa alamat pengambilan toko",
+        body: r.reason,
+        href: "/pengaturan?section=alamat",
+        cta: "Buka Alamat Pengambilan",
+      };
+}
