@@ -825,6 +825,17 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
 **Rollback:** flip the switch back to KiriminAja. New quotes return to KiriminAja at once (60 s config
 cache); orders already stamped `mengantar` keep tracking and cancelling through Mengantar.
 
+**Local development against the sandbox (owner workstation, 2026-11-11).** TokoΦ shares the `ongkirich`
+sandbox partner with GeraiExpress (D7); its credentials live ONLY in `secrets-env`
+(`GERAIEXPRESS_MENGANTAR_SANDBOX_PARTNER_ID` / `_SECRET`), never in a `.env` or this repo. The
+device-local launcher `~/.local/bin/tokophi-dev-mengantar admin|super [port]` (run from a checkout that
+has 0116) maps them to `MENGANTAR_PARTNER_ID` / `_SECRET` in-process, sets `MENGANTAR_ENV=sandbox`,
+`MENGANTAR_PICKUP_MODE=dropOff` and a local-only `INTEGRATION_TOKEN_KEY`, and serves against
+`$TOKOPHI_DB` (default `tokophi`). The local `tokophi` DB was migrated to 117 and the area catalogue
+loaded the same day (6/6 pickup addresses bridged). ⚠️ `tokophi` is a PRODUCTION COPY: pressing
+"Hubungkan Mengantar" there registers a real merchant's email on the sandbox partner — connect a
+throwaway store, or use the clone `tokophi_shipping`.
+
 **Measured in the sandbox before the flip** (read-only `GET /order/estimate`, 2026-11-11 — sandbox prices
 are not production prices; the *behaviour* is what was measured):
 - `courier=all` answers in 150–330 ms warm (≈580 ms cold), faster than KiriminAja's fast pair.
