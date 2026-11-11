@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/rbac";
+import { getSession } from "@/lib/auth";
 import {
   connectStoreMengantar,
   mengantarAccountStatus,
@@ -10,6 +11,10 @@ import {
   type MgAccountStatus,
 } from "@tokophi/db/mengantar-account";
 import { mengantarStoreBalance, payMengantarUnpaid } from "@/lib/mengantar-shipping";
+import { getProviderConfig } from "@tokophi/lib/provider-config";
+import { schema } from "@tokophi/db";
+import { withTenant } from "@/lib/tenant";
+import { mengantarReadiness, type MengantarReadiness } from "@/lib/mengantar-readiness";
 
 // Mengantar Partner Business API — the Seller's own actions. The store's Mengantar account is created
 // AUTOMATICALLY (signup / approval) with the owner's TokoΦ email; the seller never sees or pastes a key
@@ -17,13 +22,52 @@ import { mengantarStoreBalance, payMengantarUnpaid } from "@/lib/mengantar-shipp
 // so they need `settings:write` (owner-only, rbac-policy.ts). "Bayar ongkir" spends the store's
 // Mengantar wallet on a booking the seller already made → `orders:write`, the capability that booked it.
 
-export type MengantarCardState = Omit<MgAccountStatus, "retryAfterAt" | "connectedAt" | "updatedAt"> & { balance: number | null; connectedAt: string | null };
+export type MengantarCardState = Omit<MgAccountStatus, "retryAfterAt" | "connectedAt" | "updatedAt"> & {
+  balance: number | null;
+  connectedAt: string | null;
+  /** Whether THIS store's checkout quotes through Mengantar now, and the first reason it does not. */
+  checkout: MengantarReadiness;
+};
+
+/** One computation for every screen that says whether checkout uses Mengantar (card + Jasa Kirim). */
+async function readinessFor(storeId: string, state: string): Promise<MengantarReadiness> {
+  const [cfg, [pickup]] = await Promise.all([
+    getProviderConfig(),
+    withTenant(storeId, (db) =>
+      db
+        .select({ kecamatan: schema.storeSettings.senderKecamatanId, area: schema.storeSettings.senderMengantarAreaId })
+        .from(schema.storeSettings)
+        .limit(1),
+    ),
+  ]);
+  return mengantarReadiness({
+    switchOn: cfg.shipping === "mengantar",
+    envNamed: cfg.mengantar.envSource === "env",
+    state,
+    hasPickupAddress: pickup?.kecamatan != null,
+    hasPickupArea: !!pickup?.area?.trim(),
+  });
+}
+
+/**
+ * For the Jasa Kirim card (any role that can open Pengaturan → Pengiriman): does this store's checkout
+ * quote through Mengantar now? Read-only, names no secret, so a session is enough.
+ */
+export async function getShippingViaMengantar(): Promise<boolean> {
+  const session = await getSession();
+  if (!session) return false;
+  const s = await mengantarAccountStatus(session.storeId);
+  return (await readinessFor(session.storeId, s.state)).active;
+}
 
 /** Read for the Pengaturan card (owner-only screen section; the read itself names no secret). */
 export async function getMengantarCard(): Promise<MengantarCardState> {
   const { storeId } = await requireCapability("settings:write");
   const s = await mengantarAccountStatus(storeId);
-  const balance = s.state === "connected" ? await mengantarStoreBalance(storeId) : null;
+  const [balance, checkout] = await Promise.all([
+    s.state === "connected" ? mengantarStoreBalance(storeId) : Promise.resolve(null),
+    readinessFor(storeId, s.state),
+  ]);
   return {
     env: s.env,
     state: s.state,
@@ -35,6 +79,7 @@ export async function getMengantarCard(): Promise<MengantarCardState> {
     lastError: s.lastError,
     connectedAt: s.connectedAt ? s.connectedAt.toISOString() : null,
     balance,
+    checkout,
   };
 }
 

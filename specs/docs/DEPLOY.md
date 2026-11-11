@@ -812,7 +812,9 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
 4. **Super Admin → Pengaturan → Kurir:** save the production partner id + secret (the card probes them).
 5. **Connect the sellers.** New signups queue automatically (after approval, D15). Existing stores:
    the owner of each store presses **"Hubungkan Mengantar"** (Seller → Pengaturan → Pengiriman, it
-   carries the consent line), or Super Admin connects one store at a time. Count before flipping:
+   carries the consent line), or Super Admin connects one store at a time. After the flip that same
+   card tells each seller **"Dipakai di checkout"** or names the first thing stopping it (account,
+   pickup address, an area Mengantar does not know). Count before flipping:
    `select state, count(*) from store_mengantar_accounts where env = 'production' group by 1;`
 6. **Flip the switch** (Super Admin → Pengaturan → Kurir → Mengantar). It refuses while
    `MENGANTAR_ENV` is unset in its own process, which is the check step 3 worked.

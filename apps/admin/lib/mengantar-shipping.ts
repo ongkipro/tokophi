@@ -25,7 +25,7 @@ import {
 import { DEFAULT_SHIPPING_PROVIDER, type MengantarConfig, type ShippingProvider } from "@tokophi/lib/provider-config";
 import { cacheGet, cacheSet } from "@tokophi/lib/cache";
 import { isInstantCourier } from "@tokophi/lib/couriers";
-import { mengantarRates, type QuotedRate } from "@/lib/shipping-quote";
+import { kaServiceGroups, mengantarRates, type QuotedRate } from "@/lib/shipping-quote";
 import { mengantarDestination } from "@/lib/data/areas";
 import { weightForOrder } from "@/lib/shipping-weight";
 import { composePickupAddress } from "@/lib/pickup-address";
@@ -179,7 +179,7 @@ async function orderRates(storeId: string, ctx: NonNullable<OrderCtx>, call: Cal
   const priceDest = await mengantarDestination(o.shipDistrictId, null);
   if (!priceDest) return { ok: false, error: "Ongkir belum tersedia untuk kecamatan tujuan ini." };
 
-  const platformRows = await db.select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled }).from(schema.platformCouriers);
+  const platformRows = await db.select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled, services: schema.platformCouriers.services }).from(schema.platformCouriers);
   const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
   const picked = await withTenant(storeId, (tx) =>
     tx
@@ -196,7 +196,7 @@ async function orderRates(storeId: string, ctx: NonNullable<OrderCtx>, call: Cal
   }
   if (!r.ok) return { ok: false, error: r.error || `Gagal mengambil tarif dari Mengantar.` };
   const all = r.data;
-  const quoted = mengantarRates(all, { platformOn, merchant: s?.couriers ?? null, picked });
+  const quoted = mengantarRates(all, { platformOn, merchant: s?.couriers ?? null, picked, kaGroups: kaServiceGroups(platformRows) });
   const rates: PricedRate[] = [];
   for (const q of quoted) {
     const mg = all.find((m) => m.key === q.type);

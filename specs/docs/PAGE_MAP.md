@@ -317,7 +317,7 @@
 | `landing.ts` | `deleteLanding` `saveLanding` |
 | `ledger.ts` | `fetchExportRows` `fetchInvoiceDetail` `requestPayout` `saveBankAccount` |
 | `media.ts` | `deleteMedia` `deleteProductImage` `getMedia` `getMediaPage` `uploadMedia` `uploadProductImage` |
-| `mengantar.ts` | `connectMengantar` `getMengantarCard` `payMengantarShipping` `rotateMengantarKey` |
+| `mengantar.ts` | `connectMengantar` `getMengantarCard` `getShippingViaMengantar` `payMengantarShipping` `rotateMengantarKey` |
 | `menus.ts` | `createMenu` `saveMenu` |
 | `orders.ts` | `setOrderStatus` |
 | `pages.ts` | `createPage` `deletePage` `updatePage` |

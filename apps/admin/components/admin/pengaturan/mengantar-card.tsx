@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, Truck, RefreshCw } from "lucide-react";
+import { Loader2, Truck, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
@@ -25,7 +25,8 @@ const STATE: Record<MengantarCardState["state"], { label: string; tone: string }
   rotating: { label: "Memperbarui kunci", tone: "bg-amber-100 text-amber-800" },
 };
 
-export function MengantarCard() {
+/** `onOpenAlamat` jumps to Pengaturan → Alamat (the page owns which section is open). */
+export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = {}) {
   const canOwn = useCan("settings:write");
   const [card, setCard] = React.useState<MengantarCardState | null>(null);
   const [busy, startBusy] = React.useTransition();
@@ -69,6 +70,39 @@ export function MengantarCard() {
           </p>
         ) : (
           <>
+            {/* Whether checkout ACTUALLY quotes through Mengantar. "Terhubung" alone misled: a broken
+                link below falls back silently (O6), right for the shopper, invisible to the seller.
+                Glyph + words, never colour alone. */}
+            <div
+              data-mengantar-checkout={card.checkout.active ? "active" : card.checkout.fix ?? "platform"}
+              className="flex items-start gap-2 rounded-lg border p-3"
+            >
+              {card.checkout.active ? (
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden />
+              ) : (
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+              )}
+              <div className="min-w-0 space-y-1">
+                <p className="font-medium">{card.checkout.active ? "Dipakai di checkout" : "Belum dipakai di checkout"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {card.checkout.active
+                    ? "Ongkir pesanan non-COD toko ini dihitung dan dikirim lewat Mengantar. COD tetap memakai pengiriman standar TokoΦ."
+                    : card.checkout.reason}
+                </p>
+                {card.checkout.fix === "alamat" && onOpenAlamat && (
+                  <Button size="sm" variant="outline" className="mt-1" onClick={onOpenAlamat}>
+                    Buka Alamat Pengambilan
+                  </Button>
+                )}
+              </div>
+            </div>
+            {state === "connected" && card.balance != null && card.balance <= 0 && (
+              <p className="flex items-start gap-2 text-xs text-amber-800">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                Saldo Mengantar kosong. Pengiriman yang kamu buat tetap tercatat, tapi ongkirnya berstatus belum dibayar dan resi belum terbit
+                sampai saldo diisi lalu ongkir dibayar dari halaman pesanan.
+              </p>
+            )}
             {state === "connected" && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
                 <dt className="text-muted-foreground">Email akun</dt>

@@ -49,7 +49,7 @@ vi.mock("@/lib/cod", () => ({
   getCodPolicy: vi.fn(async () => ({ enabled: true, allows: () => true, reason: () => null })),
 }));
 
-const { quoteShipping, mengantarRates, mgEstimateCacheKey, findRate } = await import("./shipping-quote");
+const { quoteShipping, mengantarRates, kaServiceGroups, mgEstimateCacheKey, findRate } = await import("./shipping-quote");
 
 const STORE = "00000000-0000-4000-8000-000000000001";
 const ORIGIN = "aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -364,6 +364,21 @@ describe("mengantarRates — the courier rule (pure)", () => {
   it("every rate is non-COD and priced at `price`", () => {
     const out = mengantarRates([rate("JNE", 18000)], { platformOn: ["jne"], merchant: null, picked: [] });
     expect(out).toEqual([{ name: "JNE", code: "jne", type: "JNE", cost: 18000, etd: "", cod: false, group: "regular" }]);
+  });
+
+  it("a KiriminAja row counts only for a class Mengantar sells — JNE YES alone does not open JNE Reguler", () => {
+    const kaGroups = kaServiceGroups([
+      { courier: "jne", services: [{ type: "REG23", group: "regular" }, { type: "YES23", group: "next_day" }] },
+      { courier: "spx", services: [{ type: "1", group: "regular" }] },
+      { courier: "jnt", services: [{ type: "EZ", group: "regular" }, { type: "JTCARGO", group: "cargo" }, "LEGACY"] },
+    ]);
+    // JNE: only YES (next_day) enabled → not offered; SPX regular → offered; J&T only cargo → not offered.
+    const picked = [{ courier: "jne", service: "YES23" }, { courier: "spx", service: "1" }, { courier: "jnt", service: "JTCARGO" }];
+    expect(codes(mengantarRates(all, { platformOn: ["jne", "spx", "jnt"], merchant: null, picked, kaGroups }))).toEqual(["spx:spx"]);
+    // Every row a non-sellable class → nothing (the quote then falls back), never "no narrowing".
+    expect(mengantarRates(all, { platformOn: ["jne", "spx", "jnt"], merchant: null, picked: [{ courier: "jne", service: "YES23" }], kaGroups })).toEqual([]);
+    // A row whose class is unknown (service gone from the platform list) still counts, as before.
+    expect(codes(mengantarRates(all, { platformOn: ["jne"], merchant: null, picked: [{ courier: "jne", service: "OLD" }], kaGroups }))).toEqual(["jne:JNE"]);
   });
 
   it("never quotes a key with no TokoΦ courier", () => {

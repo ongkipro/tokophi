@@ -339,7 +339,27 @@ export type MgScope = {
   merchant: string[] | null;
   /** the store's ENABLED store_shipping_methods rows (KiriminAja and/or Mengantar keyed). */
   picked: { courier: string; service: string }[];
+  /**
+   * `courier:service` → the KiriminAja speed class of that service (`platform_couriers.services[].group`),
+   * from `kaServiceGroups`. Lets rule 3 count a courier only for the classes Mengantar actually sells.
+   * Absent / unknown key = no class known (the row still counts, as before).
+   */
+  kaGroups?: ReadonlyMap<string, string>;
 };
+
+/** Mengantar sells these KiriminAja classes; Same Day / Next Day / Kargo have no Mengantar equivalent. */
+const MG_SELLABLE_KA_GROUPS = new Set(["regular", "reguler", "economy"]);
+
+/** `platform_couriers` rows → `courier:service` → group, for `MgScope.kaGroups`. Legacy string entries are skipped. */
+export function kaServiceGroups(rows: { courier: string; services: unknown }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const r of rows) {
+    for (const s of Array.isArray(r.services) ? r.services : []) {
+      if (s && typeof s === "object" && typeof s.type === "string" && typeof s.group === "string") out.set(`${r.courier}:${s.type}`, s.group.toLowerCase());
+    }
+  }
+  return out;
+}
 
 /**
  * MgRate[] → QuotedRate[] under the courier rule (written down in the analysis doc, "Quote/checkout
@@ -353,7 +373,10 @@ export type MgScope = {
  *      · rows whose `service` is a Mengantar estimate key OF THAT courier exist → only those keys;
  *      · otherwise, if the store has KiriminAja rows → only the COURIERS those rows name (the merchant
  *        who ships "JNE + SPX" keeps shipping JNE + SPX after the switch, at every service Mengantar
- *        offers for them, until they save a Mengantar selection);
+ *        offers for them, until they save a Mengantar selection) — and only through rows of a class
+ *        Mengantar sells (Reguler / Hemat, `kaGroups`): a seller who enabled JNE YES but switched JNE
+ *        Reguler OFF is not offered JNE Reguler through Mengantar. A store whose rows are all Same Day /
+ *        Next Day / Kargo therefore gets no Mengantar rate, and the quote falls back (O6);
  *      · no rows at all → no further narrowing (rules 1–2 still apply).
  *   4. Unknown/cargo keys (`mgCourierCode` null) are never quoted.
  */
@@ -362,7 +385,11 @@ export function mengantarRates(rates: MgRate[], scope: MgScope): QuotedRate[] {
   const merchant = scope.merchant ? new Set(scope.merchant) : null;
   const mgPicked = scope.picked.filter((p) => mgCourierCode(p.service) === p.courier);
   const services = mgPicked.length ? new Set(mgPicked.map((p) => `${p.courier}:${p.service.toLowerCase()}`)) : null;
-  const kaCouriers = !services && scope.picked.length ? new Set(scope.picked.map((p) => p.courier)) : null;
+  const sellable = (p: { courier: string; service: string }) => {
+    const g = scope.kaGroups?.get(`${p.courier}:${p.service}`);
+    return !g || MG_SELLABLE_KA_GROUPS.has(g);
+  };
+  const kaCouriers = !services && scope.picked.length ? new Set(scope.picked.filter(sellable).map((p) => p.courier)) : null;
   const out: QuotedRate[] = [];
   for (const r of rates) {
     const code = mgCourierCode(r.key);
@@ -392,7 +419,7 @@ async function quoteMengantar(input: QuoteInput, mg: MengantarConfig): Promise<Q
   }
 
   const platformRows = await db
-    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled })
+    .select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled, services: schema.platformCouriers.services })
     .from(schema.platformCouriers);
   const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
 
@@ -451,7 +478,7 @@ async function quoteMengantar(input: QuoteInput, mg: MengantarConfig): Promise<Q
     if (all.length > 0) cacheSet(cacheKey, all, MG_PRICE_TTL);
   }
 
-  let rates = mengantarRates(all, { platformOn, merchant: settings?.couriers ?? null, picked });
+  let rates = mengantarRates(all, { platformOn, merchant: settings?.couriers ?? null, picked, kaGroups: kaServiceGroups(platformRows) });
   // `couriers` is a LATENCY scope for KiriminAja. Mengantar answers every courier in one call, so here
   // it only keeps the response the same shape the checkout expects (fast pair first, the rest on
   // "Pilih ekspedisi lain"). It narrows; it can never widen past the policy above.

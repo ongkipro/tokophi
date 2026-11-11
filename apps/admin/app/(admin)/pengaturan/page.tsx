@@ -205,7 +205,7 @@ export default function Page() {
               merchant set them and nothing whatsoever happened. Removed rather than left lying. */}
           {section === "pengiriman" && (
             <div className="max-w-3xl space-y-5">
-              <MengantarCard />
+              <MengantarCard onOpenAlamat={() => setSection("alamat")} />
               <JasaKirimCard />
             </div>
           )}
