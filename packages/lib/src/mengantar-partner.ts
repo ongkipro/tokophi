@@ -190,7 +190,9 @@ export async function partnerRegisterSeller(
   const email = input.email.trim().toLowerCase();
   const phone = partnerPhone(input.phone);
   const ext = input.externalUserId.trim();
-  if (!name || !email || !ext || ext.length > 128) return { ok: false, httpStatus: 0, code: "MISSING_FIELDS", message: "Nama, email dan externalUserId wajib.", unknown: false };
+  if (!name || !email || !ext) return { ok: false, httpStatus: 0, code: "MISSING_FIELDS", message: "Nama, email dan externalUserId wajib.", unknown: false };
+  // The provider's own code for this case (docs: 400 INVALID_EXTERNAL_USER_ID, "longer than 128 characters").
+  if (ext.length > 128) return { ok: false, httpStatus: 0, code: "INVALID_EXTERNAL_USER_ID", message: "externalUserId lebih dari 128 karakter.", field: "externalUserId", unknown: false };
   if (!phone) return { ok: false, httpStatus: 0, code: "INVALID_PHONE", message: "Nomor HP pemilik harus nomor seluler Indonesia (08…/62…).", field: "phone", unknown: false };
   const r = await partnerPost("/sellers", { name, email, phone, externalUserId: ext }, opts);
   if (!r.ok) return r;

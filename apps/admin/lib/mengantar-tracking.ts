@@ -2,7 +2,8 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { mgTrackByCnote, mgTrackByOrderId, type MgCallOptions, type MgResult, type MgTracking } from "@tokophi/lib/mengantar";
-import { openFailureMessage, openStoreMengantar, type MgOpen } from "@tokophi/db/mengantar-account";
+import { openFailureMessage, openStoreMengantar, refreshStoreMengantarKey, type MgOpen } from "@tokophi/db/mengantar-account";
+import { MengantarNotWhitelistedError } from "@tokophi/lib/mengantar";
 import { syncOrderFromKa } from "@/lib/ka-tracking";
 import { withTenant } from "@/lib/tenant";
 import { SHIPPING_SERVICE } from "@tokophi/lib/provider-label";
@@ -174,6 +175,8 @@ export async function sweepMengantarTracking(opts?: MgPullOptions): Promise<MgSw
       if (ch.some((c) => c.startsWith("cancel:"))) sum.cancelsReconciled++;
     } catch (err) {
       console.error("[cron/tracking] mg pull/sync failed", o.number, err instanceof Error ? err.name : err);
+      // The sweep is where a store with no checkout traffic still heals a key its seller regenerated.
+      if (err instanceof MengantarNotWhitelistedError) await refreshStoreMengantarKey(o.storeId);
       sum.errors++;
     }
   }

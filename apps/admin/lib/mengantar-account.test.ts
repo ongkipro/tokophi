@@ -351,3 +351,94 @@ describe("sellerConnectRefusal — the Seller button cannot spend the shared par
     expect(sellerConnectRefusal({ state: "rotating", updatedAt: ago(10 * 60_000) }, now)).toMatch(/sedang diperbarui/);
   });
 });
+
+// Partner docs audit 2026-11-11 (`sandbox.mengantar.com/docs/partner/`, unchanged since 2026-11-05).
+suite("partner docs audit — refusals, the shared budget, the email Mengantar knows, a seller-rotated key", () => {
+  const pendingRow = async (o: { approved?: boolean } = {}) => {
+    const s = await newStore(o);
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending')`;
+    return s;
+  };
+
+  it("a PARTNER-level refusal stops the sweep at the first row (limits are per partner, the budget is shared)", async () => {
+    await pendingRow();
+    await pendingRow();
+    const p = fakePartner({ register: { status: 429, body: { success: false, code: "RATE_LIMITED", message: "slow down" }, headers: { "retry-after": "30" } } });
+    const sum = await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 50 });
+    expect(sum.partnerRefused).toBe("RATE_LIMITED");
+    expect(p.count("register")).toBe(1);
+  });
+
+  it("PARTNER_DEACTIVATED (docs: 'Stop retrying') waits a day, not 30 minutes; never a lock-out", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({ register: { status: 403, body: { success: false, code: "PARTNER_DEACTIVATED", message: "partner off" } } });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r).toMatchObject({ state: "pending", partnerRefused: "PARTNER_DEACTIVATED" });
+    const db = await row(storeId);
+    expect(db.retry_after_at!.getTime() - Date.now()).toBeGreaterThan(23 * 3600_000);
+  });
+
+  it.each(["INVALID_EXTERNAL_USER_ID", "PASSWORD_NOT_ALLOWED", "INVALID_PAGINATION"])("400 %s (docs: retrying unchanged gives the same answer) → failed, not an endless retry", async (code) => {
+    const { storeId } = await newStore();
+    const p = fakePartner({ register: { status: 400, body: { success: false, code, message: code } } });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("failed");
+    expect((await row(storeId)).last_error_code).toBe(code);
+  });
+
+  it("a repeat register with apiKey null (docs: the key is disabled) → blocked, no extra get-key call", async () => {
+    const { storeId, email } = await newStore();
+    const p = fakePartner({ register: { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `dis-${runId}`, email, apiKey: null } } } });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("blocked");
+    expect(p.count("key")).toBe(0);
+    expect((await row(storeId)).last_error_code).toBe("API_KEY_DISABLED");
+  });
+
+  it("the card shows the email Mengantar REGISTERED (first registration wins), not today's TokoΦ email", async () => {
+    const { storeId, ext } = await newStore();
+    const first = `first-${runId}@example.test`;
+    const p = fakePartner({
+      register: { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `em-${runId}`, email: first, apiKey: `API-EM-${runId}` } } },
+      list: listed(ext, `em-${runId}`),
+    });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("connected");
+    expect((await acct.mengantarAccountStatus(storeId)).ownerEmail).toBe(first);
+  });
+
+  describe("refreshStoreMengantarKey — the seller regenerated their key inside Mengantar", () => {
+    const connected = async (sellerId: string) => {
+      const s = await newStore();
+      const p = fakePartner({ register: { status: 201, body: { success: true, data: { sellerId, apiKey: `API-OLD-${sellerId}` } } }, list: listed(s.ext, sellerId) });
+      await acct.connectStoreMengantar(s.storeId, opts(p.fetch));
+      return s.storeId;
+    };
+    const part = (p: ReturnType<typeof fakePartner>, at: number) => ({ partner: { cfg: PCFG, fetch: p.fetch }, now: () => at });
+
+    it("a changed key is fetched with get-key (never re-registered) and resealed; the opener hands out the new one", async () => {
+      const storeId = await connected(`rk1-${runId}`);
+      const p = fakePartner({ key: (b) => ({ body: { success: true, data: { sellerId: b.sellerId, apiKey: "API-SELLER-ROTATED" } } }) });
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("refreshed");
+      expect(p.calls.map((c) => c.route)).toEqual(["key"]);
+      const open = await acct.openStoreMengantar(storeId);
+      expect(open.ok && open.cfg.key).toBe("API-SELLER-ROTATED");
+    });
+
+    it("the same key → unchanged (the 403 was a permission/IP refusal), nothing rewritten; a second call inside 10 min is skipped", async () => {
+      const sellerId = `rk2-${runId}`;
+      const storeId = await connected(sellerId);
+      const before = await row(storeId);
+      const p = fakePartner({ key: (b) => ({ body: { success: true, data: { sellerId: b.sellerId, apiKey: `API-OLD-${sellerId}` } } }) });
+      const t = Date.now();
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, t))).toBe("unchanged");
+      expect((await row(storeId)).key_version).toBe(before.key_version);
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, t + 60_000))).toBe("skipped");
+      expect(p.count("key")).toBe(1);
+    });
+
+    it("API_KEY_DISABLED on get-key → blocked (the opener then refuses)", async () => {
+      const storeId = await connected(`rk3-${runId}`);
+      const p = fakePartner({ key: { status: 403, body: { success: false, code: "API_KEY_DISABLED", message: "disabled" } } });
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("blocked");
+      expect((await row(storeId)).state).toBe("blocked");
+    });
+  });
+});

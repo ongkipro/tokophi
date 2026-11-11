@@ -201,7 +201,19 @@ export type ConnectOptions = {
   partner?: Partial<PartnerCallOptions>;
   now?: () => number;
 };
-export type ConnectResult = { state: MgAccountState | "none"; message: string };
+export type ConnectResult = {
+  state: MgAccountState | "none";
+  message: string;
+  /** Set when the PARTNER (not this store) was refused — the sweep stops spending the shared budget. */
+  partnerRefused?: string;
+};
+
+/**
+ * Refusals about the PARTNER account, not the store (docs: limits are "counted per partner, not per
+ * server"; `PARTNER_DEACTIVATED` "Stop retrying"). One of these on row 1 is the same answer for rows 2…n,
+ * and the budget is shared with GeraiExpress (D7) — so the sweep stops at the first one.
+ */
+const PARTNER_LEVEL = new Set(["RATE_LIMITED", "DAILY_REGISTRATION_LIMIT", "PARTNER_DEACTIVATED", "UNAUTHORIZED", "IP_NOT_ALLOWED", "INVALID_TIMESTAMP"]);
 
 async function partnerOpts(o: ConnectOptions): Promise<PartnerCallOptions> {
   const cfg: MengantarPartnerConfig = o.partner?.cfg ?? (await getProviderConfig()).mengantar;
@@ -290,7 +302,16 @@ function refusalPatch(f: PartnerFailure, now: number): { state: MgAccountState; 
     case "INVALID_EMAIL":
     case "INVALID_PHONE":
     case "PHONE_NOT_ALLOWED":
+    // Docs: a 400 means "Fix the request. Retrying it unchanged gives the same answer." — never a retry loop.
+    case "INVALID_EXTERNAL_USER_ID":
+    case "PASSWORD_NOT_ALLOWED":
+    case "INVALID_PAGINATION":
+    // After a PASSED ownership proof this is the provider contradicting itself — an operator looks.
+    case "SELLER_NOT_FOUND":
       return { state: "failed", patch: { ...base, state: "failed" } };
+    case "PARTNER_DEACTIVATED":
+      // Docs: "Stop retrying." Kept `pending` (O10: never a lock-out of the store), but a day apart, not 30 min.
+      return { state: "pending", patch: { ...base, state: "pending", retryAfterAt: new Date(now + 24 * 3600_000) } };
     default:
       // Partner-level (UNAUTHORIZED, IP_NOT_ALLOWED, PARTNER_DEACTIVATED, INVALID_TIMESTAMP, unexpected
       // codes): not this store's fault and fixable by ops — retried later, never a lock-out (O10).
@@ -380,9 +401,18 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
     const reg = await partnerRegisterSeller({ name: who.name, email: who.email, phone: who.phone!, externalUserId: ext }, popts);
     let sellerId: string | null = null;
     let apiKey: string | null = null;
+    let registeredEmail: string | null = null;
     if (reg.ok) {
       sellerId = reg.data.sellerId;
       apiKey = reg.data.apiKey;
+      // Docs: a repeat call returns the seller AS FIRST REGISTERED — that email is the one Mengantar's
+      // "Lupa Password" knows, so it is the one the Seller card must show.
+      registeredEmail = reg.data.email;
+      if (reg.data.alreadyRegistered && apiKey === null) {
+        // Docs: `apiKey: null` on a repeat = the key is disabled — "Talk to us before doing anything else."
+        await setState(storeId, env, ["registering"], { state: "blocked", lastErrorCode: "API_KEY_DISABLED", lastError: "Kunci API seller dinonaktifkan Mengantar." });
+        return { state: "blocked", message: SELLER_MSG.blocked };
+      }
     } else if (reg.unknown) {
       const found = await partnerListSellers({ externalUserId: ext }, popts);
       const mine = found.ok ? found.data.sellers.filter((s) => s.externalUserId === ext) : [];
@@ -393,12 +423,13 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
         return { state: "registering", message: SELLER_MSG.registering };
       }
       sellerId = mine[0].sellerId;
+      registeredEmail = mine[0].email;
     } else {
       // KEY_PROVISIONING_FAILED carries a sellerId; it is NOT written (unproven) — the retry re-registers
       // with the same externalUserId, which is exactly what the provider asks for.
       const next = refusalPatch(reg, now());
       await setState(storeId, env, ["registering"], next.patch);
-      return { state: next.state, message: SELLER_MSG[next.state] ?? SELLER_MSG.pending };
+      return { state: next.state, message: SELLER_MSG[next.state] ?? SELLER_MSG.pending, ...(PARTNER_LEVEL.has(reg.code) ? { partnerRefused: reg.code } : {}) };
     }
 
     // 2. OWNERSHIP PROOF: the seller id is ours only if `sellers/list` says this externalUserId owns it.
@@ -424,13 +455,13 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
       if (!k.ok) {
         const next = k.unknown ? { state: "registering" as const, patch: { lastErrorCode: "outcome_unknown", lastError: "Kunci belum terbaca; dicek ulang otomatis." } } : refusalPatch(k, now());
         await setState(storeId, env, ["registering"], next.patch);
-        return { state: next.state, message: SELLER_MSG[next.state] ?? SELLER_MSG.pending };
+        return { state: next.state, message: SELLER_MSG[next.state] ?? SELLER_MSG.pending, ...(!k.unknown && PARTNER_LEVEL.has(k.code) ? { partnerRefused: k.code } : {}) };
       }
       apiKey = k.data.apiKey;
     }
 
     // 4. Seal + connect, in ONE statement guarded by the claim.
-    return await seal(storeId, env, sellerId!, apiKey, claimed[0].v + 1, popts.cfg.partnerId!, ["registering"]);
+    return await seal(storeId, env, sellerId!, apiKey, claimed[0].v + 1, popts.cfg.partnerId!, ["registering"], registeredEmail ?? owned[0].email);
   } catch (e) {
     // Never thrown into provisioning. A config error is already handled above; anything else queues.
     const msg = e instanceof MengantarPartnerConfigError ? e.message : e instanceof Error ? e.name : "UnknownError";
@@ -444,7 +475,7 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
   }
 }
 
-async function seal(storeId: string, env: ProviderEnv, sellerId: string, apiKey: string, version: number, partnerId: string, from: MgAccountState[]): Promise<ConnectResult> {
+async function seal(storeId: string, env: ProviderEnv, sellerId: string, apiKey: string, version: number, partnerId: string, from: MgAccountState[], registeredEmail?: string | null): Promise<ConnectResult> {
   const blob = encryptSecret(apiKey, mengantarKeyScope(storeId, env, sellerId, version));
   try {
     const done = await setState(storeId, env, from, {
@@ -455,6 +486,7 @@ async function seal(storeId: string, env: ProviderEnv, sellerId: string, apiKey:
       keyVersion: version,
       keyHint: apiKey.slice(-4),
       connectedAt: new Date(),
+      ...(registeredEmail ? { ownerEmail: registeredEmail } : {}),
       lastErrorCode: null,
       lastError: null,
       retryAfterAt: null,
@@ -573,9 +605,59 @@ async function recoverRotation(storeId: string, env: ProviderEnv, sellerId: stri
   return { state: "rotating", message: "Pembaruan kunci belum terkonfirmasi; dipulihkan otomatis dalam beberapa menit." };
 }
 
+// ─── Key refresh after a refusal ─────────────────────────────────────────────────────────────────
+
+// lazy: a per-PROCESS throttle — a second replica may refresh once more; harmless, `sellers/api-key`
+// returns the current key and changes nothing. Upgrade path: a `key_checked_at` column.
+const lastKeyCheck = new Map<string, number>();
+export const MG_KEY_REFRESH_EVERY_MS = 10 * 60_000;
+
+export type MgKeyRefresh = "refreshed" | "unchanged" | "blocked" | "skipped";
+
+/**
+ * A Public call with this store's key answered 403 "Not allowed". The seller OWNS the account and may
+ * have regenerated the key inside Mengantar; the docs' instruction is exact: "When a call starts
+ * answering with an invalid key, fetch the current one with Get a seller's API key rather than
+ * registering the user again." So: fetch it (read-only, at most once per `MG_KEY_REFRESH_EVERY_MS` per
+ * store), reseal it if it changed (`refreshed`), leave the row if it did not (`unchanged` — the 403 is a
+ * permission/IP refusal, not the key), and park the row on a disabled key/seller (`blocked`).
+ * Never throws: every caller is already on an error path.
+ */
+export async function refreshStoreMengantarKey(storeId: string, o: { partner?: Partial<PartnerCallOptions>; now?: () => number } = {}): Promise<MgKeyRefresh> {
+  const now = (o.now ?? Date.now)();
+  try {
+    if ((lastKeyCheck.get(storeId) ?? 0) > now - MG_KEY_REFRESH_EVERY_MS) return "skipped";
+    lastKeyCheck.set(storeId, now);
+    const popts = await partnerOpts({ source: "cron", partner: o.partner });
+    const env = popts.cfg.env;
+    if (!popts.cfg.partnerBase || !popts.cfg.partnerId || !popts.cfg.partnerSecret || !encryptionAvailable()) return "skipped";
+    const [row] = await db
+      .select({ state: storeMengantarAccounts.state, sellerId: storeMengantarAccounts.sellerId, enc: storeMengantarAccounts.apiKeyEnc, v: storeMengantarAccounts.keyVersion })
+      .from(storeMengantarAccounts)
+      .where(where(storeId, env))
+      .limit(1);
+    if (!row || row.state !== "connected" || !row.sellerId) return "skipped";
+    const k = await partnerGetSellerKey(row.sellerId, popts);
+    if (!k.ok) {
+      if (!k.unknown && (k.code === "API_KEY_DISABLED" || k.code === "SELLER_DEACTIVATED")) {
+        await setState(storeId, env, ["connected"], { state: "blocked", lastErrorCode: k.code, lastError: k.message.slice(0, 300) });
+        return "blocked";
+      }
+      return "skipped";
+    }
+    const current = row.enc ? decryptSecret(row.enc, mengantarKeyScope(storeId, env, row.sellerId, row.v)) : null;
+    if (current === k.data.apiKey) return "unchanged";
+    const r = await seal(storeId, env, row.sellerId, k.data.apiKey, row.v + 1, popts.cfg.partnerId, ["connected"]);
+    return r.state === "connected" ? "refreshed" : "skipped";
+  } catch (e) {
+    console.error("[mengantar-account] key refresh failed", storeId, e instanceof Error ? e.name : "UnknownError");
+    return "skipped";
+  }
+}
+
 // ─── The retry sweep (cron) ──────────────────────────────────────────────────────────────────────
 
-export type MgAccountSweep = { picked: number; connected: number; stillPending: number; recovered: number };
+export type MgAccountSweep = { picked: number; connected: number; stillPending: number; recovered: number; partnerRefused?: string };
 
 /**
  * Finish queued work, bounded per tick (the 60/min partner budget is shared with every product on the
@@ -616,6 +698,11 @@ export async function retryMengantarAccounts(o: { limit?: number; partner?: Part
     const res = await connectStoreMengantar(r.storeId, { source: "cron", partner: o.partner, now });
     if (res.state === "connected") sum.connected++;
     else sum.stillPending++;
+    if (res.partnerRefused) {
+      // The partner itself was refused: every next row would get the same answer and spend the shared budget.
+      sum.partnerRefused = res.partnerRefused;
+      break;
+    }
   }
   return sum;
 }

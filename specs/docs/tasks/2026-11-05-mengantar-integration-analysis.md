@@ -454,7 +454,7 @@ order by the representative and book by the kelurahan.
 No dimensions (trap 7).
 
 **Mapping.** `MgRate` → `QuotedRate`: `code` = `mgCourierCode(key)` (TokoΦ courier code: `JT`→`jnt`,
-`iDexpress`→`idx`, `SAP`/`SAPLite`→`sap`, …; additive helper in `packages/lib/src/mengantar.ts`), `type` = estimate key
+`iDexpress`→`idx`, `SAP`→`sap` (`SAPLite` is never quoted or booked — M8), …; additive helper in `packages/lib/src/mengantar.ts`), `type` = estimate key
 verbatim, `cost` = `price` (never `estimatedSpecialPrice`), `group` = `mgGroup`, `etd` when present. Unknown keys and
 Cargo are never quoted. **COD: every Mengantar rate has `cod:false` and the quote has `codEnabled:false`**, whatever
 `unsupported_cod` says. The order route also refuses `channelCode:"cod"` on a Mengantar quote outright (403
@@ -534,8 +534,31 @@ order still answers `GET /order`).
 
 ### 9.1 Owner rulings implemented (2026-11-05, phase 3b)
 
-- **Pickup** follows the provider's schedule: earliest still-bookable slot from `GET /time?address=` (cached 60 s), else
+- **Pickup** follows the provider's schedule: earliest still-bookable slot from `GET /time` (documented with NO parameters; only rows that NAME this address count, and documented rows name none — audit 2026-11-11), else
   the earliest rule-valid slot via `POST /time`; an unreadable schedule refuses the booking. The seller sees the slot.
 - **Pay-unpaid** and **unknown-booking release** are OWNER actions on Super Admin `/pengiriman`
   (`apps/super-admin/lib/mengantar-ops.ts`) — CAS claims, verified pulls, reasons, audit lines naming the operator.
 - **Live test**: `ops/mengantar-live-booking-test.ts` (run instructions in its header; `--check` first).
+
+
+## 10. Docs audit 2026-11-11 (live docs re-fetched: unchanged since the 2026-11-05 snapshot)
+
+Both live pages (`/docs/` Public, `/docs/partner/` Partner) were compared word-for-word with the 2026-11-05 copies: only
+punctuation spacing differs. Findings fixed on `feat/mengantar-default-ready` (BUILD-LOG 2026-11-11 "docs audit"):
+
+- `POST /time` hour must be ZERO-PADDED (`"09:00"`): the sandbox refuses `"9:00"` with "Time allowed 09:00, … 20:00" —
+  every 9 a.m. scheduled pickup would have failed. Found only by running the client against the sandbox.
+- `POST /address` and `POST /time` send JSON (as documented; both sandbox-proven). `pinpointData` is accepted and stored.
+- `GET /time` rows carry only `{_id, date, time}` — never reused for an address; a slot this process created is
+  remembered until it stops being bookable, so bookings do not stack a slot per parcel.
+- POS is not quoted under scheduled pickup (needs `pinpointData`; TokoΦ stores no coordinates); AnterAja is not
+  quoted under drop-off.
+- `DELIVERED_PENDING` → delivered; a tracking row with `isDeleted: true` reads as not found.
+- Partner: partner-level refusals stop the retry sweep; deterministic 400s and `SELLER_NOT_FOUND` → `failed`;
+  `PARTNER_DEACTIVATED` waits 24 h; a repeat register with `apiKey: null` → `blocked`; the card shows the email
+  Mengantar registered; a 403 on a store key fetches the current key with get-key (docs: never re-register).
+
+Still open (owner): consent. The docs say "Get their agreement to the Mengantar Terms and Conditions and Privacy
+Policy … it has to happen on your side". Today signup records consent without showing any Mengantar text, and a
+Super Admin `createStore` registers with no consent at all (D14 made both automatic). Not changed without a ruling.
+Also unverified: what `ordersClosedDestination` / `jneOrdersUnsuported` carry on a refused `POST /order`.

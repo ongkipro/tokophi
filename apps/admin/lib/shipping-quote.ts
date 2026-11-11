@@ -3,9 +3,9 @@ import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { kaShippingPrice, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
-import { mgEstimate, mgCourierCode, type MgRate } from "@tokophi/lib/mengantar";
+import { mgEstimate, mgCourierCode, mgPickupModeFromEnv, mgUnbookableInMode, MengantarNotWhitelistedError, type MgPickupMode, type MgRate } from "@tokophi/lib/mengantar";
 import { getProviderConfig, DEFAULT_SHIPPING_PROVIDER, type MengantarConfig, type ShippingProvider } from "@tokophi/lib/provider-config";
-import { openStoreMengantar } from "@tokophi/db/mengantar-account";
+import { openStoreMengantar, refreshStoreMengantarKey } from "@tokophi/db/mengantar-account";
 import { cacheGet, cacheSet } from "@tokophi/lib/cache";
 import { courierName, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, mengantarDestination } from "@/lib/data/areas";
@@ -345,6 +345,8 @@ export type MgScope = {
    * Absent / unknown key = no class known (the row still counts, as before).
    */
   kaGroups?: ReadonlyMap<string, string>;
+  /** The booking mode the order will be booked in; couriers it cannot book are not quoted (`mgUnbookableInMode`). */
+  pickupMode: MgPickupMode;
 };
 
 /** Mengantar sells these KiriminAja classes; Same Day / Next Day / Kargo have no Mengantar equivalent. */
@@ -379,6 +381,8 @@ export function kaServiceGroups(rows: { courier: string; services: unknown }[]):
  *        Next Day / Kargo therefore gets no Mengantar rate, and the quote falls back (O6);
  *      · no rows at all → no further narrowing (rules 1–2 still apply).
  *   4. Unknown/cargo keys (`mgCourierCode` null) are never quoted.
+ *   5. A courier the booking mode cannot book is never quoted (`mgUnbookableInMode`: POS needs a
+ *      pinpoint for a scheduled pickup, AnterAja refuses drop-off).
  */
 export function mengantarRates(rates: MgRate[], scope: MgScope): QuotedRate[] {
   const platform = new Set(scope.platformOn);
@@ -394,12 +398,13 @@ export function mengantarRates(rates: MgRate[], scope: MgScope): QuotedRate[] {
   for (const r of rates) {
     const code = mgCourierCode(r.key);
     if (!code) continue;
+    if (mgUnbookableInMode(r.key, scope.pickupMode)) continue;
     if (!platform.has(code)) continue;
     if (merchant && !merchant.has(code)) continue;
     if (services && !services.has(`${code}:${r.key.toLowerCase()}`)) continue;
     if (kaCouriers && !kaCouriers.has(code)) continue;
     out.push({
-      name: /lite$/i.test(r.key) ? `${courierName(code)} Lite` : courierName(code),
+      name: courierName(code), // SAPLite is never quoted (M8), so there is no "Lite" label to build
       code,
       type: r.key,
       // `price` = the public courier charge, what the SHOPPER pays. `r.cost` (estimatedSpecialPrice,
@@ -468,6 +473,10 @@ async function quoteMengantar(input: QuoteInput, mg: MengantarConfig): Promise<Q
     try {
       r = await mgEstimate({ originId: origin, destinationId: priceDest.areaId, kg }, { cfg: mg });
     } catch (e) {
+      // A refused store key falls back silently here (O6) — so without this the store would stay on the
+      // default provider forever after the seller regenerated their key. Not awaited: the shopper waits
+      // for nothing; the NEXT quote opens the refreshed key.
+      if (e instanceof MengantarNotWhitelistedError) void refreshStoreMengantarKey(input.storeId);
       // Transport failures / 403 refusals are the provider's words — flagged so the public routes
       // substitute SHIPPING_QUOTE_UNAVAILABLE (ADR 0004).
       return { ok: false, error: e instanceof Error ? e.message : "Gagal mengambil tarif.", fromProvider: true };
@@ -478,7 +487,7 @@ async function quoteMengantar(input: QuoteInput, mg: MengantarConfig): Promise<Q
     if (all.length > 0) cacheSet(cacheKey, all, MG_PRICE_TTL);
   }
 
-  let rates = mengantarRates(all, { platformOn, merchant: settings?.couriers ?? null, picked, kaGroups: kaServiceGroups(platformRows) });
+  let rates = mengantarRates(all, { platformOn, merchant: settings?.couriers ?? null, picked, kaGroups: kaServiceGroups(platformRows), pickupMode: mgPickupModeFromEnv() });
   // `couriers` is a LATENCY scope for KiriminAja. Mengantar answers every courier in one call, so here
   // it only keeps the response the same shape the checkout expects (fast pair first, the rest on
   // "Pilih ekspedisi lain"). It narrows; it can never widen past the policy above.
