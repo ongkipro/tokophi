@@ -145,6 +145,15 @@ services:
       AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
       AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
+      # SHIP-MENGANTAR — the provider switch + Mengantar Partner env. Empty = today's behaviour (the quote
+      # reads an unset MENGANTAR_ENV as sandbox and keeps the default provider). A var set in Coolify
+      # reaches this container ONLY through this block — test/compose-provider-env.test.ts.
+      MENGANTAR_ENV: ${MENGANTAR_ENV:-}
+      MENGANTAR_PARTNER_ID: ${MENGANTAR_PARTNER_ID:-}
+      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
+      SHIPPING_PROVIDER: ${SHIPPING_PROVIDER:-}
+      # scheduledPickup (default, empty) | dropOff — read by the Mengantar booking only.
+      MENGANTAR_PICKUP_MODE: ${MENGANTAR_PICKUP_MODE:-}
       CRON_SECRET: ${CRON_SECRET:-}
       # Cloudflare for SaaS — creates and polls merchant Custom Hostnames after our TXT proof passes.
       CF_SAAS_ZONE_ID: ${CF_SAAS_ZONE_ID:-}
@@ -239,8 +248,16 @@ services:
       ADMIN_URL: ${ADMIN_URL:-}
       KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
       KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
+      KIRIMINAJA_ORDER_PREFIX: ${KIRIMINAJA_ORDER_PREFIX:-}
       AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
+      # SHIP-MENGANTAR — the provider switch + Mengantar Partner env. Empty = today's behaviour (the Kurir
+      # switch reads an unset MENGANTAR_ENV as sandbox and keeps the default provider). A var set in Coolify
+      # reaches this container ONLY through this block — test/compose-provider-env.test.ts.
+      MENGANTAR_ENV: ${MENGANTAR_ENV:-}
+      MENGANTAR_PARTNER_ID: ${MENGANTAR_PARTNER_ID:-}
+      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
+      SHIPPING_PROVIDER: ${SHIPPING_PROVIDER:-}
     expose:
       - "3001"
     healthcheck:

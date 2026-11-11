@@ -185,7 +185,7 @@ describe("quoteShipping — switch = mengantar", () => {
     const q = await quoteShipping({ storeId: STORE, destinationId: 324, items: CART });
     if (!q.ok) throw new Error(q.error);
     expect(q.rates).toEqual([
-      { name: "JNE", code: "jne", type: "JNE", cost: 18000, etd: "2-3 hari", cod: false, group: "regular" },
+      { name: "JNE", code: "jne", type: "JNE", cost: 18000, etd: "2-3", cod: false, group: "regular" },
       { name: "J&T Express", code: "jnt", type: "JT", cost: 17000, etd: "", cod: false, group: "regular" },
       { name: "Shopee Express (SPX)", code: "spx", type: "spx", cost: 12000, etd: "", cod: false, group: "regular" },
     ]);

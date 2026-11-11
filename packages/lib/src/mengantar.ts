@@ -532,6 +532,20 @@ export function mgGroup(estimateKey: string): MgGroup {
 
 // ─── Estimate ───────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Mengantar's ETD text → KiriminAja's shape (`"2-3"`, `"2"`, or `""`), the one every reader expects:
+ * the checkout prints `Estimasi <etd> hari` (stripping only a trailing "hari") and the Seller order
+ * detail prints `<etd> hari`. Measured in the sandbox 2026-11-11, one `/order/estimate` answer carried
+ * `"1 - 2 days"`, `"1 - 2 Days"`, `"2 - 4 Hari"`, `"2-3 Day"` and `"2 HARI"` — passed through verbatim
+ * they rendered as "Estimasi 1 - 2 days hari". Only the numbers are kept; anything else is `""`.
+ */
+export function mgEtd(v: unknown): string {
+  // Whole-string match, 1–2 digit day counts: a DATE (`estimatedDate` may be one) is not a day count.
+  const m = /^\D*?(\d{1,2})(?:\s*(?:-|–|s\/d|sampai|to)\s*(\d{1,2}))?\s*[^\d]*$/i.exec(str(v) ?? "");
+  if (!m) return "";
+  return m[2] && m[2] !== m[1] ? `${m[1]}-${m[2]}` : m[1];
+}
+
 export type MgRate = {
   /** The estimate key verbatim (`JNE`, `SAPLite`, `spx`) — a quote's service `type`. */
   key: string;
@@ -546,7 +560,7 @@ export type MgRate = {
   cod: boolean;
   /** `codFee`, present only when `COD_AMOUNT` was sent. */
   codFee: number | null;
-  /** ETD text when Mengantar sends one (`estimate_delivery` / `estimatedDate`), else "". */
+  /** ETD in KiriminAja's shape (`"2-3"`) via `mgEtd`, from `estimate_delivery` / `estimatedDate`; else "". */
   etd: string;
 };
 
@@ -589,7 +603,7 @@ export async function mgEstimate(
       cost: cost !== null && cost > 0 ? cost : null,
       cod: v.unsupported_cod !== true && v.coverage_cod !== false,
       codFee,
-      etd: str(v.estimate_delivery) ?? str(v.estimatedDate) ?? "",
+      etd: mgEtd(v.estimate_delivery) || mgEtd(v.estimatedDate),
     });
   }
   return { ok: true, data: rates };

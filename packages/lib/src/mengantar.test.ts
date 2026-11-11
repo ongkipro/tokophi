@@ -8,6 +8,7 @@ import {
   mgCancel,
   mgCreateOrder,
   mgEstimate,
+  mgEtd,
   mgPayUnpaid,
   mgPickupAddresses,
   mgPickupSlot,
@@ -222,7 +223,7 @@ describe("mgEstimate — the courier map becomes bookable rates", () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.data.map((x) => x.key)).toEqual(["JNE", "SAP", "JT"]);
     const by = Object.fromEntries(r.data.map((x) => [x.key, x]));
-    expect(by.JNE).toMatchObject({ price: 12000, cost: 10500, cod: true, group: "regular", etd: "2 - 3 days", shipment: { courier: "JNE", cargo: false } });
+    expect(by.JNE).toMatchObject({ price: 12000, cost: 10500, cod: true, group: "regular", etd: "2-3", shipment: { courier: "JNE", cargo: false } });
     expect(by.SAP).toMatchObject({ price: 11000, cost: 9000, cod: false, shipment: { courier: "Sap", cargo: false } });
     expect(by.JT).toMatchObject({ price: 14000, cost: 11000, codFee: 499 });
     for (const x of r.data) expect(x.price).not.toBe(x.cost);
@@ -237,6 +238,23 @@ describe("mgEstimate — the courier map becomes bookable rates", () => {
     expect(new URL(m.calls[0].url).searchParams.get("COD_AMOUNT")).toBe("250000");
     expect(await mgEstimate({ originId: "o", destinationId: "d", kg: 0 }, m.opts)).toMatchObject({ ok: false, httpStatus: 0 });
     expect(m.fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mgEtd — Mengantar ETD text becomes KiriminAja's \"2-3\" shape", () => {
+  // Every string below is one the sandbox returned on 2026-11-11 (one /order/estimate answer).
+  it.each([
+    ["1 - 2 days", "1-2"],
+    ["1 - 2 Days", "1-2"],
+    ["2 - 4 Hari", "2-4"],
+    ["2-3 Day", "2-3"],
+    ["2 HARI", "2"],
+    ["2 - 5 days", "2-5"],
+    ["3 s/d 3 hari", "3"],
+  ])("%s → %s", (raw, want) => expect(mgEtd(raw)).toBe(want));
+
+  it("anything that is not a day count is empty — never a guessed number", () => {
+    for (const raw of ["", "  ", null, undefined, 3, "besok", "2026-11-13", "13/11/2026", "100 - 200 days"]) expect(mgEtd(raw)).toBe("");
   });
 });
 
