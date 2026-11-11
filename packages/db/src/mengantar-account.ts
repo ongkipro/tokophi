@@ -211,7 +211,7 @@ export type ConnectResult = {
 /**
  * Refusals about the PARTNER account, not the store (docs: limits are "counted per partner, not per
  * server"; `PARTNER_DEACTIVATED` "Stop retrying"). One of these on row 1 is the same answer for rows 2…n,
- * and the budget is shared with GeraiExpress (D7) — so the sweep stops at the first one.
+ * and the partner's budget is shared by every TokoΦ store — so the sweep stops at the first one.
  */
 const PARTNER_LEVEL = new Set(["RATE_LIMITED", "DAILY_REGISTRATION_LIMIT", "PARTNER_DEACTIVATED", "UNAUTHORIZED", "IP_NOT_ALLOWED", "INVALID_TIMESTAMP"]);
 
@@ -333,6 +333,23 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
     if (o.actorUserId) {
       // An owner who clicks (or signs up) records the consent; a cron retry never overwrites it.
       await db.update(storeMengantarAccounts).set({ consentSource: o.source, consentBy: o.actorUserId, consentedAt: new Date() }).where(where(storeId, env));
+    }
+
+    // CONSENT FIRST (partner docs, "What Mengantar expects from you": "Get their agreement to the Mengantar
+    // Terms and Conditions and Privacy Policy … it has to happen on your side"). The agreement is the store
+    // owner's: the signup page states it next to the create button (`app/daftar`), the Pengaturan card
+    // next to "Hubungkan Mengantar". An operator-created store, an approval, a retry or the cron carries no
+    // owner → the row waits, with no network call, until the owner agrees with one click. Parked far out so
+    // the retry sweep does not spend its per-tick budget re-reading it; the click requeues it.
+    const [consent] = await db.select({ at: storeMengantarAccounts.consentedAt }).from(storeMengantarAccounts).where(where(storeId, env)).limit(1);
+    if (!consent?.at) {
+      await setState(storeId, env, ["pending", "registering"], {
+        state: "pending",
+        lastErrorCode: "awaiting_consent",
+        lastError: "Menunggu persetujuan pemilik toko — tekan “Hubungkan Mengantar” di Pengaturan → Pengiriman.",
+        retryAfterAt: new Date(now() + 30 * 24 * 3600_000),
+      });
+      return { state: "pending", message: "Akun Mengantar dibuat setelah pemilik toko menyetujuinya di Pengaturan → Pengiriman." };
     }
 
     // Configuration first — no network: a missing origin or credential queues the store, never locks it.

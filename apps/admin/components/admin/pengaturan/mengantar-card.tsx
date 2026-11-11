@@ -8,6 +8,7 @@ import { Badge } from "@tokophi/ui/badge";
 import { useCan } from "@/components/admin/permissions";
 import { IDR } from "@tokophi/lib/format";
 import { connectMengantar, getMengantarCard, rotateMengantarKey, type MengantarCardState } from "@/lib/actions/mengantar";
+import { MengantarConsent } from "@/components/admin/mengantar-consent";
 
 // Pengaturan → Pengiriman → "Akun Mengantar" (Mengantar Partner Business API). The store's own Mengantar
 // account is created by TokoΦ with the owner's email — automatically at signup, or with one click here.
@@ -49,7 +50,12 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
     });
 
   const state = card?.state ?? "none";
-  const meta = STATE[state];
+  // Created by TokoΦ (Super Admin) or approved without the owner's click: the account waits for THEIR
+  // agreement (`connectStoreMengantar`, partner docs) — a first-time connect, not a failed one.
+  const awaitingConsent = state === "pending" && card?.lastErrorCode === "awaiting_consent";
+  const meta = awaitingConsent ? { label: "Perlu persetujuan", tone: "bg-amber-100 text-amber-800" } : STATE[state];
+  const firstConnect = state === "none" || awaitingConsent;
+  const canConnect = state !== "connected" && state !== "rotating";
   return (
     <Card data-mengantar-card={state}>
       <CardHeader>
@@ -58,9 +64,8 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
           {card && <Badge className={`border-transparent ${meta.tone}`}>{meta.label}</Badge>}
         </CardTitle>
         <CardDescription>
-          TokoΦ membuatkan akun Mengantar atas nama toko ini dengan email pemilik toko. Ongkir pesanan yang dikirim lewat Mengantar dibayar dari
-          saldo Mengantar toko, dan ongkir yang dibayar pembeli masuk ke saldo TokoΦ toko. Pesanan COD dan toko yang belum terhubung tetap memakai
-          pengiriman standar TokoΦ.
+          Pengiriman non-COD tokomu memakai akun Mengantar milik toko sendiri, dibuat oleh TokoΦ. Ongkir ke kurir dibayar dari saldo Mengantar
+          toko; ongkir yang dibayar pembeli masuk ke saldo TokoΦ-mu.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -116,7 +121,13 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
                 Masuk ke aplikasi Mengantar lewat “Lupa Password” dengan email di atas untuk mengisi saldo, melihat pengiriman, atau menarik dana.
               </p>
             )}
-            {card.lastError && state !== "connected" && <p className="text-xs text-muted-foreground">{card.lastError}</p>}
+            {awaitingConsent ? (
+              <p className="text-xs text-muted-foreground">
+                Akun Mengantar toko ini belum dibuat karena menunggu persetujuanmu sebagai pemilik toko. Tekan “Hubungkan Mengantar” — sekali saja.
+              </p>
+            ) : (
+              card.lastError && state !== "connected" && <p className="text-xs text-muted-foreground">{card.lastError}</p>
+            )}
             {state === "email_taken" && (
               <p className="text-xs text-muted-foreground">
                 Email pemilik toko sudah punya akun Mengantar sendiri, jadi TokoΦ tidak bisa membuatkan akun baru dengan email itu. Toko tetap
@@ -124,10 +135,10 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              {state !== "connected" && state !== "rotating" && (
+              {canConnect && (
                 <Button size="sm" disabled={busy || state === "registering"} onClick={() => run(connectMengantar)}>
                   {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {state === "none" ? "Hubungkan Mengantar" : "Coba hubungkan lagi"}
+                  {firstConnect ? "Hubungkan Mengantar" : "Coba hubungkan lagi"}
                 </Button>
               )}
               {state === "connected" && (
@@ -136,10 +147,12 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
                 </Button>
               )}
             </div>
-            {state === "none" && (
+            {/* The agreement sits next to EVERY button that can create the account (a retry can be the
+                first successful registration too). */}
+            {canConnect && <MengantarConsent action="connect" />}
+            {state === "connected" && (
               <p className="text-xs text-muted-foreground">
-                Dengan menekan “Hubungkan Mengantar”, kamu setuju TokoΦ membuat akun Mengantar atas nama toko ini memakai email dan nomor HP
-                pengirim toko.
+                Memakai webhook di aplikasi Mengantar? Setelah kunci diperbarui, perbarui juga secret webhook-mu di sana.
               </p>
             )}
           </>

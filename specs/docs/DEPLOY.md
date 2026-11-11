@@ -812,7 +812,9 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
 4. **Super Admin → Pengaturan → Kurir:** save the production partner id + secret (the card probes them).
 5. **Connect the sellers.** New signups queue automatically (after approval, D15). Existing stores:
    the owner of each store presses **"Hubungkan Mengantar"** (Seller → Pengaturan → Pengiriman, it
-   carries the consent line), or Super Admin connects one store at a time. After the flip that same
+   carries the consent line). Super Admin can QUEUE a store but cannot register it: without the owner's
+   recorded consent `connectStoreMengantar` makes no call (`awaiting_consent`) — the Mengantar docs
+   require the owner's agreement to their Terms + Privacy Policy, so the Dashboard banner asks the owner. After the flip that same
    card tells each seller **"Dipakai di checkout"** or names the first thing stopping it (account,
    pickup address, an area Mengantar does not know). Count before flipping:
    `select state, count(*) from store_mengantar_accounts where env = 'production' group by 1;`
@@ -825,9 +827,9 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
 **Rollback:** flip the switch back to KiriminAja. New quotes return to KiriminAja at once (60 s config
 cache); orders already stamped `mengantar` keep tracking and cancelling through Mengantar.
 
-**Local development against the sandbox (owner workstation, 2026-11-11).** TokoΦ shares the `ongkirich`
-sandbox partner with GeraiExpress (D7); its credentials live ONLY in `secrets-env`
-(`GERAIEXPRESS_MENGANTAR_SANDBOX_PARTNER_ID` / `_SECRET`), never in a `.env` or this repo. The
+**Local development against the sandbox (owner workstation, 2026-11-11).** TokoΦ's sandbox Partner
+credentials (owner-provided) live ONLY in `secrets-env` (`TOKOPHI_MENGANTAR_SANDBOX_PARTNER_ID` /
+`_PARTNER_SECRET`), never in a `.env` or this repo. Local `tokophi` has the switch on Mengantar. The
 device-local launcher `~/.local/bin/tokophi-dev-mengantar admin|super [port]` (run from a checkout that
 has 0116) maps them to `MENGANTAR_PARTNER_ID` / `_SECRET` in-process, sets `MENGANTAR_ENV=sandbox`,
 `MENGANTAR_PICKUP_MODE=dropOff` and a local-only `INTEGRATION_TOKEN_KEY`, and serves against

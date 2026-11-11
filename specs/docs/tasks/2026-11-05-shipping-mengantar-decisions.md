@@ -37,3 +37,21 @@ Still open: O2 (production Partner origin + allow-listed IP), O8 (which Menganta
 consent line cites — the Seller card shows a plain consent sentence today), D12, and whether `idempotencyKey`
 replays in the sandbox (sent, not relied on).
 
+
+
+## Consent (owner ruling 2026-11-11) — refines D14
+
+Owner: *"1 boleh kamu sesuaikan dan sempurnakan textnya juga ui ux nya"* and *"bukannya daftar ke kita akan otomatis
+terhubung ke mengantar?"* — yes: **signing up still creates the store's Mengantar account automatically** (after
+approval, D15). What changed is that it is now AGREED to, as the Mengantar Partner docs require ("Get their agreement
+to the Mengantar Terms and Conditions and Privacy Policy … it has to happen on your side"):
+
+| Path | Consent | What happens |
+|---|---|---|
+| Signup (`/daftar`, form or Google) | the sentence under the form, on every step, links Mengantar's [Terms](https://www.mengantar.com/terms/) + [Privacy](https://www.mengantar.com/privacy-policy/) and TokoΦ's privacy page | recorded (`consent_source = signup`, the new owner) → registered after approval |
+| Seller "Hubungkan Mengantar" | the same agreement next to the button | recorded (`pengaturan`, the clicker) → registered now |
+| Super Admin `createStore` / approval / retry, cron | none — the owner never saw anything | **no registration, no call**: row `pending` + `awaiting_consent`; the card says "Perlu persetujuan" and the Dashboard banner asks the owner to connect |
+
+Code: `connectStoreMengantar` refuses without `consented_at` (test "no owner consent …"); `components/admin/mengantar-consent.tsx`
+holds the sentence and URLs (guard `lib/mengantar-consent.test.ts`). O8 (which T&C/Privacy versions) is answered by
+linking Mengantar's live pages, verified 2026-11-11.

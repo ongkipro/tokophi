@@ -9,6 +9,7 @@ import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { GoogleButton } from "./google-button";
+import { MengantarConsent } from "@/components/admin/mengantar-consent";
 
 const STEPS = ["Buat akun", "Profil pemilik", "Alamat penjemputan"] as const;
 
@@ -306,6 +307,11 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
         </div>
 
       </form>
+
+      {/* Every path that creates the store — "Daftar dengan Google" on step ①, "Lewati" mid-way, "Selesai"
+          at the end — is on this page, so the agreement is shown on every step, not only the last one.
+          Creating the store queues its Mengantar account (owner D14); this is the consent that records. */}
+      <MengantarConsent action="signup" />
     </div>
   );
 }

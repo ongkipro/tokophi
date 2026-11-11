@@ -44,7 +44,9 @@ function fakePartner(answers: Partial<Record<Route, Reply | ((body: Record<strin
   }) as unknown as typeof globalThis.fetch;
   return { fetch, calls, count: (r: Route) => calls.filter((c) => c.route === r).length };
 }
-const opts = (fetch: typeof globalThis.fetch) => ({ source: "pengaturan" as const, partner: { cfg: PCFG, fetch } });
+// The owner's click (Pengaturan → "Hubungkan Mengantar"): the only consent a registration may go on.
+const CLICKER = randomUUID();
+const opts = (fetch: typeof globalThis.fetch) => ({ source: "pengaturan" as const, actorUserId: CLICKER, partner: { cfg: PCFG, fetch } });
 const listed = (ext: string, sellerId: string, active = true) => ({ body: { success: true, data: { sellers: [{ sellerId, externalUserId: ext, active }], total: 1 } } });
 const emptyList = { body: { success: true, data: { sellers: [], total: 0 } } };
 
@@ -224,7 +226,7 @@ suite("connectStoreMengantar — register with the owner's TokoΦ email, prove o
   it("no Partner origin for the env (production today) → queued, no call, store unaffected", async () => {
     const { storeId } = await newStore();
     const p = fakePartner({});
-    const r = await acct.connectStoreMengantar(storeId, { source: "signup", partner: { cfg: { ...PCFG, partnerBase: null }, fetch: p.fetch } });
+    const r = await acct.connectStoreMengantar(storeId, { source: "signup", actorUserId: CLICKER, partner: { cfg: { ...PCFG, partnerBase: null }, fetch: p.fetch } });
     expect(r.state).toBe("pending");
     expect(p.calls).toHaveLength(0);
     expect((await row(storeId)).last_error_code).toBe("configuration_blocked");
@@ -233,7 +235,7 @@ suite("connectStoreMengantar — register with the owner's TokoΦ email, prove o
   it("an UNSET MENGANTAR_ENV (read as sandbox) holds registration — a real seller is never sent to the sandbox partner", async () => {
     const { storeId } = await newStore();
     const p = fakePartner({});
-    const r = await acct.connectStoreMengantar(storeId, { source: "signup", partner: { cfg: { ...PCFG, envSource: "default" }, fetch: p.fetch } });
+    const r = await acct.connectStoreMengantar(storeId, { source: "signup", actorUserId: CLICKER, partner: { cfg: { ...PCFG, envSource: "default" }, fetch: p.fetch } });
     expect(r.state).toBe("pending");
     expect(p.calls).toHaveLength(0);
     const got = await row(storeId);
@@ -356,9 +358,32 @@ describe("sellerConnectRefusal — the Seller button cannot spend the shared par
 suite("partner docs audit — refusals, the shared budget, the email Mengantar knows, a seller-rotated key", () => {
   const pendingRow = async (o: { approved?: boolean } = {}) => {
     const s = await newStore(o);
-    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending')`;
+    // A row the owner already agreed to (signup / click) — the sweep only finishes consented work.
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending', 'signup', now())`;
     return s;
   };
+
+  it("no owner consent (operator-created store, approval, retry, cron) → waits, NO partner call; the owner's click registers", async () => {
+    const { storeId, ext, email } = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, data: { sellerId: `cs-${runId}`, email, apiKey: `API-CS-${runId}` } } },
+      list: listed(ext, `cs-${runId}`),
+    });
+    const op = await acct.connectStoreMengantar(storeId, { source: "operator", partner: { cfg: PCFG, fetch: p.fetch } });
+    expect(op.state).toBe("pending");
+    expect(p.calls).toHaveLength(0);
+    const waiting = await row(storeId);
+    expect(waiting.last_error_code).toBe("awaiting_consent");
+    expect(waiting.retry_after_at!.getTime() - Date.now()).toBeGreaterThan(7 * 24 * 3600_000); // the sweep leaves it alone
+    // The cron does not register it either.
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 50 });
+    expect(p.count("register")).toBe(0);
+    // The owner presses "Hubungkan Mengantar" (the Seller action requeues, then connects as the owner).
+    await acct.requeueMengantar(storeId, opts(p.fetch));
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("connected");
+    const [c] = await client<{ consent_source: string; consent_by: string }[]>`select consent_source, consent_by from store_mengantar_accounts where store_id = ${storeId}`;
+    expect(c).toEqual({ consent_source: "pengaturan", consent_by: CLICKER });
+  });
 
   it("a PARTNER-level refusal stops the sweep at the first row (limits are per partner, the budget is shared)", async () => {
     await pendingRow();
