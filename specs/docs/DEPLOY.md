@@ -829,6 +829,17 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
    Mengantar couriers (admin log has **no** `mengantar could not quote; falling back` line for it);
    then ONE owner-approved real booking + cancel on that store, recorded in BUILD-LOG.
 
+**Current production state (2026-11-12, owner exception O11):** `MENGANTAR_ENV=production` is set and the switch is
+ON Mengantar, but there is still NO Partner credential: no store can register. Only the demo store `batiknusantara`
+quotes non-COD through Mengantar, on the owner's OWN seller account attached with `ops/mengantar-attach-own-key.ts`
+(`partner_id` NULL, pickup = the Surabaya address already registered on that account). Every other store, and every COD
+order, stays on KiriminAja; with no Partner credential the Seller banner and the connect button stay hidden
+(`canRegister`). The Super Admin switch refuses Mengantar without a Partner credential by design, so it was flipped by
+SQL with a `platform_activity` line. ⚠️ Coolify reports a deploy "finished" BEFORE the `seed` container exits; the area
+bridge is rebuilt at the END of that seed (`seed-areas.ts` → `bridgeMengantarAreas`), so a quote in the first ~2 minutes
+after a deploy falls back to KiriminAja. Check `select count(*) from kiriminaja_areas where mengantar_area_id is not null`
+(expect 6 919) before judging a live quote.
+
 **Rollback:** flip the switch back to KiriminAja. New quotes return to KiriminAja at once (60 s config
 cache); orders already stamped `mengantar` keep tracking and cancelling through Mengantar.
 
