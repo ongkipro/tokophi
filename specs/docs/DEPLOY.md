@@ -792,12 +792,12 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
 2. The dedicated host's egress IP on Mengantar's **allow-list** (the IP lives in device-local ops
    notes, SSH alias `tokophi-new-ops`; never in this public repo).
 3. The **Terms/Privacy URLs** the Seller consent line cites (decision O8).
-4. Owner approval of the **area import** on production (dataset licence, risk R14).
+4. ~~Owner approval of the **area import** on production~~ — **approved and DONE 2026-11-12** (step 2 below).
 
 **Steps, in order — each one owner-approved, production writes included:**
 1. **Code PR:** set `MENGANTAR_ORIGINS.production.partner` to the published origin (one line + the
    `provider-config.test.ts` expectation). Merge, then deploy by hand (step 2 of the checklist above).
-2. **Area import** (once per dataset version, idempotent, upsert-only), from a workstation tunnel to
+2. ✅ **DONE on production 2026-11-12** (owner-approved; dataset `2026-11-04`; result identical to local: 82 374 areas, kelurahan 71 285/78 764, kecamatan 6 919/7 030, seller origins 6/6 — BUILD-LOG 2026-11-12). Re-run only for a NEW dataset version. **Area import** (once per dataset version, idempotent, upsert-only), from a workstation tunnel to
    production Postgres: `MENGANTAR_AREAS_FILE=<99ribu>/data/shipping/mengantar-areas.json.gz npm run
    load:mengantar-areas -w @tokophi/db`. It also fills `store_settings.sender_mengantar_area_id` for
    stores whose pickup kecamatan matches uniquely. Read back what it prints (`senders_matched`, unmatched
