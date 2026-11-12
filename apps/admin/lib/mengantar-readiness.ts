@@ -13,6 +13,8 @@ export type MengantarReadinessInput = {
   envNamed: boolean;
   /** `store_mengantar_accounts.state` for the active env (`none` when there is no row). */
   state: string;
+  /** `store_mengantar_accounts.last_error_code` — splits `pending` into "waiting on the owner" vs "waiting on us". */
+  lastErrorCode?: string | null;
   /** `store_settings.sender_mengantar_area_id` is set. */
   hasPickupArea: boolean;
   /** `store_settings.sender_kecamatan_id` is set (the pickup address was saved at all). */
@@ -27,9 +29,7 @@ export function mengantarReadiness(i: MengantarReadinessInput): MengantarReadine
   if (!i.switchOn || !i.envNamed) {
     return { active: false, reason: "TokoΦ belum mengaktifkan Mengantar untuk checkout. Ongkir memakai pengiriman standar TokoΦ.", fix: null };
   }
-  if (i.state !== "connected") {
-    return { active: false, reason: "Akun Mengantar toko belum terhubung, jadi ongkir memakai pengiriman standar TokoΦ.", fix: "akun" };
-  }
+  if (i.state !== "connected") return accountNotReady(i.state, i.lastErrorCode ?? null);
   if (!i.hasPickupAddress) {
     return { active: false, reason: "Alamat pengambilan toko belum diisi — Mengantar tidak bisa menghitung ongkir tanpa itu.", fix: "alamat" };
   }
@@ -41,6 +41,38 @@ export function mengantarReadiness(i: MengantarReadinessInput): MengantarReadine
     };
   }
   return { active: true, reason: null, fix: null };
+}
+
+const STANDARD = "ongkir memakai pengiriman standar TokoΦ";
+
+/**
+ * `fix: "akun"` only where a click by the owner can change the outcome — `none`, `failed`, a `pending` row
+ * waiting for the owner's consent, and `email_taken` (the owner's email is re-read live, so changing it and
+ * connecting again is the way out). A row waiting on TokoΦ (approval, a retry already scheduled, a key
+ * being rotated) or refused for review (`blocked`, which `sellerConnectRefusal` always refuses) gets
+ * `fix: null`: telling the seller to connect there is a button that cannot work.
+ */
+function accountNotReady(state: string, code: string | null): MengantarReadiness {
+  switch (state) {
+    case "pending":
+      if (code === "awaiting_consent") {
+        return { active: false, reason: `Akun Mengantar toko menunggu persetujuan pemilik di Pengaturan → Pengiriman. Sementara itu ${STANDARD}.`, fix: "akun" };
+      }
+      if (code === "awaiting_approval") return { active: false, reason: `Akun Mengantar dibuat setelah toko disetujui TokoΦ. Sementara itu ${STANDARD}.`, fix: null };
+      return { active: false, reason: `Akun Mengantar toko sedang didaftarkan otomatis. Sementara itu ${STANDARD}.`, fix: null };
+    case "registering":
+    case "rotating":
+      return { active: false, reason: `Akun Mengantar toko sedang diproses. Sementara itu ${STANDARD}.`, fix: null };
+    case "blocked":
+      return { active: false, reason: `Akun Mengantar toko perlu ditinjau tim TokoΦ — hubungi dukungan TokoΦ. Sementara itu ${STANDARD}.`, fix: null };
+    case "email_taken":
+      return {
+        active: false,
+        reason: `Email pemilik toko sudah dipakai akun Mengantar lain. Ganti email login pemilik, lalu hubungkan lagi. Sementara itu ${STANDARD}.`,
+        fix: "akun",
+      };
+  }
+  return { active: false, reason: `Akun Mengantar toko belum terhubung, jadi ${STANDARD}.`, fix: "akun" };
 }
 
 /** The dashboard banner for a store that is NOT on Mengantar while the platform is. `null` = no banner. */
@@ -57,7 +89,7 @@ export function mengantarNotice(r: MengantarReadiness, canFix: boolean): Mengant
   return r.fix === "akun"
     ? {
         title: "Hubungkan akun Mengantar toko",
-        body: "Pengiriman non-COD TokoΦ kini lewat Mengantar, tapi toko ini belum terhubung — ongkirnya masih memakai pengiriman standar.",
+        body: r.reason,
         href: "/pengaturan?section=pengiriman",
         cta: "Buka Pengaturan Pengiriman",
       }

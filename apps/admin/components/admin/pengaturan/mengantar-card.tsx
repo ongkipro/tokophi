@@ -55,7 +55,10 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
   const awaitingConsent = state === "pending" && card?.lastErrorCode === "awaiting_consent";
   const meta = awaitingConsent ? { label: "Perlu persetujuan", tone: "bg-amber-100 text-amber-800" } : STATE[state];
   const firstConnect = state === "none" || awaitingConsent;
-  const canConnect = state !== "connected" && state !== "rotating";
+  // No button that cannot work: `blocked` is always refused (`sellerConnectRefusal`), and a store still
+  // waiting for TokoΦ's approval is parked again by `connectStoreMengantar` whatever the owner clicks.
+  const awaitingApproval = state === "pending" && card?.lastErrorCode === "awaiting_approval";
+  const canConnect = state !== "connected" && state !== "rotating" && state !== "blocked" && !awaitingApproval;
   return (
     <Card data-mengantar-card={state}>
       <CardHeader>
@@ -127,12 +130,6 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
               </p>
             ) : (
               card.lastError && state !== "connected" && <p className="text-xs text-muted-foreground">{card.lastError}</p>
-            )}
-            {state === "email_taken" && (
-              <p className="text-xs text-muted-foreground">
-                Email pemilik toko sudah punya akun Mengantar sendiri, jadi TokoΦ tidak bisa membuatkan akun baru dengan email itu. Toko tetap
-                memakai pengiriman standar TokoΦ.
-              </p>
             )}
             <div className="flex flex-wrap gap-2">
               {canConnect && (

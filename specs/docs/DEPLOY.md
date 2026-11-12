@@ -810,14 +810,19 @@ booking, tracking and cancel follow the order, never the switch. KiriminAja ther
    `_SECRET` are FALLBACKS: prefer saving the pair on Super Admin → Pengaturan → Kurir (encrypted,
    probed before save). Leave `MENGANTAR_PICKUP_MODE` empty (production = `scheduledPickup`). Redeploy.
 4. **Super Admin → Pengaturan → Kurir:** save the production partner id + secret (the card probes them).
-5. **Connect the sellers.** New signups queue automatically (after approval, D15). Existing stores:
-   the owner of each store presses **"Hubungkan Mengantar"** (Seller → Pengaturan → Pengiriman, it
-   carries the consent line). Super Admin can QUEUE a store but cannot register it: without the owner's
-   recorded consent `connectStoreMengantar` makes no call (`awaiting_consent`) — the Mengantar docs
-   require the owner's agreement to their Terms + Privacy Policy, so the Dashboard banner asks the owner. After the flip that same
-   card tells each seller **"Dipakai di checkout"** or names the first thing stopping it (account,
-   pickup address, an area Mengantar does not know). Count before flipping:
-   `select state, count(*) from store_mengantar_accounts where env = 'production' group by 1;`
+5. **Connect the sellers.** Stores that signed up BEFORE step 3 recorded their consent on a `sandbox`
+   row (an unset `MENGANTAR_ENV` reads as sandbox); once production is named, the account sweep carries
+   every consented store into a `production` row and registers it — nothing to click (only that
+   direction: a production owner is never copied onto the sandbox partner). New signups queue
+   automatically (after approval, D15). Stores with NO recorded consent (created from Super Admin, or
+   older than the consent line): the owner presses **"Hubungkan Mengantar"** (Seller → Pengaturan →
+   Pengiriman, it carries the consent line). Super Admin can QUEUE a store but cannot register it, and an
+   operator in "Buka Dashboard Seller" cannot press that button for the owner — the Mengantar docs require
+   the owner's own agreement to their Terms + Privacy Policy. ⚠️ The Dashboard banner appears only AFTER
+   the flip (step 6) — before it, ask those owners directly. After the flip the card tells each seller
+   **"Dipakai di checkout"** or names the first thing stopping it (account, pickup address, an area
+   Mengantar does not know). Count before flipping:
+   `select state, last_error_code, count(*) from store_mengantar_accounts where env = 'production' group by 1, 2;`
 6. **Flip the switch** (Super Admin → Pengaturan → Kurir → Mengantar). It refuses while
    `MENGANTAR_ENV` is unset in its own process, which is the check step 3 worked.
 7. **Verify:** `ops/tokophi-probe.sh` exits 0; one checkout quote on a connected store shows the

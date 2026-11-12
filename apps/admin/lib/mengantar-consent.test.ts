@@ -11,6 +11,7 @@ import { codeOnly } from "../../../test/source-code";
 const read = (p: string) => codeOnly(readFileSync(new URL(p, import.meta.url), "utf8"));
 const SIGNUP = read("../app/daftar/daftar-form.tsx");
 const CARD = read("../components/admin/pengaturan/mengantar-card.tsx");
+const ACTIONS = read("./actions/mengantar.ts");
 const CONSENT = readFileSync(new URL("../components/admin/mengantar-consent.tsx", import.meta.url), "utf8");
 
 describe("Mengantar consent is shown where the account is created", () => {
@@ -20,6 +21,10 @@ describe("Mengantar consent is shown where the account is created", () => {
     expect(at).toBeGreaterThan(-1);
     // After the closing form tag: not inside a `step === …` branch.
     expect(at).toBeGreaterThan(SIGNUP.search(/<\/\s*form\s*>/));
+    // …and rendered unconditionally there: the token before it closes a JSX element. `{step === 2 && <M…/>}`
+    // or `{x ? <M…/> : null}` after the form would hide it from the "Daftar dengan Google" step.
+    // (`codeOnly` leaves a stripped JSX comment as an empty `{ }`.)
+    expect(SIGNUP.slice(0, at).replace(/(\{\s*\}\s*)+$/, "").trimEnd()).toMatch(/>$/);
   });
 
   it("the Pengaturan card renders the connect sentence whenever a connect button can be pressed", () => {
@@ -31,5 +36,14 @@ describe("Mengantar consent is shown where the account is created", () => {
     expect(CONSENT).toContain('"https://www.mengantar.com/terms/"');
     expect(CONSENT).toContain('"https://www.mengantar.com/privacy-policy/"');
     expect(CONSENT).toMatch(/rel="noopener noreferrer"/);
+  });
+
+  it("the click records consent only from the owner — never from an operator in \"Buka Dashboard Seller\"", () => {
+    // Impersonation carries the merchant's role AND user id, so requireCapability passes and consent would
+    // be written in the owner's name. The refusal must come before anything that registers or requeues.
+    const body = ACTIONS.slice(ACTIONS.search(/export\s+async\s+function\s+connectMengantar\s*\(/));
+    const imp = body.search(/if\s*\(\s*session\s*\.\s*imp\s*\)\s*return\s*\{\s*ok\s*:\s*false/);
+    expect(imp).toBeGreaterThan(-1);
+    for (const call of [/requeueMengantar\s*\(/, /connectStoreMengantar\s*\(/]) expect(imp).toBeLessThan(body.search(call));
   });
 });

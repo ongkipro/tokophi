@@ -394,6 +394,19 @@ suite("partner docs audit — refusals, the shared budget, the email Mengantar k
     expect(p.count("register")).toBe(1);
   });
 
+  it("a partner-level refusal of the OWNERSHIP proof honours Retry-After and is reported (stops the sweep), not a blind 60 s retry", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, data: { sellerId: `pl-${runId}`, apiKey: "API-PL" } } },
+      list: { status: 429, body: { success: false, code: "RATE_LIMITED", message: "slow down" }, headers: { "retry-after": "600" } },
+    });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r).toMatchObject({ state: "pending", partnerRefused: "RATE_LIMITED" });
+    const db = await row(storeId);
+    expect(db).toMatchObject({ state: "pending", seller_id: null, last_error_code: "RATE_LIMITED" });
+    expect(db.retry_after_at!.getTime() - Date.now()).toBeGreaterThan(500_000);
+  });
+
   it("PARTNER_DEACTIVATED (docs: 'Stop retrying') waits a day, not 30 minutes; never a lock-out", async () => {
     const { storeId } = await newStore();
     const p = fakePartner({ register: { status: 403, body: { success: false, code: "PARTNER_DEACTIVATED", message: "partner off" } } });
@@ -459,11 +472,55 @@ suite("partner docs audit — refusals, the shared budget, the email Mengantar k
       expect(p.count("key")).toBe(1);
     });
 
+    it("a rotation that lands while get-key is in flight wins: the older answer is NOT sealed over it", async () => {
+      const storeId = await connected(`rk4-${runId}`);
+      const before = await row(storeId);
+      // Stand-in for "Perbarui kunci" finishing mid-flight: it sealed a newer key at v+1 (state back to connected).
+      const p = fakePartner({
+        key: async (b) => {
+          await client`update store_mengantar_accounts set key_version = key_version + 1, api_key_enc = 'rotated-blob' where store_id = ${storeId}`;
+          return { body: { success: true, data: { sellerId: b.sellerId, apiKey: "API-SEEN-BEFORE-ROTATION" } } };
+        },
+      });
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("skipped");
+      expect(await row(storeId)).toMatchObject({ state: "connected", key_version: before.key_version + 1, api_key_enc: "rotated-blob" });
+    });
+
     it("API_KEY_DISABLED on get-key → blocked (the opener then refuses)", async () => {
       const storeId = await connected(`rk3-${runId}`);
       const p = fakePartner({ key: { status: 403, body: { success: false, code: "API_KEY_DISABLED", message: "disabled" } } });
       expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("blocked");
       expect((await row(storeId)).state).toBe("blocked");
+    });
+  });
+
+  describe("go-live: consent given before production named MENGANTAR_ENV reaches the production row", () => {
+    const PROD: MengantarPartnerConfig = { ...PCFG, env: "production" };
+    const consentRow = (storeId: string, env: "sandbox" | "production", consented: boolean) =>
+      client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consent_by, consented_at)
+             values (${storeId}, ${env}, ${env === "production" ? `tokophi:store:${storeId}` : `tokophi:sandbox:store:${storeId}`}, 'pending',
+                     ${consented ? "signup" : null}, ${consented ? CLICKER : null}, ${consented ? new Date() : null})`;
+    const consentOf = async (storeId: string, env: string) =>
+      (await client<{ external_user_id: string; consent_source: string | null; consented_at: Date | null }[]>`
+        select external_user_id, consent_source, consented_at from store_mengantar_accounts where store_id = ${storeId} and env = ${env}`)[0];
+
+    it("a production sweep carries a consented sandbox row into production (consent kept); an unconsented one stays behind", async () => {
+      const yes = (await newStore()).storeId;
+      const no = (await newStore()).storeId;
+      await consentRow(yes, "sandbox", true);
+      await consentRow(no, "sandbox", false);
+      const p = fakePartner({});
+      await acct.retryMengantarAccounts({ partner: { cfg: PROD, fetch: p.fetch }, limit: 0 });
+      expect(await consentOf(yes, "production")).toMatchObject({ external_user_id: `tokophi:store:${yes}`, consent_source: "signup", consented_at: expect.any(Date) });
+      expect(await consentOf(no, "production")).toBeUndefined();
+      expect(p.calls).toHaveLength(0);
+    });
+
+    it("never the other way: a sandbox sweep does not copy a production owner's consent onto the sandbox partner", async () => {
+      const storeId = (await newStore()).storeId;
+      await consentRow(storeId, "production", true);
+      await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: fakePartner({}).fetch }, limit: 0 });
+      expect(await consentOf(storeId, "sandbox")).toBeUndefined();
     });
   });
 });

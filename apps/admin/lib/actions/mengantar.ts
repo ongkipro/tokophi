@@ -31,7 +31,7 @@ export type MengantarCardState = Omit<MgAccountStatus, "retryAfterAt" | "connect
 };
 
 /** One computation for every screen that says whether checkout uses Mengantar (card + Jasa Kirim). */
-async function readinessFor(storeId: string, state: string): Promise<MengantarReadiness> {
+async function readinessFor(storeId: string, state: string, lastErrorCode: string | null): Promise<MengantarReadiness> {
   const [cfg, [pickup]] = await Promise.all([
     getProviderConfig(),
     withTenant(storeId, (db) =>
@@ -45,6 +45,7 @@ async function readinessFor(storeId: string, state: string): Promise<MengantarRe
     switchOn: cfg.shipping === "mengantar",
     envNamed: cfg.mengantar.envSource === "env",
     state,
+    lastErrorCode,
     hasPickupAddress: pickup?.kecamatan != null,
     hasPickupArea: !!pickup?.area?.trim(),
   });
@@ -58,7 +59,7 @@ export async function getShippingViaMengantar(): Promise<boolean> {
   const session = await getSession();
   if (!session) return false;
   const s = await mengantarAccountStatus(session.storeId);
-  return (await readinessFor(session.storeId, s.state)).active;
+  return (await readinessFor(session.storeId, s.state, s.lastErrorCode)).active;
 }
 
 /**
@@ -71,7 +72,7 @@ export async function getMengantarDashboardNotice(): Promise<MengantarNotice | n
   const canFix = can(session.role, "settings:write");
   if (!canFix) return null; // nobody to act → skip the reads entirely
   const s = await mengantarAccountStatus(session.storeId);
-  return mengantarNotice(await readinessFor(session.storeId, s.state), canFix);
+  return mengantarNotice(await readinessFor(session.storeId, s.state, s.lastErrorCode), canFix);
 }
 
 /** Read for the Pengaturan card (owner-only screen section; the read itself names no secret). */
@@ -80,7 +81,7 @@ export async function getMengantarCard(): Promise<MengantarCardState> {
   const s = await mengantarAccountStatus(storeId);
   const [balance, checkout] = await Promise.all([
     s.state === "connected" ? mengantarStoreBalance(storeId) : Promise.resolve(null),
-    readinessFor(storeId, s.state),
+    readinessFor(storeId, s.state, s.lastErrorCode),
   ]);
   return {
     env: s.env,
@@ -100,6 +101,11 @@ export async function getMengantarCard(): Promise<MengantarCardState> {
 /** "Hubungkan Mengantar" — register (or re-try) the store's own account. The click is the owner's consent. */
 export async function connectMengantar(): Promise<{ ok: boolean; message: string }> {
   const session = await requireCapability("settings:write");
+  // The click IS the owner's agreement to Mengantar's Terms + Privacy, recorded in the owner's name. An
+  // operator in "Buka Dashboard Seller" carries the merchant's role and user id, so without this check a
+  // Super Admin could consent for the owner — the exact thing the operator path (`source: "operator"`) is
+  // not allowed to do.
+  if (session.imp) return { ok: false, message: "Persetujuan Mengantar hanya bisa diberikan pemilik toko sendiri, bukan dari Super Admin." };
   const before = await mengantarAccountStatus(session.storeId);
   if (before.state === "connected") return { ok: true, message: "Akun Mengantar toko sudah terhubung." };
   const refusal = sellerConnectRefusal(before, Date.now());

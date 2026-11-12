@@ -558,7 +558,14 @@ punctuation spacing differs. Findings fixed on `feat/mengantar-default-ready` (B
   `PARTNER_DEACTIVATED` waits 24 h; a repeat register with `apiKey: null` → `blocked`; the card shows the email
   Mengantar registered; a 403 on a store key fetches the current key with get-key (docs: never re-register).
 
-Still open (owner): consent. The docs say "Get their agreement to the Mengantar Terms and Conditions and Privacy
-Policy … it has to happen on your side". Today signup records consent without showing any Mengantar text, and a
-Super Admin `createStore` registers with no consent at all (D14 made both automatic). Not changed without a ruling.
-Also unverified: what `ordersClosedDestination` / `jneOrdersUnsuported` carry on a refused `POST /order`.
+Consent — resolved 2026-11-11 (owner ruling, commit `3008c1dc`): the signup page and the Pengaturan "Hubungkan
+Mengantar" button show Mengantar's Terms + Privacy; `connectStoreMengantar` refuses to register a store with no recorded
+consent (`pending` / `awaiting_consent`, no network call), so a Super Admin `createStore` waits for the owner's click.
+
+Seller name — resolved 2026-11-12 (sandbox-proven, invalid email so nothing was created): the docs' "letters" means
+ASCII letters. "Kopi Señor", "Batik Café", "Toko Φ", "Toko & Co" and "Kedai 日本" all answer 400 `INVALID_NAME`, which is
+never retried. `partnerSellerName()` folds accents (é → e), turns anything else into a space and falls back from the
+store name to the owner name to "Toko"; the folded names pass the same check.
+
+Still unverified: what `ordersClosedDestination` / `jneOrdersUnsuported` carry on a refused `POST /order` (needs a live
+refusal to observe).

@@ -19,6 +19,7 @@ import {
   partnerPhone,
   partnerRegenerateSellerKey,
   partnerRegisterSeller,
+  partnerSellerName,
   type PartnerCallOptions,
   type PartnerFailure,
 } from "@tokophi/lib/mengantar-partner";
@@ -234,8 +235,8 @@ async function ownerIdentity(storeId: string) {
   if (!o) return null;
   return {
     email: o.email.trim().toLowerCase(),
-    // Mengantar's name rule: letters, digits, space and ' - _ . @ — the store name is the account's face.
-    name: (o.storeName || o.name || "Toko").replace(/[^\p{L}\p{N} '\-_.@]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 100) || "Toko",
+    // The store name is the account's face, folded to what Mengantar accepts (ASCII only — sandbox-proven).
+    name: partnerSellerName(o.storeName, o.name),
     phone: o.senderPhone?.trim() || o.storePhone?.trim() || null,
     userId: o.userId,
   };
@@ -258,11 +259,18 @@ async function ensureRow(storeId: string, env: ProviderEnv, o: ConnectOptions): 
 
 const where = (storeId: string, env: ProviderEnv) => and(eq(storeMengantarAccounts.storeId, storeId), eq(storeMengantarAccounts.env, env));
 
-async function setState(storeId: string, env: ProviderEnv, from: MgAccountState[], patch: Partial<typeof storeMengantarAccounts.$inferInsert>) {
+/** `fromVersion` additionally fences on the key version the caller read (a CAS against a concurrent rotation). */
+async function setState(storeId: string, env: ProviderEnv, from: MgAccountState[], patch: Partial<typeof storeMengantarAccounts.$inferInsert>, fromVersion?: number) {
   return db
     .update(storeMengantarAccounts)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(where(storeId, env), inArray(storeMengantarAccounts.state, from)))
+    .where(
+      and(
+        where(storeId, env),
+        inArray(storeMengantarAccounts.state, from),
+        fromVersion === undefined ? undefined : eq(storeMengantarAccounts.keyVersion, fromVersion),
+      ),
+    )
     .returning({ state: storeMengantarAccounts.state });
 }
 
@@ -437,7 +445,9 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
         // Still unknown (or not created): stays `registering`; the retry sweep takes it after the stale
         // window and repeats the SAME register — safe by the provider's idempotency on this id.
         await setState(storeId, env, ["registering"], { lastErrorCode: "outcome_unknown", lastError: `Jawaban pendaftaran tidak terbaca (${reg.code}); dicek ulang otomatis.` });
-        return { state: "registering", message: SELLER_MSG.registering };
+        // The register MAY have landed, so the row stays `registering`; but a partner-level refusal of the
+        // reconcile still stops the sweep — every next row would spend the shared budget on the same answer.
+        return { state: "registering", message: SELLER_MSG.registering, ...(!found.ok && !found.unknown && PARTNER_LEVEL.has(found.code) ? { partnerRefused: found.code } : {}) };
       }
       sellerId = mine[0].sellerId;
       registeredEmail = mine[0].email;
@@ -452,6 +462,12 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
     // 2. OWNERSHIP PROOF: the seller id is ours only if `sellers/list` says this externalUserId owns it.
     const proof = await partnerListSellers({ externalUserId: ext }, popts);
     const owned = proof.ok ? proof.data.sellers.filter((s) => s.externalUserId === ext) : [];
+    if (!proof.ok && !proof.unknown && PARTNER_LEVEL.has(proof.code)) {
+      // The PARTNER was refused (rate limit, credential, IP): honour its Retry-After and stop the sweep.
+      const next = refusalPatch(proof, now());
+      await setState(storeId, env, ["registering"], next.patch);
+      return { state: next.state, message: SELLER_MSG[next.state] ?? SELLER_MSG.pending, partnerRefused: proof.code };
+    }
     if (!proof.ok || owned.length !== 1 || owned[0].sellerId !== sellerId) {
       await setState(storeId, env, ["registering"], {
         state: "pending",
@@ -492,7 +508,17 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
   }
 }
 
-async function seal(storeId: string, env: ProviderEnv, sellerId: string, apiKey: string, version: number, partnerId: string, from: MgAccountState[], registeredEmail?: string | null): Promise<ConnectResult> {
+async function seal(
+  storeId: string,
+  env: ProviderEnv,
+  sellerId: string,
+  apiKey: string,
+  version: number,
+  partnerId: string,
+  from: MgAccountState[],
+  registeredEmail?: string | null,
+  fromVersion?: number,
+): Promise<ConnectResult> {
   const blob = encryptSecret(apiKey, mengantarKeyScope(storeId, env, sellerId, version));
   try {
     const done = await setState(storeId, env, from, {
@@ -507,7 +533,7 @@ async function seal(storeId: string, env: ProviderEnv, sellerId: string, apiKey:
       lastErrorCode: null,
       lastError: null,
       retryAfterAt: null,
-    });
+    }, fromVersion);
     if (!done.length) return { state: "pending", message: SELLER_MSG.pending };
     return { state: "connected", message: `${SELLER_MSG.connected} (kunci ${maskKey(apiKey)})` };
   } catch (e) {
@@ -664,7 +690,9 @@ export async function refreshStoreMengantarKey(storeId: string, o: { partner?: P
     }
     const current = row.enc ? decryptSecret(row.enc, mengantarKeyScope(storeId, env, row.sellerId, row.v)) : null;
     if (current === k.data.apiKey) return "unchanged";
-    const r = await seal(storeId, env, row.sellerId, k.data.apiKey, row.v + 1, popts.cfg.partnerId, ["connected"]);
+    // Fenced on the version read above: a "Perbarui kunci" that finished while get-key was in flight has
+    // already sealed a NEWER key at v+1 — this (older) answer must not overwrite it.
+    const r = await seal(storeId, env, row.sellerId, k.data.apiKey, row.v + 1, popts.cfg.partnerId, ["connected"], null, row.v);
     return r.state === "connected" ? "refreshed" : "skipped";
   } catch (e) {
     console.error("[mengantar-account] key refresh failed", storeId, e instanceof Error ? e.name : "UnknownError");
@@ -686,6 +714,20 @@ export async function retryMengantarAccounts(o: { limit?: number; partner?: Part
   const popts = await partnerOpts({ source: "cron", partner: o.partner });
   const env = popts.cfg.env;
   const stale = new Date(now() - MG_CLAIM_STALE_MS);
+  // Consent is the OWNER's, not an environment's — but rows are per (store, env). Until production names
+  // MENGANTAR_ENV it reads as sandbox, so every signup before the go-live recorded its consent on a SANDBOX
+  // row and has no production row for this sweep to find: the signup page promised an automatic account
+  // that would never come. Carry consented stores INTO production (only that direction: the local DB is a
+  // production copy, and a real owner's email must never be registered on the sandbox partner).
+  // The external id below is the CHECK-pinned production form, = mengantarExternalUserId(id, "production").
+  if (env === "production" && popts.cfg.envSource === "env") {
+    await db.execute(sql`
+      insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consent_by, consented_at)
+      select s.store_id, 'production', 'tokophi:store:' || s.store_id::text, 'pending', s.consent_source, s.consent_by, s.consented_at
+        from store_mengantar_accounts s
+       where s.env = 'sandbox' and s.consented_at is not null
+      on conflict do nothing`);
+  }
   const rows = await db
     .select({ storeId: storeMengantarAccounts.storeId, state: storeMengantarAccounts.state, sellerId: storeMengantarAccounts.sellerId, v: storeMengantarAccounts.keyVersion })
     .from(storeMengantarAccounts)

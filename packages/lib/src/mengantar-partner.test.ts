@@ -7,6 +7,7 @@ import {
   partnerPhone,
   partnerRegenerateSellerKey,
   partnerRegisterSeller,
+  partnerSellerName,
   signPartnerRequest,
   type PartnerCallOptions,
 } from "./mengantar-partner";
@@ -162,6 +163,20 @@ describe("configuration refusals — nothing is sent", () => {
 });
 
 describe("helpers", () => {
+  // Sandbox 2026-11-12: every non-ASCII letter and "&" → 400 INVALID_NAME, never retried.
+  it.each([
+    [["Batik Café"], "Batik Cafe"],
+    [["Kopi Señor & Co."], "Kopi Senor Co."],
+    [["TokoΦ Jaya"], "Toko Jaya"],
+    [["  O'Neil_shop@id - 01 "], "O'Neil_shop@id - 01"],
+    [["日本", "Siti Ñurhaliza"], "Siti Nurhaliza"],
+    [["---", null, ""], "Toko"],
+    [["a".repeat(120)], "a".repeat(100)],
+  ])("partnerSellerName(%j) → %j", (c, out) => {
+    const n = partnerSellerName(...c);
+    expect(n).toBe(out);
+    expect(n).toMatch(/^[A-Za-z0-9 '\-_.@]{1,100}$/);
+  });
   it.each([
     ["0812 3456 7890", "6281234567890"],
     ["+62 812-3456-7890", "6281234567890"],
