@@ -4981,3 +4981,9 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Fix:** the bridge steps moved out of `load-mengantar-areas.ts` into `packages/db/src/mengantar-bridges.ts` (`bridgeMengantarAreas`, unchanged SQL); `seed-areas.ts` calls it after the reload whenever `mengantar_areas` has rows. Proof on the clone `tokophi_shipping` running the deploy's own `seed-areas.ts`: before 6 919 kec / 71 285 kel → after 6 919 / 71 285 (bridges +50 525/+20 760/+6 686/+233 rebuilt). Tests: `mengantar-bridges.test.ts` — source guard (call after the truncate CALL and the kelurahan reload; red when the call is commented out) + DB test (bridge, wipe as a deploy does, rebuild identical; idempotent).
 - **State until this fix deploys:** switch on Mengantar, but with no bridge every store (demo included) falls back to KiriminAja per quote — i.e. checkout behaves exactly as before the switch.
 
+### [2026-11-12 UTC] — SHIP-MENGANTAR-OWN-ACCOUNT · LIVE: demo store quotes through Mengantar on production
+
+- **Executor:** Main Session. After PR #458 (`0af0986`, deploy `07w9hrm5s17lzydmnskuefc8`): the seed container rebuilt the bridge at its end ("kelurahan +50525 … kecamatan +6686 … +233"); production now **6 919/7 030 kecamatan, 71 285/78 764 kelurahan** bridged. Note: Coolify reported the deploy finished while the seed was still running — the first check right after it still read 0.
+- **Live `POST https://app.tokophi.com/api/public/ongkir`** (real product `hijab-voal`, destination Kebayoran Baru): **batiknusantara non-COD → Mengantar** (JNE Rp11.000 1–2 d, Shopee Express Rp13.700 2–3 d, `codRequote: true`); batiknusantara COD → KiriminAja (SPX COD); control store `permata-store` → KiriminAja, unchanged. Admin log: no "falling back" line in the minute after. `ops/tokophi-probe.sh` exit 0.
+- **Not done:** no real booking (needs owner approval; the Mengantar wallet held Rp10.500 — a non-COD booking would stay unpaid until it is topped up).
+
