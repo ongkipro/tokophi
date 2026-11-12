@@ -454,7 +454,7 @@ order by the representative and book by the kelurahan.
 No dimensions (trap 7).
 
 **Mapping.** `MgRate` → `QuotedRate`: `code` = `mgCourierCode(key)` (TokoΦ courier code: `JT`→`jnt`,
-`iDexpress`→`idx`, `SAP`/`SAPLite`→`sap`, …; additive helper in `packages/lib/src/mengantar.ts`), `type` = estimate key
+`iDexpress`→`idx`, `SAP`→`sap` (`SAPLite` is never quoted or booked — M8), …; additive helper in `packages/lib/src/mengantar.ts`), `type` = estimate key
 verbatim, `cost` = `price` (never `estimatedSpecialPrice`), `group` = `mgGroup`, `etd` when present. Unknown keys and
 Cargo are never quoted. **COD: every Mengantar rate has `cod:false` and the quote has `codEnabled:false`**, whatever
 `unsupported_cod` says. The order route also refuses `channelCode:"cod"` on a Mengantar quote outright (403
@@ -534,8 +534,38 @@ order still answers `GET /order`).
 
 ### 9.1 Owner rulings implemented (2026-11-05, phase 3b)
 
-- **Pickup** follows the provider's schedule: earliest still-bookable slot from `GET /time?address=` (cached 60 s), else
+- **Pickup** follows the provider's schedule: earliest still-bookable slot from `GET /time` (documented with NO parameters; only rows that NAME this address count, and documented rows name none — audit 2026-11-11), else
   the earliest rule-valid slot via `POST /time`; an unreadable schedule refuses the booking. The seller sees the slot.
 - **Pay-unpaid** and **unknown-booking release** are OWNER actions on Super Admin `/pengiriman`
   (`apps/super-admin/lib/mengantar-ops.ts`) — CAS claims, verified pulls, reasons, audit lines naming the operator.
 - **Live test**: `ops/mengantar-live-booking-test.ts` (run instructions in its header; `--check` first).
+
+
+## 10. Docs audit 2026-11-11 (live docs re-fetched: unchanged since the 2026-11-05 snapshot)
+
+Both live pages (`/docs/` Public, `/docs/partner/` Partner) were compared word-for-word with the 2026-11-05 copies: only
+punctuation spacing differs. Findings fixed on `feat/mengantar-default-ready` (BUILD-LOG 2026-11-11 "docs audit"):
+
+- `POST /time` hour must be ZERO-PADDED (`"09:00"`): the sandbox refuses `"9:00"` with "Time allowed 09:00, … 20:00" —
+  every 9 a.m. scheduled pickup would have failed. Found only by running the client against the sandbox.
+- `POST /address` and `POST /time` send JSON (as documented; both sandbox-proven). `pinpointData` is accepted and stored.
+- `GET /time` rows carry only `{_id, date, time}` — never reused for an address; a slot this process created is
+  remembered until it stops being bookable, so bookings do not stack a slot per parcel.
+- POS is not quoted under scheduled pickup (needs `pinpointData`; TokoΦ stores no coordinates); AnterAja is not
+  quoted under drop-off.
+- `DELIVERED_PENDING` → delivered; a tracking row with `isDeleted: true` reads as not found.
+- Partner: partner-level refusals stop the retry sweep; deterministic 400s and `SELLER_NOT_FOUND` → `failed`;
+  `PARTNER_DEACTIVATED` waits 24 h; a repeat register with `apiKey: null` → `blocked`; the card shows the email
+  Mengantar registered; a 403 on a store key fetches the current key with get-key (docs: never re-register).
+
+Consent — resolved 2026-11-11 (owner ruling, commit `3008c1dc`): the signup page and the Pengaturan "Hubungkan
+Mengantar" button show Mengantar's Terms + Privacy; `connectStoreMengantar` refuses to register a store with no recorded
+consent (`pending` / `awaiting_consent`, no network call), so a Super Admin `createStore` waits for the owner's click.
+
+Seller name — resolved 2026-11-12 (sandbox-proven, invalid email so nothing was created): the docs' "letters" means
+ASCII letters. "Kopi Señor", "Batik Café", "Toko Φ", "Toko & Co" and "Kedai 日本" all answer 400 `INVALID_NAME`, which is
+never retried. `partnerSellerName()` folds accents (é → e), turns anything else into a space and falls back from the
+store name to the owner name to "Toko"; the folded names pass the same check.
+
+Still unverified: what `ordersClosedDestination` / `jneOrdersUnsuported` carry on a refused `POST /order` (needs a live
+refusal to observe).

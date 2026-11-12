@@ -95,7 +95,9 @@ export class MengantarPosCodIneligibleError extends Error {
  */
 export class MengantarNotWhitelistedError extends Error {
   constructor(readonly path: string) {
-    super(`Mengantar ${path}: akun belum di-whitelist untuk fitur ini. Minta akses ke CS Mengantar.`);
+    // Seller-facing (O5 allows the brand on the Seller surface). The same 403 covers a key the seller
+    // regenerated inside Mengantar, a disabled key and a missing permission — so it does not claim one.
+    super(`Mengantar ${path}: kunci akun Mengantar toko ditolak. TokoΦ mengambil kunci terbaru otomatis — coba lagi beberapa menit lagi; bila tetap gagal, hubungi dukungan TokoΦ.`);
     this.name = "MengantarNotWhitelistedError";
   }
 }
@@ -297,14 +299,15 @@ const norm = (v: string) => v.normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ")
 const digits = (v: string) => v.replace(/\D/g, "");
 
 /**
- * `POST /address` (form-encoded, as adsbookcms ships it). Returns the address `_id`. Mengantar
+ * `POST /address` — a JSON body, as the docs specify (sandbox-proven 2026-11-11; adsbookcms sent a form, which
+ * the sandbox also accepts but which cannot carry `pinpointData`). Returns the address `_id`. Mengantar
  * sometimes answers success with no `_id`; the list is then read back and matched (by id, else by
  * name + phone + address). Accepted-but-unidentifiable is outcome-unknown, not a failure: a retry
  * would register a second address.
  */
 export async function mgUpsertPickupAddress(input: MgPickupAddressInput, opts?: MgCallOptions): Promise<MgResult<string>> {
   assertWriteAllowed("mgUpsertPickupAddress", opts);
-  const form: Record<string, string> = {
+  const json: Record<string, string> = {
     PICKUP_NAME: input.name,
     PICKUP_PIC: input.pic,
     PICKUP_PIC_PHONE: input.picPhone,
@@ -312,8 +315,8 @@ export async function mgUpsertPickupAddress(input: MgPickupAddressInput, opts?: 
     PICKUP_AUTOFILL: input.areaId,
   };
   const wantId = str(input.id);
-  if (wantId) form._id = wantId;
-  const r = await mg("POST", "/address", opts, { form });
+  if (wantId) json._id = wantId;
+  const r = await mg("POST", "/address", opts, { json });
   if (!r.ok) return fail(r);
   const d = isObj(r.body.data) ? r.body.data : {};
   const id = str(d._id) ?? str(d.address_id) ?? str(d.id);
@@ -367,7 +370,9 @@ export async function mgPickupSlot(
   if (startsAt < (opts?.now ?? Date.now()) + MG_PICKUP_LEAD_MS) return refuse("Jadwal pickup minimal 90 menit dari sekarang.");
 
   const [y, m, d] = date.split("-");
-  const slot = { date: `${m}-${d}-${y}`, time: `${hour}:00` };
+  // `HH:00`, zero-padded. Measured 2026-11-11 (sandbox, POST /time): "9:00" is REFUSED with "Time allowed
+  // 09:00, 10:00, … 20:00" — the docs' unpadded examples are not what the endpoint accepts.
+  const slot = { date: `${m}-${d}-${y}`, time: `${String(hour).padStart(2, "0")}:00` };
   // Rows are compared NORMALISED (`slotRows`): GET answers epoch-ms dates, POST an ISO midnight, the
   // form we send is mm-dd-yyyy (reference M11). A raw string compare never matched and booked a fresh
   // slot on every call.
@@ -380,7 +385,8 @@ export async function mgPickupSlot(
   const found = pick(existing.body.data);
   if (found) return { ok: true, data: found };
 
-  const r = await mg("POST", "/time", opts, { form: { address_id: addressId, ...slot } });
+  // JSON, as documented (sandbox-proven 2026-11-11: HTTP 200, the answer names `address._id`).
+  const r = await mg("POST", "/time", opts, { json: { address_id: addressId, ...slot } });
   if (!r.ok) return fail(r);
   const created = pick(r.body.data) ?? (isObj(r.body.data) ? str(r.body.data._id) : null);
   if (created) return { ok: true, data: created };
@@ -390,7 +396,7 @@ export async function mgPickupSlot(
   throw new MengantarOutcomeUnknownError("POST /time", "accepted without a slot _id and no matching slot on re-list");
 }
 
-/** One slot of `GET /time?address=`, normalised. `startsAt` = epoch ms of the slot start (WIB). */
+/** One slot row of `GET /time` / `POST /time`, normalised. `startsAt` = epoch ms of the slot start (WIB). */
 export type MgPickupSlotRow = { id: string; date: string; hour: number; startsAt: number };
 
 /**
@@ -415,7 +421,7 @@ function slotDate(v: unknown): string | null {
 const slotAddress = (row: Record<string, unknown>): string | null =>
   isObj(row.address) ? str(row.address._id) : (str(row.address) ?? str(row.address_id));
 
-/** Normalise slot rows; a row naming ANOTHER pickup address of this seller is dropped. */
+/** Normalise slot rows; a row that does not NAME `addressId` (another address, or none) is dropped. */
 function slotRows(data: unknown, addressId: string): MgPickupSlotRow[] {
   const rows = (Array.isArray(data) ? data : isObj(data) ? [data] : []).filter(isObj);
   const out: MgPickupSlotRow[] = [];
@@ -425,7 +431,10 @@ function slotRows(data: unknown, addressId: string): MgPickupSlotRow[] {
     const mins = clockMinutes(row.time);
     const addr = slotAddress(row);
     if (!id || !date || !Number.isFinite(mins) || mins % 60 !== 0) continue;
-    if (addr && addr !== addressId) continue;
+    // A row must NAME this address. `GET /time` rows carry only `{_id, date, time}` (docs; measured
+    // 2026-11-11) — they may belong to the seller's PREVIOUS pickup address, so an address-less row is
+    // never reused; `POST /time` answers with `address._id` and is the row that matches.
+    if (addr !== addressId) continue;
     const hour = mins / 60;
     if (!(MG_PICKUP_HOURS as readonly number[]).includes(hour)) continue;
     out.push({ id, date, hour, startsAt: new Date(`${date}T${String(hour).padStart(2, "0")}:00:00+07:00`).getTime() });
@@ -436,7 +445,8 @@ function slotRows(data: unknown, addressId: string): MgPickupSlotRow[] {
 /**
  * `GET /time` (documented with no parameters, M10) — the seller's pickup slots, normalised for
  * `addressId`. A row whose date or hour cannot be read, whose hour is outside the 09–18 grid, or that
- * names another pickup address is dropped (never guessed into a slot). The sandbox answers `[]`.
+ * does not name this pickup address is dropped (never guessed into a slot). Documented GET rows carry no
+ * address at all, so this list is empty in practice and the booking creates its slot with `POST /time`.
  */
 export async function mgPickupSlots(addressId: string, opts?: MgCallOptions): Promise<MgResult<MgPickupSlotRow[]>> {
   if (!str(addressId)) return refuse("Alamat pickup Mengantar belum terdaftar.");
@@ -520,6 +530,24 @@ export function mgCourierCode(estimateKey: string | null | undefined): string | 
   return TOKOPHI_COURIER[(estimateKey ?? "").trim().toLowerCase()] ?? null;
 }
 
+export type MgPickupMode = "scheduledPickup" | "dropOff";
+
+/** `MENGANTAR_PICKUP_MODE` → the booking mode. Anything but `dropOff` is a scheduled pickup (the production default). */
+export const mgPickupModeFromEnv = (v: string | undefined = process.env.MENGANTAR_PICKUP_MODE): MgPickupMode => (v === "dropOff" ? "dropOff" : "scheduledPickup");
+
+/**
+ * Couriers that cannot be BOOKED in a pickup mode, so they are never QUOTED in it either (a price the
+ * shopper pays for a parcel the seller then cannot book):
+ *   · scheduledPickup — POS: "the selected pickup address must contain valid `pinpointData.lat`/`lng`"
+ *     (docs, POST /order). TokoΦ stores no coordinates (`sender_lat/lng` are dead columns), so a POS
+ *     booking would always be refused. Lift this when a real pinpoint is captured.
+ *   · dropOff — AnterAja refuses drop-off (reference §5.3, observed in the sandbox).
+ */
+export function mgUnbookableInMode(estimateKey: string, mode: MgPickupMode): boolean {
+  const k = estimateKey.trim().toLowerCase();
+  return mode === "scheduledPickup" ? k === "pos" : k === "anteraja";
+}
+
 const BOOKING_NAMES = new Set(Object.values(SHIPMENT_NAMES).map((s) => s.courier));
 
 export type MgGroup = "regular" | "economy" | "cargo";
@@ -531,6 +559,23 @@ export function mgGroup(estimateKey: string): MgGroup {
 }
 
 // ─── Estimate ───────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Mengantar's ETD text → KiriminAja's shape (`"2-3"`, `"2"`, or `""`), the one every reader expects:
+ * the checkout prints `Estimasi <etd> hari` (stripping only a trailing "hari") and the Seller order
+ * detail prints `<etd> hari`. Measured in the sandbox 2026-11-11, one `/order/estimate` answer carried
+ * `"1 - 2 days"`, `"1 - 2 Days"`, `"2 - 4 Hari"`, `"2-3 Day"` and `"2 HARI"` — passed through verbatim
+ * they rendered as "Estimasi 1 - 2 days hari". Only the numbers are kept; anything else is `""`.
+ */
+export function mgEtd(v: unknown): string {
+  // Whole-string match, 1–2 digit day counts: a DATE (`estimatedDate` may be one) is not a day count.
+  const m = /^\D*?(\d{1,2})(?:\s*(?:-|–|s\/d|sampai|to)\s*(\d{1,2}))?\s*[^\d]*$/i.exec(str(v) ?? "");
+  if (!m) return "";
+  if (!m[2] || m[2] === m[1]) return String(Number(m[1]));
+  // Production answers a reversed range for some couriers (SPX "2-1", seen 2026-11-12): a range reads low-high.
+  const [lo, hi] = [Number(m[1]), Number(m[2])].sort((a, b) => a - b);
+  return `${lo}-${hi}`;
+}
 
 export type MgRate = {
   /** The estimate key verbatim (`JNE`, `SAPLite`, `spx`) — a quote's service `type`. */
@@ -546,7 +591,7 @@ export type MgRate = {
   cod: boolean;
   /** `codFee`, present only when `COD_AMOUNT` was sent. */
   codFee: number | null;
-  /** ETD text when Mengantar sends one (`estimate_delivery` / `estimatedDate`), else "". */
+  /** ETD in KiriminAja's shape (`"2-3"`) via `mgEtd`, from `estimate_delivery` / `estimatedDate`; else "". */
   etd: string;
 };
 
@@ -589,7 +634,7 @@ export async function mgEstimate(
       cost: cost !== null && cost > 0 ? cost : null,
       cod: v.unsupported_cod !== true && v.coverage_cod !== false,
       codFee,
-      etd: str(v.estimate_delivery) ?? str(v.estimatedDate) ?? "",
+      etd: mgEtd(v.estimate_delivery) || mgEtd(v.estimatedDate),
     });
   }
   return { ok: true, data: rates };
@@ -771,6 +816,9 @@ const OUTCOME_BY_TOKEN: Record<string, MgOutcome | null> = {
   DELIVERED: "delivered",
   "DELIVERED COMPLETE": "delivered",
   "DELIVERED COMPLETED": "delivered",
+  // Documented status key (`DELIVERED_PENDING`, public docs status vocabulary): the parcel reached the
+  // buyer; what is pending is Mengantar's own settlement step, not the delivery.
+  "DELIVERED PENDING": "delivered",
   "DELIVERY COMPLETE": "delivered",
   RTS: "returned",
   RETURNED: "returned",
@@ -891,6 +939,9 @@ async function track(param: "tracking_id" | "order_id", value: string, opts?: Mg
   const want = v.toUpperCase();
   const row = rows.find((x) => [x.cnote_no, x.ORDER_ID].some((id) => str(id)?.toUpperCase() === want));
   if (!row) return { ok: false, error: "Jawaban pelacakan Mengantar tidak menyebut pengiriman yang diminta.", httpStatus: r.httpStatus };
+  // `isDeleted: true` (docs, `GET /order` rows; single lookups also search the archive) is a shipment the
+  // seller deleted — the same fact as the sandbox's "a deleted order is gone", so it reads as not found.
+  if (row.isDeleted === true) return { ok: true, data: null };
   return { ok: true, data: parseMgTracking(row) };
 }
 

@@ -2197,7 +2197,7 @@ const RECOVER = recovered && {
       // API fans out per courier and both are fast), and on a route SPX does not serve (2145) the
       // spx-only call returns ZERO, which would force a second round-trip to find the fallback.
       // Quoting the pair is how "no SPX here → JNE is the default" stays free and instant.
-      var preferred = fast.filter(function (x) { return x.code === "spx" && x.type === "1"; })[0];
+      var preferred = fast.filter(function (x) { return x.code === "spx" && (x.type === "1" || String(x.type).toLowerCase() === "spx"); })[0]; // "spx" = Mengantar key — checkout-default-spx.test.ts
       var def = preferred || fast[0] || universe[0];
 
       // ── THE DEFAULT VIEW IS ONE ROW ────────────────────────────────────────────────────────────

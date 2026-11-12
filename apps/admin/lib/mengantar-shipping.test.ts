@@ -99,9 +99,9 @@ async function sealAccount(storeId: string, opts: { pickupId?: string | null; ve
   const key = opts.key ?? `key-${storeId.slice(0, 8)}-v${v}`;
   const enc = crypto_.encryptSecret(key, acct.mengantarKeyScope(storeId, "sandbox", seller, v));
   await client`
-    insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id, state, api_key_enc, key_hint, key_version, pickup_address_id)
-    values (${storeId}, 'sandbox', ${`tokophi:sandbox:store:${storeId}`}, ${seller}, ${opts.state ?? "connected"}, ${enc}, ${key.slice(-4)}, ${v}, ${opts.pickupId === undefined ? "addr-preset" : opts.pickupId})
-    on conflict (store_id, env) do update set seller_id = excluded.seller_id, state = excluded.state, api_key_enc = excluded.api_key_enc, key_version = excluded.key_version, pickup_address_id = excluded.pickup_address_id`;
+    insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id, partner_id, state, api_key_enc, key_hint, key_version, pickup_address_id)
+    values (${storeId}, 'sandbox', ${`tokophi:sandbox:store:${storeId}`}, ${seller}, 'p-test', ${opts.state ?? "connected"}, ${enc}, ${key.slice(-4)}, ${v}, ${opts.pickupId === undefined ? "addr-preset" : opts.pickupId})
+    on conflict (store_id, env) do update set seller_id = excluded.seller_id, partner_id = excluded.partner_id, state = excluded.state, api_key_enc = excluded.api_key_enc, key_version = excluded.key_version, pickup_address_id = excluded.pickup_address_id`;
   keyOf.set(storeId, key);
   sellerOf.set(storeId, seller);
 }
@@ -419,7 +419,8 @@ suite("bookMengantar — the pickup slot comes from the provider's own schedule"
   };
 
   it("reuses the earliest listed slot that is still ≥ 90 min away — no POST /time — and tells the seller when", async () => {
-    const store = await newStore({ pickupId: `addr-${randomUUID().slice(0, 8)}` });
+    const pickupId = `addr-${randomUUID().slice(0, 8)}`;
+    const store = await newStore({ pickupId });
     const o = await newOrder(store);
     const in3d = new Date(Date.now() + 3 * 864e5);
     const in2d = new Date(Date.now() + 2 * 864e5);
@@ -428,9 +429,10 @@ suite("bookMengantar — the pickup slot comes from the provider's own schedule"
         body: {
           success: true,
           data: [
-            { _id: "slot-far", date: mmddyyyy(in3d), time: "10:00" },
-            { _id: "slot-near", date: mmddyyyy(in2d), time: "9:00" },
-            { _id: "slot-past", date: mmddyyyy(new Date(Date.now() - 864e5)), time: "10:00" },
+            // Rows NAME the address (a row without one is never reused — mengantar.ts slotRows).
+            { _id: "slot-far", date: mmddyyyy(in3d), time: "10:00", address: { _id: pickupId } },
+            { _id: "slot-near", date: mmddyyyy(in2d), time: "9:00", address: { _id: pickupId } },
+            { _id: "slot-past", date: mmddyyyy(new Date(Date.now() - 864e5)), time: "10:00", address: { _id: pickupId } },
           ],
         },
       }),
@@ -449,8 +451,29 @@ suite("bookMengantar — the pickup slot comes from the provider's own schedule"
     const r = await book(store, o.number, p.fetch);
     expect(r.ok).toBe(true);
     const post = p.calls.find((c) => c.method === "POST" && c.path === "/time");
-    expect(post?.body).toMatchObject({ time: expect.stringMatching(/^(9|1[0-8]):00$/) });
+    // Zero-padded: the provider refuses "9:00" ("Time allowed 09:00, …", sandbox 2026-11-11).
+    expect(post?.body).toMatchObject({ time: expect.stringMatching(/^(09|1[0-8]):00$/) });
     expect(r.pickupAt).toBeTruthy();
+  });
+
+  it("a slot this process created is reused by the next booking of the same door and hour — one POST /time, not one per parcel", async () => {
+    const store = await newStore({ pickupId: `addr-${randomUUID().slice(0, 8)}` });
+    const a = await newOrder(store);
+    const b = await newOrder(store);
+    const p = fakeProvider();
+    // Past the 60 s schedule cache: only `Date` is faked (DB and fetch keep real timers).
+    const t0 = Math.floor(Date.now() / 3_600_000) * 3_600_000 + 5 * 60_000;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(t0);
+      expect((await book(store, a.number, p.fetch)).ok).toBe(true);
+      vi.setSystemTime(t0 + 2 * 60_000);
+      expect((await book(store, b.number, p.fetch)).ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(p.calls.filter((c) => c.method === "POST" && c.path === "/time")).toHaveLength(1);
+    expect(p.posts().map((c) => (c.body as { pickup: { time_id: string } }).pickup.time_id)).toEqual(["slot0000000000000000000a", "slot0000000000000000000a"]);
   });
 
   it("the schedule cannot be read → refused with a seller message, nothing reserved, no POST /order", async () => {

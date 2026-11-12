@@ -21,6 +21,7 @@ import {
   type PlatformService,
 } from "@/lib/actions/shipping";
 import { courierName } from "@tokophi/lib/couriers";
+import { getShippingViaMengantar } from "@/lib/actions/mengantar";
 
 // KiriminAja's own speed classes (the `group` on every rate). Grouping the page by them — rather
 // than by courier — is what makes it read like a shipping menu instead of a vendor list: a seller
@@ -46,12 +47,20 @@ export function JasaKirimCard() {
   const [freeShip, setFreeShipOn] = React.useState(false); // PROMO P1 — automatic free shipping
   const [freeShipMin, setFreeShipMin] = React.useState(""); // Rp threshold as a string (input)
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
+  const [viaMengantar, setViaMengantar] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
     (async () => {
-      const [platform, mine, codOn, fs] = await Promise.all([getPlatformServices(), getStoreServices(), getCodEnabled(), getFreeShip()]);
+      const [platform, mine, codOn, fs, mg] = await Promise.all([
+        getPlatformServices(),
+        getStoreServices(),
+        getCodEnabled(),
+        getFreeShip(),
+        getShippingViaMengantar().catch(() => false),
+      ]);
       if (!alive) return;
+      setViaMengantar(mg);
       setFreeShipOn(fs.enabled);
       setFreeShipMin(fs.minIdr ? String(fs.minIdr) : "");
       setServices(platform);
@@ -186,6 +195,21 @@ export function JasaKirimCard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* Under Mengantar the switches below still decide WHICH couriers the shopper sees, but only
+              through Reguler/Hemat rows (Mengantar sells no Same Day / Next Day / Kargo) — rule 3 in
+              shipping-quote.ts `mengantarRates`. Said here so a seller who left only "Next Day" on is
+              not surprised that the courier disappears. */}
+          {viaMengantar && (
+            <div data-jasa-kirim-mengantar className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <span>
+                Pesanan non-COD toko ini dikirim lewat <span className="font-medium text-foreground">Mengantar</span>. Kurir yang ditawarkan ke
+                pembeli adalah kurir yang layanan <span className="font-medium text-foreground">Reguler</span> atau{" "}
+                <span className="font-medium text-foreground">Hemat</span>-nya aktif di bawah. Same Day, Next Day dan Kargo tidak tersedia lewat
+                Mengantar; pesanan COD tetap memakai semua layanan yang aktif.
+              </span>
+            </div>
+          )}
           {GROUPS.map((g) => {
             const list = services.filter((s) => s.group === g.key);
             if (!list.length) return null;

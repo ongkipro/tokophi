@@ -174,6 +174,28 @@ export function partnerPhone(raw: string | null | undefined): string | null {
   return /^628\d{7,12}$/.test(n) ? n : null;
 }
 
+/**
+ * The seller `name` Mengantar accepts: ASCII letters, digits, space and ' - _ . @, up to 100 characters.
+ * Sandbox-proven 2026-11-12: "Kopi Señor", "Batik Café", "Toko Φ", "Toko & Co" and "Kedai 日本" are ALL
+ * refused with 400 INVALID_NAME (the docs' "letters" means ASCII letters), and a 400 is never retried — so
+ * an unfolded name would leave the store unconnected for good. Accents fold (é → e); anything else becomes
+ * a space. The first candidate that survives wins (store name, then owner name), else "Toko".
+ */
+export function partnerSellerName(...candidates: (string | null | undefined)[]): string {
+  for (const c of candidates) {
+    const n = String(c ?? "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Za-z0-9 '\-_.@]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100)
+      .trim();
+    if (/[A-Za-z0-9]/.test(n)) return n;
+  }
+  return "Toko";
+}
+
 export type RegisteredSeller = { alreadyRegistered: boolean; sellerId: string; email: string | null; apiKey: string | null };
 
 /**
@@ -190,7 +212,9 @@ export async function partnerRegisterSeller(
   const email = input.email.trim().toLowerCase();
   const phone = partnerPhone(input.phone);
   const ext = input.externalUserId.trim();
-  if (!name || !email || !ext || ext.length > 128) return { ok: false, httpStatus: 0, code: "MISSING_FIELDS", message: "Nama, email dan externalUserId wajib.", unknown: false };
+  if (!name || !email || !ext) return { ok: false, httpStatus: 0, code: "MISSING_FIELDS", message: "Nama, email dan externalUserId wajib.", unknown: false };
+  // The provider's own code for this case (docs: 400 INVALID_EXTERNAL_USER_ID, "longer than 128 characters").
+  if (ext.length > 128) return { ok: false, httpStatus: 0, code: "INVALID_EXTERNAL_USER_ID", message: "externalUserId lebih dari 128 karakter.", field: "externalUserId", unknown: false };
   if (!phone) return { ok: false, httpStatus: 0, code: "INVALID_PHONE", message: "Nomor HP pemilik harus nomor seluler Indonesia (08…/62…).", field: "phone", unknown: false };
   const r = await partnerPost("/sellers", { name, email, phone, externalUserId: ext }, opts);
   if (!r.ok) return r;

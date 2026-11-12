@@ -777,6 +777,86 @@ A migration count (`select count(*) from drizzle.__drizzle_migrations`), a new r
 field in an API payload, a new route answering 200 — anything the old build cannot emit. Health checks
 tell you the container is alive; only this tells you it is running **your** code.
 
+## 🚚 Mengantar as the default shipping provider — go-live runbook (prepared 2026-11-11, NOT run)
+
+Owner direction 2026-11-11: make Mengantar the default, flip only when Mengantar's production details
+arrive. Rules that do not change with the flip (owner decisions D9/D11, `specs/docs/tasks/2026-11-05-shipping-mengantar-decisions.md`):
+**COD always quotes and books on KiriminAja**, and a store with no connected Mengantar account, no
+Mengantar pickup area, or a destination Mengantar cannot price **falls back to KiriminAja** per quote
+(`quoteShipping`). An order keeps the provider it was quoted with (`orders.shipping_provider`), so
+booking, tracking and cancel follow the order, never the switch. KiriminAja therefore stays configured.
+
+**Blocked on Mengantar/owner (none of these is code):**
+1. The production **Partner API origin**. `MENGANTAR_ORIGINS.production.partner` is `null`
+   (`packages/lib/src/provider-config.ts`); until it is filled, production onboarding is refused.
+2. The dedicated host's egress IP on Mengantar's **allow-list** (the IP lives in device-local ops
+   notes, SSH alias `tokophi-new-ops`; never in this public repo).
+3. The **Terms/Privacy URLs** the Seller consent line cites (decision O8).
+4. ~~Owner approval of the **area import** on production~~ — **approved and DONE 2026-11-12** (step 2 below).
+
+**Steps, in order — each one owner-approved, production writes included:**
+1. **Code PR:** set `MENGANTAR_ORIGINS.production.partner` to the published origin (one line + the
+   `provider-config.test.ts` expectation). Merge, then deploy by hand (step 2 of the checklist above).
+2. ✅ **DONE on production 2026-11-12** (owner-approved; dataset `2026-11-04`; result identical to local: 82 374 areas, kelurahan 71 285/78 764, kecamatan 6 919/7 030, seller origins 6/6 — BUILD-LOG 2026-11-12). Re-run only for a NEW dataset version. **Area import** (once per dataset version, idempotent, upsert-only), from a workstation tunnel to
+   production Postgres: `MENGANTAR_AREAS_FILE=<99ribu>/data/shipping/mengantar-areas.json.gz npm run
+   load:mengantar-areas -w @tokophi/db`. It also fills `store_settings.sender_mengantar_area_id` for
+   stores whose pickup kecamatan matches uniquely. Read back what it prints (`senders_matched`, unmatched
+   districts). Measured on the clone `tokophi_shipping` (2026-11-11): 82 374 areas, **111 of 7 030
+   KiriminAja districts have no Mengantar bridge** (they fall back to KiriminAja), 7/7 configured pickup
+   addresses matched.
+3. **Coolify env** on the `tokophi` application: `MENGANTAR_ENV=production`. It reaches `admin` and
+   `super-admin` only because `docker-compose.coolify.yml` forwards it — added 2026-11-11, before that
+   the variable was silently dropped (`test/compose-provider-env.test.ts`). `MENGANTAR_PARTNER_ID` /
+   `_SECRET` are FALLBACKS: prefer saving the pair on Super Admin → Pengaturan → Kurir (encrypted,
+   probed before save). Leave `MENGANTAR_PICKUP_MODE` empty (production = `scheduledPickup`). Redeploy.
+4. **Super Admin → Pengaturan → Kurir:** save the production partner id + secret (the card probes them).
+5. **Connect the sellers.** Stores that signed up BEFORE step 3 recorded their consent on a `sandbox`
+   row (an unset `MENGANTAR_ENV` reads as sandbox); once production is named, the account sweep carries
+   every consented store into a `production` row and registers it — nothing to click (only that
+   direction: a production owner is never copied onto the sandbox partner). New signups queue
+   automatically (after approval, D15). Stores with NO recorded consent (created from Super Admin, or
+   older than the consent line): the owner presses **"Hubungkan Mengantar"** (Seller → Pengaturan →
+   Pengiriman, it carries the consent line). Super Admin can QUEUE a store but cannot register it, and an
+   operator in "Buka Dashboard Seller" cannot press that button for the owner — the Mengantar docs require
+   the owner's own agreement to their Terms + Privacy Policy. ⚠️ The Dashboard banner appears only AFTER
+   the flip (step 6) — before it, ask those owners directly. After the flip the card tells each seller
+   **"Dipakai di checkout"** or names the first thing stopping it (account, pickup address, an area
+   Mengantar does not know). Count before flipping:
+   `select state, last_error_code, count(*) from store_mengantar_accounts where env = 'production' group by 1, 2;`
+6. **Flip the switch** (Super Admin → Pengaturan → Kurir → Mengantar). It refuses while
+   `MENGANTAR_ENV` is unset in its own process, which is the check step 3 worked.
+7. **Verify:** `ops/tokophi-probe.sh` exits 0; one checkout quote on a connected store shows the
+   Mengantar couriers (admin log has **no** `mengantar could not quote; falling back` line for it);
+   then ONE owner-approved real booking + cancel on that store, recorded in BUILD-LOG.
+
+**Rollback:** flip the switch back to KiriminAja. New quotes return to KiriminAja at once (60 s config
+cache); orders already stamped `mengantar` keep tracking and cancelling through Mengantar.
+
+**Local development against the sandbox (owner workstation, 2026-11-11).** TokoΦ's sandbox Partner
+credentials (owner-provided) live ONLY in `secrets-env` (`TOKOPHI_MENGANTAR_SANDBOX_PARTNER_ID` /
+`_PARTNER_SECRET`), never in a `.env` or this repo. Local `tokophi` has the switch on Mengantar. The
+device-local launcher `~/.local/bin/tokophi-dev-mengantar admin|super [port]` (run from a checkout that
+has 0116) maps them to `MENGANTAR_PARTNER_ID` / `_SECRET` in-process, sets `MENGANTAR_ENV=sandbox`,
+`MENGANTAR_PICKUP_MODE=dropOff` and a local-only `INTEGRATION_TOKEN_KEY`, and serves against
+`$TOKOPHI_DB` (default `tokophi`). The local `tokophi` DB was migrated to 117 and the area catalogue
+loaded the same day (6/6 pickup addresses bridged). ⚠️ `tokophi` is a PRODUCTION COPY: pressing
+"Hubungkan Mengantar" there registers a real merchant's email on the sandbox partner — connect a
+throwaway store, or use the clone `tokophi_shipping`.
+
+**Measured in the sandbox before the flip** (read-only `GET /order/estimate`, 2026-11-11 — sandbox prices
+are not production prices; the *behaviour* is what was measured):
+- `courier=all` answers in 150–330 ms warm (≈580 ms cold), faster than KiriminAja's fast pair.
+- Fractional kg is accepted and priced per courier: SiCepat, iDexpress, J&T, Lion, AnterAja and POS
+  scale linearly (1.01 kg = 1.01 × the 1 kg price); JNE, SAP and SPX step up between 1.01 and 1.5 kg.
+  Quote and booking already send the same unrounded Σ-lines kg, so the shopper is charged what the
+  booking prices.
+- Two kelurahan of one kecamatan priced identically (Semarang Tengah, Genteng, Kebayoran Baru) — the
+  district-representative price destination is harmless.
+- The ETD text is free-form (`"1 - 2 days"`, `"2-3 Day"`, `"2 HARI"`) and absent for J&T and iDexpress;
+  `mgEtd` now normalises it to `"1-2"` (it rendered "Estimasi 1 - 2 days hari" before).
+- One of three identical calls omitted Lion. If production does the same, an order whose courier
+  vanishes between quote and re-quote is refused by `/api/public/order` — watch for it after the flip.
+
 ## Env to set in Coolify
 
 ⚠️ **`INTEGRATION_TOKEN_KEY` IS NOT IN `.env.coolify.example`** (audited 2026-07-30 — this page said it

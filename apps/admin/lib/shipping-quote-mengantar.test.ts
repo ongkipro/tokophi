@@ -49,7 +49,7 @@ vi.mock("@/lib/cod", () => ({
   getCodPolicy: vi.fn(async () => ({ enabled: true, allows: () => true, reason: () => null })),
 }));
 
-const { quoteShipping, mengantarRates, mgEstimateCacheKey, findRate } = await import("./shipping-quote");
+const { quoteShipping, mengantarRates, kaServiceGroups, mgEstimateCacheKey, findRate } = await import("./shipping-quote");
 
 const STORE = "00000000-0000-4000-8000-000000000001";
 const ORIGIN = "aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -185,7 +185,7 @@ describe("quoteShipping — switch = mengantar", () => {
     const q = await quoteShipping({ storeId: STORE, destinationId: 324, items: CART });
     if (!q.ok) throw new Error(q.error);
     expect(q.rates).toEqual([
-      { name: "JNE", code: "jne", type: "JNE", cost: 18000, etd: "2-3 hari", cod: false, group: "regular" },
+      { name: "JNE", code: "jne", type: "JNE", cost: 18000, etd: "2-3", cod: false, group: "regular" },
       { name: "J&T Express", code: "jnt", type: "JT", cost: 17000, etd: "", cod: false, group: "regular" },
       { name: "Shopee Express (SPX)", code: "spx", type: "spx", cost: 12000, etd: "", cod: false, group: "regular" },
     ]);
@@ -341,32 +341,54 @@ describe("mengantarRates — the courier rule (pure)", () => {
   const codes = (rs: { code: string; type: string }[]) => rs.map((r) => `${r.code}:${r.type}`);
 
   it("platform ∩ merchant column when the store selected nothing per service", () => {
-    expect(codes(mengantarRates(all, { platformOn: ["jne", "spx", "sap"], merchant: ["spx", "sap", "jnt"], picked: [] }))).toEqual([
+    expect(codes(mengantarRates(all, { pickupMode: "dropOff", platformOn: ["jne", "spx", "sap"], merchant: ["spx", "sap", "jnt"], picked: [] }))).toEqual([
       "spx:spx", "sap:SAP",
     ]);
   });
 
   it("a store with only KiriminAja service rows keeps ITS couriers, at every Mengantar service for them", () => {
     const picked = [{ courier: "jne", service: "REG" }, { courier: "spx", service: "1" }];
-    expect(codes(mengantarRates(all, { platformOn: ["jne", "spx", "jnt"], merchant: null, picked }))).toEqual(["jne:JNE", "spx:spx"]);
+    expect(codes(mengantarRates(all, { pickupMode: "dropOff", platformOn: ["jne", "spx", "jnt"], merchant: null, picked }))).toEqual(["jne:JNE", "spx:spx"]);
   });
 
   it("a saved Mengantar selection is exact: only those estimate keys", () => {
     const picked = [{ courier: "sap", service: "SAP" }, { courier: "jne", service: "REG" }];
-    expect(codes(mengantarRates(all, { platformOn: ["jne", "sap"], merchant: null, picked }))).toEqual(["sap:SAP"]);
+    expect(codes(mengantarRates(all, { pickupMode: "dropOff", platformOn: ["jne", "sap"], merchant: null, picked }))).toEqual(["sap:SAP"]);
   });
 
   it("empty platform list = no rates, whatever the store says", () => {
-    expect(mengantarRates(all, { platformOn: [], merchant: null, picked: [] })).toEqual([]);
-    expect(mengantarRates(all, { platformOn: [], merchant: ["jne"], picked: [{ courier: "jne", service: "JNE" }] })).toEqual([]);
+    expect(mengantarRates(all, { pickupMode: "dropOff", platformOn: [], merchant: null, picked: [] })).toEqual([]);
+    expect(mengantarRates(all, { pickupMode: "dropOff", platformOn: [], merchant: ["jne"], picked: [{ courier: "jne", service: "JNE" }] })).toEqual([]);
   });
 
   it("every rate is non-COD and priced at `price`", () => {
-    const out = mengantarRates([rate("JNE", 18000)], { platformOn: ["jne"], merchant: null, picked: [] });
+    const out = mengantarRates([rate("JNE", 18000)], { pickupMode: "dropOff", platformOn: ["jne"], merchant: null, picked: [] });
     expect(out).toEqual([{ name: "JNE", code: "jne", type: "JNE", cost: 18000, etd: "", cod: false, group: "regular" }]);
   });
 
+  it("a KiriminAja row counts only for a class Mengantar sells — JNE YES alone does not open JNE Reguler", () => {
+    const kaGroups = kaServiceGroups([
+      { courier: "jne", services: [{ type: "REG23", group: "regular" }, { type: "YES23", group: "next_day" }] },
+      { courier: "spx", services: [{ type: "1", group: "regular" }] },
+      { courier: "jnt", services: [{ type: "EZ", group: "regular" }, { type: "JTCARGO", group: "cargo" }, "LEGACY"] },
+    ]);
+    // JNE: only YES (next_day) enabled → not offered; SPX regular → offered; J&T only cargo → not offered.
+    const picked = [{ courier: "jne", service: "YES23" }, { courier: "spx", service: "1" }, { courier: "jnt", service: "JTCARGO" }];
+    expect(codes(mengantarRates(all, { pickupMode: "dropOff", platformOn: ["jne", "spx", "jnt"], merchant: null, picked, kaGroups }))).toEqual(["spx:spx"]);
+    // Every row a non-sellable class → nothing (the quote then falls back), never "no narrowing".
+    expect(mengantarRates(all, { pickupMode: "dropOff", platformOn: ["jne", "spx", "jnt"], merchant: null, picked: [{ courier: "jne", service: "YES23" }], kaGroups })).toEqual([]);
+    // A row whose class is unknown (service gone from the platform list) still counts, as before.
+    expect(codes(mengantarRates(all, { pickupMode: "dropOff", platformOn: ["jne"], merchant: null, picked: [{ courier: "jne", service: "OLD" }], kaGroups }))).toEqual(["jne:JNE"]);
+  });
+
+  it("never quotes a courier the booking mode cannot book — POS needs a pinpoint for a pickup, AnterAja refuses drop-off", () => {
+    const keys = [rate("JNE"), rate("pos"), rate("anteraja"), rate("spx")];
+    const scope = { platformOn: ["jne", "pos", "anteraja", "spx"], merchant: null, picked: [] };
+    expect(codes(mengantarRates(keys, { ...scope, pickupMode: "scheduledPickup" }))).toEqual(["jne:JNE", "anteraja:anteraja", "spx:spx"]);
+    expect(codes(mengantarRates(keys, { ...scope, pickupMode: "dropOff" }))).toEqual(["jne:JNE", "pos:pos", "spx:spx"]);
+  });
+
   it("never quotes a key with no TokoΦ courier", () => {
-    expect(mengantarRates([rate("Ninja"), rate("JNECargo")], { platformOn: ["ninja", "jne"], merchant: null, picked: [] })).toEqual([]);
+    expect(mengantarRates([rate("Ninja"), rate("JNECargo")], { pickupMode: "dropOff", platformOn: ["ninja", "jne"], merchant: null, picked: [] })).toEqual([]);
   });
 });

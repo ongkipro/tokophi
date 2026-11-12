@@ -8,6 +8,7 @@ import {
   mgCancel,
   mgCreateOrder,
   mgEstimate,
+  mgEtd,
   mgPayUnpaid,
   mgPickupAddresses,
   mgPickupSlot,
@@ -222,7 +223,7 @@ describe("mgEstimate — the courier map becomes bookable rates", () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.data.map((x) => x.key)).toEqual(["JNE", "SAP", "JT"]);
     const by = Object.fromEntries(r.data.map((x) => [x.key, x]));
-    expect(by.JNE).toMatchObject({ price: 12000, cost: 10500, cod: true, group: "regular", etd: "2 - 3 days", shipment: { courier: "JNE", cargo: false } });
+    expect(by.JNE).toMatchObject({ price: 12000, cost: 10500, cod: true, group: "regular", etd: "2-3", shipment: { courier: "JNE", cargo: false } });
     expect(by.SAP).toMatchObject({ price: 11000, cost: 9000, cod: false, shipment: { courier: "Sap", cargo: false } });
     expect(by.JT).toMatchObject({ price: 14000, cost: 11000, codFee: 499 });
     for (const x of r.data) expect(x.price).not.toBe(x.cost);
@@ -237,6 +238,25 @@ describe("mgEstimate — the courier map becomes bookable rates", () => {
     expect(new URL(m.calls[0].url).searchParams.get("COD_AMOUNT")).toBe("250000");
     expect(await mgEstimate({ originId: "o", destinationId: "d", kg: 0 }, m.opts)).toMatchObject({ ok: false, httpStatus: 0 });
     expect(m.fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mgEtd — Mengantar ETD text becomes KiriminAja's \"2-3\" shape", () => {
+  // Every string below is one the sandbox returned on 2026-11-11 (one /order/estimate answer).
+  it.each([
+    ["1 - 2 days", "1-2"],
+    ["1 - 2 Days", "1-2"],
+    ["2 - 4 Hari", "2-4"],
+    ["2-3 Day", "2-3"],
+    ["2 HARI", "2"],
+    ["2 - 5 days", "2-5"],
+    ["3 s/d 3 hari", "3"],
+    ["2-1", "1-2"],
+    ["3 - 2 hari", "2-3"],
+  ])("%s → %s", (raw, want) => expect(mgEtd(raw)).toBe(want));
+
+  it("anything that is not a day count is empty — never a guessed number", () => {
+    for (const raw of ["", "  ", null, undefined, 3, "besok", "2026-11-13", "13/11/2026", "100 - 200 days"]) expect(mgEtd(raw)).toBe("");
   });
 });
 
@@ -338,11 +358,11 @@ describe("mgCreateOrder — booking", () => {
 describe("pickup addresses and slots", () => {
   const input = { name: "Toko A", pic: "Ani", picPhone: "0812-000", address: "Jl. A 1", areaId: "c".repeat(24) };
 
-  it("upsert reads the _id from the answer, form-encoded", async () => {
+  it("upsert reads the _id from the answer, JSON body as documented (sandbox-proven 2026-11-11)", async () => {
     const m = mockFetch(json(200, { success: true, data: { _id: "addr1" } }));
     expect(await mgUpsertPickupAddress(input, m.opts)).toEqual({ ok: true, data: "addr1" });
-    expect((m.calls[0].init.headers as Record<string, string>)["Content-Type"]).toBe("application/x-www-form-urlencoded");
-    expect(new URLSearchParams(String(m.calls[0].init.body)).get("PICKUP_AUTOFILL")).toBe("c".repeat(24));
+    expect((m.calls[0].init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(String(m.calls[0].init.body)).PICKUP_AUTOFILL).toBe("c".repeat(24));
   });
 
   it("upsert re-lists when the answer has no _id and matches name + phone + address", async () => {
@@ -361,7 +381,7 @@ describe("pickup addresses and slots", () => {
 
   const now = Date.parse("2026-11-10T08:00:00+07:00");
   it("re-uses an existing slot (hour compared numerically) without a POST", async () => {
-    const m = mockFetch(json(200, { success: true, data: [{ _id: "t9", date: "11-11-2026", time: "09:00" }] }));
+    const m = mockFetch(json(200, { success: true, data: [{ _id: "t9", date: "11-11-2026", time: "09:00", address: { _id: "addr1" } }] }));
     expect(await mgPickupSlot("addr1", "2026-11-11", 9, { ...m.opts, now })).toEqual({ ok: true, data: "t9" });
     expect(m.fn).toHaveBeenCalledTimes(1);
     expect(m.calls[0].init.method).toBe("GET");
@@ -370,15 +390,32 @@ describe("pickup addresses and slots", () => {
   });
 
   it("M11: an epoch-ms slot date (what GET /time documents) is matched, not dropped", async () => {
-    const m = mockFetch(json(200, { success: true, data: [{ _id: "t10", date: Date.parse("2026-11-11T10:00:00Z"), time: "10:00" }] }));
+    const m = mockFetch(json(200, { success: true, data: [{ _id: "t10", date: Date.parse("2026-11-11T10:00:00Z"), time: "10:00", address: "addr1" }] }));
     expect(await mgPickupSlot("addr1", "2026-11-11", 10, { ...m.opts, now })).toEqual({ ok: true, data: "t10" });
     expect(m.fn).toHaveBeenCalledTimes(1);
   });
 
-  it("creates a slot with mm-dd-yyyy when none exists", async () => {
-    const m = mockFetch(json(200, { success: true, data: [] }), json(200, { success: true, data: { _id: "t13", date: "11-11-2026", time: "13:00" } }));
+  it("creates a slot with mm-dd-yyyy when none exists — JSON body, answer names the address (sandbox shape 2026-11-11)", async () => {
+    const m = mockFetch(json(200, { success: true, data: [] }), json(200, { success: true, data: { _id: "t13", date: "2026-11-11T00:00:00.000Z", time: "13:00", address: { _id: "addr1" } } }));
     expect(await mgPickupSlot("addr1", "2026-11-11", 13, { ...m.opts, now })).toEqual({ ok: true, data: "t13" });
-    expect(Object.fromEntries(new URLSearchParams(String(m.calls[1].init.body)))).toEqual({ address_id: "addr1", date: "11-11-2026", time: "13:00" });
+    expect((m.calls[1].init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(String(m.calls[1].init.body))).toEqual({ address_id: "addr1", date: "11-11-2026", time: "13:00" });
+  });
+
+  it("sends the hour ZERO-PADDED — the provider refuses 9:00 (Time allowed 09:00, …; sandbox 2026-11-11)", async () => {
+    const m = mockFetch(json(200, { success: true, data: [] }), json(200, { success: true, data: { _id: "t9p", date: "2026-11-11T00:00:00.000Z", time: "09:00", address: { _id: "addr1" } } }));
+    expect(await mgPickupSlot("addr1", "2026-11-11", 9, { ...m.opts, now })).toEqual({ ok: true, data: "t9p" });
+    expect(JSON.parse(String(m.calls[1].init.body)).time).toBe("09:00");
+  });
+
+  it("never re-uses a GET /time row that does not NAME this address — it may be the old pickup door", async () => {
+    // Documented + measured: GET rows are only {_id, date, time}. Same date and hour, no address → a new slot.
+    const m = mockFetch(
+      json(200, { success: true, data: [{ _id: "old-door", date: "11-11-2026", time: "13:00" }] }),
+      json(200, { success: true, data: { _id: "t13b", date: "2026-11-11T00:00:00.000Z", time: "13:00", address: { _id: "addr1" } } }),
+    );
+    expect(await mgPickupSlot("addr1", "2026-11-11", 13, { ...m.opts, now })).toEqual({ ok: true, data: "t13b" });
+    expect(m.calls.map((c) => c.init.method)).toEqual(["GET", "POST"]);
   });
 
   it.each([
@@ -440,6 +477,18 @@ describe("tracking, balance, test connection", () => {
     expect(await mgTestConnection(ok.opts)).toEqual({ ok: true, data: { pickupAddresses: 1 } });
     expect(ok.calls[0].init.method).toBe("GET");
     expect(await mgTestConnection(mockFetch(text(502, "<html/>")).opts)).toMatchObject({ ok: false });
+  });
+});
+
+describe("public docs audit 2026-11-11 — tracking vocabulary and deleted rows", () => {
+  it("DELIVERED_PENDING (documented status key) is delivered, as a flag and as a category", () => {
+    expect(outcomeFromMengantar('{"DELIVERED_PENDING":true,"PICKED_UP":true}')).toBe("delivered");
+    expect(outcomeFromMengantar("DELIVERED PENDING")).toBe("delivered");
+  });
+
+  it("a row with isDeleted: true is a deleted shipment → not found, never its stale status", async () => {
+    const m = mockFetch(json(200, { success: true, data: [{ cnote_no: "JNEDEL", ORDER_ID: "MGT-D", statusCategory: "PICKED UP", isDeleted: true }] }));
+    expect(await mgTrackByCnote("JNEDEL", m.opts)).toEqual({ ok: true, data: null });
   });
 });
 
@@ -522,13 +571,14 @@ describe("pickup schedule — read the provider's slots, pick the earliest booka
       json(200, {
         success: true,
         data: [
-          { _id: "s1", date: "11-05-2026", time: "9:00" },
-          { _id: "s2", date: "11-06-2026", time: "10:00" },
-          { _id: "s3", date: "2026-11-05", time: "13:00" },
-          { _id: "bad1", date: "13-45-2026", time: "10:00" },
-          { _id: "bad2", date: "11-05-2026", time: "19:00" },
-          { _id: "bad3", date: "11-05-2026", time: "10:30" },
-          { date: "11-05-2026", time: "11:00" },
+          { _id: "s1", date: "11-05-2026", time: "9:00", address: { _id: "addr1" } },
+          { _id: "s2", date: "11-06-2026", time: "10:00", address_id: "addr1" },
+          { _id: "s3", date: "2026-11-05", time: "13:00", address: "addr1" },
+          { _id: "bad1", date: "13-45-2026", time: "10:00", address: "addr1" },
+          { _id: "bad2", date: "11-05-2026", time: "19:00", address: "addr1" },
+          { _id: "bad3", date: "11-05-2026", time: "10:30", address: "addr1" },
+          { date: "11-05-2026", time: "11:00", address: "addr1" },
+          { _id: "no-addr", date: "11-05-2026", time: "12:00" },
           { _id: "other-addr", date: "11-05-2026", time: "14:00", address: { _id: "addr2" } },
           { _id: "s4", date: Date.parse("2026-11-07T15:00:00Z"), time: "15:00", address: { _id: "addr1" } },
         ],

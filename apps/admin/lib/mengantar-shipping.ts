@@ -2,7 +2,7 @@ import "server-only";
 import { db, schema } from "@tokophi/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/lib/tenant";
-import { openFailureMessage, openStoreMengantar, storePickupAddressId, type MgOpen } from "@tokophi/db/mengantar-account";
+import { openFailureMessage, openStoreMengantar, storePickupAddressId, refreshStoreMengantarKey, type MgOpen } from "@tokophi/db/mengantar-account";
 import {
   mgBalance,
   mgCancel,
@@ -11,6 +11,9 @@ import {
   mgPayUnpaid,
   mgPickupSlot,
   mgPickupSlots,
+  mgPickupModeFromEnv,
+  MG_PICKUP_LEAD_MS,
+  type MgPickupMode,
   earliestPickupSlot,
   nextPickupStart,
   type MgPickupSlotRow,
@@ -25,7 +28,7 @@ import {
 import { DEFAULT_SHIPPING_PROVIDER, type MengantarConfig, type ShippingProvider } from "@tokophi/lib/provider-config";
 import { cacheGet, cacheSet } from "@tokophi/lib/cache";
 import { isInstantCourier } from "@tokophi/lib/couriers";
-import { mengantarRates, type QuotedRate } from "@/lib/shipping-quote";
+import { kaServiceGroups, mengantarRates, type QuotedRate } from "@/lib/shipping-quote";
 import { mengantarDestination } from "@/lib/data/areas";
 import { weightForOrder } from "@/lib/shipping-weight";
 import { composePickupAddress } from "@/lib/pickup-address";
@@ -99,8 +102,7 @@ const SLOT_CACHE_MS = 60_000;
 /** One POST /order in flight per SELLER ACCOUNT (the 409 is per account). */
 const leaseKey = (storeId: string, sellerId: string) => `shipping:mg:create-order:${storeId}:${sellerId}`;
 
-const pickupModeOf = (opts: MgShippingOptions): "scheduledPickup" | "dropOff" =>
-  opts.pickupMode ?? (process.env.MENGANTAR_PICKUP_MODE === "dropOff" ? "dropOff" : "scheduledPickup");
+const pickupModeOf = (opts: MgShippingOptions): MgPickupMode => opts.pickupMode ?? mgPickupModeFromEnv();
 
 /** The call options for ONE seller account. */
 const callFor = (cfg: MengantarConfig, opts: MgShippingOptions) => ({ cfg, fetch: opts.fetch, timeoutMs: opts.timeoutMs });
@@ -170,7 +172,7 @@ type PricedRate = { rate: QuotedRate; mg: MgRate };
  * (`mengantarRates`): seller origin, the kecamatan representative as the PRICE destination (what the
  * checkout quoted), and the order's own Σ-lines weight in kg. Never cached — a booking prices now.
  */
-async function orderRates(storeId: string, ctx: NonNullable<OrderCtx>, call: Call): Promise<{ ok: true; rates: PricedRate[] } | { ok: false; error: string }> {
+async function orderRates(storeId: string, ctx: NonNullable<OrderCtx>, call: Call, mode: MgPickupMode): Promise<{ ok: true; rates: PricedRate[] } | { ok: false; error: string }> {
   const { s, o, pkg } = ctx;
   if (!o || !pkg) return { ok: false, error: "Pesanan tidak ditemukan." };
   const origin = s?.senderMengantarAreaId?.trim();
@@ -179,7 +181,7 @@ async function orderRates(storeId: string, ctx: NonNullable<OrderCtx>, call: Cal
   const priceDest = await mengantarDestination(o.shipDistrictId, null);
   if (!priceDest) return { ok: false, error: "Ongkir belum tersedia untuk kecamatan tujuan ini." };
 
-  const platformRows = await db.select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled }).from(schema.platformCouriers);
+  const platformRows = await db.select({ courier: schema.platformCouriers.courier, enabled: schema.platformCouriers.enabled, services: schema.platformCouriers.services }).from(schema.platformCouriers);
   const platformOn = platformRows.filter((p) => p.enabled && !isInstantCourier(p.courier)).map((p) => p.courier);
   const picked = await withTenant(storeId, (tx) =>
     tx
@@ -196,7 +198,7 @@ async function orderRates(storeId: string, ctx: NonNullable<OrderCtx>, call: Cal
   }
   if (!r.ok) return { ok: false, error: r.error || `Gagal mengambil tarif dari Mengantar.` };
   const all = r.data;
-  const quoted = mengantarRates(all, { platformOn, merchant: s?.couriers ?? null, picked });
+  const quoted = mengantarRates(all, { platformOn, merchant: s?.couriers ?? null, picked, kaGroups: kaServiceGroups(platformRows), pickupMode: mode });
   const rates: PricedRate[] = [];
   for (const q of quoted) {
     const mg = all.find((m) => m.key === q.type);
@@ -214,7 +216,7 @@ export async function mengantarOrderRates(
   const ctx = await loadOrder(storeId, orderNumber);
   const acc = await openStoreMengantar(storeId, ctx.o ?? undefined);
   if (!acc.ok) return { ok: false, rates: [], error: openFailureMessage(acc.reason) };
-  const q = await orderRates(storeId, ctx, callFor(acc.cfg, opts));
+  const q = await orderRates(storeId, ctx, callFor(acc.cfg, opts), pickupModeOf(opts));
   if (!q.ok) return { ok: false, rates: [], error: q.error };
   return {
     ok: true,
@@ -282,7 +284,8 @@ export const pickupSlotLabel = (startsAt: number) => `${SLOT_LABEL.format(new Da
 
 /**
  * The pickup slot, from the PROVIDER's own schedule (owner ruling 2026-11-05): the address's existing
- * slots (`GET /time?address=`, reused for `SLOT_CACHE_MS`) — the earliest one still ≥ 90 min away —
+ * slots (`GET /time` — documented with no parameters; only rows that NAME this address count, reused for
+ * `SLOT_CACHE_MS`) — the earliest one still ≥ 90 min away —
  * else the earliest slot the provider's documented rule allows (09–18 WIB, ≥ 90 min), created with
  * `POST /time` (`mgPickupSlot` re-lists first, so a retry never makes a second one). If the schedule
  * cannot be READ, the booking is refused: a slot we guessed is a courier at the wrong hour, or a
@@ -307,6 +310,13 @@ async function choosePickupSlot(addressId: string, now: number, opts: Call): Pro
   if (hit) return { ok: true, id: hit.id, startsAt: hit.startsAt };
 
   const next = nextPickupStart(now);
+  // `GET /time` rows name no address (docs; measured 2026-11-11), so they are never reused and every
+  // booking would POST a fresh slot for the same door and hour. A slot THIS process created for this
+  // address is remembered until it stops being bookable. // lazy: per process — another replica may create
+  // one more slot for the same hour; upgrade path: store the slot id on store_mengantar_accounts.
+  const mineKey = `mg:slot:${addressId}:${next.date}:${next.hour}`;
+  const mine = cacheGet<string>(mineKey);
+  if (mine) return { ok: true, id: mine, startsAt: next.startsAt };
   let created: MgResult<string>;
   try {
     created = await mgPickupSlot(addressId, next.date, next.hour, { ...opts, now });
@@ -316,6 +326,8 @@ async function choosePickupSlot(addressId: string, now: number, opts: Call): Pro
   }
   if (!created.ok) return { ok: false, error: `Jadwal penjemputan ditolak: ${created.error}` };
   cacheSet(key, [...rows, { id: created.data, date: next.date, hour: next.hour, startsAt: next.startsAt }], SLOT_CACHE_MS);
+  const bookableFor = next.startsAt - MG_PICKUP_LEAD_MS - now;
+  if (bookableFor > 0) cacheSet(mineKey, created.data, bookableFor);
   return { ok: true, id: created.data, startsAt: next.startsAt };
 }
 
@@ -422,7 +434,7 @@ export async function bookMengantar(
   if (!destAreaId) return { ok: false, error: `Area tujuan pesanan ${o.number} tidak ditemukan di Mengantar.` };
 
   // Re-price on the server immediately before booking; `input.cost` is display state.
-  const q = await orderRates(storeId, ctx, call);
+  const q = await orderRates(storeId, ctx, call, pickupModeOf(opts));
   if (!q.ok) return { ok: false, error: q.error };
   const picked = q.rates.find((r) => r.rate.code === input.service && r.rate.type === input.serviceType);
   if (!picked) return { ok: false, error: "Layanan ini tidak tersedia pada tarif terbaru. Pilih layanan lain." };
@@ -537,6 +549,7 @@ export async function bookMengantar(
   } catch (error) {
     if (error instanceof MengantarPosCodIneligibleError || error instanceof MengantarNotWhitelistedError) {
       // Definitive refusals from the provider: nothing was created.
+      if (error instanceof MengantarNotWhitelistedError) await refreshStoreMengantarKey(storeId);
       await releaseReservation(storeId, bookingId, error.message);
       return { ok: false, error: error.message };
     }
