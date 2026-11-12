@@ -2,6 +2,7 @@
 // Static reference data (~7k rows) — NOT wiped by the demo reseed. Run:
 //   npm run seed:areas -w @tokophi/db
 import { db, client, schema } from "./client";
+import { bridgeMengantarAreas, bridgeSummary } from "./mengantar-bridges";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -46,6 +47,11 @@ async function main() {
   console.log(`Seeded ${rows.length} KiriminAja areas (${new Set(rows.map((r) => r.provinceName)).size} provinces).`);
 
   await seedKelurahan();
+  // The truncate above wiped every Mengantar bridge column (they live on these two tables). Rebuild
+  // them from `mengantar_areas` with the loader's own rule, or each deploy silently turns Mengantar
+  // off for every store (2026-11-12: 0/7 030 kecamatan bridged right after a deploy).
+  const [{ n }] = await client<{ n: number }[]>`select count(*)::int n from mengantar_areas`;
+  if (n > 0) console.log(`Mengantar ${bridgeSummary(await bridgeMengantarAreas(client))}`);
   await client.end();
 }
 
