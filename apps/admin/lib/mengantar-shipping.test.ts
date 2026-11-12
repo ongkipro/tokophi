@@ -99,9 +99,9 @@ async function sealAccount(storeId: string, opts: { pickupId?: string | null; ve
   const key = opts.key ?? `key-${storeId.slice(0, 8)}-v${v}`;
   const enc = crypto_.encryptSecret(key, acct.mengantarKeyScope(storeId, "sandbox", seller, v));
   await client`
-    insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id, state, api_key_enc, key_hint, key_version, pickup_address_id)
-    values (${storeId}, 'sandbox', ${`tokophi:sandbox:store:${storeId}`}, ${seller}, ${opts.state ?? "connected"}, ${enc}, ${key.slice(-4)}, ${v}, ${opts.pickupId === undefined ? "addr-preset" : opts.pickupId})
-    on conflict (store_id, env) do update set seller_id = excluded.seller_id, state = excluded.state, api_key_enc = excluded.api_key_enc, key_version = excluded.key_version, pickup_address_id = excluded.pickup_address_id`;
+    insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id, partner_id, state, api_key_enc, key_hint, key_version, pickup_address_id)
+    values (${storeId}, 'sandbox', ${`tokophi:sandbox:store:${storeId}`}, ${seller}, 'p-test', ${opts.state ?? "connected"}, ${enc}, ${key.slice(-4)}, ${v}, ${opts.pickupId === undefined ? "addr-preset" : opts.pickupId})
+    on conflict (store_id, env) do update set seller_id = excluded.seller_id, partner_id = excluded.partner_id, state = excluded.state, api_key_enc = excluded.api_key_enc, key_version = excluded.key_version, pickup_address_id = excluded.pickup_address_id`;
   keyOf.set(storeId, key);
   sellerOf.set(storeId, seller);
 }

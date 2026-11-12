@@ -28,7 +28,12 @@ export type MengantarCardState = Omit<MgAccountStatus, "retryAfterAt" | "connect
   connectedAt: string | null;
   /** Whether THIS store's checkout quotes through Mengantar now, and the first reason it does not. */
   checkout: MengantarReadiness;
+  /** False = the platform cannot register accounts in this env yet → the card shows no connect button. */
+  canRegister: boolean;
 };
+
+/** Whether a "Hubungkan" click can reach the Partner API at all in this env (origin + credential). */
+const canRegister = (m: { partnerBase: string | null; partnerId: string | null; partnerSecret: string | null }) => !!(m.partnerBase && m.partnerId && m.partnerSecret);
 
 /** One computation for every screen that says whether checkout uses Mengantar (card + Jasa Kirim). */
 async function readinessFor(storeId: string, state: string, lastErrorCode: string | null): Promise<MengantarReadiness> {
@@ -44,6 +49,7 @@ async function readinessFor(storeId: string, state: string, lastErrorCode: strin
   return mengantarReadiness({
     switchOn: cfg.shipping === "mengantar",
     envNamed: cfg.mengantar.envSource === "env",
+    canRegister: canRegister(cfg.mengantar),
     state,
     lastErrorCode,
     hasPickupAddress: pickup?.kecamatan != null,
@@ -79,9 +85,10 @@ export async function getMengantarDashboardNotice(): Promise<MengantarNotice | n
 export async function getMengantarCard(): Promise<MengantarCardState> {
   const { storeId } = await requireCapability("settings:write");
   const s = await mengantarAccountStatus(storeId);
-  const [balance, checkout] = await Promise.all([
+  const [balance, checkout, cfg] = await Promise.all([
     s.state === "connected" ? mengantarStoreBalance(storeId) : Promise.resolve(null),
     readinessFor(storeId, s.state, s.lastErrorCode),
+    getProviderConfig(),
   ]);
   return {
     env: s.env,
@@ -95,6 +102,7 @@ export async function getMengantarCard(): Promise<MengantarCardState> {
     connectedAt: s.connectedAt ? s.connectedAt.toISOString() : null,
     balance,
     checkout,
+    canRegister: canRegister(cfg.mengantar),
   };
 }
 

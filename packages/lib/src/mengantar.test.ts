@@ -251,6 +251,8 @@ describe("mgEtd — Mengantar ETD text becomes KiriminAja's \"2-3\" shape", () =
     ["2 HARI", "2"],
     ["2 - 5 days", "2-5"],
     ["3 s/d 3 hari", "3"],
+    ["2-1", "1-2"],
+    ["3 - 2 hari", "2-3"],
   ])("%s → %s", (raw, want) => expect(mgEtd(raw)).toBe(want));
 
   it("anything that is not a day count is empty — never a guessed number", () => {

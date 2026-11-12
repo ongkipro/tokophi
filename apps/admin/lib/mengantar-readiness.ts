@@ -13,6 +13,13 @@ export type MengantarReadinessInput = {
   envNamed: boolean;
   /** `store_mengantar_accounts.state` for the active env (`none` when there is no row). */
   state: string;
+  /**
+   * The platform can register a store's account RIGHT NOW (a Partner origin for this env + the partner id
+   * and secret). False = a "Hubungkan" click can only park the row (`configuration_blocked`), so no banner
+   * and no button — e.g. production before Mengantar issues the Partner origin, while a store that was
+   * connected some other way (owner O11: the demo store on the owner's own account) already ships.
+   */
+  canRegister: boolean;
   /** `store_mengantar_accounts.last_error_code` — splits `pending` into "waiting on the owner" vs "waiting on us". */
   lastErrorCode?: string | null;
   /** `store_settings.sender_mengantar_area_id` is set. */
@@ -29,7 +36,13 @@ export function mengantarReadiness(i: MengantarReadinessInput): MengantarReadine
   if (!i.switchOn || !i.envNamed) {
     return { active: false, reason: "TokoΦ belum mengaktifkan Mengantar untuk checkout. Ongkir memakai pengiriman standar TokoΦ.", fix: null };
   }
-  if (i.state !== "connected") return accountNotReady(i.state, i.lastErrorCode ?? null);
+  if (i.state !== "connected") {
+    const r = accountNotReady(i.state, i.lastErrorCode ?? null);
+    if (r.fix === "akun" && !i.canRegister) {
+      return { active: false, reason: `Pendaftaran akun Mengantar untuk toko belum dibuka TokoΦ. Sementara itu ${STANDARD}.`, fix: null };
+    }
+    return r;
+  }
   if (!i.hasPickupAddress) {
     return { active: false, reason: "Alamat pengambilan toko belum diisi — Mengantar tidak bisa menghitung ongkir tanpa itu.", fix: "alamat" };
   }

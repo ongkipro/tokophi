@@ -619,9 +619,20 @@ export async function rotateStoreMengantarKey(storeId: string, o: RotateOptions 
   const fenced = await db
     .update(storeMengantarAccounts)
     .set({ state: "rotating", updatedAt: new Date() })
-    .where(and(where(storeId, env), eq(storeMengantarAccounts.state, "connected"), sql`${storeMengantarAccounts.sellerId} is not null`))
+    // `partner_id is null` = an account the OWNER attached with their own key (`ops/mengantar-attach-own-key.ts`,
+    // owner O11) — our partner never registered that seller, so a partner regenerate would only fail on it.
+    .where(and(where(storeId, env), eq(storeMengantarAccounts.state, "connected"), sql`${storeMengantarAccounts.sellerId} is not null`, sql`${storeMengantarAccounts.partnerId} is not null`))
     .returning({ sellerId: storeMengantarAccounts.sellerId, v: storeMengantarAccounts.keyVersion });
-  if (!fenced.length) return { state: (await mengantarAccountStatus(storeId)).state, message: "Hanya akun Mengantar yang terhubung yang bisa diperbarui kuncinya." };
+  if (!fenced.length) {
+    const st = await mengantarAccountStatus(storeId);
+    return {
+      state: st.state,
+      message:
+        st.state === "connected" && !st.partnerId
+          ? "Akun Mengantar ini milik pemilik toko sendiri — kuncinya diatur di aplikasi Mengantar, bukan dari sini."
+          : "Hanya akun Mengantar yang terhubung yang bisa diperbarui kuncinya.",
+    };
+  }
   const { sellerId, v } = fenced[0];
   let r;
   try {
@@ -675,11 +686,12 @@ export async function refreshStoreMengantarKey(storeId: string, o: { partner?: P
     const env = popts.cfg.env;
     if (!popts.cfg.partnerBase || !popts.cfg.partnerId || !popts.cfg.partnerSecret || !encryptionAvailable()) return "skipped";
     const [row] = await db
-      .select({ state: storeMengantarAccounts.state, sellerId: storeMengantarAccounts.sellerId, enc: storeMengantarAccounts.apiKeyEnc, v: storeMengantarAccounts.keyVersion })
+      .select({ state: storeMengantarAccounts.state, sellerId: storeMengantarAccounts.sellerId, enc: storeMengantarAccounts.apiKeyEnc, v: storeMengantarAccounts.keyVersion, partnerId: storeMengantarAccounts.partnerId })
       .from(storeMengantarAccounts)
       .where(where(storeId, env))
       .limit(1);
-    if (!row || row.state !== "connected" || !row.sellerId) return "skipped";
+    // An owner-attached account (no partner) is not ours to re-read through the Partner API.
+    if (!row || row.state !== "connected" || !row.sellerId || !row.partnerId) return "skipped";
     const k = await partnerGetSellerKey(row.sellerId, popts);
     if (!k.ok) {
       if (!k.unknown && (k.code === "API_KEY_DISABLED" || k.code === "SELLER_DEACTIVATED")) {

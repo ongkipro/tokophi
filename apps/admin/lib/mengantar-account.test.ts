@@ -523,4 +523,17 @@ suite("partner docs audit — refusals, the shared budget, the email Mengantar k
       expect(await consentOf(storeId, "sandbox")).toBeUndefined();
     });
   });
+
+  it("an OWNER-attached account (partner_id NULL, O11) is never touched through the Partner API: no regenerate, no get-key refresh", async () => {
+    const { storeId } = await newStore();
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, seller_id, partner_id, api_key_enc, key_version, key_hint)
+                 values (${storeId}, 'sandbox', ${`tokophi:sandbox:store:${storeId}`}, 'connected', ${`own-${runId}`}, null, 'sealed-elsewhere', 1, 'abcd')`;
+    const p = fakePartner({});
+    const r = await acct.rotateStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch } });
+    expect(r).toMatchObject({ state: "connected", message: expect.stringContaining("milik pemilik toko") });
+    expect(await acct.refreshStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch }, now: () => Date.now() + 3_600_000 })).toBe("skipped");
+    expect(p.calls).toHaveLength(0);
+    expect(await row(storeId)).toMatchObject({ state: "connected", key_version: 1, api_key_enc: "sealed-elsewhere" });
+  });
 });
+

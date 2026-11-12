@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mengantarNotice, mengantarReadiness, type MengantarReadinessInput } from "./mengantar-readiness";
 
-const READY: MengantarReadinessInput = { switchOn: true, envNamed: true, state: "connected", hasPickupArea: true, hasPickupAddress: true };
+const READY: MengantarReadinessInput = { switchOn: true, envNamed: true, canRegister: true, state: "connected", hasPickupArea: true, hasPickupAddress: true };
 
 describe("mengantarReadiness — the first broken link, in quoteShipping's order", () => {
   it("everything holds → active", () => {
@@ -39,6 +39,18 @@ describe("mengantarReadiness — the first broken link, in quoteShipping's order
     }
     expect(mengantarReadiness({ ...READY, state: "pending", lastErrorCode: "awaiting_approval" }).reason).toContain("disetujui TokoΦ");
     expect(mengantarReadiness({ ...READY, state: "blocked" }).reason).toContain("dukungan TokoΦ");
+  });
+
+  it("the platform cannot register accounts yet (no Partner origin) → nothing to click, but a connected store still ships", () => {
+    for (const state of ["none", "failed", "email_taken"]) {
+      expect(mengantarReadiness({ ...READY, canRegister: false, state })).toMatchObject({ active: false, fix: null, reason: expect.stringContaining("belum dibuka") });
+    }
+    expect(mengantarReadiness({ ...READY, canRegister: false, state: "pending", lastErrorCode: "awaiting_consent" })).toMatchObject({ fix: null });
+    // A store connected some other way (the demo store on the owner's own account) is unaffected.
+    expect(mengantarReadiness({ ...READY, canRegister: false })).toEqual({ active: true, reason: null, fix: null });
+    // An address problem is still the seller's to fix.
+    expect(mengantarReadiness({ ...READY, canRegister: false, hasPickupArea: false })).toMatchObject({ fix: "alamat" });
+    expect(mengantarNotice(mengantarReadiness({ ...READY, canRegister: false, state: "none" }), true)).toBeNull();
   });
 
   it("the default provider is never named to the seller (ADR 0004)", () => {

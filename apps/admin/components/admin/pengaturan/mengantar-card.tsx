@@ -57,8 +57,12 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
   const firstConnect = state === "none" || awaitingConsent;
   // No button that cannot work: `blocked` is always refused (`sellerConnectRefusal`), and a store still
   // waiting for TokoΦ's approval is parked again by `connectStoreMengantar` whatever the owner clicks.
+  // `partner_id` NULL on a connected row = the owner's OWN Mengantar account, attached by the owner-run
+  // `ops/mengantar-attach-own-key.ts` (O11) — not one TokoΦ registered: no "Lupa Password" email story, no key rotation.
+  const ownAccount = state === "connected" && !!card && !card.partnerId;
   const awaitingApproval = state === "pending" && card?.lastErrorCode === "awaiting_approval";
-  const canConnect = state !== "connected" && state !== "rotating" && state !== "blocked" && !awaitingApproval;
+  // …and none while the platform cannot register accounts in this env at all (no Partner origin yet).
+  const canConnect = !!card?.canRegister && state !== "connected" && state !== "rotating" && state !== "blocked" && !awaitingApproval;
   return (
     <Card data-mengantar-card={state}>
       <CardHeader>
@@ -67,8 +71,10 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
           {card && <Badge className={`border-transparent ${meta.tone}`}>{meta.label}</Badge>}
         </CardTitle>
         <CardDescription>
-          Pengiriman non-COD tokomu memakai akun Mengantar milik toko sendiri, dibuat oleh TokoΦ. Ongkir ke kurir dibayar dari saldo Mengantar
-          toko; ongkir yang dibayar pembeli masuk ke saldo TokoΦ-mu.
+          {ownAccount
+            ? "Pengiriman non-COD tokomu memakai akun Mengantar milikmu sendiri."
+            : "Pengiriman non-COD tokomu memakai akun Mengantar milik toko sendiri, dibuat oleh TokoΦ."}{" "}
+          Ongkir ke kurir dibayar dari saldo Mengantar toko; ongkir yang dibayar pembeli masuk ke saldo TokoΦ-mu.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -113,15 +119,21 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
             )}
             {state === "connected" && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-                <dt className="text-muted-foreground">Email akun</dt>
-                <dd className="min-w-0 truncate">{card.ownerEmail ?? "—"}</dd>
+                {!ownAccount && (
+                  <>
+                    <dt className="text-muted-foreground">Email akun</dt>
+                    <dd className="min-w-0 truncate">{card.ownerEmail ?? "—"}</dd>
+                  </>
+                )}
                 <dt className="text-muted-foreground">Saldo Mengantar</dt>
                 <dd className="tabular-nums">{card.balance == null ? "—" : IDR(card.balance)}</dd>
               </dl>
             )}
             {state === "connected" && (
               <p className="text-xs text-muted-foreground">
-                Masuk ke aplikasi Mengantar lewat “Lupa Password” dengan email di atas untuk mengisi saldo, melihat pengiriman, atau menarik dana.
+                {ownAccount
+                  ? "Isi saldo, lihat pengiriman, atau tarik dana di aplikasi Mengantar dengan akunmu sendiri."
+                  : "Masuk ke aplikasi Mengantar lewat “Lupa Password” dengan email di atas untuk mengisi saldo, melihat pengiriman, atau menarik dana."}
               </p>
             )}
             {awaitingConsent ? (
@@ -138,7 +150,8 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
                   {firstConnect ? "Hubungkan Mengantar" : "Coba hubungkan lagi"}
                 </Button>
               )}
-              {state === "connected" && (
+              {/* Only an account TokoΦ registered (has a partner) can have its key regenerated from here. */}
+              {state === "connected" && card.partnerId && (
                 <Button size="sm" variant="outline" className="gap-1.5" disabled={busy} onClick={() => run(rotateMengantarKey)}>
                   <RefreshCw className="size-3.5" /> Perbarui kunci akses
                 </Button>
@@ -147,7 +160,7 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
             {/* The agreement sits next to EVERY button that can create the account (a retry can be the
                 first successful registration too). */}
             {canConnect && <MengantarConsent action="connect" />}
-            {state === "connected" && (
+            {state === "connected" && card.partnerId && (
               <p className="text-xs text-muted-foreground">
                 Memakai webhook di aplikasi Mengantar? Setelah kunci diperbarui, perbarui juga secret webhook-mu di sana.
               </p>

@@ -571,7 +571,10 @@ export function mgEtd(v: unknown): string {
   // Whole-string match, 1–2 digit day counts: a DATE (`estimatedDate` may be one) is not a day count.
   const m = /^\D*?(\d{1,2})(?:\s*(?:-|–|s\/d|sampai|to)\s*(\d{1,2}))?\s*[^\d]*$/i.exec(str(v) ?? "");
   if (!m) return "";
-  return m[2] && m[2] !== m[1] ? `${m[1]}-${m[2]}` : m[1];
+  if (!m[2] || m[2] === m[1]) return String(Number(m[1]));
+  // Production answers a reversed range for some couriers (SPX "2-1", seen 2026-11-12): a range reads low-high.
+  const [lo, hi] = [Number(m[1]), Number(m[2])].sort((a, b) => a - b);
+  return `${lo}-${hi}`;
 }
 
 export type MgRate = {
