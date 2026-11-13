@@ -2007,6 +2007,9 @@ export const storePlugins = pgTable(
     connectedAt: ts(),
     brokenAt: ts(),
     activatedAt: ts(),
+    // When the store last switched it OFF (null while on). Re-activation marks what arrived since as
+    // skipped — never back-filled (KEL-001, owner "aktif / nonaktif").
+    disabledAt: ts(),
     updatedAt: ts().notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.storeId, t.plugin], name: "store_plugins_pk" })],

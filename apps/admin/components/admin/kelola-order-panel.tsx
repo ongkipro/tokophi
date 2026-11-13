@@ -31,6 +31,8 @@ export function KelolaOrderPanel({ orderNumber }: { orderNumber: string }) {
 
   let status: React.ReactNode;
   if (s?.synced_at) status = <>Terkirim ke Kelola · {fmt(s.synced_at)}</>;
+  // attempts 0 + gave_up = skipped because the plugin was OFF when the order came in (never POSTed).
+  else if (s?.gave_up_at && !s.attempts) status = <span className="text-muted-foreground">{s.last_error}</span>;
   else if (s?.gave_up_at) status = <span className="text-red-700">Ditolak Kelola: {s.last_error}</span>;
   else if (s?.attempts) status = <span className="text-amber-700">Gagal ({s.attempts}×), dicoba lagi otomatis: {s.last_error}</span>;
   else status = <span className="text-muted-foreground">Belum terkirim. Pesanan COD dikirim saat dibuat; prabayar setelah lunas.</span>;

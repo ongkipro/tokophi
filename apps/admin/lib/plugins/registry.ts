@@ -33,8 +33,13 @@ export type Plugin = {
   description: string;
   /** Seller page that configures the plugin once it is active. */
   settingsHref: string;
-  /** Statements run by "Hapus data", each scoped to `$1` = store id. */
+  /** Statements run by "Hapus koneksi" (uninstall): delete THIS store's plugin rows. */
   uninstall: (q: Q, storeId: string) => Promise<void>;
+  /**
+   * Switched back ON after being OFF since `offSince`, inside the same transaction as the switch.
+   * Marks whatever arrived while it was off as skipped, so the hooks never back-fill it.
+   */
+  onResume?(q: Q, storeId: string, offSince: Date): Promise<void>;
   /** After the order transaction committed. Runs outside the shopper's response. */
   onOrderCreated?(ctx: PluginContext, orderId: string): Promise<unknown>;
   /** Inside the plugin cron. Returns a count for the cron summary. */
@@ -47,12 +52,12 @@ export function findPlugin(id: string) {
   return PLUGINS.find((p) => p.id === id) ?? null;
 }
 
-type Row = { plugin: string; enabled: boolean; activated_at: Date | null };
+type Row = { plugin: string; enabled: boolean; activated_at: Date | null; disabled_at: Date | null };
 
 /** What Pengaturan → Plugin lists: every compiled-in plugin and this store's state. */
 export async function listPlugins(q: Q, storeId: string) {
   const rows = (await q.execute(sql`
-    select plugin, enabled, activated_at from store_plugins where store_id = ${storeId}`)) as unknown as Row[];
+    select plugin, enabled, activated_at, disabled_at from store_plugins where store_id = ${storeId}`)) as unknown as Row[];
   const byId = new Map(rows.map((r) => [r.plugin, r]));
   return PLUGINS.map((p) => {
     const r = byId.get(p.id);
@@ -64,26 +69,61 @@ export async function listPlugins(q: Q, storeId: string) {
       installed: Boolean(r),
       enabled: Boolean(r?.enabled),
       activatedAt: r?.activated_at ?? null,
+      disabledAt: r?.disabled_at ?? null,
     };
   });
 }
 
+/*
+ * AKTIF / NONAKTIF — the semantics (owner 2026-11-13: "plugins (aktif, non aktif)"):
+ *
+ *   Aktifkan (first time)  → row written, `enabled`. The plugin still does nothing until it is CONNECTED
+ *                            (Kelola: `connected_at`); nothing placed before the connection is ever sent.
+ *   Nonaktifkan            → `enabled = false`, `disabled_at = now()`. Both hooks stop at once: the order
+ *                            hook and the cron read `enabled` before anything else. The sealed credential,
+ *                            the settings and the push history STAY, so switching back on needs no re-typing.
+ *   Aktifkan (again)       → `enabled`, `disabled_at = null`, and the plugin's `onResume` marks every order
+ *                            / lead that arrived while it was off as SKIPPED. They are NOT back-filled: the
+ *                            seller said "off" for them, and PII sent anyway is the one thing that cannot be
+ *                            taken back. Work that was pending from BEFORE the switch-off (a retry, a prepaid
+ *                            order paid later) resumes normally. A skipped order can still be sent one at a
+ *                            time with "Kirim ulang". Nothing here can double-send: every POST still goes
+ *                            through the plugin's claim statement.
+ *   Hapus koneksi          → uninstall: this store's plugin rows and its `store_plugins` row (credential
+ *                            included) are deleted. A later activation starts from nothing.
+ *
+ * All three run inside the caller's tenant transaction (`withTenant`), so the switch and the skip-marking
+ * commit together.
+ */
 export async function activatePlugin(q: Q, storeId: string, id: string) {
-  if (!findPlugin(id)) return false;
+  const p = findPlugin(id);
+  if (!p) return false;
+  // Lock the row (if any) so a concurrent toggle cannot read the same `disabled_at` twice.
+  const [prev] = (await q.execute(sql`
+    select enabled, disabled_at from store_plugins
+     where store_id = ${storeId} and plugin = ${id} for update`)) as unknown as { enabled: boolean; disabled_at: Date | string | null }[];
   await q.execute(sql`
     insert into store_plugins (store_id, plugin, enabled, activated_at) values (${storeId}, ${id}, true, now())
-    on conflict (store_id, plugin) do update set enabled = true, activated_at = coalesce(store_plugins.activated_at, now()), updated_at = now()`);
+    on conflict (store_id, plugin) do update
+      set enabled = true, disabled_at = null,
+          activated_at = coalesce(store_plugins.activated_at, now()), updated_at = now()`);
+  if (prev && !prev.enabled && prev.disabled_at && p.onResume) {
+    await p.onResume(q, storeId, new Date(prev.disabled_at));
+  }
   return true;
 }
 
-/** Hooks stop; settings, credential and history stay for a re-activation. */
+/** Hooks stop now; settings, credential and history stay for a re-activation. */
 export async function deactivatePlugin(q: Q, storeId: string, id: string) {
   if (!findPlugin(id)) return false;
-  await q.execute(sql`update store_plugins set enabled = false, updated_at = now() where store_id = ${storeId} and plugin = ${id}`);
+  await q.execute(sql`
+    update store_plugins
+       set enabled = false, disabled_at = case when enabled then now() else disabled_at end, updated_at = now()
+     where store_id = ${storeId} and plugin = ${id}`);
   return true;
 }
 
-/** "Hapus data": this store's plugin rows and its credential, gone. Not reversible. */
+/** "Hapus koneksi": this store's plugin rows and its credential, gone. Not reversible. */
 export async function uninstallPlugin(q: Q, storeId: string, id: string) {
   const p = findPlugin(id);
   if (!p) return false;

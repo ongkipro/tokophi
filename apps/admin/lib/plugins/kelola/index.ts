@@ -7,7 +7,7 @@ import "server-only";
 import { db } from "@tokophi/db";
 import { sql } from "drizzle-orm";
 import type { Plugin } from "../registry";
-import { KELOLA, drainKelolaLeads, drainKelolaOrders, loadKelolaStore, pushKelolaOrder } from "./sync";
+import { KELOLA, drainKelolaLeads, drainKelolaOrders, loadKelolaStore, pushKelolaOrder, skipWhileOff } from "./sync";
 
 export const kelolaPlugin: Plugin = {
   id: KELOLA,
@@ -19,6 +19,8 @@ export const kelolaPlugin: Plugin = {
     await q.execute(sql`delete from plugin_kelola_orders where store_id = ${storeId}`);
     await q.execute(sql`delete from plugin_kelola_leads where store_id = ${storeId}`);
   },
+  // Switched back on: orders/leads that arrived while it was off are skipped, never back-filled.
+  onResume: skipWhileOff,
   async onOrderCreated({ storeId }, orderId) {
     const store = await loadKelolaStore(db, storeId);
     // Not eligible yet (e.g. an unpaid prepaid order) answers "skipped" — the cron picks it up later.

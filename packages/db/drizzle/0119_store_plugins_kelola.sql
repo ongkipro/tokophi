@@ -16,8 +16,14 @@
 --
 -- All three are store-scoped → RLS, the standard tenant_isolation policy.
 -- Idempotent (AGENTS.md / specs/docs/rules/migrations.md): every statement can re-run.
--- ⚠️ Numbering: written as 0117 after origin/main's 0116; open PRs #424/#426 also claim numbers here.
--- Whoever merges second RENUMBERS AND RE-STAMPS. Never applied to the shared `tokophi` dev DB before merge.
+-- ⚠️ Numbering: written as 0117 on the paused feat/kelola-plugin; RENUMBERED AND RE-STAMPED to 0119 on
+-- feat/kelola-plugin-v2 after main landed 0117_store_shipping_provider + 0118_pay_retry (old tag RETIRED in
+-- src/verify-migrations.ts). Never applied to the shared `tokophi` dev DB before merge.
+--
+-- Aktif / Nonaktif (owner 2026-11-13, "plugins (aktif, non aktif)"): `enabled` is the switch. Turning it OFF
+-- keeps the sealed credential and the push history; `disabled_at` records WHEN, so turning it back ON can
+-- mark the orders/leads that arrived while it was off as skipped (never back-filled — the seller said "off"
+-- for them). Uninstall ("Hapus koneksi") deletes the row and this store's plugin rows.
 
 create table if not exists "store_plugins" (
   "store_id" uuid not null references "stores"("id"),
@@ -29,10 +35,13 @@ create table if not exists "store_plugins" (
   "connected_at" timestamp with time zone,
   "broken_at" timestamp with time zone,
   "activated_at" timestamp with time zone,
+  "disabled_at" timestamp with time zone,
   "updated_at" timestamp with time zone not null default now(),
   constraint "store_plugins_pk" primary key ("store_id", "plugin"),
   constraint "store_plugins_plugin_check" check ("plugin" ~ '^[a-z][a-z0-9_-]{0,31}$')
 );--> statement-breakpoint
+-- A database that ran this file before `disabled_at` existed (the paused branch's own DB) gets it here.
+alter table "store_plugins" add column if not exists "disabled_at" timestamp with time zone;--> statement-breakpoint
 alter table "store_plugins" enable row level security;--> statement-breakpoint
 drop policy if exists "tenant_isolation" on "store_plugins";--> statement-breakpoint
 create policy "tenant_isolation" on "store_plugins" using (store_id = app_current_store_id()) with check (store_id = app_current_store_id());--> statement-breakpoint
@@ -45,6 +54,8 @@ comment on column "store_plugins"."secret_enc" is
   'AES-GCM (INTEGRATION_TOKEN_KEY), scope <plugin>:<store_id>:v<secret_v>. For kelola: JSON {webhook_url, webhook_secret} — the URL carries Kelola''s token. Never returned to a browser, never logged.';--> statement-breakpoint
 comment on column "store_plugins"."connected_at" is
   'FIRST successful connection (kept on a re-save; cleared on disconnect). Nothing placed before it is ever pushed (spec §4.4, no backfill). Moving it on a re-save would drop every order placed while the credential was broken.';--> statement-breakpoint
+comment on column "store_plugins"."disabled_at" is
+  'When the store last switched the plugin OFF (null while on). Re-activation marks the orders/leads placed since then as skipped (gave_up_at, attempts 0) — they are never pushed automatically; "Kirim ulang" on one order still can.';--> statement-breakpoint
 comment on column "store_plugins"."broken_at" is
   'Set when the provider answered 401/404 (credential refused). The cron skips the store until the credential is saved again, which clears it.';--> statement-breakpoint
 

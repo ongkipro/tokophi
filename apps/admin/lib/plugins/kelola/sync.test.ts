@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import postgres, { type Sql } from "postgres";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 // The Kelola plugin's Postgres side (KELOLA_PLUGIN_SPEC.md §4.4, §6). REAL Postgres; Kelola is a FAKE
 // fetch that records every call — nothing leaves the machine.
@@ -298,5 +298,127 @@ suite("Kelola plugin — dormant, eligibility, claim, outcomes, isolation", () =
     const view = await sync.kelolaSettingsView(db, st.id);
     expect(JSON.stringify(view)).not.toContain("right-secret");
     expect(JSON.stringify(view)).not.toContain(`twh_${runId}_save`);
+  });
+});
+
+// ── Aktif / Nonaktif (owner 2026-11-13: "plugins (aktif, non aktif)") ──────────────────────────────
+// Semantics live in lib/plugins/registry.ts. Truth table under test:
+//   Nonaktif      → the order hook and the cron never call the plugin; credential + history kept.
+//   Aktif lagi    → pushes resume; what arrived while OFF is skipped (never back-filled); work
+//                   pending from BEFORE the switch-off resumes; "Kirim ulang" can still send one.
+//   Hapus koneksi → credential + this store's plugin rows deleted; re-activation starts unconnected.
+suite("Kelola plugin — Aktif / Nonaktif / Hapus koneksi", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("Nonaktif: neither the order hook nor the cron reaches the plugin; an active store in the same pass does", async () => {
+    const { db } = await import("@tokophi/db");
+    const registry = await import("../registry");
+    const { kelolaPlugin } = await import("./index");
+    const onOrder = vi.spyOn(kelolaPlugin, "onOrderCreated").mockResolvedValue("mocked");
+    const onCron = vi.spyOn(kelolaPlugin, "onCron").mockResolvedValue(0);
+
+    const off = await newStore();
+    const on = await newStore();
+    const offOrder = await newOrder(off.storeId);
+    const onOrderId = await newOrder(on.storeId);
+    expect(await registry.deactivatePlugin(db, off.storeId, "kelola")).toBe(true);
+
+    await registry.runOrderCreated(off.storeId, offOrder);
+    await registry.runOrderCreated(on.storeId, onOrderId);
+    expect(onOrder.mock.calls.map(([ctx]) => ctx.storeId)).toEqual([on.storeId]);
+
+    await registry.runPluginCron(new Date());
+    const cronStores = onCron.mock.calls.map(([ctx]) => ctx.storeId);
+    expect(cronStores).toContain(on.storeId);
+    expect(cronStores).not.toContain(off.storeId);
+
+    // The plugin's own read refuses it too (defence in depth), and the credential is still there.
+    expect(await sync.loadKelolaStore(db, off.storeId)).toBeNull();
+    const [row] = await client<{ enabled: boolean; secret_enc: string | null; disabled_at: Date | null }[]>`
+      select enabled, secret_enc, disabled_at from store_plugins where store_id = ${off.storeId}`;
+    expect(row.enabled).toBe(false);
+    expect(row.secret_enc).not.toBeNull();
+    expect(row.disabled_at).not.toBeNull();
+    expect(await kRow(off.storeId, offOrder)).toBeUndefined();
+  });
+
+  it("Aktif lagi: no re-typing; orders/leads from while OFF are skipped, never back-filled; earlier pending work resumes", async () => {
+    const { db } = await import("@tokophi/db");
+    const registry = await import("../registry");
+    const { storeId, n } = await newStore({ pushLeads: true });
+    const firstConfig = (await store(storeId)).config;
+
+    // Before the switch-off: a prepaid order still unpaid, and a COD order whose push failed (503).
+    const prepaidBefore = await newOrder(storeId, { method: "qris", placedAt: new Date(Date.now() - 2 * 3600_000) });
+    const retryBefore = await newOrder(storeId, { placedAt: new Date(Date.now() - 2 * 3600_000) });
+    expect(await sync.pushKelolaOrder(await store(storeId), storeId, retryBefore, { fetch: fakeKelola(503).fetch })).toBe("retry");
+
+    await registry.deactivatePlugin(db, storeId, "kelola");
+    const [{ disabled_at: offAt }] = await client<{ disabled_at: Date }[]>`select disabled_at from store_plugins where store_id = ${storeId}`;
+    await registry.deactivatePlugin(db, storeId, "kelola"); // a second "off" keeps the first instant
+    const [{ disabled_at: offAt2 }] = await client<{ disabled_at: Date }[]>`select disabled_at from store_plugins where store_id = ${storeId}`;
+    expect(offAt2.getTime()).toBe(offAt.getTime());
+
+    // While OFF: a new COD order, an abandoned checkout, and the earlier prepaid order gets paid.
+    const duringOff = await newOrder(storeId);
+    await client`
+      insert into checkout_sessions (store_id, session_id, name, phone, status, abandoned_at, subtotal_idr, items)
+      values (${storeId}, ${randomUUID()}, 'Rina Wati', '6282222222222', 'ditinggal', now(), 50000,
+              ${client.json([{ name: "Kain", qty: 1, price: 50000 }])})`;
+    await client`update payments set status = 'berhasil', paid_at = now() where order_id = ${prepaidBefore}`;
+
+    await registry.activatePlugin(db, storeId, "kelola");
+    const resumed = await store(storeId);
+    expect(resumed.config).toEqual(firstConfig); // credential kept — nothing re-typed
+    const skipped = await kRow(storeId, duringOff);
+    expect(skipped.gave_up_at).not.toBeNull();
+    expect(skipped.attempts).toBe(0);
+    expect(skipped.last_error).toBe(sync.SKIPPED_WHILE_OFF);
+    expect((await sync.kelolaSyncSummary(db, storeId)).skipped_off).toBe(1);
+
+    // The cron resumes earlier work only: the prepaid order paid while OFF (placed while ON) + the 503 retry.
+    await client`update plugin_kelola_orders set claimed_at = now() - interval '6 minutes' where order_id = ${retryBefore}`;
+    const k = fakeKelola(201);
+    expect(await sync.drainKelolaOrders(resumed, storeId, k.fetch)).toBe(2);
+    const expected = await client<{ number: string }[]>`select number from orders where id in (${prepaidBefore}, ${retryBefore})`;
+    expect(k.calls.map((c) => c.body.code).sort()).toEqual(expected.map((r) => r.number).sort());
+    expect(await sync.drainKelolaLeads(resumed, storeId, k.fetch)).toBe(0); // the lead from while OFF is skipped too
+    expect(k.calls).toHaveLength(2);
+
+    // A new order after re-activation goes out; the skipped one only when a person asks for it.
+    const after = await newOrder(storeId);
+    expect(await sync.pushKelolaOrder(resumed, storeId, after, { fetch: k.fetch })).toBe("synced");
+    expect(await sync.pushKelolaOrder(resumed, storeId, duringOff, { fetch: k.fetch })).toBe("skipped");
+    expect(await sync.pushKelolaOrder(resumed, storeId, duringOff, { fetch: k.fetch, force: true })).toBe("synced");
+    expect(k.calls).toHaveLength(4);
+    expect(k.calls.every((c) => c.url === kelolaUrl(n))).toBe(true);
+    const summary = await sync.kelolaSyncSummary(db, storeId);
+    expect(summary.skipped_off).toBe(0);
+    expect(summary.gave_up).toBe(0);
+  });
+
+  it("Hapus koneksi: credential and this store's rows are deleted; another store is untouched", async () => {
+    const { db } = await import("@tokophi/db");
+    const registry = await import("../registry");
+    const gone = await newStore();
+    const kept = await newStore();
+    const goneOrder = await newOrder(gone.storeId);
+    const keptOrder = await newOrder(kept.storeId);
+    const k = fakeKelola(201);
+    await sync.pushKelolaOrder(await store(gone.storeId), gone.storeId, goneOrder, { fetch: k.fetch });
+    await sync.pushKelolaOrder(await store(kept.storeId), kept.storeId, keptOrder, { fetch: k.fetch });
+
+    expect(await registry.uninstallPlugin(db, gone.storeId, "kelola")).toBe(true);
+    const [left] = await client<{ plugins: number; orders: number }[]>`
+      select (select count(*) from store_plugins where store_id = ${gone.storeId})::int as plugins,
+             (select count(*) from plugin_kelola_orders where store_id = ${gone.storeId})::int as orders`;
+    expect(left).toEqual({ plugins: 0, orders: 0 });
+    expect((await kRow(kept.storeId, keptOrder)).synced_at).not.toBeNull();
+
+    // Re-activating starts from nothing: on, but unconnected → still sends nothing.
+    await registry.activatePlugin(db, gone.storeId, "kelola");
+    expect(await sync.loadKelolaStore(db, gone.storeId)).toBeNull();
+    const [listed] = (await registry.listPlugins(db, gone.storeId)).filter((p) => p.id === "kelola");
+    expect(listed).toMatchObject({ installed: true, enabled: true });
   });
 });

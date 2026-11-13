@@ -23,6 +23,7 @@ import "server-only";
 import { db } from "@tokophi/db";
 import { sql, type SQL } from "drizzle-orm";
 import { decryptSecret, encryptSecret, encryptionAvailable } from "@/lib/crypto";
+import { latestPaymentFirst } from "@/lib/data/order-payment";
 import {
   classifyKelolaResponse,
   kelolaLeadPayload,
@@ -158,15 +159,6 @@ export async function saveKelolaConnection(
   return { ok: true, message: test.message };
 }
 
-/** Forget the credential. Push state stays (Hapus data is what deletes it). */
-export async function disconnectKelola(q: Q, storeId: string) {
-  await q.execute(sql`
-    update store_plugins
-       set secret_enc = null, connected_at = null, broken_at = null,
-           settings = settings - 'webhook_url_masked', updated_at = now()
-     where store_id = ${storeId} and plugin = ${KELOLA}`);
-}
-
 export async function setKelolaPushLeads(q: Q, storeId: string, on: boolean) {
   await q.execute(sql`
     update store_plugins set settings = settings || ${JSON.stringify({ push_leads: on })}::jsonb, updated_at = now()
@@ -184,10 +176,12 @@ function orderEligible(storeId: string, connectedAt: Date, force = false): SQL {
     and o.status not in ('batal', 'retur')
     ${force ? sql.raw("") : sql`and o.placed_at >= ${connectedAt.toISOString()}::timestamptz and o.placed_at >= now() - make_interval(days => ${KELOLA_WINDOW_DAYS}::int)`}
     and coalesce((
-      -- the ONE definition of "the order's payment" (data/orders.ts, data/order-detail.ts)
-      select p.method = 'cod' or p.status = 'berhasil'
-        from payments p where p.order_id = o.id
-       order by p.paid_at desc nulls last, p.id desc limit 1
+      -- the ONE definition of "the order's payment" (lib/data/order-payment.ts): most recently PAID
+      -- first, then the NEWEST attempt (PAY-RETRY 0118), then id. Unaliased "payments" on purpose —
+      -- latestPaymentFirst() renders qualified column names.
+      select payments.method = 'cod' or payments.status = 'berhasil'
+        from payments where payments.order_id = o.id
+       order by ${latestPaymentFirst()} limit 1
     ), false)`;
 }
 
@@ -216,8 +210,8 @@ async function orderPayload(q: Q, storeId: string, orderId: string) {
            o.ship_address as address, o.ship_kelurahan_name as kelurahan,
            o.city, o.province, ka.district_name as district, o.ship_postcode as postcode,
            o.shipping_idr, o.discount_idr, o.total_idr,
-           (select p.method from payments p where p.order_id = o.id
-             order by p.paid_at desc nulls last, p.id desc limit 1) as method
+           (select payments.method from payments where payments.order_id = o.id
+             order by ${latestPaymentFirst()} limit 1) as method
       from orders o
       left join customers c on c.id = o.customer_id
       left join kiriminaja_areas ka on ka.id = o.ship_district_id
@@ -418,6 +412,34 @@ export async function drainKelolaLeads(store: KelolaStore, storeId: string, fetc
   return synced;
 }
 
+// ── switched back on: what arrived while it was off is skipped, never back-filled ────────────────
+
+/** Stored on an order the plugin skipped because it was OFF when the order came in. Seller-facing. */
+export const SKIPPED_WHILE_OFF = "Tidak dikirim otomatis: pesanan masuk saat plugin Kelola nonaktif.";
+
+/**
+ * Registry `onResume`, inside the activation transaction. Every order placed — and every checkout
+ * abandoned — since `offSince` gets a row with `gave_up_at` set and `attempts = 0` (= skipped, never
+ * POSTed; a Kelola refusal always has attempts ≥ 1). The claim statement and the cron's queue both
+ * exclude `gave_up_at`, so none of them is ever pushed automatically; "Kirim ulang" (force) still can.
+ * `on conflict do nothing`: a row that already exists (work pending from BEFORE the switch-off) keeps
+ * its state and resumes. Bounded by the 7-day window — anything older is outside it anyway.
+ */
+export async function skipWhileOff(q: Q, storeId: string, offSince: Date) {
+  await q.execute(sql`
+    insert into plugin_kelola_orders (store_id, order_id, gave_up_at, last_error)
+    select ${storeId}, o.id, now(), ${SKIPPED_WHILE_OFF} from orders o
+     where o.store_id = ${storeId} and o.placed_at >= ${offSince.toISOString()}::timestamptz
+       and o.placed_at >= now() - make_interval(days => ${KELOLA_WINDOW_DAYS}::int)
+    on conflict (store_id, order_id) do nothing`);
+  await q.execute(sql`
+    insert into plugin_kelola_leads (store_id, session_id, gave_up_at, last_error)
+    select ${storeId}, s.id, now(), ${SKIPPED_WHILE_OFF} from checkout_sessions s
+     where s.store_id = ${storeId} and s.abandoned_at >= ${offSince.toISOString()}::timestamptz
+       and s.abandoned_at >= now() - make_interval(days => ${KELOLA_WINDOW_DAYS}::int)
+    on conflict (store_id, session_id) do nothing`);
+}
+
 // ── read models for the Seller screens ─────────────────────────────────────────────────────────
 
 /** The order-detail panel. */
@@ -432,10 +454,11 @@ export async function kelolaOrderState(q: Q, storeId: string, orderId: string): 
 
 /** The settings page's sync summary over the 7-day window. */
 export async function kelolaSyncSummary(q: Q, storeId: string) {
-  const [r] = await rows<{ synced: number; failing: number; gave_up: number; last_synced_at: Date | null }>(q, sql`
+  const [r] = await rows<{ synced: number; failing: number; gave_up: number; skipped_off: number; last_synced_at: Date | null }>(q, sql`
     select count(*) filter (where synced_at >= now() - make_interval(days => ${KELOLA_WINDOW_DAYS}::int))::int as synced,
            count(*) filter (where synced_at is null and gave_up_at is null and attempts > 0)::int as failing,
-           count(*) filter (where gave_up_at is not null)::int as gave_up,
+           count(*) filter (where gave_up_at is not null and attempts > 0)::int as gave_up,
+           count(*) filter (where gave_up_at is not null and attempts = 0 and synced_at is null)::int as skipped_off,
            max(synced_at) as last_synced_at
       from plugin_kelola_orders where store_id = ${storeId}`);
   const [last] = await rows<{ number: string; last_error: string; attempts: number }>(q, sql`
@@ -443,5 +466,5 @@ export async function kelolaSyncSummary(q: Q, storeId: string) {
       from plugin_kelola_orders k join orders o on o.id = k.order_id and o.store_id = ${storeId}
      where k.store_id = ${storeId} and k.synced_at is null and k.last_error is not null
      order by k.claimed_at desc nulls last limit 1`);
-  return { ...(r ?? { synced: 0, failing: 0, gave_up: 0, last_synced_at: null }), lastError: last ?? null };
+  return { ...(r ?? { synced: 0, failing: 0, gave_up: 0, skipped_off: 0, last_synced_at: null }), lastError: last ?? null };
 }

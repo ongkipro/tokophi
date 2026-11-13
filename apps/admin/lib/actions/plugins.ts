@@ -5,7 +5,6 @@ import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 import { activatePlugin, deactivatePlugin, findPlugin, listPlugins, uninstallPlugin } from "@/lib/plugins/registry";
 import {
-  disconnectKelola,
   kelolaOrderState,
   kelolaSettingsView,
   kelolaSyncSummary,
@@ -53,7 +52,12 @@ export async function setPluginActive(id: string, on: boolean): Promise<Result> 
   if (!p) return { ok: false, message: "Plugin tidak dikenal." };
   await withTenant(storeId, (db) => (on ? activatePlugin(db, storeId, id) : deactivatePlugin(db, storeId, id)));
   revalidatePath("/pengaturan");
-  return { ok: true, message: on ? `${p.name} diaktifkan.` : `${p.name} dinonaktifkan. Pengaturan & riwayatnya disimpan.` };
+  return {
+    ok: true,
+    message: on
+      ? `${p.name} aktif.`
+      : `${p.name} nonaktif — tidak ada data yang dikirim. Kredensial & riwayatnya tetap disimpan.`,
+  };
 }
 
 export async function removePluginData(id: string): Promise<Result> {
@@ -62,7 +66,7 @@ export async function removePluginData(id: string): Promise<Result> {
   if (!p) return { ok: false, message: "Plugin tidak dikenal." };
   await withTenant(storeId, (db) => uninstallPlugin(db, storeId, id));
   revalidatePath("/pengaturan");
-  return { ok: true, message: `Data ${p.name} di toko ini dihapus.` };
+  return { ok: true, message: `Koneksi ${p.name} di toko ini dihapus.` };
 }
 
 export async function saveKelola(input: { url: string; secret: string }): Promise<Result> {
@@ -70,13 +74,6 @@ export async function saveKelola(input: { url: string; secret: string }): Promis
   const r = await saveKelolaConnection(perStatement(storeId), storeId, input);
   revalidatePath("/pengaturan");
   return r.ok ? { ok: true, message: r.message } : { ok: false, message: r.error };
-}
-
-export async function disconnectKelolaAction(): Promise<Result> {
-  const { storeId } = await requireCapability("plugins:manage");
-  await withTenant(storeId, (db) => disconnectKelola(db, storeId));
-  revalidatePath("/pengaturan");
-  return { ok: true, message: "Kelola diputus. Pesanan baru tidak dikirim lagi." };
 }
 
 export async function setKelolaLeads(on: boolean): Promise<Result> {
@@ -120,7 +117,7 @@ export async function resendKelolaOrder(orderNumber: string): Promise<Result> {
   const orderId = await orderIdByNumber(storeId, orderNumber);
   if (!orderId) return { ok: false, message: "Pesanan tidak ditemukan." };
   const store = await withTenant(storeId, (db) => loadKelolaStore(db, storeId));
-  if (!store) return { ok: false, message: "Kelola belum terhubung, atau kredensialnya ditolak — periksa Pengaturan → Plugin." };
+  if (!store) return { ok: false, message: "Plugin Kelola nonaktif, belum terhubung, atau kredensialnya ditolak — periksa Pengaturan → Plugin." };
   const out = await pushKelolaOrder(store, storeId, orderId, { force: true });
   revalidatePath(`/pesanan/${orderNumber}`);
   if (out === "synced") return { ok: true, message: "Pesanan terkirim ke Kelola." };

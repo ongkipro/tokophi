@@ -1,17 +1,17 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Loader2, Plug, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, PauseCircle, Plug, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { Badge } from "@tokophi/ui/badge";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
+import { Switch } from "@tokophi/ui/switch";
 import { useCan } from "@/components/admin/permissions";
 import { ConfirmDelete } from "@/components/admin/confirm-delete";
 import { ToggleRow } from "@/components/admin/pengaturan/toggle-row";
 import {
-  disconnectKelolaAction,
   getPluginCard,
   removePluginData,
   saveKelola,
@@ -23,6 +23,10 @@ import {
 // Pengaturan → Plugin (ADR 0021, KEL-001) — the same list AdsBookCMS shows at Pengaturan → Plugin.
 // Owner-only (`plugins:manage`): the actions are the boundary, this hides the card from roles that
 // cannot use it. Every action answers `{ ok, message }`; the message is shown either way.
+//
+// Aktif / Nonaktif is ONE switch per plugin (semantics: `lib/plugins/registry.ts`). Nonaktif keeps the
+// credential and history, so the Kelola card stays visible (read-only) while the plugin is off —
+// the seller can see what is kept and what happens on re-activation. "Hapus koneksi" is the uninstall.
 
 const fmt = (d: Date | string | null) =>
   d ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(d)) : "—";
@@ -96,45 +100,82 @@ export function PluginCard() {
             <Plug className="size-4" aria-hidden /> Plugin
           </CardTitle>
           <CardDescription>
-            Fitur tambahan buatan TokoΦ yang bisa Anda aktifkan per toko. Plugin yang tidak diaktifkan tidak berjalan sama
-            sekali — tidak mengirim data apa pun.
+            Fitur tambahan buatan TokoΦ yang bisa Anda aktifkan per toko. Plugin yang nonaktif tidak berjalan sama sekali —
+            tidak mengirim data apa pun.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {card.plugins.map((p) => (
-            <div key={p.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{p.name}</span>
-                  {p.enabled ? (
-                    <Badge className="bg-emerald-100 text-emerald-800">Aktif</Badge>
-                  ) : p.installed ? (
-                    <Badge variant="secondary">Nonaktif</Badge>
-                  ) : (
-                    <Badge variant="outline">Belum diaktifkan</Badge>
+          {card.plugins.map((p) => {
+            const switchId = `plugin-${p.id}-aktif`;
+            return (
+              <div key={p.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{p.name}</span>
+                    {p.enabled ? (
+                      <Badge className="bg-emerald-100 text-emerald-800">Aktif</Badge>
+                    ) : (
+                      <Badge variant="secondary">Nonaktif</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">{p.description}</p>
+                  {!p.enabled && p.installed && p.disabledAt && (
+                    <p className="text-xs text-muted-foreground">Dinonaktifkan {fmt(p.disabledAt)}.</p>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">{p.description}</p>
+                <div className="flex shrink-0 flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={switchId}
+                      checked={p.enabled}
+                      disabled={busy}
+                      onCheckedChange={(on) => run(() => setPluginActive(p.id, on))}
+                    />
+                    <label htmlFor={switchId} className="text-sm font-medium">
+                      {p.enabled ? "Aktif" : "Nonaktif"}
+                    </label>
+                  </div>
+                  {p.installed && (
+                    <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmRemove(true)}>
+                      Hapus koneksi
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant={p.enabled ? "outline" : "default"}
-                  disabled={busy}
-                  onClick={() => run(() => setPluginActive(p.id, !p.enabled))}
-                >
-                  {p.enabled ? "Nonaktifkan" : "Aktifkan"}
-                </Button>
-                {p.installed && (
-                  <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmRemove(true)}>
-                    Hapus data
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
+
+      {kelolaMeta?.installed && !kelolaMeta.enabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PauseCircle className="size-4 text-muted-foreground" aria-hidden /> Kelola CRM — nonaktif
+            </CardTitle>
+            <CardDescription>
+              Tidak ada pesanan atau keranjang yang dikirim ke Kelola selama plugin nonaktif.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              {k.configured ? (
+                <>
+                  Kredensial tetap tersimpan (<code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{k.maskedUrl}</code>)
+                  beserta riwayat pengirimannya — aktifkan lagi tanpa perlu menempel ulang URL & secret.
+                </>
+              ) : (
+                <>Belum ada kredensial yang tersimpan.</>
+              )}
+            </p>
+            <p className="text-muted-foreground">
+              Saat diaktifkan lagi, pesanan yang masuk selama nonaktif <strong className="font-medium text-foreground">tidak dikirim
+              otomatis</strong>; bila perlu, kirim satu per satu lewat <em>Kirim ulang</em> di detail pesanan. Pesanan dari sebelum
+              dinonaktifkan yang masih tertunda tetap dilanjutkan.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {kelolaMeta?.enabled && (
         <Card>
@@ -168,7 +209,7 @@ export function PluginCard() {
                   <span className="text-muted-foreground">sejak {fmt(k.connectedAt)}</span>
                 </>
               ) : (
-                <span className="text-muted-foreground">Belum terhubung.</span>
+                <span className="text-muted-foreground">Belum terhubung — belum ada data yang dikirim.</span>
               )}
             </div>
 
@@ -191,7 +232,8 @@ export function PluginCard() {
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Di Kelola: Toko → Pengaturan → Toko & advertiser → hubungkan toko → salin URL & secret.
+                  Di Kelola: Toko → Pengaturan → Toko & advertiser → hubungkan toko → salin URL & secret. Hanya URL
+                  kelolatim.com yang diterima.
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -206,16 +248,9 @@ export function PluginCard() {
                   required={!k.configured}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={busy || !k.encryptionReady}>
-                  {busy && <Loader2 className="size-4 animate-spin" aria-hidden />} Simpan & tes koneksi
-                </Button>
-                {k.configured && (
-                  <Button type="button" variant="outline" disabled={busy} onClick={() => run(() => disconnectKelolaAction())}>
-                    Putuskan
-                  </Button>
-                )}
-              </div>
+              <Button type="submit" disabled={busy || !k.encryptionReady}>
+                {busy && <Loader2 className="size-4 animate-spin" aria-hidden />} Simpan & tes koneksi
+              </Button>
               <p className="text-xs text-muted-foreground">
                 Kredensial hanya disimpan setelah Kelola menerimanya, dan tidak pernah ditampilkan lagi.
               </p>
@@ -230,10 +265,11 @@ export function PluginCard() {
             />
 
             {k.sync && k.configured && (
-              <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
                 <div><dt className="text-muted-foreground">Terkirim (7 hari)</dt><dd className="tabular-nums font-medium">{k.sync.synced}</dd></div>
                 <div><dt className="text-muted-foreground">Gagal, dicoba lagi</dt><dd className="tabular-nums font-medium">{k.sync.failing}</dd></div>
                 <div><dt className="text-muted-foreground">Ditolak Kelola</dt><dd className="tabular-nums font-medium">{k.sync.gave_up}</dd></div>
+                <div><dt className="text-muted-foreground">Dilewati (nonaktif)</dt><dd className="tabular-nums font-medium">{k.sync.skipped_off}</dd></div>
                 <div><dt className="text-muted-foreground">Terakhir terkirim</dt><dd className="font-medium">{fmt(k.sync.last_synced_at)}</dd></div>
                 {k.sync.lastError && (
                   <div className="col-span-full text-xs text-muted-foreground">
@@ -258,9 +294,9 @@ export function PluginCard() {
       <ConfirmDelete
         open={confirmRemove}
         onOpenChange={setConfirmRemove}
-        title="Hapus data Kelola CRM?"
-        description="Kredensial dan riwayat pengiriman ke Kelola di toko ini dihapus permanen, dan plugin dinonaktifkan. Data yang sudah ada di Kelola tidak terhapus."
-        confirmLabel="Ya, hapus data"
+        title="Hapus koneksi Kelola CRM?"
+        description="Kredensial dan riwayat pengiriman ke Kelola di toko ini dihapus permanen, dan plugin dinonaktifkan. Untuk memakainya lagi, aktifkan dan tempel ulang URL & secret. Data yang sudah ada di Kelola tidak terhapus."
+        confirmLabel="Ya, hapus koneksi"
         pending={busy}
         onConfirm={() => run(() => removePluginData("kelola"), () => setConfirmRemove(false))}
       />
