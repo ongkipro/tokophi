@@ -65,21 +65,52 @@ const PIXEL_CONNECT = [
   "https://www.googleadservices.com",
 ];
 
-/** Storefront: first-party + the three ad platforms. `frame-ancestors` is deliberately absent (Store Builder preview). */
-export const STOREFRONT_CSP_REPORT_ONLY = [
-  `default-src ${SELF}`,
-  `base-uri ${SELF}`,
-  "object-src 'none'",
-  `form-action ${SELF}`,
-  `script-src ${SELF} 'unsafe-inline' ${CF_BEACON_SCRIPT} ${PIXEL_SCRIPTS.join(" ")}`,
-  `style-src ${SELF} 'unsafe-inline'`,
-  `img-src ${SELF} data: blob: https:`,
-  `font-src ${SELF} data:`,
-  `connect-src ${SELF} ${CF_BEACON_CONNECT} ${PIXEL_CONNECT.join(" ")}`,
-  `media-src ${SELF} https:`,
-  "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.facebook.com https://td.doubleclick.net",
-  "report-uri /api/csp-report",
-].join("; ");
+/**
+ * The ORIGINS of the URLs a shopper page's own scripts call, deduplicated. A relative or unparsable
+ * URL contributes nothing (relative = same-origin, already `'self'`), and anything that is not plain
+ * http(s) is dropped — so a mangled env value can never smuggle a `;` or a keyword into the header:
+ * `URL#origin` cannot contain either.
+ */
+export function cspOrigins(urls: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const u of urls) {
+    try {
+      const o = new URL(u);
+      if (o.protocol === "https:" || o.protocol === "http:") out.add(o.origin);
+    } catch {
+      // relative or garbage: not a cross-origin connection, nothing to list
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Storefront: first-party + the three ad platforms + **the Seller app's public API**.
+ * `frame-ancestors` is deliberately absent (Store Builder preview).
+ *
+ * `apiUrls` = the exact URLs the checkout and the landing-page order funnel `fetch()`. The public
+ * routes (`ongkir`, `order`, `promo`) are served by the Seller app — `app.tokophi.com` in production,
+ * `localhost:3000` in dev — NOT by the shop's own origin. They were missing from `connect-src` until
+ * 2026-11-13 (CSP-CONNECT): harmless while report-only, but the day this policy is enforced no rate
+ * loads and no order can be placed. A PARAMETER, so the header is built from the same values the
+ * client is handed (`apps/storefront/src/lib/public-api.ts`), never from a second copy of a hostname.
+ */
+export function storefrontCspReportOnly(apiUrls: readonly string[]): string {
+  return [
+    `default-src ${SELF}`,
+    `base-uri ${SELF}`,
+    "object-src 'none'",
+    `form-action ${SELF}`,
+    `script-src ${SELF} 'unsafe-inline' ${CF_BEACON_SCRIPT} ${PIXEL_SCRIPTS.join(" ")}`,
+    `style-src ${SELF} 'unsafe-inline'`,
+    `img-src ${SELF} data: blob: https:`,
+    `font-src ${SELF} data:`,
+    [`connect-src ${SELF}`, ...cspOrigins(apiUrls), CF_BEACON_CONNECT, ...PIXEL_CONNECT].join(" "),
+    `media-src ${SELF} https:`,
+    "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.facebook.com https://td.doubleclick.net",
+    "report-uri /api/csp-report",
+  ].join("; ");
+}
 
 export const CSP_REPORT_ONLY_HEADER = "Content-Security-Policy-Report-Only";
 

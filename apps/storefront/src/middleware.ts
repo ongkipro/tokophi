@@ -4,7 +4,8 @@
 import { defineMiddleware } from "astro:middleware";
 import { getLockedStoreByHost, getStoreByHost, normalizeHost, primaryOrigin } from "./data/store";
 import { getCatalog } from "./data/catalog";
-import { CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP_REPORT_ONLY } from "@tokophi/lib/csp";
+import { CSP_REPORT_ONLY_HEADER } from "@tokophi/lib/csp";
+import { STOREFRONT_CSP } from "./lib/public-api";
 
 const notFoundHtml = (host: string) => `<!doctype html>
 <html lang="id">
@@ -167,7 +168,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
     // Report-only: measures what shopper pages load (pixels, merchant HTML) before anything is enforced.
-    if (import.meta.env.PROD) res.headers.set(CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP_REPORT_ONLY);
+    // STOREFRONT_CSP lists the Seller app's API origin from the SAME env the checkout fetches (CSP-CONNECT).
+    if (import.meta.env.PROD) res.headers.set(CSP_REPORT_ONLY_HEADER, STOREFRONT_CSP);
   } catch {
     // immutable Response (e.g. a proxied fetch): serve it unchanged rather than fail the request.
   }
