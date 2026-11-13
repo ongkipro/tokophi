@@ -5157,3 +5157,34 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
   the known invalid TikTok pixel warning, TRACK-DEMO-TIKTOK-ID). `ops/tokophi-probe.sh` (main's copy) exit 0.
 - **Not yet proven on production:** a real "Bayar ulang" (the `-n` reff_id on `/submit`), a signup with a code, a
   Super Admin provider switch (no code created, no store moved — nothing was written by the verification).
+
+### [2026-11-13 14:39 UTC] — BILL-PRICE-2026-11 · subscription Rp178.500 / annual Rp1.713.600, promo removed, first-invoice code discount (ADR 0020)
+- **Executor:** subagent of Main Session (branch `feat/pricing-178k-code-discount`, PR open — NOT merged, owner-gated; deploy manual).
+- **Owner decisions 2026-11-13** 1–7 implemented; defaults recorded in ADR 0020 §6 (owner-confirmable).
+- **Files:** `packages/lib/src/billing.ts` (+test), `packages/db/drizzle/0119_subscription_code_discount.sql` + journal,
+  `packages/db/src/{schema.ts,subscription-invoice.ts,subscription-invoice-pricing.test.ts,schema-indexes.test.ts,seed.ts}`,
+  `test/platform-finance-lock.ts`, admin (`akun/langganan`, `keuangan`, `faktur/[number]`, `daftar` form+page,
+  `pay-subscription.tsx`, `lib/data/billing.ts`, `lib/signup-code.ts`, `lib/actions/register.ts`, cron test), super-admin
+  (`kode-daftar` page+client, `toko` catalog/detail, `paket`, dashboard, `pengaturan` Keuangan, `lib/{actions,data,shipping-data,
+  store-shipping-provider(+test),subscription-kpi(+test),types}.ts`, `components/bits.tsx`), landing (`offer.ts`, Pricing, Hero,
+  Footer, cara-kerja, harga, `design/og.html`, `public/og.png` re-rendered, DESIGN.md), docs app (3 pages), specs (ADR 0020,
+  DECISIONS, FINANCE, PRICING, PRD, REQUIREMENTS, SCHEMA, CODE_MAP, UI_INVENTORY, SECURITY, STATUS, TASKS, PAGE_MAP regen), AGENTS.md, CHANGELOG.
+- **Verification (own databases only — `tokophi_bp2611_test`, `tokophi_bp2611_ui`; shared `tokophi` untouched; no provider call):**
+  - `TEST_DATABASE_URL=…/tokophi_bp2611_test TEST_DB_REQUIRED=1 heavy-run --lock tokophi-env -- npm run test:db` → **231 files,
+    2387 tests passed** (run after `git add`). New real-Postgres suite `subscription-invoice-pricing.test.ts` 15/15; billing.test 36/36.
+  - `build` admin ✓ · super-admin ✓ · landing ✓; `check:landing` ✓ · `check:storefront` ✓; `tsc` admin/super-admin/db/lib clean;
+    `lint` admin 0 errors (12 pre-existing warnings, none in touched files) · super-admin 0; `verify-migrations` ✓ (120 entries);
+    0119 re-applied by hand on the test DB → no error (idempotent); `doc-counts` 18/18.
+  - **Mutation proofs (each red, then restored byte-identical):** M1 `codeDiscountFor` ignores a `dibayar` invoice → 2 red
+    (unit + "manual Lunas"); M2 creator ignores the owed discount → 7 red; M3 index dropped on the test DB → 2 red
+    (DB impossibility + race); M4 race catch removed → 1 red; M5 PPN on the list price → 5 red.
+  - **Browser (prod builds, own ports 3510/3511/3512, only own PIDs killed; Playwright, 390 + 1440, 0 console errors):** Super Admin
+    Kode Daftar created `REF-BP100` (KiriminAja, Rp100.000; out-of-range 178.500 refused in-form; audit line "potongan tagihan
+    pertama Rp100.000"); `/daftar?kode=ref-bp100` → "Kode diterima — potongan Rp 100.000 untuk tagihan langganan pertama", store
+    created with `signup_code`; Seller Langganan: next Rp78.500 + "Potongan kode REF-BP100", picker Bulanan Rp78.500 / Tahunan
+    Rp1.613.600 (13 bln), price card without promo; annual invoice raised through the real creator (provider stubbed) →
+    Rp1.613.600, `code_discount_idr` 100000; faktur prints Paket Rp1.713.600 · Potongan kode REF-BP100 −Rp100.000 · Total
+    Rp1.613.600; history Jenis "Tahunan"; Super Admin store card "(tagihan pertama, potongan kode −Rp 100.000)", catalog tab
+    "Tagihan 1"; landing `/harga/` title/description/JSON-LD 178500/1713600, annual toggle, no old price on the page.
+- **Not verified:** a real provider payment/callback for a discounted invoice (stubbed); the Google signup door with a code;
+  production. Before merge: re-check migration 0119 / ADR 0020 numbers against `main`.

@@ -160,7 +160,7 @@
 | URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `/analitik` | Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice). | page | `apps/super-admin/app/(platform)/analitik/page.tsx` | — | `data` | — | — | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
-| `/kode-daftar` | 'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner). | page | `apps/super-admin/app/(platform)/kode-daftar/page.tsx` | `kode-daftar-client.tsx` | — | `actions` | `route:/kode-daftar` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` `apps/super-admin/lib/store-shipping-provider.test.ts` |
+| `/kode-daftar` | 'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) and may carry a first-invoice discount (ADR 0020) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner). | page | `apps/super-admin/app/(platform)/kode-daftar/page.tsx` | `kode-daftar-client.tsx` | — | `actions` | `route:/kode-daftar` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` `apps/super-admin/lib/store-shipping-provider.test.ts` |
 | `/` | layout | layout | `apps/super-admin/app/(platform)/layout.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `platform-session` | — | ✓ | — |
 | `/log-sistem` | 'Log Sistem' — the whole `platform_activity` audit log, filtered and paged in the database. | page | `apps/super-admin/app/(platform)/log-sistem/page.tsx` | — | `data` | — | `route:/log-sistem` | — | ✓ | `apps/super-admin/lib/activity-log.test.ts` `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | Platform dashboard (MRR, revenue, merchant float, latest invoices) — `admin` rank; support is forwarded to its landing. | page | `apps/super-admin/app/(platform)/page.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `route:/` | — | ✓ | — |
@@ -171,7 +171,7 @@
 | `/tiket/[id]` | One ticket thread (reply, close). | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/tiket` | 'Tiket' — merchant support desk. | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/toko/[id]` | Store detail: billing, users (add/reset — credential shown once), suspend with a reason, comp a month, 'Buka Dashboard Seller'. | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `shipping-provider-card.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` |
-| `/toko` | 'Toko' — all stores by lifecycle segment (trial / first month / regular / VIP) + review queue. | page | `apps/super-admin/app/(platform)/toko/page.tsx` | `toko-client.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
+| `/toko` | 'Toko' — all stores by lifecycle segment (trial / first invoice / regular / VIP) + review queue. | page | `apps/super-admin/app/(platform)/toko/page.tsx` | `toko-client.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/update-log` | 'Update Log' — the product changelog shown to operators (`dev-logs.ts`), paged. | page | `apps/super-admin/app/(platform)/update-log/page.tsx` | `update-log-client.tsx` | — | — | `route:/update-log` | — |  | `apps/super-admin/lib/list-page.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | layout | layout | `apps/super-admin/app/layout.tsx` | — | — | — | — | — |  | — |
 | `/login` | Operator login (front door, rank re-read from `platform_admins` on every request). | page | `apps/super-admin/app/login/page.tsx` | — | — | `auth` | — | — |  | `apps/super-admin/lib/platform-shell-contract.test.ts` `packages/lib/src/no-published-credentials.test.ts` |
@@ -238,7 +238,7 @@
 | `/cara-kerja` | Signup → review → setup → first order, the daily workflow, and the subscription billing timeline. | `apps/landing/src/pages/cara-kerja.astro` | `MarketingLayout` | — | `navigation` `offer` |  |  | — |
 | `/demo` | What to try on the demo storefront (batiknusantara.tokophi.id), with its real screens. | `apps/landing/src/pages/demo.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/fitur` | Every feature in the one plan, grouped (store, sales, shipping, marketing, operations) with real screenshots. | `apps/landing/src/pages/fitur.astro` | `MarketingLayout` | — | `offer` |  |  | — |
-| `/harga` | Subscription pricing (one plan, monthly/annual switch) and the who-pays-which-fee table. | `apps/landing/src/pages/harga.astro` | `MarketingLayout` | — | — |  |  | — |
+| `/harga` | Subscription pricing (one plan, monthly/annual switch) and the who-pays-which-fee table. | `apps/landing/src/pages/harga.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/` | tokophi.com front door. | `apps/landing/src/pages/index.astro` | `MarketingLayout` | — | — |  |  | `packages/lib/src/provider-label.test.ts` |
 | `/kontak` | Contact. | `apps/landing/src/pages/kontak.astro` | `Base` | — | `identity` `navigation` |  |  | — |
 | `/pembayaran-pengiriman` | Payment channels, COD rules, couriers, payout, and the who-pays-which-fee table, all from code constants. | `apps/landing/src/pages/pembayaran-pengiriman.astro` | `MarketingLayout` | — | `offer` |  |  | — |
@@ -260,7 +260,7 @@
 | `analytics.ts` | `SERIES_DAYS` `dailyStatsRows` `getCategorySales` `getChannelSalesDaily` `getCustomerMix` `getDailyStats` `getHourlyStats` `getOrderStats` `getProductSalesDaily` `getRegionSales` `hourlyStatsRows` |
 | `areas.ts` | `areaById` `kelurahanForDistrict` `kelurahanWithKaIdForDistrict` `mengantarDestination` `provinceForDistrict` `resolveArea` `resolveDestinationKelurahan` `searchAreaLocal` |
 | `articles.ts` | `getArticle` `getArticles` `getBlogs` |
-| `billing.ts` | `getBilling` `getFaktur` `getMyInvoices` |
+| `billing.ts` | `getBilling` `getFaktur` `getMyInvoices` `getOwedCodeDiscount` |
 | `bulk-labels.ts` | `bulkLabels` `getBulkLabels` |
 | `bulk-shipping.ts` | `getBulkShipping` |
 | `chat.ts` | `canReadChat` `getMessagesSince` `getThread` `getThreads` `getUnreadTotal` `requireChatRead` |
@@ -374,7 +374,7 @@
 | `route-roles.ts` | `ROUTE_RULES` `canOpenPath` `landingForRole` `minRoleForPath` `reasonForPath` |
 | `session.ts` | `SESSION_COOKIE` `signSession` |
 | `shipping-data.ts` | `getStoreShipping` `listSignupCodes` |
-| `store-shipping-provider.ts` | `PROVIDER_LABEL` `SHIPPING_PROVIDER_MIN_RANK` `SIGNUP_CODE_NOTE_MAX` `STORE_PROVIDER_REASON_MIN` `createSignupCodeWith` `isShippingProvider` `setSignupCodeActiveWith` `setStoreShippingProviderWith` |
+| `store-shipping-provider.ts` | `PROVIDER_LABEL` `SHIPPING_PROVIDER_MIN_RANK` `SIGNUP_CODE_DISCOUNT_MAX_IDR` `SIGNUP_CODE_NOTE_MAX` `STORE_PROVIDER_REASON_MIN` `createSignupCodeWith` `isShippingProvider` `parseSignupCodeDiscount` `setSignupCodeActiveWith` `setStoreShippingProviderWith` |
 | `subscription-kpi.ts` | `periodBackedBy` `subscriptionKpiBucket` |
 | `types.ts` | — |
 

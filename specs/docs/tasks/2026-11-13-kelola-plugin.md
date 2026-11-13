@@ -38,7 +38,7 @@
 - [x] `codeOnly` guard: nothing under `lib/plugins/**` writes `orders`
 
 ### v2 takeover — Aktif / Nonaktif (2026-11-13, KelolaPluginAgent, `feat/kelola-plugin-v2`)
-- [x] Merge `origin/main` (no rebase): migration renumbered **and re-stamped** `0117_store_plugins_kelola` → `0119_store_plugins_kelola` (stamp 1787545951751 > 0118's 1787545891751); old tag RETIRED in `packages/db/src/verify-migrations.ts`
+- [x] Merge `origin/main` (no rebase): migration renumbered **and re-stamped** `0117_store_plugins_kelola` → `0119_store_plugins_kelola` (stamp 1787545951751 > 0118's 1787545891751), then → `0120_store_plugins_kelola` (stamp 1787546011751) after PR #468 landed its own 0119 with the same stamp; old tag RETIRED in `packages/db/src/verify-migrations.ts`
 - [x] ADR renumbered `0019-first-party-plugins` → **`0021-first-party-plugins`** (0019 = store-level shipping provider on main, 0020 reserved by `feat/pricing-178k-code-discount`); every reference updated; DECISIONS next-free → 0022
 - [x] Prepaid-eligibility + payload method read `latestPaymentFirst()` (PAY-RETRY added `created_at desc`); guard `lib/plugins/payment-definition.test.ts`
 - [x] Aktif / Nonaktif semantics (spec §4.9, ADR 0021 §2.8): `store_plugins.disabled_at`; Nonaktif keeps credential + history; re-activation marks what arrived while off as skipped (never back-filled); "Hapus koneksi" = uninstall; "Putuskan" dropped

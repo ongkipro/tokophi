@@ -17,8 +17,9 @@
 -- All three are store-scoped → RLS, the standard tenant_isolation policy.
 -- Idempotent (AGENTS.md / specs/docs/rules/migrations.md): every statement can re-run.
 -- ⚠️ Numbering: written as 0117 on the paused feat/kelola-plugin; RENUMBERED AND RE-STAMPED to 0119 on
--- feat/kelola-plugin-v2 after main landed 0117_store_shipping_provider + 0118_pay_retry (old tag RETIRED in
--- src/verify-migrations.ts). Never applied to the shared `tokophi` dev DB before merge.
+-- feat/kelola-plugin-v2 after main landed 0117_store_shipping_provider + 0118_pay_retry, and AGAIN to 0120
+-- (stamp 1787546011751) after main landed 0119_subscription_code_discount (PR #468) with the same stamp
+-- (both old tags RETIRED in src/verify-migrations.ts). Never applied to the shared `tokophi` dev DB before merge.
 --
 -- Aktif / Nonaktif (owner 2026-11-13, "plugins (aktif, non aktif)"): `enabled` is the switch. Turning it OFF
 -- keeps the sealed credential and the push history; `disabled_at` records WHEN, so turning it back ON can

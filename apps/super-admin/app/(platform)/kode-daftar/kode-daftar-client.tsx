@@ -11,6 +11,8 @@ import { Label } from "@tokophi/ui/label";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@tokophi/ui/table";
 import { cn } from "@tokophi/ui/lib/utils";
 import { normalizeSignupCode } from "@tokophi/lib/signup-code";
+import { BILLING } from "@tokophi/lib/billing";
+import { IDR } from "@tokophi/lib/format";
 import { createSignupCode, setSignupCodeActive } from "@/lib/actions";
 import type { SignupCodeRow } from "@/lib/shipping-data";
 
@@ -27,7 +29,12 @@ export function KodeDaftarClient({ codes, signupBase }: { codes: SignupCodeRow[]
   const [code, setCode] = useState("");
   const [provider, setProvider] = useState<Provider>("mengantar");
   const [note, setNote] = useState("");
+  // ADR 0020 — first-invoice discount, stored per code. Pre-filled with the owner's default (Rp100.000);
+  // 0 = a provider-only code. The action is the boundary (bounds in `parseSignupCodeDiscount`).
+  const [discount, setDiscount] = useState(String(BILLING.SIGNUP_CODE_DISCOUNT_DEFAULT_IDR));
   const norm = normalizeSignupCode(code);
+  const discountN = discount === "" ? 0 : Number(discount);
+  const discountBad = !Number.isInteger(discountN) || discountN < 0 || discountN >= BILLING.MONTHLY_IDR;
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>, after?: () => void) =>
     start(async () => {
@@ -61,7 +68,7 @@ export function KodeDaftarClient({ codes, signupBase }: { codes: SignupCodeRow[]
             className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"
             onSubmit={(e) => {
               e.preventDefault();
-              run(() => createSignupCode(code, provider, note), () => {
+              run(() => createSignupCode(code, provider, note, discount), () => {
                 setCode("");
                 setNote("");
               });
@@ -84,6 +91,27 @@ export function KodeDaftarClient({ codes, signupBase }: { codes: SignupCodeRow[]
                 />
                 <p id="sc-code-hint" className={cn("text-xs", norm === null ? "text-destructive" : "text-muted-foreground")}>
                   3–32 karakter: huruf, angka, tanda minus. Disimpan huruf besar.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="sc-discount">Potongan tagihan pertama (Rp)</Label>
+                <Input
+                  id="sc-discount"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value.replace(/[^\d]/g, ""))}
+                  inputMode="numeric"
+                  maxLength={9}
+                  autoComplete="off"
+                  className="tabular-nums"
+                  aria-invalid={discountBad || undefined}
+                  aria-describedby="sc-discount-hint"
+                />
+                <p id="sc-discount-hint" className={cn("text-xs", discountBad ? "text-destructive" : "text-muted-foreground")}>
+                  {discountBad
+                    ? `Maksimal ${IDR(BILLING.MONTHLY_IDR - 1)} — harus di bawah harga bulanan.`
+                    : discountN > 0
+                      ? `Tagihan pertama: bulanan ${IDR(BILLING.MONTHLY_IDR - discountN)}, tahunan ${IDR(BILLING.ANNUAL_IDR - discountN)}. Sekali per toko; isi 0 bila tanpa potongan.`
+                      : "Tanpa potongan — kode ini hanya menentukan penyedia pengiriman."}
                 </p>
               </div>
               <div className="flex flex-col gap-2">
@@ -114,7 +142,7 @@ export function KodeDaftarClient({ codes, signupBase }: { codes: SignupCodeRow[]
                 )}
               </fieldset>
             </div>
-            <Button type="submit" disabled={pending || !norm}>
+            <Button type="submit" disabled={pending || !norm || discountBad}>
               {pending ? "Menyimpan…" : "Buat kode"}
             </Button>
           </form>
@@ -135,6 +163,7 @@ export function KodeDaftarClient({ codes, signupBase }: { codes: SignupCodeRow[]
                   <TableRow>
                     <TableHead>Kode</TableHead>
                     <TableHead>Penyedia</TableHead>
+                    <TableHead className="text-right">Potongan tagihan pertama</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Dipakai</TableHead>
                     <TableHead>Catatan</TableHead>
@@ -147,6 +176,7 @@ export function KodeDaftarClient({ codes, signupBase }: { codes: SignupCodeRow[]
                     <TableRow key={c.code} data-signup-code={c.code}>
                       <TableCell className="font-mono text-xs">{c.code}</TableCell>
                       <TableCell>{LABEL[c.provider]}</TableCell>
+                      <TableCell className="text-right tabular-nums">{c.discountIdr > 0 ? `−${IDR(c.discountIdr)}` : "—"}</TableCell>
                       <TableCell>
                         <Badge variant={c.active ? "default" : "outline"}>{c.active ? "Aktif" : "Nonaktif"}</Badge>
                       </TableCell>

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { BILLING, withPpn, baseFromTotal, quote, storeSegment, computeBilling, type StoreBillingRow, subscriptionCharge } from "./billing";
+import { BILLING, withPpn, baseFromTotal, quote, codeDiscountFor, storeSegment, computeBilling, type StoreBillingRow, subscriptionCharge } from "./billing";
 
 // The subscription money math. Plan prices are the DPP (ex-tax); the merchant pays base + 11% PPN, and
 // invoices store the PPN-inclusive total — so withPpn/baseFromTotal must round-trip. quote() encodes
-// the promo (Rp50rb first month) and the annual bonus month; computeBilling() is the trial → active →
+// the single price (ADR 0020), the owed code discount and the annual bonus month; computeBilling() is the trial → active →
 // past_due → suspended lifecycle that decides whether the shop is read-only. These are the numbers on
 // real invoices — they must be exercised, not eyeballed.
 
@@ -34,15 +34,61 @@ describe("PPN — base + 11% round-trips with the stored total", () => {
   });
 });
 
-describe("quote — promo first month + annual bonus month", () => {
-  it("monthly: Rp50rb the first time, Rp275rb after", () => {
-    expect(quote("monthly", false)).toMatchObject({ amount: 50_000, months: 1, bonusMonth: false });
-    expect(quote("monthly", true)).toMatchObject({ amount: 275_000, months: 1 });
+// ADR 0020 (owner 2026-11-13): Rp178.500/month, annual = monthly × 12 − 20%, NO first-month promo,
+// trial stays 3 days, and a signup code may take a fixed amount off the FIRST PAID invoice only.
+describe("ADR 0020 — the price list is the owner's numbers, and annual IS the formula", () => {
+  it("pins every figure the owner named", () => {
+    expect(BILLING.TRIAL_DAYS).toBe(3);
+    expect(BILLING.MONTHLY_IDR).toBe(178_500);
+    expect(BILLING.ANNUAL_IDR).toBe(1_713_600);
+    expect(BILLING.ANNUAL_MONTHLY_IDR).toBe(142_800);
+    expect(BILLING.SIGNUP_CODE_DISCOUNT_DEFAULT_IDR).toBe(100_000);
+    expect("FIRST_MONTH_IDR" in BILLING).toBe(false); // the promo is gone, not merely unused
+  });
+  it("annual = monthly × 12 × (1 − 20%), and per-month × 12 = annual (no rounding drift)", () => {
+    expect(BILLING.ANNUAL_IDR).toBe((BILLING.MONTHLY_IDR * 12 * (100 - BILLING.ANNUAL_DISCOUNT_PCT)) / 100);
+    expect(BILLING.ANNUAL_MONTHLY_IDR * 12).toBe(BILLING.ANNUAL_IDR);
+  });
+});
+
+describe("quote — one price + annual bonus month + an OWED code discount", () => {
+  it("monthly: Rp178.500 whether or not anything was paid before (no promo)", () => {
+    expect(quote("monthly", false)).toMatchObject({ amount: 178_500, listAmount: 178_500, codeDiscountIdr: 0, months: 1, bonusMonth: false });
+    expect(quote("monthly", true)).toMatchObject({ amount: 178_500, months: 1 });
   });
 
-  it("annual: first-time (from trial) grants 13 months; afterwards 12", () => {
-    expect(quote("annual", false)).toMatchObject({ amount: 2_700_000, months: 13, bonusMonth: true });
-    expect(quote("annual", true)).toMatchObject({ amount: 2_700_000, months: 12, bonusMonth: false });
+  it("annual: first-time (from trial) grants 13 months; afterwards 12 — same Rp1.713.600", () => {
+    expect(quote("annual", false)).toMatchObject({ amount: 1_713_600, months: 13, bonusMonth: true });
+    expect(quote("annual", true)).toMatchObject({ amount: 1_713_600, months: 12, bonusMonth: false });
+  });
+
+  it("an owed Rp100.000 code discount: monthly 78.500, annual 1.613.600 (bonus month kept)", () => {
+    expect(quote("monthly", false, 100_000)).toMatchObject({ listAmount: 178_500, codeDiscountIdr: 100_000, amount: 78_500 });
+    expect(quote("annual", false, 100_000)).toMatchObject({ listAmount: 1_713_600, codeDiscountIdr: 100_000, amount: 1_613_600, months: 13 });
+  });
+
+  it("a discount is clamped to the price and never negative", () => {
+    expect(quote("monthly", false, 999_999).amount).toBe(0); // the creator refuses a Rp0 bill
+    expect(quote("monthly", false, -5).amount).toBe(178_500);
+    expect(quote("monthly", false, Number.NaN).amount).toBe(178_500);
+  });
+});
+
+describe("codeDiscountFor — the ONE rule for 'is the code discount still owed?'", () => {
+  const fresh = { codeDiscountIdr: 100_000, firstInvoicePaid: false, hasPaidSubscription: false };
+  it("owed to a never-paid store whose code carries a discount", () => {
+    expect(codeDiscountFor(fresh)).toBe(100_000);
+  });
+  it("no code / a provider-only code (0) → 0", () => {
+    expect(codeDiscountFor({ ...fresh, codeDiscountIdr: null })).toBe(0);
+    expect(codeDiscountFor({ ...fresh, codeDiscountIdr: 0 })).toBe(0);
+  });
+  it("never twice: gone once the callback flagged a payment OR any subscription invoice is dibayar", () => {
+    expect(codeDiscountFor({ ...fresh, firstInvoicePaid: true })).toBe(0);
+    expect(codeDiscountFor({ ...fresh, hasPaidSubscription: true })).toBe(0); // manual "Lunas" flip
+  });
+  it("VIP is never billed, so owes nothing", () => {
+    expect(codeDiscountFor({ ...fresh, comped: true })).toBe(0);
   });
 });
 
@@ -53,9 +99,9 @@ describe("storeSegment — the 4 lifecycle buckets", () => {
   it("in trial → trial", () => {
     expect(storeSegment({ trialEndsAt: future(2), currentPeriodEnd: null, firstInvoicePaid: false, suspendedAt: null }, NOW)).toBe("trial");
   });
-  it("paid once → regular; not yet → first_month", () => {
+  it("paid once → regular; not yet → first_invoice (ADR 0020: was first_month, same predicate)", () => {
     expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: true, suspendedAt: null }, NOW)).toBe("regular");
-    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: false, suspendedAt: null }, NOW)).toBe("first_month");
+    expect(storeSegment({ trialEndsAt: null, currentPeriodEnd: future(20), firstInvoicePaid: false, suspendedAt: null }, NOW)).toBe("first_invoice");
   });
 });
 
@@ -75,15 +121,27 @@ describe("computeBilling — trial → active → past_due → suspended, and VI
     expect(s.status).toBe("active");
     expect(s.readOnly).toBe(false);
     expect(s.daysLeft).toBe(10);
-    expect(s.nextAmount).toBe(275_000); // already paid once → regular price next
+    expect(s.nextAmount).toBe(178_500); // ADR 0020 regular price
   });
 
-  it("in the free trial (never paid) → trial, promo price next", () => {
+  it("in the free trial (never paid), no code → trial, the NORMAL price next (no promo)", () => {
     const s = computeBilling(base({ trialEndsAt: future(2) }), NOW);
     expect(s.status).toBe("trial");
     expect(s.readOnly).toBe(false);
-    expect(s.isPromo).toBe(true);
-    expect(s.nextAmount).toBe(50_000);
+    expect(s.codeDiscountIdr).toBe(0);
+    expect(s.nextAmount).toBe(178_500);
+  });
+
+  it("in the trial with an owed code discount → the discounted first invoice next", () => {
+    const s = computeBilling(base({ trialEndsAt: future(2), codeDiscountIdr: 100_000 }), NOW);
+    expect(s.nextAmount).toBe(78_500);
+    expect(s.codeDiscountIdr).toBe(100_000);
+  });
+
+  it("a caller that passes a discount for an ALREADY-paid store is ignored (belt over codeDiscountFor)", () => {
+    const s = computeBilling(base({ currentPeriodEnd: future(10), firstInvoicePaid: true, codeDiscountIdr: 100_000 }), NOW);
+    expect(s.nextAmount).toBe(178_500);
+    expect(s.codeDiscountIdr).toBe(0);
   });
 
   it("overdue but within the 3-day grace → past_due, STILL full access", () => {
@@ -218,5 +276,12 @@ describe("subscriptionCharge", () => {
   it("ON bills base + PPN 11% and reports the tax it added", () => {
     expect(subscriptionCharge(275_000, true)).toEqual({ total: 305_250, taxIdr: 30_250 });
     expect(subscriptionCharge(2_700_000, true)).toEqual({ total: 2_997_000, taxIdr: 297_000 });
+  });
+  it("ADR 0020 truth table — PPN applies to the (discounted) DPP", () => {
+    expect(subscriptionCharge(quote("monthly", false).amount, true)).toEqual({ total: 198_135, taxIdr: 19_635 });
+    expect(subscriptionCharge(quote("annual", false).amount, true)).toEqual({ total: 1_902_096, taxIdr: 188_496 });
+    expect(subscriptionCharge(quote("monthly", false, 100_000).amount, true)).toEqual({ total: 87_135, taxIdr: 8_635 });
+    expect(subscriptionCharge(quote("annual", false, 100_000).amount, true)).toEqual({ total: 1_791_096, taxIdr: 177_496 });
+    expect(subscriptionCharge(quote("monthly", false, 100_000).amount, false)).toEqual({ total: 78_500, taxIdr: 0 });
   });
 });

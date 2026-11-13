@@ -1861,7 +1861,7 @@
             "apps/super-admin/lib/route-roles.test.ts",
             "apps/super-admin/lib/store-shipping-provider.test.ts"
           ],
-          "whatItIs": "'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner)."
+          "whatItIs": "'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) and may carry a first-invoice discount (ADR 0020) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner)."
         },
         {
           "url": "/",
@@ -2141,7 +2141,7 @@
             "apps/super-admin/lib/add-store-user.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
           ],
-          "whatItIs": "'Toko' — all stores by lifecycle segment (trial / first month / regular / VIP) + review queue."
+          "whatItIs": "'Toko' — all stores by lifecycle segment (trial / first invoice / regular / VIP) + review queue."
         },
         {
           "url": "/update-log",
@@ -2930,7 +2930,9 @@
             "MarketingLayout"
           ],
           "data": [],
-          "lib": [],
+          "lib": [
+            "offer"
+          ],
           "locals": false,
           "db": false,
           "gate": [],
@@ -3085,7 +3087,8 @@
         "exports": [
           "getBilling",
           "getFaktur",
-          "getMyInvoices"
+          "getMyInvoices",
+          "getOwedCodeDiscount"
         ]
       },
       {
@@ -4069,10 +4072,12 @@
         "exports": [
           "PROVIDER_LABEL",
           "SHIPPING_PROVIDER_MIN_RANK",
+          "SIGNUP_CODE_DISCOUNT_MAX_IDR",
           "SIGNUP_CODE_NOTE_MAX",
           "STORE_PROVIDER_REASON_MIN",
           "createSignupCodeWith",
           "isShippingProvider",
+          "parseSignupCodeDiscount",
           "setSignupCodeActiveWith",
           "setStoreShippingProviderWith"
         ]

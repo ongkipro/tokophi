@@ -309,7 +309,14 @@ architecture decision before the PostgREST cutover.
     malformed codes (no hint which); (4) codes being deactivatable at once (the signup transaction re-reads
     the code `FOR SHARE`). `signup_codes` has RLS with no policy (owner pool only). Known gap, same as every
     limit here: process-local decision, IP-keyed — the wall is Cloudflare. A code is not a secret and may
-    appear in a URL; never make one grant anything beyond the provider choice.
+    appear in a URL. **Since ADR 0020 (2026-11-13) a code MAY also grant money**: its
+    `discount_first_invoice_idr` (set by an owner-rank operator at creation, bounded below the monthly price)
+    comes off the new store's FIRST paid subscription invoice, once. What a guessed or leaked discount code buys
+    is therefore at most that one discount, on a store that must still be approved before it can trade — and it
+    is priced ONLY inside `createSubscriptionInvoice` from the store's own `signup_code` (nothing the client
+    sends can set it; at most one live discounted invoice per store is a DB constraint, 0119). A leaked code
+    is deactivated at once; stores that already signed up with it keep their discount (owner-confirmable). Never
+    make a code grant anything beyond the provider choice and this one first-invoice discount.
   - **Exception (owner O11, 2026-11-12):** `ops/mengantar-attach-own-key.ts` attaches an account the store
     owner already owns (production: the demo store only). The key comes from `secrets-env` at run time, is
     sealed exactly as a registered key, and is never printed; `partner_id` NULL marks the row so rotate /

@@ -277,7 +277,7 @@ type PluginContext = { storeId: string; settings: Record<string, unknown> };
 | `plugins.settings` JSON incl. secret | `store_plugins.settings` (non-secret) + `secret_enc` via `encryptSecret` |
 | env pair `KELOLA_ORDER_WEBHOOK_URL/_SECRET` fallback | **dropped** — multi-tenant; a platform-wide env pair would push every store to one Kelola |
 
-### 4.3 Data — migration `0119` (drafted as `0117`; renumbered on takeover), hand-written, idempotent (`specs/docs/rules/migrations.md`)
+### 4.3 Data — migration `0120` (drafted as `0117`, renumbered to `0119` on takeover, then `0120` after PR #468 took `0119`), hand-written, idempotent (`specs/docs/rules/migrations.md`)
 
 ```
 store_plugins                                    -- AdsBookCMS `plugins`, + store_id

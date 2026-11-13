@@ -44,6 +44,8 @@ export async function getStoreShipping(storeId: string): Promise<StoreShipping |
 export type SignupCodeRow = {
   code: string;
   provider: ShippingProvider;
+  /** ADR 0020 — IDR off a store's first paid subscription invoice (0 = provider-only code). */
+  discountIdr: number;
   active: boolean;
   note: string | null;
   createdBy: string | null;
@@ -58,6 +60,7 @@ export async function listSignupCodes(): Promise<SignupCodeRow[]> {
     .select({
       code: schema.signupCodes.code,
       provider: schema.signupCodes.shippingProvider,
+      discountIdr: schema.signupCodes.discountFirstInvoiceIdr,
       active: schema.signupCodes.active,
       note: schema.signupCodes.note,
       createdBy: schema.platformAdmins.email,
@@ -74,5 +77,6 @@ export async function listSignupCodes(): Promise<SignupCodeRow[]> {
     provider: isShippingProvider(r.provider) ? r.provider : "kiriminaja",
     createdAt: new Date(r.createdAt),
     used: Number(r.used),
+    discountIdr: Number(r.discountIdr),
   }));
 }

@@ -457,9 +457,9 @@ the tick answers `{"ok":true,"stores":0,…}` and writes nothing. It makes outbo
 merchant pasted at Pengaturan → Plugin → Kelola; a store whose credential Kelola refused (401/404) is
 skipped until the merchant saves it again, and a store whose owner switched the plugin **Nonaktif** is not
 listed at all (`store_plugins.enabled`). **First deploy of KEL-001 (PR from `feat/kelola-plugin-v2`) is MANUAL**:
-it adds this sidecar and migration `0119_store_plugins_kelola`, so after the merge trigger the deploy by hand
+it adds this sidecar and migration `0120_store_plugins_kelola`, so after the merge trigger the deploy by hand
 (checklist below), then confirm (1) `select max(created_at) from drizzle.__drizzle_migrations` =
-`1787545951751` (0119 applied, not skipped), (2) the `cron-plugins-*` container is up and its first log line is
+`1787546011751` (0120 applied, not skipped), (2) the `cron-plugins-*` container is up and its first log line is
 the JSON, not `cron plugins failed`, (3) Super Admin → Analitik → Sistem lists "Plugin toko" (job `plugins`) with interval 900 s.
 It needs no new env var — `CRON_SECRET` (the route) and `INTEGRATION_TOKEN_KEY` (sealing the Kelola credential;
 without it the Seller connect form refuses to save) are already set on the admin container. This heading used to read *"schedule this"* and told you to add a **Coolify

@@ -231,11 +231,11 @@ never ages its own carts) and the capture rate limiter is in-process. ([`BACKLOG
 
 ## 6. Subscription billing (what merchants pay us)
 
-**One plan, all features.** 3-day trial → **Rp50.000** first month → **Rp275.000/mo** (annual
-Rp2.700.000). Prices are the **DPP (ex-tax)**; the merchant pays base + **PPN 11%**. Invoices store the
+**One plan, all features** (pricing per ADR 0020, 2026-11-13). 3-day trial → **Rp178.500/mo** from the first invoice — no first-month promo (annual
+**Rp1.713.600** = monthly × 12 − 20%, 13 months when paid straight from the trial). A signup/referral code (`/daftar?kode=`, ADR 0019) may carry a discount on the store's FIRST PAID subscription invoice, once (default Rp100.000 → Rp78.500 / Rp1.613.600). Prices are the **DPP (ex-tax)**; PPN 11% is added only when the global toggle is on, on the discounted DPP. Invoices store the
 PPN-inclusive total; the faktur itemises DPP + PPN.
 
-**Store lifecycle:** `trial → first_month → regular → vip`. **VIP = `stores.comped`** — free, always
+**Store lifecycle:** `trial → first_invoice → regular → vip` (`first_invoice` = trial over, never paid; formerly `first_month`). **VIP = `stores.comped`** — free, always
 active, never billed, never suspended.
 
 A past-due store goes **read-only** after its grace period (`requireCapability` throws
