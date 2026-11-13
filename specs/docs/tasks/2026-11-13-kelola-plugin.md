@@ -3,7 +3,7 @@
 - **Branch / worktree:** `feat/kelola-plugin` at `~/Projects/tokophi-kelola` (from `origin/main` `68947858`, 2026-11-13)
 - **Spec (read first):** `specs/docs/KELOLA_PLUGIN_SPEC.md` — Kelola API (§1–2), fit (§3), plugin layer (§4), CRM retirement (§5), acceptance (§6), owner decisions (§7)
 - **Reference implementation:** AdsBookCMS (`~/Projects/adsbookcms`) — `DECISIONS.md` ADR-027 + ADR-028, `src/plugins/registry.ts`, `src/plugins/kelola/{index,sync,sync.test}.ts`, `src/pages/admin/settings/plugins/kelola.astro`, `src/pages/api/admin/plugins/*`. `git fetch` it first; port from `origin/main`.
-- **Status:** `[~]` PR 1 built + verified locally on branch `feat/kelola-plugin` (not pushed, no PR yet); PR 2 waits for the owner's #418 + CRM-data decisions
+- **Status:** ⏸ **PAUSED 2026-11-13** — owner: *"kelola kan masih dalam tahap pengembangan, biarkan aja dulu"* (relayed by session `tokophi-resume`). PR 1 is built, verified and committed **locally only** on `feat/kelola-plugin` at `4ce5782d` — not pushed, no PR. DB `tokophi_kelola` left as is. PR 2 also waits for the #418 + CRM-data decisions.
 - **Owner direction (2026-11-13):** current Seller CRM is cleaned out; CRM moves to Kelola (`kelolatim.com`) as a plugin, following the AdsBookCMS plugin contract.
 
 ## Defaults in force until the owner answers spec §7
@@ -58,6 +58,7 @@
 
 ## Log
 
+- 2026-11-13 — Main Session: PAUSED by owner direction (Kelola still in development). Last commit `4ce5782d` (SSRF host pin from review). Before resuming: `git fetch` + merge `origin/main`, re-check the migration number (0117 may be taken by then — renumber AND re-stamp), re-run `test:db`, then push/PR only with the owner's OK.
 - 2026-11-13 — Main Session: PR 1 built (8 commits on `feat/kelola-plugin`, 497118a3…). Gates: `test:db` 227 files / 2312 tests green before the last two guards (+ plugin suites 39/39 after), lint 0 errors, `build:admin` green, browser pass on `next start` at 390/1280 with 0 console errors. Details + mutation proofs in BUILD-LOG `KEL-001`.
 
 - 2026-11-13 — Main Session: Kelola API studied (`https://kelolatim.com/docs/api`), spec written, worktree created, `npm install` run. No code, no DB touched.
