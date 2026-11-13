@@ -196,7 +196,7 @@ export function OrderDetail({
 }) {
   // Everything below is REAL: `detail` comes from order_line_items / orders / customers /
   // customer_addresses / payments.
-  const { lines, money, shipment, buyer, address, payment, refund, sender, financial } =
+  const { lines, money, shipment, buyer, address, payment, paymentAttempts, refund, sender, financial } =
     detail;
   // The order's own destination (orders.city/province) — the only city this parcel is tied to.
   const destination =
@@ -221,9 +221,12 @@ export function OrderDetail({
   const canBookShipment = isCod || payment?.status === "berhasil";
   // A gateway bill (VA/QRIS/DANA) exists only when the payments row carries a channel code.
   const hasBill = !!payment?.channelCode;
+  // PAY-RETRY: a bill still `menunggu` but past its window is dead — re-billable, same rule the server
+  // applies in `createOrderPayment` (lib/pay-retry.ts).
   const canBill =
     !payment ||
     payment.status === "gagal" ||
+    payment.expired ||
     (!hasBill && payment.status !== "berhasil");
 
   const action = primaryAction(order.status);
@@ -515,6 +518,11 @@ export function OrderDetail({
     gagal: {
       label: "Gagal / kedaluwarsa",
       cls: "bg-red-500/12 text-red-600 dark:text-red-400",
+    },
+    // PAY-RETRY: still `menunggu` in the row, past its window — derived, never stored.
+    kedaluwarsa: {
+      label: "Kedaluwarsa",
+      cls: "bg-muted text-muted-foreground",
     },
   };
 
@@ -1278,11 +1286,42 @@ export function OrderDetail({
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">Status</span>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAY_STATUS[payment.status].cls}`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAY_STATUS[payment.expired ? "kedaluwarsa" : payment.status].cls}`}
                   >
-                    {PAY_STATUS[payment.status].label}
+                    {PAY_STATUS[payment.expired ? "kedaluwarsa" : payment.status].label}
                   </span>
                 </div>
+              )}
+              {payment?.status === "menunggu" && !payment.expired && payment.expiresAtLabel && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Berlaku sampai</span>
+                  <span className="font-medium">{payment.expiresAtLabel}</span>
+                </div>
+              )}
+              {/* PAY-RETRY — every bill this order was given, oldest first. Read-only: the buyer's
+                  "Bayar ulang" and this page's "Buat tagihan" are the only writers. */}
+              {paymentAttempts.length > 1 && (
+                <details className="rounded-lg border px-3 py-2">
+                  <summary className="cursor-pointer text-muted-foreground">
+                    Riwayat tagihan ({paymentAttempts.length})
+                  </summary>
+                  <ol className="mt-2 space-y-1.5">
+                    {paymentAttempts.map((a, i) => {
+                      const key = a.expired ? "kedaluwarsa" : a.status;
+                      return (
+                        <li key={`${a.reffId ?? "bill"}-${i}`} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="min-w-0 text-muted-foreground">
+                            {i + 1}. {a.createdAtLabel}
+                            {a.channelCode ? ` · ${a.channelCode}` : ""}
+                          </span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${PAY_STATUS[key].cls}`}>
+                            {PAY_STATUS[key].label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
               )}
               {payment?.paidAtLabel && (
                 <div className="flex items-center justify-between gap-2">

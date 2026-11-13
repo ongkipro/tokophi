@@ -50,14 +50,14 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 4 | 20 |
+| Seller (merchant panel) | 56 | 4 | 21 |
 | Super Admin (platform control plane) | 14 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 4 layouts · 20 API routes
+56 pages · 4 layouts · 21 API routes
 
 ### Pages
 
@@ -143,7 +143,8 @@
 | `/api/public/kiriminaja/webhook` | Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill. | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-sorting-code.test.ts` `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/ongkir/route.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` |
 | `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
-| `/api/public/pay/callback` | PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`. | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/fee-truth.test.ts` |
+| `/api/public/pay/callback` | PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`. | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/pay/retry/route.test.ts` `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/fee-truth.test.ts` |
+| `/api/public/pay/retry` | "Bayar ulang" (PAY-RETRY) — a NEW bill for the SAME order once the last one expired or failed; one-order token, row-locked, never two live bills. | OPTIONS POST | `apps/admin/app/api/public/pay/retry/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/pay-retry.test.ts` |
 | `/api/public/promo` | Voucher check for the checkout (deliberately specific error copy). | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
 | `/api/uploads/[name]` | Serves merchant uploads with `?w=` resizing. | GET | `apps/admin/app/api/uploads/[name]/route.ts` | — |  | `apps/admin/lib/image-content.test.ts` |
 | `/impersonate/exit` | Ends an impersonation session and logs it. | GET | `apps/admin/app/impersonate/exit/route.ts` | `session` |  | — |
@@ -194,7 +195,7 @@
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
 | `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
-| `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | — | ✓ |  | — |
+| `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | `public-api` | ✓ |  | — |
 | `/halaman/[handle]` | Static page. | `apps/storefront/src/pages/halaman/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/` | Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction. | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
 | `/kategori/[handle]` | One collection: CategoryHero always, then the `category` template body. | `apps/storefront/src/pages/kategori/[handle].astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
@@ -403,7 +404,7 @@
 | `chat.ts` | `CHAT_COOKIE` `LIMITS` `MAX_BODY` `MAX_NAME` `MAX_OPEN_CONVERSATIONS` `clientIp` `cursorOf` `ipHash` `json` `mintVisitorCookie` `parseCursor` `rateLimit` `readVisitorToken` |
 | `packages.ts` | `buildPackages` |
 | `product-feed.ts` | `PROFILES` `catalogSpecs` `colourSizeIndexes` `feedBrand` `feedDocument` `feedItems` `xml` |
-| `public-api.ts` | `CLIENT_API_URLS` `ONGKIR_API` `ORDER_API` `PROMO_API` `STOREFRONT_CSP` |
+| `public-api.ts` | `CLIENT_API_URLS` `ONGKIR_API` `ORDER_API` `PAY_RETRY_API` `PROMO_API` `STOREFRONT_CSP` |
 | `recovery.ts` | — |
 | `safe-href.ts` | `safeHref` |
 | `text.ts` | `clamp` |

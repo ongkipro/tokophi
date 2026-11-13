@@ -181,6 +181,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicError'
+  /api/public/pay/retry:
+    options:
+      operationId: preflightPayRetry
+      tags: [Orders]
+      summary: Negotiate cross-origin access for a payment retry
+      responses:
+        '204':
+          $ref: '#/components/responses/CorsPreflight'
+    post:
+      operationId: retryOrderPayment
+      tags: [Orders]
+      summary: Issue a new payment instruction for the same prepaid order ("Bayar ulang")
+      description: |
+        PAY-RETRY. Authorised by the one-order `token` the order API returned to the
+        checkout (`payToken`); the order number alone authorises nothing, and an
+        unknown order, a wrong token, another store, a COD order and a pre-0118 order
+        all answer the same 404. A new instruction is issued only when every previous
+        one is failed or provably expired, the order is still new and unpaid, and the
+        attempt limit is not reached — decided under the order's row lock, so an order
+        never holds two live instructions. The amount, admin fee, total and channel are
+        copied from the previous attempt. While an instruction is still payable the
+        route returns THAT instruction with `reused: true` instead of a new one.
+        Provider error text never reaches the response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayRetryRequest'
+      responses:
+        '200':
+          description: A new instruction, or the still-live one (`reused`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayRetrySuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: No order this token opens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayRetryRefusal'
+        '409':
+          description: The order cannot be given a new instruction now (see `code`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayRetryRefusal'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          description: The provider refused or the call failed; the attempt is recorded, nothing is billed by us.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayRetryRefusal'
+        '503':
+          description: The payment gateway is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayRetryRefusal'
   /api/public/pay/callback:
     post:
       operationId: receivePaymentCallback
@@ -675,6 +743,9 @@ components:
             # settlement and is never added to what the shopper pays (Task 8.25 (a)).
             providerFee: { type: integer, minimum: 0 }
             feeMismatch: { type: boolean }
+            # PAY-RETRY: the one-order secret for `/api/public/pay/retry`. Returned once; only its
+            # sha256 is stored. Also present on PaymentStartFailure.
+            payToken: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
             payment:
               $ref: '#/components/schemas/PaymentInstructions'
     PaymentInstructions:
@@ -699,7 +770,33 @@ components:
         amount: { type: number, minimum: 0 }
         admin: { type: integer, minimum: 0 }
         total: { type: integer, minimum: 0 }
-        expiresAt: { type: string, format: date-time }
+        # ISO 8601 with an offset (the provider's WIB wall clock, parsed server-side); null = unknown.
+        expiresAt: { type: [string, 'null'], format: date-time }
+    PayRetryRequest:
+      type: object
+      required: [storeSlug, orderNumber, token]
+      properties:
+        storeSlug: { type: string, minLength: 1 }
+        orderNumber: { type: string, minLength: 1, maxLength: 64 }
+        token: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+    PayRetrySuccess:
+      type: object
+      required: [ok, orderNumber, payment]
+      properties:
+        ok: { const: true }
+        reused: { const: true }
+        orderNumber: { type: string }
+        payment:
+          $ref: '#/components/schemas/PaymentInstructions'
+    PayRetryRefusal:
+      allOf:
+        - $ref: '#/components/schemas/PublicError'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [not_found, cod, order_closed, already_paid, in_progress, unknown_outcome, no_payment, order_expired, attempt_limit, channel_off, payment_start_failed]
     PaymentStartFailure:
       allOf:
         - $ref: '#/components/schemas/PublicError'
@@ -711,6 +808,7 @@ components:
             orderNumber: { type: string }
             code: { const: payment_start_failed }
             payError: { type: string }
+            payToken: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
     PromoPreviewRequest:
       type: object
       required: [storeSlug, code]

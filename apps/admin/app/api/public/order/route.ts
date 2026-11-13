@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { alCreateOrder, autolarisConfigured } from "@tokophi/lib/autolaris";
-import QRCode from "qrcode";
 import { calculateOrderFinance } from "@tokophi/lib/order-finance";
 import {
   PAYMENT_FEES,
@@ -43,6 +42,8 @@ import {
 } from "@/lib/tracking-events";
 import { adChannel } from "@/lib/ad-channel";
 import { defaultInventoryLevelId } from "@/lib/inventory-location";
+import { hashPayToken, mintPayToken } from "@/lib/pay-retry";
+import { qrImageDataUrl } from "@/lib/pay-instruction";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -849,6 +850,11 @@ async function handle(req: Request) {
   const payMethod =
     channelCode === "QRIS" ? "qris" : channelCode === "DANA" ? "dana" : "va";
   const alConfigured = autolarisConfigured();
+  // PAY-RETRY — the shopper's one-order secret for "Bayar ulang" (lib/pay-retry.ts). Prepaid only: a
+  // COD order has no instruction to renew. Minted here, stored as a hash ON the order row inside the
+  // write txn, and handed back to the browser once in this response — never derivable from the order
+  // number, which is printed on labels and quoted in chats.
+  const payToken = isCod ? null : mintPayToken();
   let customerId: string;
   let order: { id: string; number: string };
   try {
@@ -1056,6 +1062,7 @@ async function handle(req: Request) {
           // all, and every such order must be free to coexist. The index is partial for exactly
           // that reason — NULLs do not collide, empty strings would.
           checkoutSessionId: checkoutSessionId || null,
+          payTokenHash: payToken ? hashPayToken(payToken) : null,
         })
         .returning({ id: schema.orders.id, number: schema.orders.number });
 
@@ -1345,6 +1352,7 @@ async function handle(req: Request) {
           "Pesanan sudah tercatat, tetapi pembayaran belum dapat dibuat. Jangan kirim ulang pesanan ini.",
         code: "payment_start_failed",
         payError: "Pembayaran belum dikonfigurasi.",
+        payToken,
         subtotal,
         lines,
         shipping: shippingCost,
@@ -1377,6 +1385,9 @@ async function handle(req: Request) {
   // fee (0,7 % of the whole amount incl. ongkir for QRIS), so the shopper saw one number and was
   // billed another — measured on production, `PHI-768771328ISC`: shown Rp1.323, billed Rp1.372.
   let pay: Awaited<ReturnType<typeof alCreateOrder>>;
+  // A THROW is an UNKNOWN outcome (the vendor may have created the bill before the socket died); an
+  // answer with `rc != 00` is a REFUSAL (nothing was created). PAY-RETRY treats them differently.
+  let payThrew = false;
   try {
     pay = await alCreateOrder({
       reffId: order.number,
@@ -1395,6 +1406,7 @@ async function handle(req: Request) {
     });
   } catch (err) {
     console.error("[order] alCreateOrder threw for", order.number, err);
+    payThrew = true;
     pay = { ok: false, error: PAY_START_FAILED };
   }
   if (!pay.ok) {
@@ -1406,6 +1418,20 @@ async function handle(req: Request) {
       "—",
       pay.error,
     );
+    // PAY-RETRY: a REFUSED bill is not a live one. Left `menunggu` it read as a pending instruction
+    // nobody could pay — blocking the Seller's re-bill (`createOrderPayment` refused while any row was
+    // `menunggu`) and now the shopper's retry. A THROWN call stays `menunggu` on purpose: the bill may
+    // exist, and `instructionState` presumes an unknown one payable (no second bill on top of it).
+    if (!payThrew) {
+      try {
+        await db
+          .update(schema.payments)
+          .set({ status: "gagal", requestError: (pay.error ?? "").slice(0, 500) || null, requestUpdatedAt: new Date() })
+          .where(and(eq(schema.payments.orderId, order.id), eq(schema.payments.status, "menunggu")));
+      } catch (err) {
+        console.error("[order] could not mark the refused bill gagal for", order.number, err);
+      }
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -1415,6 +1441,7 @@ async function handle(req: Request) {
           "Pesanan sudah tercatat, tetapi pembayaran belum dapat dibuat. Jangan kirim ulang pesanan ini.",
         code: "payment_start_failed",
         payError: PAY_START_FAILED,
+        payToken,
         subtotal,
         lines,
         shipping: shippingCost,
@@ -1440,6 +1467,11 @@ async function handle(req: Request) {
   if (feeMismatch) {
     console.warn("[order] provider grand_total differs from buyerPayable", order.number, "ours", finance.buyerPayableIdr, "theirs", providerTotal);
   }
+  // PAY-RETRY: the provider's expiry is PERSISTED now (it used to reach the browser once and be lost),
+  // because "may this order get a new instruction?" is a server question. Unparseable → NULL, which
+  // readers bound conservatively — and logged, so a vendor format change is visible, not silent.
+  const expiresAt = pay.expiresAt ? new Date(pay.expiresAt) : null;
+  if (!expiresAt) console.warn("[order] provider returned no parseable expiry for", order.number);
   await db
     .update(schema.payments)
     .set({
@@ -1448,24 +1480,10 @@ async function handle(req: Request) {
       qr: pay.qr,
       url: pay.url,
       paymentCode: pay.paymentCode,
+      expiresAt,
     })
     .where(eq(schema.payments.orderId, order.id));
-  let qrImage: string | null = null;
-  if (pay.qr) {
-    try {
-      qrImage = await QRCode.toDataURL(pay.qr, {
-        margin: 4,
-        width: 320,
-        errorCorrectionLevel: "M",
-      });
-    } catch (error) {
-      console.error(
-        "[order] QRIS image generation failed for",
-        order.number,
-        error,
-      );
-    }
-  }
+  const qrImage = await qrImageDataUrl(pay.qr, order.number);
   // `payChannel` is set by the gate above for every non-COD order, and the COD path returned long
   // before here — so the `??` is unreachable. It exists because this line runs AFTER the payment was
   // created, and it must not be the thing that throws. It used to be
@@ -1498,6 +1516,7 @@ async function handle(req: Request) {
       buyerPayable: finance.buyerPayableIdr,
       feeMismatch,
       tracking,
+      payToken,
       payment: {
         channel: {
           code: channel.code,
@@ -1512,7 +1531,7 @@ async function handle(req: Request) {
         amount: total,
         admin: finance.gatewayFeeIdr,
         total: finance.buyerPayableIdr,
-        expiresAt: pay.expiresAt,
+        expiresAt: expiresAt?.toISOString() ?? null,
       },
     },
     { headers: CORS },

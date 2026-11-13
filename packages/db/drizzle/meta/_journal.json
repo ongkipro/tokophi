@@ -827,6 +827,13 @@
       "when": 1787545831751,
       "tag": "0117_store_shipping_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1787545891751,
+      "tag": "0118_pay_retry",
+      "breakpoints": true
     }
   ]
 }

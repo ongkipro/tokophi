@@ -269,4 +269,60 @@ suite("createOrderPayment durable request identity (real Postgres)", () => {
       await db.execute(sql`delete from accounts where id = ${account.id}`);
     }
   });
+
+  // PAY-RETRY: the Seller's re-bill reads "is a bill already live?" through `instructionState`. It
+  // used to be `status in (menunggu, berhasil)`, so a QR that expired without its EXPIRED callback
+  // (production carries such rows from July) blocked the re-bill for ever. A live bill, a COD order
+  // and a paid one still block.
+  it("an EXPIRED unpaid bill no longer blocks the re-bill; a live one, COD and a paid one still do", async () => {
+    const fixture = `pay-retry-seller-${randomUUID()}`;
+    const channel = `VAT${randomUUID().slice(0, 6)}`.toUpperCase();
+    const [account] = (await db.execute(sql`insert into accounts (name) values (${fixture}) returning id`)) as unknown as { id: string }[];
+    const [store] = (await db.execute(sql`
+      insert into stores (account_id, name, slug) values (${account.id}, ${fixture}, ${fixture}) returning id
+    `)) as unknown as { id: string }[];
+    h.storeId = store.id;
+    await db.execute(sql`insert into platform_payment_channels (channel, label, kind, active, enabled)
+      values (${channel}, 'VA Uji', 'va', true, true)`);
+    const mk = async (payment: { method: string; status: string; expiresAt: Date | null }) => {
+      const number = `PAY-${randomUUID()}`;
+      const [o] = (await db.execute(sql`
+        insert into orders (store_id, number, status, financial_status, total_idr)
+        values (${store.id}, ${number}, 'baru', 'pending', 100000) returning id
+      `)) as unknown as { id: string }[];
+      await db.execute(sql`
+        insert into payments (order_id, store_id, method, status, amount_idr, provider, reff_id, expires_at)
+        values (${o.id}, ${store.id}, ${payment.method}::payment_method, ${payment.status}::payment_status, 100000, 'autolaris', ${number}, ${payment.expiresAt?.toISOString() ?? null}::timestamptz)
+      `);
+      return { id: o.id, number };
+    };
+    try {
+      h.provider.mockReset();
+      h.provider.mockResolvedValue({ ok: true, trxId: "trx-seller-rebill", virtualAccount: "880099", expiresAt: "2099-01-01T00:00:00.000Z" });
+      const expired = await mk({ method: "va", status: "menunggu", expiresAt: new Date(Date.now() - 60_000) });
+      const live = await mk({ method: "va", status: "menunggu", expiresAt: new Date(Date.now() + 3_600_000) });
+      const cod = await mk({ method: "cod", status: "menunggu", expiresAt: null });
+      const paidOrder = await mk({ method: "va", status: "berhasil", expiresAt: null });
+
+      const ok = await createOrderPayment(expired.number, channel, `SB-${randomUUID().slice(0, 16)}`);
+      expect(ok).toMatchObject({ ok: true });
+      const rows = (await db.execute(sql`
+        select status, request_state, expires_at from payments where order_id = ${expired.id} order by created_at, id
+      `)) as unknown as { status: string; request_state: string | null; expires_at: Date | null }[];
+      expect(rows.map((r) => r.status)).toEqual(["gagal", "menunggu"]);
+      expect(rows[1].request_state).toBe("accepted");
+      expect(new Date(rows[1].expires_at!).toISOString()).toBe("2099-01-01T00:00:00.000Z");
+
+      expect(await createOrderPayment(live.number, channel, `SB-${randomUUID().slice(0, 16)}`)).toMatchObject({ ok: false, code: "active_payment" });
+      expect(await createOrderPayment(cod.number, channel, `SB-${randomUUID().slice(0, 16)}`)).toMatchObject({ ok: false, code: "active_payment" });
+      expect(await createOrderPayment(paidOrder.number, channel, `SB-${randomUUID().slice(0, 16)}`)).toMatchObject({ ok: false, code: "already_paid" });
+      expect(h.provider).toHaveBeenCalledTimes(1);
+    } finally {
+      await db.execute(sql`delete from payments where store_id = ${store.id}`);
+      await db.execute(sql`delete from orders where store_id = ${store.id}`);
+      await db.execute(sql`delete from stores where id = ${store.id}`);
+      await db.execute(sql`delete from accounts where id = ${account.id}`);
+      await db.execute(sql`delete from platform_payment_channels where channel = ${channel}`);
+    }
+  });
 });

@@ -1,13 +1,14 @@
 "use server";
 
 import { schema } from "@tokophi/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { alCreateOrder, autolarisConfigured, type AlPayment } from "@tokophi/lib/autolaris";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
 import { PAYMENT_FEES, paymentFee, type FeeKind } from "@tokophi/lib/payment-fees";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
+import { blocksNewBill, instructionState } from "@/lib/pay-retry";
 
 export type CreateOrderPaymentResult =
   | { ok: true; paymentId: string }
@@ -185,6 +186,7 @@ export async function createOrderPayment(
         discount: schema.orders.discountIdr,
         status: schema.orders.status,
         financialStatus: schema.orders.financialStatus,
+        placedAt: schema.orders.placedAt,
         name: schema.customers.name,
         phone: schema.customers.phone,
         email: schema.customers.email,
@@ -288,16 +290,37 @@ export async function createOrderPayment(
       };
     }
 
-    const [live] = await db
-      .select({ status: schema.payments.status })
+    // PAY-RETRY: "is there a bill already?" is `instructionState`, the same answer the shopper's retry
+    // and the order-expiry cron read. It used to be `status in (menunggu, berhasil)`, so a QR that
+    // expired without its EXPIRED callback (production holds rows like that from July) blocked the
+    // Seller's re-bill for ever. A paid row, a live one, one being minted or one of unknown expiry
+    // still blocks — a second live bill is how a buyer pays twice.
+    const rows = await db
+      .select({
+        status: schema.payments.status,
+        method: schema.payments.method,
+        expiresAt: schema.payments.expiresAt,
+        requestState: schema.payments.requestState,
+        requestUpdatedAt: schema.payments.requestUpdatedAt,
+      })
       .from(schema.payments)
       .where(
         and(
           eq(schema.payments.orderId, order.id),
           inArray(schema.payments.status, ["menunggu", "berhasil"]),
         ),
-      )
-      .limit(1);
+      );
+    const now = new Date();
+    // A COD row is `menunggu` until the parcel is delivered — it is not an instruction with a clock,
+    // and it keeps blocking exactly as before.
+    const states = rows.map((r) =>
+      r.method === "cod" && r.status === "menunggu" ? ("live" as const) : instructionState(r, order.placedAt, now),
+    );
+    const live = states.includes("paid")
+      ? { status: "berhasil" as const }
+      : states.some(blocksNewBill)
+        ? { status: "menunggu" as const }
+        : null;
     if (live) {
       return {
         kind: "result" as const,
@@ -347,6 +370,19 @@ export async function createOrderPayment(
       channelCode,
     );
     const buyerPayable = order.total + gatewayFee;
+
+    // Every prepaid row still `menunggu` is dead by the check above — say so (same as the shopper's
+    // retry), so the order screen never shows a dead QR as "Menunggu".
+    await db
+      .update(schema.payments)
+      .set({ status: "gagal" })
+      .where(
+        and(
+          eq(schema.payments.orderId, order.id),
+          eq(schema.payments.status, "menunggu"),
+          ne(schema.payments.method, "cod"),
+        ),
+      );
 
     const [inserted] = await db
       .insert(schema.payments)
@@ -476,6 +512,8 @@ export async function createOrderPayment(
         qr: providerResult.qr,
         url: providerResult.url,
         paymentCode: providerResult.paymentCode,
+        // PAY-RETRY (0118): kept, so the next "is a bill live?" question has an answer.
+        expiresAt: providerResult.expiresAt ? new Date(providerResult.expiresAt) : null,
       })
       .where(
         and(

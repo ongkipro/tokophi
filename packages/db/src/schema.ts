@@ -967,6 +967,9 @@ export const orders = pgTable("orders", {
   // session, and NULLs do not collide. TEXT, not uuid: this is `checkout_sessions.session_id`, the
   // string the storefront generates and the API receives — not that row's primary key.
   checkoutSessionId: text(),
+  // PAY-RETRY (0118) — sha256 hex of the shopper-held secret that authorises
+  // `/api/public/pay/retry` for THIS order. Never the token itself. NULL = COD or pre-0118.
+  payTokenHash: text(),
 
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
@@ -1154,6 +1157,10 @@ export const payments = pgTable("payments", {
   requestState: paymentRequestState(),
   requestError: text(),
   requestUpdatedAt: ts(),
+  // PAY-RETRY (0118). When the provider stops accepting this instruction; NULL = unknown, bounded
+  // conservatively by `lib/pay-retry.ts`. `createdAt` orders several attempts on one order.
+  expiresAt: ts(),
+  createdAt: createdAt(),
 }, (t) => [
   index("payments_trx_idx")
     .on(t.trxId)

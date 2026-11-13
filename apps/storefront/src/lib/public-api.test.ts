@@ -38,7 +38,7 @@ describe("storefront CSP connect-src ⊇ the origins the checkout fetches", () =
     process.env.PUBLIC_ORDER_API = "https://api2.tokophi.test/api/public/order";
     const m = await load();
     const listed = connectSrc(m.STOREFRONT_CSP);
-    for (const url of [m.ONGKIR_API, m.ORDER_API, m.PROMO_API]) expect(listed).toContain(new URL(url).origin);
+    for (const url of [m.ONGKIR_API, m.ORDER_API, m.PROMO_API, m.PAY_RETRY_API]) expect(listed).toContain(new URL(url).origin);
     expect(listed).toContain("https://app.tokophi.com");
     expect(listed).toContain("https://api2.tokophi.test");
   });
@@ -61,7 +61,7 @@ describe("storefront CSP connect-src ⊇ the origins the checkout fetches", () =
 // ── wiring (source guard — codeOnly, so a commented-out line cannot satisfy it) ─────────────────────
 
 const STOREFRONT_SOURCES = trackedSources().filter((f) => f.startsWith("apps/storefront/src/") && !isTestFile(f));
-const PUBLIC_API_NAMES = new Set(["ONGKIR_API", "ORDER_API", "PROMO_API"]);
+const PUBLIC_API_NAMES = new Set(["ONGKIR_API", "ORDER_API", "PROMO_API", "PAY_RETRY_API"]);
 // Named exception: checkout.astro's abandoned-cart capture holds a SAME-origin path in a variable.
 // Pinned below to stay a "/…" literal, so it can never turn into a cross-origin target unseen.
 const SAME_ORIGIN_VARS = new Set(["CAPTURE_API"]);
