@@ -323,6 +323,27 @@ sequenceDiagram
 Tracking: the storefront has **no** `/api/track`-style shipment lookup; `kaTrack()` exists in `packages/lib` and is
 reachable from the merchant admin only.
 
+### 5.1 Mengantar path (ADR 0018, live since 2026-11-12 for the demo store)
+
+The diagram above is the KiriminAja path. Since migration `0116` a second provider sits behind the platform
+switch `shipping_provider_config.active_provider`; which one serves an order is decided per order and stamped:
+
+```mermaid
+flowchart TD
+    Q["POST /api/public/ongkir — quoteShipping()<br/>(apps/admin/lib/shipping-quote.ts)"] --> C{"switch = mengantar<br/>∧ not COD<br/>∧ store account connected<br/>for MENGANTAR_ENV?"}
+    C -- yes --> M["Mengantar estimate with THE STORE'S seller key<br/>origin = sender kecamatan → mengantar_areas bridge<br/>answer carries codRequote: true"]
+    C -- no --> K["KiriminAja (the path above)"]
+    M --> O["POST /api/public/order re-quotes;<br/>orders.shipping_provider = 'mengantar', mg_env, mg_seller_id"]
+    K --> O2["orders.shipping_provider = 'kiriminaja'"]
+    O --> B["Seller: Atur pengiriman → bookMengantar()<br/>needs a SUCCESSFUL payment (prepaid only), re-prices,<br/>POST /order with idempotencyKey; seller wallet pays<br/>(no ledger debit — the buyer's ongkir is passed through)"]
+    B --> T["cron/tracking polls with the order's own account;<br/>AWB arrives later (cnote_no); short wallet → pay-unpaid"]
+```
+
+- Picking COD on a connected store re-quotes the same destination on the default provider (`codRequote`), so the
+  rates on screen always match the payment method; Mengantar never carries COD (O4/O6).
+- Cancel goes through the provider that booked it (Mengantar cancels by its own `_id`; KiriminAja by AWB only).
+- Rules and traps: `specs/docs/rules/shipping-cod.md` → Mengantar; secrets: `specs/docs/SECURITY.md`.
+
 ---
 
 ## 6. Auth, session, and how RLS actually enforces tenancy

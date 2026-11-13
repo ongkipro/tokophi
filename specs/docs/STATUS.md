@@ -1,15 +1,18 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-05 12:25 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`0e4d950a`** (deploy of PR #451 — storefront redesign C, all tenants —
-> on top of #448 article lists, #446 Mengantar Partner Business API, #447), all five web containers `(healthy)` on two consecutive polls,
-> `migrate`/`seed` `Exited (0)`. **Migrations: 117 on production (head `0116_mengantar_shipping`)**; shipping
-> provider switch stays **KiriminAja**, `MENGANTAR_ENV` unset → Mengantar quoting and seller registration are
-> held by design (no store has a Mengantar account: `store_mengantar_accounts` = 0). Live `/api/public/ongkir`
-> answers with `codRequote:false`. `ops/tokophi-probe.sh` all green, disk 31 %. Merges do NOT deploy here —
-> trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar production needs the Partner
-> origin, IP allowlist and Terms/Privacy URLs from Mengantar; the 99ribu area import (`load:mengantar-areas`)
-> is an owner-approved step not yet run on production.
+> **Current state — 2026-11-13 09:31 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`68947858`** (deploy of PR #462 CSP-CONNECT,
+> on top of #460, #459, #458, #457), admin / super-admin / storefront / landing `(healthy)` on that image on two
+> consecutive polls. **Migrations: 117 on production (head `0116_mengantar_shipping`).** **Shipping provider
+> switch = Mengantar** (`MENGANTAR_ENV=production`, ADR 0018): exactly ONE store has a Mengantar account — the
+> demo store `batiknusantara`, owner-attached (`store_mengantar_accounts`: 1 `connected`, `partner_id` NULL) —
+> so its non-COD checkout quotes through Mengantar (`codRequote:true`); COD and every other store stay on
+> KiriminAja (D11). Area bridge 6 919 / 7 030 kecamatan, rebuilt on every deploy. `orders` stamped `mengantar`: 1
+> (the unpaid test order `PHI-555925447U5H`). Storefront CSP `connect-src` lists `https://app.tokophi.com`
+> (verified in a browser, 0 reports). `ops/tokophi-probe.sh` exit 0, disk 36 %. Merges do NOT deploy here —
+> trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's production Partner origin +
+> IP allow-list (O2) before any other store can register; the first real Mengantar booking + cancel; the
+> AutoLaris QRIS window is the vendor's 2 h default (`/submit` sends no `expired` — task PAY-QRIS-EXPIRY).
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS

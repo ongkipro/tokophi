@@ -30,3 +30,9 @@ login, wallet and emails are the seller's). Hiding that brand from the seller wo
 so **Seller copy may name "Mengantar"**. Everything else in this ADR stands: **shoppers never see a provider
 brand** (storefront, landing, and the shopper-facing `apps/admin/app/api/public/**`), and KiriminAja /
 AutoLaris stay hidden from sellers too. Enforced by `packages/lib/src/provider-label.test.ts`.
+
+## Note 2026-11-13 — per-store courier accounts (ADR 0018)
+
+The partner model above is recorded in full as **ADR 0018**: for Mengantar, the courier account belongs to the
+STORE (registered by TokoΦ, no key field, owner consent recorded), not to the platform. This ADR's other rules —
+platform-chosen provider, no merchant credentials, no brand to shoppers, KiriminAja for COD — still hold.

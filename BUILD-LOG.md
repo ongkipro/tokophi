@@ -5029,3 +5029,24 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
   tracking setting holds a wrong/placeholder id (store data, not code).
 - **Test order still open:** `PHI-555925447U5H` (demo store, QRIS Rp51.015, Mengantar SPX Pakis → Gubeng) created
   2026-11-13 07:45 UTC by the main session for the first real Mengantar booking test; payment `menunggu`.
+
+### [2026-11-13 09:45 UTC] — DOCS-MENGANTAR-ADR · ADR 0018 + PRD/FLOWS/STATUS/OPEN/CHANGELOG brought up to the live state
+- **Executor:** Main Session (owner: "review aja dan sempurnakan, termasuk adr, prd … doc lainnya"). Docs only.
+- **ADR 0018** `specs/decisions/0018-mengantar-per-store-seller-accounts.md` — records the owner's partner-model
+  rulings (O1–O11, D7–D18) as one decision: per-store Mengantar seller accounts behind the provider switch,
+  KiriminAja = fallback + COD, seller wallet pays (no ledger debit), owner-attached demo account. Dated notes
+  appended to ADR 0004 and ADR 0015 (substance untouched); `DECISIONS.md` rows for 0004/0015 amended, 0016 (stub,
+  previously missing from the index) and 0018 added; `specs/README.md` ADR table gains 0017 + 0018. No duplicate
+  ADR number (`ls specs/decisions | grep -oE '^[0-9]+' | sort | uniq -d` → empty).
+- **PRD** (scope rows + Shipping state), **FLOWS §5.1** (Mengantar dispatch/booking flow), **STATUS** current state
+  (re-measured on production 09:31 UTC: switch `mengantar`, 1 connected owner-attached account, 117 migrations,
+  bridge 6 919/7 030, 1 Mengantar-stamped order, probe exit 0 disk 36 %), **OPEN.md** resume block + open-PR table
+  (from `gh pr list`), **CHANGELOG** 2026-11-13 entry.
+- **TASKS:** new `PAY-QRIS-EXPIRY` (checkout's `/api/h2h/submit` sends no `expired` → vendor 2 h default; observed on
+  `PHI-555925447U5H`) and `TRACK-DEMO-TIKTOK-ID`; SHIP-MENGANTAR line links ADR 0018.
+- **Every identifier the ADR names was grepped** (`redactKey`, `bookMengantar`, `codRequote`, `mengantarKeyScope`,
+  `bridgeMengantarAreas`, `seller_debit_idr`, `pay-unpaid`) and every cited test file listed with `git ls-files`
+  (one wrong path — `packages/db/src/mengantar-account.test.ts` — corrected to `apps/admin/lib/…`).
+- **Side finding:** the main checkout (`~/Projects/tokophi`, branch `docs/split-agents-md`) carries an OLD
+  `ops/tokophi-probe.sh` that still probes the retired host `45.77.33.112` (ssh FAIL); main's copy is correct.
+  Run the probe from a checkout of `main`.
