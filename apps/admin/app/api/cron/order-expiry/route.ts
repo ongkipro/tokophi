@@ -5,11 +5,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { applyOrderStatusChange } from "@/lib/order-status";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 import { cronAuthorized } from "@/lib/cron-auth";
+import { ORDER_TTL_MS, blocksExpiry, instructionState } from "@/lib/pay-retry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ORDER_TTL_MS = 24 * 60 * 60 * 1000;
 
 type ExpirySummary = {
   scanned: number;
@@ -54,7 +53,13 @@ async function expireCandidate(orderId: string, cutoff: Date): Promise<"cancelle
     // older VA attempt is still menunggu/gagal. Conversely, once this lock is ours, a late callback
     // waits until cancellation commits and reaches the callback's explicit terminal-order alert path.
     const payments = await tx
-      .select({ method: schema.payments.method, status: schema.payments.status })
+      .select({
+        method: schema.payments.method,
+        status: schema.payments.status,
+        expiresAt: schema.payments.expiresAt,
+        requestState: schema.payments.requestState,
+        requestUpdatedAt: schema.payments.requestUpdatedAt,
+      })
       .from(schema.payments)
       .where(eq(schema.payments.orderId, order.id))
       .for("update");
@@ -62,6 +67,21 @@ async function expireCandidate(orderId: string, cutoff: Date): Promise<"cancelle
     const isPrepaid = payments.some((payment) => payment.method !== "cod");
     const isPaid = payments.some((payment) => payment.status === "berhasil");
     if (!isPrepaid || isPaid) return "skipped";
+    // PAY-RETRY: a shopper may have been given a fresh instruction late in the order's life ("Bayar
+    // ulang", refused within RETRY_CLOSE_MARGIN_MS of this cutoff). Cancelling under a payable QR is
+    // how a buyer pays for an order that no longer exists — so wait while one is live or being
+    // minted. Bounded: retries stop near the cutoff and every instruction expires (an unknown one is
+    // NOT waited for here — that is today's behaviour, and the callback refunds money on a closed order).
+    const now = new Date();
+    if (
+      payments.some(
+        (payment) =>
+          payment.method !== "cod" &&
+          blocksExpiry(instructionState(payment, order.placedAt, now)),
+      )
+    ) {
+      return "skipped";
+    }
 
     const result = await applyOrderStatusChange(
       tx as unknown as Parameters<typeof applyOrderStatusChange>[0],
@@ -87,8 +107,9 @@ export async function GET(req: NextRequest) {
   const cutoff = new Date(startedAt - ORDER_TTL_MS);
 
   try {
-    // There is no persisted gateway `expires_at` in the current schema. AutoLaris creates every
-    // prepaid instrument with a 24-hour TTL, so orders.placed_at is the durable fallback clock. The
+    // orders.placed_at is the clock for the ORDER's life (24 h). The instruction's own expiry
+    // (`payments.expires_at`, 0117 — `/submit` answers +2 h) only delays a cancellation while a bill
+    // is still payable; see expireCandidate. The
     // EXISTS clauses deliberately identify payment METHOD rather than trusting financial_status alone:
     // COD also stays pending until delivery and must never be reclaimed by this worker.
     const prepaidPayment = db

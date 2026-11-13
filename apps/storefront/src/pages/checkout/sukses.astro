@@ -5,6 +5,7 @@
 // The one exit is deliberate and earned: the "Lanjut Belanja" button at the bottom.
 import CheckoutLayout from "../../layouts/CheckoutLayout.astro";
 import { UPLOAD_WIDTHS } from "../../data/catalog";
+import { PAY_RETRY_API } from "../../lib/public-api";
 const store = Astro.locals.store;
 // The shop's own CS WhatsApp (migration 0049), or no button at all — never a platform number.
 const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
@@ -98,7 +99,7 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
 </CheckoutLayout>
 
 {/* The line thumbnail is `h-16 w-14` in a `shrink-0` cell: 56 px at every viewport (Task 6.12). */}
-<script is:inline define:vars={{ UPLOAD_WIDTHS, THUMB_SIZES: "56px", STORE_NAME: store.name }}>
+<script is:inline define:vars={{ UPLOAD_WIDTHS, THUMB_SIZES: "56px", STORE_NAME: store.name, STORE_SLUG: store.slug, PAY_RETRY_API }}>
   (function () {
     var idr = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -178,20 +179,92 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
         controls.classList.add("opacity-50");
         controls.setAttribute("aria-disabled", "true");
       }
+      // PAY-RETRY: with this order's secret on the device the shopper renews the bill HERE; without it
+      // (an order placed before Bayar ulang existed) the seller is still the way.
+      var self = canRetry();
+      if (self) mountRetry("pay-expired-note");
       var t = document.getElementById("ok-title");
       var sub = document.getElementById("ok-sub");
       if (t && document.getElementById("icon-clock") && !document.getElementById("icon-clock").classList.contains("hidden")) {
         t.textContent = "Waktu pembayaran habis";
-        if (sub) sub.textContent = "Tagihan pesanan ini sudah kedaluwarsa. Hubungi " + STORE_NAME + " dan sebutkan nomor pesanan untuk dibuatkan tagihan baru.";
+        if (sub) {
+          sub.textContent = self
+            ? "Tagihan pesanan ini sudah kedaluwarsa. Buat tagihan baru di bawah — pesanan dan jumlahnya tetap sama."
+            : "Tagihan pesanan ini sudah kedaluwarsa. Hubungi " + STORE_NAME + " dan sebutkan nomor pesanan untuk dibuatkan tagihan baru.";
+        }
         show("icon-clock", false);
         show("icon-info", true);
       }
       var first = document.querySelector('#next-steps li[data-step="pay"]');
       if (first) {
         var ps = first.querySelectorAll("p");
-        if (ps[0]) ps[0].textContent = "Hubungi " + STORE_NAME;
-        if (ps[1]) ps[1].textContent = "Minta tagihan baru dengan menyebutkan nomor pesanan.";
+        if (ps[0]) ps[0].textContent = self ? "Buat tagihan baru" : "Hubungi " + STORE_NAME;
+        if (ps[1]) ps[1].textContent = self ? "Tekan Buat tagihan baru, lalu bayar sebelum batas waktunya." : "Minta tagihan baru dengan menyebutkan nomor pesanan.";
       }
+    }
+
+    // ── PAY-RETRY — "Bayar ulang" ─────────────────────────────────────────────────────────────────
+    // Asks the Seller app for a NEW instruction for the SAME order (`/api/public/pay/retry`). The
+    // server decides everything — whether the old bill is really dead, the amount, the channel — and
+    // the page only renders what comes back: on success it stores the new instruction in `lastOrder`
+    // and reloads, so the new QR/VA goes through exactly the rendering (countdown included) the first
+    // one did. `order.payToken` is the one-order secret the order API handed this browser; an order
+    // number alone authorises nothing.
+    function canRetry() {
+      return !!(order && order.number && typeof order.payToken === "string" && order.payToken);
+    }
+    // Codes after which pressing again cannot help — the button goes away and the sentence stays.
+    var RETRY_FINAL = { already_paid: 1, order_closed: 1, cod: 1, order_expired: 1, attempt_limit: 1, not_found: 1, unknown_outcome: 1, no_payment: 1, channel_off: 1 };
+    function mountRetry(afterId) {
+      if (document.getElementById("pay-retry")) return;
+      var anchor = document.getElementById(afterId);
+      if (!anchor || !anchor.parentNode) return;
+      var box = document.createElement("div");
+      box.id = "pay-retry";
+      box.className = "mt-3";
+      box.innerHTML =
+        '<button type="button" id="pay-retry-btn" class="w-full rounded-lg bg-[var(--co-accent)] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--co-accent-hover)] disabled:cursor-wait disabled:opacity-70">Buat tagihan baru</button>' +
+        '<p id="pay-retry-msg" role="status" aria-live="polite" class="mt-2 hidden rounded-lg border border-[var(--co-line)] bg-[var(--co-panel)] px-3 py-2 text-sm text-ink"></p>';
+      anchor.parentNode.insertBefore(box, anchor.nextSibling);
+      var btn = document.getElementById("pay-retry-btn");
+      var msg = document.getElementById("pay-retry-msg");
+      var say = function (text) {
+        if (!msg) return;
+        msg.textContent = text;
+        msg.classList.remove("hidden");
+      };
+      btn.addEventListener("click", function () {
+        btn.disabled = true;
+        btn.textContent = "Membuat tagihan…";
+        fetch(PAY_RETRY_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storeSlug: STORE_SLUG, orderNumber: order.number, token: order.payToken }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (res && res.ok && res.payment) {
+              order.payment = order.payment || {};
+              order.payment.instruction = res.payment;
+              delete order.paymentError;
+              try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e) {}
+              window.location.reload();
+              return;
+            }
+            say((res && res.error) || "Tagihan baru belum bisa dibuat. Coba lagi sebentar.");
+            if (res && RETRY_FINAL[res.code]) {
+              btn.classList.add("hidden");
+            } else {
+              btn.disabled = false;
+              btn.textContent = "Coba lagi";
+            }
+          })
+          .catch(function () {
+            say("Gagal terhubung ke server. Periksa koneksi, lalu coba lagi.");
+            btn.disabled = false;
+            btn.textContent = "Coba lagi";
+          });
+      });
     }
 
     function show(id, on) {
@@ -429,8 +502,10 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
         "</div>";
       var expiredNote =
         '<p id="pay-expired-note" class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">' +
-        "Tagihan ini sudah kedaluwarsa dan tidak bisa dibayar lagi. Hubungi " + esc(STORE_NAME) +
-        " dan sebutkan nomor pesanan untuk dibuatkan tagihan baru.</p>";
+        (canRetry()
+          ? "Tagihan ini sudah kedaluwarsa dan tidak bisa dibayar lagi. Buat tagihan baru untuk pesanan yang sama — jumlahnya tidak berubah."
+          : "Tagihan ini sudah kedaluwarsa dan tidak bisa dibayar lagi. Hubungi " + esc(STORE_NAME) +
+            " dan sebutkan nomor pesanan untuk dibuatkan tagihan baru.") + "</p>";
       lines = head + expiredNote + '<div id="pay-controls" class="mt-2">' + lines + "</div>" + breakdown;
       if (pay.url) {
         lines +=
@@ -566,8 +641,21 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
         subEl.textContent = "Pesananmu sudah dibuat dan akan diproses " + STORE_NAME + " setelah pembayaran diterima.";
       } else {
         titleEl.textContent = "Pesanan tercatat";
-        subEl.textContent = "Tagihan pembayaran belum berhasil dibuat. Hubungi " + STORE_NAME + " dan sebutkan nomor pesanan di bawah.";
+        subEl.textContent = canRetry()
+          ? "Tagihan pembayaran belum berhasil dibuat. Coba buat lagi di bawah — pesananmu sudah aman tercatat."
+          : "Tagihan pembayaran belum berhasil dibuat. Hubungi " + STORE_NAME + " dan sebutkan nomor pesanan di bawah.";
       }
+    }
+    // PAY-RETRY: a prepaid order whose first bill did not start can ask for one from here.
+    if (state === "no-bill" && canRetry() && payBox) {
+      payBox.classList.remove("hidden");
+      payBox.innerHTML = panel(
+        "Tagihan belum terbuat",
+        "",
+        '<p id="pay-nobill-note" class="text-sm text-[var(--co-muted)]">Pembayaran belum dapat dimulai tadi. Pesananmu sudah tercatat — buat tagihannya sekarang, jumlahnya sama dengan ringkasan pesanan.</p>',
+        "accent",
+      );
+      mountRetry("pay-nobill-note");
     }
 
     var steps = document.getElementById("next-steps");
@@ -585,10 +673,15 @@ const storeWa = store.whatsapp ? String(store.whatsapp).replace(/\D/g, "") : "";
                 ["Pembayaran terverifikasi otomatis", "Tidak perlu kirim bukti transfer.", false],
                 [STORE_NAME + " memproses dan mengirim", "Pesanan dikemas lalu diserahkan ke kurir.", false],
               ]
-            : [
-                ["Hubungi " + STORE_NAME, "Sebutkan nomor pesanan agar dibuatkan tagihan pembayaran.", true],
-                ["Bayar tagihan dari penjual", "Pesanan diproses setelah pembayaran diterima.", false],
-              ];
+            : canRetry()
+              ? [
+                  ["Buat tagihan", "Tekan Buat tagihan baru di atas.", true],
+                  ["Bayar sebelum batas waktu", "Pesanan diproses setelah pembayaran diterima.", false],
+                ]
+              : [
+                  ["Hubungi " + STORE_NAME, "Sebutkan nomor pesanan agar dibuatkan tagihan pembayaran.", true],
+                  ["Bayar tagihan dari penjual", "Pesanan diproses setelah pembayaran diterima.", false],
+                ];
       steps.classList.remove("hidden");
       steps.innerHTML =
         '<div class="rounded-lg border border-[var(--co-line)] bg-white p-5 sm:p-6">' +

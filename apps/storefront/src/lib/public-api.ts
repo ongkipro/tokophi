@@ -15,9 +15,11 @@ export const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:300
 export const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
 // PROMO P0 — voucher preview. Derived from the order API base so it needs no new env (same admin host).
 export const PROMO_API = ORDER_API.replace(/\/order$/, "/promo");
+// PAY-RETRY — "Bayar ulang" on /checkout/sukses. Same admin host, same derivation, no new env.
+export const PAY_RETRY_API = ORDER_API.replace(/\/order$/, "/pay/retry");
 
 /** Every URL a shopper page fetches cross-origin. A new one goes HERE, or the CSP will not list it. */
-export const CLIENT_API_URLS = [ONGKIR_API, ORDER_API, PROMO_API] as const;
+export const CLIENT_API_URLS = [ONGKIR_API, ORDER_API, PROMO_API, PAY_RETRY_API] as const;
 
 /** The `Content-Security-Policy-Report-Only` value `middleware.ts` sets on every storefront response. */
 export const STOREFRONT_CSP = storefrontCspReportOnly(CLIENT_API_URLS);

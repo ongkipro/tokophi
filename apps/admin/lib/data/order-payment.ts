@@ -22,10 +22,15 @@ import { sql, type SQL } from "drizzle-orm";
  * (`lib/actions/shipping.ts`), an existence test no ORDER BY can move. Do not restate this bug as a
  * money bug — it is a "the screens disagree" bug, which is bad enough on its own.
  *
+ * PAY-RETRY (0117): among UNPAID rows the NEWEST attempt wins (`created_at desc`). Before, the
+ * tie-break was `id desc` alone — a random uuid — so an order holding an expired QR and the fresh
+ * one it was replaced by named either of them, coin-toss, per screen. `id` stays the last tie-break
+ * (pre-0117 rows all share the migration instant).
+ *
  * A function, not a constant, so each query gets a fresh `SQL` node. The columns are rendered
  * qualified (`"payments"."paid_at"`), so a correlated subquery using this must select
  * `from payments` **unaliased** — an alias would break the reference rather than silently reorder,
  * which is the failure mode we want.
  */
 export const latestPaymentFirst = (): SQL =>
-  sql`${schema.payments.paidAt} desc nulls last, ${schema.payments.id} desc`;
+  sql`${schema.payments.paidAt} desc nulls last, ${schema.payments.createdAt} desc, ${schema.payments.id} desc`;

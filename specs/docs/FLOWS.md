@@ -146,6 +146,27 @@ sequenceDiagram
 `payments.total` (which adds the gateway's admin fee — the gateway's money, never the merchant's). This is what keeps
 Dashboard revenue, the Pesanan list and the Saldo ledger the same number.
 
+### 2.1 "Bayar ulang" — a new instruction for the same order (PAY-RETRY, 2026-11-13)
+
+Spec + case table: `specs/docs/tasks/2026-11-13-pay-retry.md`.
+
+1. **Checkout** (`/api/public/order`) mints a one-order secret for a prepaid order, stores its sha256 on
+   `orders.pay_token_hash`, returns it once (`payToken`); the checkout keeps it in `lastOrder`. The
+   provider's `payment_info.expired` (zoneless WIB) is parsed server-side and persisted on
+   `payments.expires_at`. A REFUSED first bill is marked `gagal`; a THROWN one stays `menunggu` (outcome unknown).
+2. **`/checkout/sukses`** — when the countdown ends, or the first bill never started, it shows
+   **Buat tagihan baru** (same device; another device → the Seller re-bills from the order screen).
+3. **`POST /api/public/pay/retry`** — under the ORDER's row lock: `retryDecision` (`lib/pay-retry.ts`)
+   allows a new bill only if every instruction is `failed` or provably `expired`, the order is `baru` +
+   `pending`, not COD, ≥15 min before the 24 h cancellation, < 5 attempts. Dead `menunggu` rows → `gagal`;
+   a new row is claimed `in_progress` with reference `<order number>-n` and the SAME amount/fee/total/channel;
+   the vendor call runs after commit. A still-live bill is returned instead (`reused`).
+4. **Callback** — unchanged matching (trx_id, then reff_id; each attempt has its own reference). New: on
+   PAID, the order's other `menunggu` rows become `gagal`, and a collected payment the ledger did not
+   credit gets a `refunds` row (`refundUncreditedPayment`: double payment, or PAID on a closed order).
+   The held Purchase is released once whichever payment lands (`event_id = purchase:{number}`, unique).
+5. **Cron `order-expiry`** — still cancels at 24 h, but waits while an instruction is live or being minted.
+
 ---
 
 ## 3. Order lifecycle — and what each transition does to inventory and to the ledger

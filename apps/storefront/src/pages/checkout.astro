@@ -2864,6 +2864,9 @@ const RECOVER = recovered && {
               if (typeof res.buyerPayable === "number") order.buyerPayable = res.buyerPayable;
               if (Array.isArray(res.lines) && res.lines.length) order.items = res.lines;
               if (res.tracking) order.tracking = res.tracking;
+              // PAY-RETRY: the bill did not start, but with the one-order secret /checkout/sukses can ask
+              // for a new one itself — so go there instead of a form whose only advice is "hubungi Seller".
+              if (res.payToken) { order.payToken = res.payToken; finish(); return; }
               try { localStorage.setItem("lastOrder", JSON.stringify(order)); } catch (e) {}
               if (err) {
                 err.textContent =
@@ -2939,6 +2942,8 @@ const RECOVER = recovered && {
             });
           }
           if (res.payment) order.payment.instruction = res.payment;
+          // PAY-RETRY: the secret that lets /checkout/sukses renew an expired bill for THIS order.
+          if (res.payToken) order.payToken = res.payToken;
           // Conversion ids the SERVER computed (ADR 0012): the de-dup `event_id` and the catalog
           // `content_ids`. Carried to /checkout/sukses so the marketing pixel fires the exact same
           // identifiers the server-side Conversions API sends — that is what stops one sale being

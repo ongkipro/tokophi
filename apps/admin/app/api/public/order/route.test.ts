@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import postgres, { type Sql } from "postgres";
 import {
   afterAll,
@@ -67,12 +67,17 @@ vi.mock("@/lib/cod", () => ({
 // The prepaid path ends at the payment gateway. These suites never reach it: "not configured" makes
 // the route answer 503 `orderCreated` AFTER the order row is written, which is exactly the row the
 // Mengantar stamp test reads. No network, no AutoLaris key.
+// PAY-RETRY adds two cases that DO reach a (stubbed) gateway — `gateway.mode` switches it per test and
+// is reset to "off" after each, so every other case keeps the never-called contract above.
+const gateway = vi.hoisted(() => ({ mode: "off" as "off" | "refuse" | "throw" }));
 vi.mock("@tokophi/lib/autolaris", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    autolarisConfigured: () => false,
+    autolarisConfigured: () => gateway.mode !== "off",
     alCreateOrder: vi.fn(async () => {
+      if (gateway.mode === "refuse") return { ok: false, error: "rc=07 kata-kata vendor" };
+      if (gateway.mode === "throw") throw new TypeError("fetch failed");
       throw new Error("AutoLaris must not be called from this suite");
     }),
   };
@@ -337,7 +342,7 @@ beforeAll(async () => {
     approvedAt,
     suspendedAt: null,
   });
-  for (const key of ["mgPrepaid", "mgCod", "mgGone", "mgRefused", "kaStamp"]) {
+  for (const key of ["mgPrepaid", "mgCod", "mgGone", "mgRefused", "kaStamp", "alRefused", "alThrew"]) {
     await addStore(key, { status: "active", approvedAt, suspendedAt: null });
   }
   // A platform channel only THIS run can name, removed in afterAll — the table is platform-wide.
@@ -638,6 +643,11 @@ suite("POST /api/public/order — Mengantar quote (SHIP-MENGANTAR phase 1)", () 
     expect(await stampOf(f.id)).toEqual([
       { shipping_provider: "mengantar", ship_mengantar_area_id: MG_AREA, courier: "jne", service_type: "JNE", shipping_idr: "18000" },
     ]);
+    // PAY-RETRY: a prepaid order hands its browser the one-order secret, and stores ONLY its hash.
+    expect(body.payToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const [o] = await client<{ pay_token_hash: string | null }[]>`select pay_token_hash from orders where store_id = ${f.id}`;
+    expect(o.pay_token_hash).toBe(createHash("sha256").update(body.payToken, "utf8").digest("hex"));
+    expect(o.pay_token_hash).not.toContain(body.payToken);
   });
 
   it("refuses a COD request on a Mengantar quote with 403 and writes nothing", async () => {
@@ -678,8 +688,55 @@ suite("POST /api/public/order — Mengantar quote (SHIP-MENGANTAR phase 1)", () 
     const f = fixtures.kaStamp!;
     const res = await POST(orderRequest("kaStamp", { ip: "203.0.113.75" }));
     expect(res.status).toBe(200);
+    // COD has no instruction to renew: no secret minted, none stored (PAY-RETRY).
+    expect((await res.json()).payToken ?? null).toBeNull();
+    const [o] = await client<{ pay_token_hash: string | null }[]>`select pay_token_hash from orders where store_id = ${f.id}`;
+    expect(o.pay_token_hash).toBeNull();
     expect(await stampOf(f.id)).toEqual([
       expect.objectContaining({ shipping_provider: "kiriminaja", ship_mengantar_area_id: null, courier: "spx", service_type: "1" }),
     ]);
+  });
+});
+
+// ── PAY-RETRY: a REFUSED first bill is failed; a THROWN one stays pending (its outcome is unknown) ─
+// A refused bill used to stay `menunggu` with no instruction at all: it blocked the Seller's re-bill
+// and would block the shopper's retry, while nothing anywhere could be paid. A thrown call is
+// different — the vendor may have created the bill before the socket died — so it must NOT be
+// declared dead (a second bill on top of a live one is a double charge).
+suite("POST /api/public/order — the first bill's failure modes (PAY-RETRY)", () => {
+  const payRows = (storeId: string) =>
+    client<{ status: string; request_error: string | null }[]>`
+      select status::text, request_error from payments where store_id = ${storeId}`;
+
+  it("gateway REFUSAL → the shell is `gagal` (retryable), the shopper gets a token and our words only", async () => {
+    const f = fixtures.alRefused!;
+    gateway.mode = "refuse";
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(orderRequest("alRefused", { ip: "203.0.113.81", channelCode: mgChannel }));
+      const text = await res.text();
+      expect(res.status).toBe(502);
+      expect(text).not.toContain("kata-kata vendor");
+      expect(JSON.parse(text)).toMatchObject({ orderCreated: true, code: "payment_start_failed" });
+      expect(JSON.parse(text).payToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect([...(await payRows(f.id))]).toEqual([{ status: "gagal", request_error: "rc=07 kata-kata vendor" }]);
+    } finally {
+      spy.mockRestore();
+      gateway.mode = "off";
+    }
+  });
+
+  it("gateway THROW → the shell stays `menunggu` (unknown outcome, no second bill on top)", async () => {
+    const f = fixtures.alThrew!;
+    gateway.mode = "throw";
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(orderRequest("alThrew", { ip: "203.0.113.82", channelCode: mgChannel }));
+      expect(res.status).toBe(502);
+      expect([...(await payRows(f.id))]).toEqual([{ status: "menunggu", request_error: null }]);
+    } finally {
+      spy.mockRestore();
+      gateway.mode = "off";
+    }
   });
 });

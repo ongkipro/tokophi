@@ -1604,10 +1604,34 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/app/api/public/pay/retry/route.test.ts",
             "apps/admin/lib/commerce-lifecycle.test.ts",
             "apps/admin/lib/fee-truth.test.ts"
           ],
           "whatItIs": "PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`."
+        },
+        {
+          "url": "/api/public/pay/retry",
+          "kind": "api",
+          "methods": [
+            "OPTIONS",
+            "POST"
+          ],
+          "file": "apps/admin/app/api/public/pay/retry/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [
+            "public-body",
+            "rate-limit"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": true,
+          "tests": [
+            "apps/admin/lib/pay-retry.test.ts"
+          ],
+          "whatItIs": "\"Bayar ulang\" (PAY-RETRY) — a NEW bill for the SAME order once the last one expired or failed; one-order token, row-locked, never two live bills."
         },
         {
           "url": "/api/public/promo",
@@ -2422,7 +2446,9 @@
           "data": [
             "catalog"
           ],
-          "lib": [],
+          "lib": [
+            "public-api"
+          ],
           "locals": true,
           "db": false,
           "gate": [],
@@ -4154,6 +4180,7 @@
           "CLIENT_API_URLS",
           "ONGKIR_API",
           "ORDER_API",
+          "PAY_RETRY_API",
           "PROMO_API",
           "STOREFRONT_CSP"
         ]

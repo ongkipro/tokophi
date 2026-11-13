@@ -2,6 +2,19 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-13 — "Bayar ulang": tagihan baru untuk pesanan yang sama (PAY-RETRY)
+
+- **Pembeli yang telat bayar (QRIS/VA/e-wallet kedaluwarsa) atau tagihannya gagal dibuat** kini bisa menekan
+  **Buat tagihan baru** di halaman sukses checkout — pesanan, jumlah, dan metode tetap sama. Dibuka oleh
+  rahasia satu-pesanan yang hanya dimiliki browser pembeli (bukan nomor pesanan); paling banyak satu tagihan
+  hidup per pesanan; maksimal 5 percobaan; ditutup 15 menit sebelum pesanan dibatalkan otomatis (24 jam).
+- **Uang yang masuk dua kali atau masuk setelah pesanan dibatalkan** kini tercatat sebagai `refunds`
+  (Super Admin → Pencairan), bukan sekadar log. Ledger tetap satu penjualan per pesanan.
+- **Jam "Bayar sebelum"** kini dibaca sebagai WIB di server (sebelumnya meleset 1–2 jam untuk pembeli di
+  WITA/WIT, dan hilang di Safari). Kedaluwarsa tagihan disimpan (`payments.expires_at`, migrasi `0117`).
+- **Seller:** tagihan kedaluwarsa tidak lagi memblokir "Buat tagihan"; detail pesanan menampilkan status
+  "Kedaluwarsa", "Berlaku sampai", dan riwayat tagihan. Cron pembatalan menunggu selama tagihan masih hidup.
+
 ## 2026-11-13 — Mengantar live untuk toko demo; CSP checkout dibereskan
 
 - **Pengiriman lewat Mengantar (ADR 0018).** Tiap toko bisa punya akun seller Mengantar sendiri, didaftarkan

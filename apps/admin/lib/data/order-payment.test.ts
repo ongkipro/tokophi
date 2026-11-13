@@ -119,4 +119,29 @@ suite("latestPaymentFirst — one order, one answer", () => {
       expect(await ordered(sql`${desc(schema.payments.paidAt)}, ${desc(schema.payments.id)}`)).toEqual(["va", "cod"]);
     });
   });
+
+  // PAY-RETRY: two UNPAID attempts — the expired QR and the fresh one "Bayar ulang" replaced it with.
+  // The newest must be "the order's payment"; `id desc` alone is a random uuid, a coin toss.
+  it("among unpaid attempts the NEWEST wins, whatever the uuids say", async () => {
+    await inTxn(async (tx) => {
+      const [acc] = await tx.execute<{ id: string }>(sql`insert into accounts (name) values ('Retry Acc') returning id`);
+      const [store] = await tx.execute<{ id: string }>(
+        sql`insert into stores (account_id, name, slug) values (${acc.id}, 'Retry Store', ${"retry-" + Math.random()}) returning id`,
+      );
+      const [o] = await tx.execute<{ id: string }>(
+        sql`insert into orders (store_id, number, status) values (${store.id}, ${"RTY-" + Math.random()}, 'baru') returning id`,
+      );
+      // The NEWER attempt gets the SMALLEST uuid, so `id desc` alone would pick the old one.
+      await tx.execute(sql`insert into payments (id, order_id, store_id, method, status, reff_id, created_at)
+        values ('ffffffff-ffff-4fff-bfff-ffffffffffff', ${o.id}, ${store.id}, 'qris', 'gagal', 'old', now() - interval '3 hours'),
+               ('00000000-0000-4000-8000-000000000000', ${o.id}, ${store.id}, 'qris', 'menunggu', 'new', now())`);
+      const [top] = await tx
+        .select({ r: schema.payments.reffId })
+        .from(schema.payments)
+        .where(eq(schema.payments.orderId, o.id))
+        .orderBy(latestPaymentFirst())
+        .limit(1);
+      expect(top.r).toBe("new");
+    });
+  });
 });

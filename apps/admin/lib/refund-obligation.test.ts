@@ -243,8 +243,13 @@ describe("refund obligation — source claims", () => {
     expect(textWithoutComments(mutated).search(/insert\s+into\s+refunds/i)).toBe(-1);
   });
 
-  it("`refunds` has exactly one writer in the admin app: applyOrderStatusChange", () => {
-    // Anything else inserting into `refunds` would be a second rule for when a buyer is owed money.
+  it("`refunds` has exactly two writers in the admin app: applyOrderStatusChange and refundUncreditedPayment", () => {
+    // Anything else inserting into `refunds` would be another rule for when a buyer is owed money.
+    // The second writer is deliberate (PAY-RETRY, 2026-11-13): money that arrives AFTER the
+    // cancellation (a PAID on a closed order) or a SECOND payment on one order — the two cases
+    // `applyOrderStatusChange` cannot see, because it only runs at the status change. It lives beside
+    // `creditSaleForPayment` in lib/ledger-credit.ts and is called only by the payment callback.
+    // A third file here is a new rule: record why in this list, or do not add it.
     const out = execSync("git grep -l -i -E 'insert\\s+into\\s+refunds' -- apps packages ':!*.test.ts' ':!*.sql' ':!*.md'", {
       cwd: new URL("../../..", import.meta.url).pathname,
       encoding: "utf8",
@@ -252,6 +257,6 @@ describe("refund obligation — source claims", () => {
       .trim()
       .split("\n")
       .filter(Boolean);
-    expect(out).toEqual(["apps/admin/lib/order-status.ts"]);
+    expect(out).toEqual(["apps/admin/lib/ledger-credit.ts", "apps/admin/lib/order-status.ts"]);
   });
 });
