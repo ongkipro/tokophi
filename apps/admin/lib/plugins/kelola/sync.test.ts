@@ -314,8 +314,10 @@ suite("Kelola plugin — Aktif / Nonaktif / Hapus koneksi", () => {
     const { db } = await import("@tokophi/db");
     const registry = await import("../registry");
     const { kelolaPlugin } = await import("./index");
-    const onOrder = vi.spyOn(kelolaPlugin, "onOrderCreated").mockResolvedValue("mocked");
-    const onCron = vi.spyOn(kelolaPlugin, "onCron").mockResolvedValue(0);
+    // Both hooks are optional on the Plugin type; Kelola implements both.
+    const hooks = kelolaPlugin as Required<typeof kelolaPlugin>;
+    const onOrder = vi.spyOn(hooks, "onOrderCreated").mockResolvedValue("mocked");
+    const onCron = vi.spyOn(hooks, "onCron").mockResolvedValue(0);
 
     const off = await newStore();
     const on = await newStore();
