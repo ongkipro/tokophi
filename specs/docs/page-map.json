@@ -1421,6 +1421,27 @@
           "whatItIs": "Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing."
         },
         {
+          "url": "/api/cron/plugins",
+          "kind": "api",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/admin/app/api/cron/plugins/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [
+            "cron"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/admin/lib/cron-auth.test.ts"
+          ],
+          "whatItIs": "Every 15 min: retries + leads for each store's active first-party plugin (Kelola CRM); idle until a merchant connects one."
+        },
+        {
           "url": "/api/cron/tracking-events",
           "kind": "api",
           "methods": [
@@ -1579,6 +1600,7 @@
             "apps/admin/lib/destination-kelurahan.test.ts",
             "apps/admin/lib/fee-truth.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
+            "apps/admin/lib/plugins/order-hook-position.test.ts",
             "apps/admin/lib/public-guard.test.ts",
             "apps/admin/lib/shipping-quote-mengantar.test.ts",
             "packages/lib/src/provider-label.test.ts"
@@ -3523,6 +3545,19 @@
           "pickerPageLinks",
           "pickerProductLinks",
           "pickerProducts"
+        ]
+      },
+      {
+        "module": "plugins.ts",
+        "exports": [
+          "disconnectKelolaAction",
+          "getKelolaOrderPanel",
+          "getPluginCard",
+          "removePluginData",
+          "resendKelolaOrder",
+          "saveKelola",
+          "setKelolaLeads",
+          "setPluginActive"
         ]
       },
       {

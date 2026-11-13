@@ -50,14 +50,14 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 4 | 20 |
+| Seller (merchant panel) | 56 | 4 | 21 |
 | Super Admin (platform control plane) | 13 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 4 layouts · 20 API routes
+56 pages · 4 layouts · 21 API routes
 
 ### Pages
 
@@ -136,13 +136,14 @@
 | `/api/cron/domains` | Custom-domain verification sweep. | GET | `apps/admin/app/api/cron/domains/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/order-expiry` | Expires unpaid prepaid orders after their window. | GET | `apps/admin/app/api/cron/order-expiry/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/payment-advice` | Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing. | GET | `apps/admin/app/api/cron/payment-advice/route.ts` | `cron` | ✓ | — |
+| `/api/cron/plugins` | Every 15 min: retries + leads for each store's active first-party plugin (Kelola CRM); idle until a merchant connects one. | GET | `apps/admin/app/api/cron/plugins/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/tracking-events` | Every 60 s delivers queued conversions (Meta CAPI / GA4 / TikTok) with retries + dead-letter. | GET | `apps/admin/app/api/cron/tracking-events/route.ts` | `cron` | ✓ | `apps/admin/lib/cron-auth.test.ts` |
 | `/api/cron/tracking` | Every 15 min pulls KiriminAja tracking for booked orders (`parseKaTracking`: `details` + package `status_code`): fills a REAL `orders.awb` (never `MOCK-<ref>`), the sorting code, and advances status forward-only. | GET | `apps/admin/app/api/cron/tracking/route.ts` | `cron` | ✓ | `apps/admin/lib/cancel-reconcile.test.ts` `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/ka-sorting-code.test.ts` |
 | `/api/csp-report` | CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing. | POST | `apps/admin/app/api/csp-report/route.ts` | — |  | — |
 | `/api/health/env` | Reports which integrations are configured (header-gated), used by the deploy probe. | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill. | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-sorting-code.test.ts` `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/ongkir/route.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` |
-| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
+| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/plugins/order-hook-position.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
 | `/api/public/pay/callback` | PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`. | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/fee-truth.test.ts` |
 | `/api/public/promo` | Voucher check for the checkout (deliberately specific error copy). | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
 | `/api/uploads/[name]` | Serves merchant uploads with `?w=` resizing. | GET | `apps/admin/app/api/uploads/[name]/route.ts` | — |  | `apps/admin/lib/image-content.test.ts` |
@@ -324,6 +325,7 @@
 | `payment-settings.ts` | `getPlatformChannels` |
 | `payments.ts` | `createOrderPayment` |
 | `picker.ts` | `pickerCategoryImages` `pickerCategoryLinks` `pickerPageLinks` `pickerProductLinks` `pickerProducts` |
+| `plugins.ts` | `disconnectKelolaAction` `getKelolaOrderPanel` `getPluginCard` `removePluginData` `resendKelolaOrder` `saveKelola` `setKelolaLeads` `setPluginActive` |
 | `products.ts` | `bulkDeleteProducts` `bulkSetProductStatus` `createProduct` `deleteProduct` `duplicateProduct` `updateProduct` |
 | `profile.ts` | `getProfile` `updateProfile` |
 | `promo-hub.ts` | `getPromoHub` `setPromoHub` |
