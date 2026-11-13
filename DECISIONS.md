@@ -1,6 +1,6 @@
 # Decision Register — tokophi
 
-Updated: 2026-09-11
+Updated: 2026-11-13
 
 > **Index only.** The full records live in `specs/decisions/` (ADRs) and, for owner rulings that
 > never got an ADR, in the named section of `AGENTS.md` / `specs/docs/FINANCE.md`. Dates in the ADR
@@ -14,7 +14,7 @@ Updated: 2026-09-11
 | ADR 0001 | accepted | Stack: Next.js admin + Astro storefront, mock-data-first | 2026-07-02 | `0001-stack-and-mock-first.md` |
 | ADR 0002 | accepted | shadcn/ui on **Base UI**, not Radix (`render` prop, no `asChild`) | 2026-07-02 | `0002-shadcn-base-ui.md` |
 | ADR 0003 | partly superseded by 0009 | Scope (no Apps; "no Themes" reversed) + multi-tenancy model | 2026-07-02 | `0003-scope-and-multitenancy.md` |
-| ADR 0004 | accepted | Payments, COD and shipping are **platform-managed**; provider brands hidden from merchants | 2026-07-02 | `0004-platform-managed-payments-shipping.md` |
+| ADR 0004 | accepted; amended by 0018 (per-store Mengantar accounts; Seller may name Mengantar) | Payments, COD and shipping are **platform-managed**; provider brands hidden from merchants | 2026-07-02 | `0004-platform-managed-payments-shipping.md` |
 | ADR 0005 | accepted | Monorepo with shared packages (npm workspaces) | 2026-07-02 | `0005-monorepo-shared-packages.md` |
 | ADR 0006 | accepted | Shared nav source: auto-connect admin ↔ storefront | 2026-07-02 | `0006-shared-nav-source-auto-connect.md` |
 | ADR 0007 | accepted | Persistence: Postgres + Drizzle (dev) → self-hosted Postgres on the VPS (prod) | 2026-07-03 | `0007-backend-postgres-drizzle.md` |
@@ -25,8 +25,10 @@ Updated: 2026-09-11
 | ADR 0012 | accepted | Meta Commerce integration uses **tenant-owned** assets; conversion built from the order row | 2026-07-28 | `0012-meta-commerce-tenant-owned-integration.md` |
 | ADR 0013 | accepted | Stable, system-generated catalog product ids (`retailerId()`, one scheme per store) | 2026-07-29 | `0013-stable-catalog-product-ids.md` |
 | ADR 0014 | superseded by 0015 (2026-08-12) | Platform absorbs the courier's shipping cost on COD orders | 2026-08-05 | `0014-platform-absorbs-cod-shipping.md` |
-| ADR 0015 | accepted (owner, issue #180) | Net Seller proceeds + shipping reconciliation (`order-finance.ts`) | 2026-08-12 | `0015-net-seller-proceeds-and-shipping-reconciliation.md` |
+| ADR 0015 | accepted (owner, issue #180); amended by 0018 for Mengantar-booked orders (no ledger shipping debit) | Net Seller proceeds + shipping reconciliation (`order-finance.ts`) | 2026-08-12 | `0015-net-seller-proceeds-and-shipping-reconciliation.md` |
+| ADR 0016 | **proposed — placeholder, not decided** (Task 5.8) | Global buyer account; the file is a stub so existing links resolve, the decision is not taken | — | `0016-global-buyer-account.md` |
 | ADR 0017 | accepted (structural changes; the ~0 s options remain an owner decision) | Deploy window: health-first in-place swap on Coolify compose — consistent container names, `migrate` gate dropped from routed apps, `start_interval: 2s`; **81–115 s → 7–8 s** accepted as the floor (0016 reserved for Task 5.8) | 2026-08-28 | `0017-zero-downtime-deploy.md` |
+| ADR 0018 | accepted (owner O1–O11, 2026-11-05/12) | Mengantar shipping: TokoΦ registers a **per-store Mengantar seller account** (Partner API) behind a platform provider switch; KiriminAja stays the fallback and the COD path; seller wallet pays the courier (no ledger debit); demo store on an owner-attached account until the production Partner origin exists | 2026-11-05 | `0018-mengantar-per-store-seller-accounts.md` |
 
 ## Owner rulings without an ADR (recorded in `AGENTS.md` unless noted)
 

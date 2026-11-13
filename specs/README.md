@@ -171,6 +171,8 @@ when the task depends on the provider's current roster.
 | [0014](decisions/0014-platform-absorbs-cod-shipping.md) | **Superseded by ADR 0015** — former platform-absorbed COD shipping rule |
 | [0015](decisions/0015-net-seller-proceeds-and-shipping-reconciliation.md) | **Accepted** — Net Seller proceeds and shipping reconciliation (supersedes ADR 0014) |
 | [0016](decisions/0016-global-buyer-account.md) | **NOT WRITTEN — stub** (Task 5.8 owner decision). Draft "Global buyer identity with isolated per-store customer projections" on unmerged `feature/buyer-account-local`; nothing accepted, runtime not deployed |
+| [0017](decisions/0017-zero-downtime-deploy.md) | **Accepted** — health-first in-place deploy swap on Coolify compose |
+| [0018](decisions/0018-mengantar-per-store-seller-accounts.md) | **Accepted** — Mengantar shipping through a per-store seller account (Partner API) behind a provider switch; KiriminAja = fallback + COD (amends 0004, 0015) |
 
 ---
 
