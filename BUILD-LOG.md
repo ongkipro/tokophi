@@ -5112,3 +5112,25 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
     persetujuan" + connect button with consent (not clicked); KiriminAja store → no card, no banner, no "Mengantar" text.
 - **Not verified:** Google signup door in a browser (OAuth not configured locally); the "Hubungkan" click (Partner
   API); a real checkout quote (no provider keys); production. Migration `0117` / ADR `0019` numbers to re-check at merge.
+
+### [2026-11-13 13:40 UTC] — DEPLOY · #464, #466 (store-level shipping provider) and #465 (Bayar ulang) live on production
+- **Executor:** Main Session. Owner: "ya jalankan dan sempurnakan" (merge + deploy in the proposed order).
+- **#464** docs merged `a008c0d4` (no deploy). **#466** merged `10e2195b` after merging main into the branch (clean) and a
+  green CI; manual Coolify deploy `jgfsnltg2mohhp7w2adqevdj`; all four surfaces on `…:10e2195b…` `(healthy)` twice;
+  `migrate` Exited 0 → 118 migrations (max stamp 1787545831751); backfill: `stores.shipping_provider` = 1 mengantar
+  (demo store) / 16 kiriminaja; `signup_codes` 0. **#465** — branch had also claimed `0117`: merged main, renumbered
+  `0117_pay_retry` → `0118_pay_retry`, re-stamped 1787545831751 → 1787545891751, declared in `verify-migrations`
+  RETIRED; resolved 8 doc conflicts keeping both PRs' facts; PAGE_MAP regenerated; `verify-migrations` ✓; full
+  `test:db` on a fresh `tokophi_merge465_test` 2358 passed + 1 doc-count line fixed (CODE_MAP head 0118, 18/18);
+  CI green; merged `ea675ef7`; deploy `bcjsi4ttbu2awv1ltlpv9rrs`; four surfaces `(healthy)` on `…:ea675ef7…` twice;
+  119 migrations (max stamp 1787545891751).
+- **Signals that had to change / stay:** quotes via `POST /api/public/ongkir` captured BEFORE #466 and re-run after each
+  deploy (after `seed` exited, so the Mengantar bridge was rebuilt): demo non-COD → Mengantar `codRequote:true`
+  jne 9000 / spx 5700; demo COD → KiriminAja spx 5700; permata-store → KiriminAja jne 11000 / spx 7273 / jne 9000 —
+  identical (permata's rate ORDER varied, same set). `POST /api/public/pay/retry` before #465: Next's HTML 404 (no
+  route); after: JSON `{"code":"not_found"}` 404. `/checkout/sukses` HTML carries "Buat tagihan baru". Super Admin
+  `/kode-daftar` → 307 (login). Bridge 6 919 after both seeds. Admin/super-admin/storefront logs since deploy: no
+  errors. Browser (Playwright, production): PDP → checkout → Gubeng → Mengantar SPX Rp5.700, console 0 errors (only
+  the known invalid TikTok pixel warning, TRACK-DEMO-TIKTOK-ID). `ops/tokophi-probe.sh` (main's copy) exit 0.
+- **Not yet proven on production:** a real "Bayar ulang" (the `-n` reff_id on `/submit`), a signup with a code, a
+  Super Admin provider switch (no code created, no store moved — nothing was written by the verification).

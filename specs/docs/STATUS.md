@@ -1,23 +1,21 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-13 09:31 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`68947858`** (deploy of PR #462 CSP-CONNECT,
-> on top of #460, #459, #458, #457), admin / super-admin / storefront / landing `(healthy)` on that image on two
-> consecutive polls. **Migrations: 117 on production (head `0116_mengantar_shipping`).** **Shipping provider
-> switch = Mengantar** (`MENGANTAR_ENV=production`, ADR 0018): exactly ONE store has a Mengantar account — the
-> demo store `batiknusantara`, owner-attached (`store_mengantar_accounts`: 1 `connected`, `partner_id` NULL) —
-> so its non-COD checkout quotes through Mengantar (`codRequote:true`); COD and every other store stay on
-> KiriminAja (D11). Area bridge 6 919 / 7 030 kecamatan, rebuilt on every deploy. `orders` stamped `mengantar`: 1
-> (the unpaid test order `PHI-555925447U5H`). Storefront CSP `connect-src` lists `https://app.tokophi.com`
-> (verified in a browser, 0 reports). `ops/tokophi-probe.sh` exit 0, disk 36 %. Merges do NOT deploy here —
-> trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's production Partner origin +
-> IP allow-list (O2) before any other store can register; the first real Mengantar booking + cancel; the
-> AutoLaris QRIS window is the vendor's 2 h default (`/submit` sends no `expired` — task PAY-QRIS-EXPIRY).
-> **2026-11-13:** PR #466 (ADR 0019, migration `0117_store_shipping_provider`) merged + deploying — the provider
-> choice moved to the store (`stores.shipping_provider`, Super Admin / signup code, default KiriminAja); its backfill
-> flips only stores with a `connected` Mengantar account (production: the demo store alone), so production quotes as
-> before. **Branch `feat/pay-retry` (PAY-RETRY, PR #465, next):** "Bayar ulang" on `/checkout/sukses` + public route
-> `/api/public/pay/retry`, migration renumbered to `0118_pay_retry` (repo journal 119). Spec `specs/docs/tasks/2026-11-13-pay-retry.md`.
+> **Current state — 2026-11-13 13:40 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`ea675ef7`** (deploy of PR #465 PAY-RETRY, on
+> top of #466 store-level shipping provider, #464, #463, #462), admin / super-admin / storefront / landing `(healthy)`
+> on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`. **Migrations: 119 on production (head
+> `0118_pay_retry`, max stamp 1787545891751).** **Shipping (ADR 0018 + 0019):** the provider is per store
+> (`stores.shipping_provider`, default KiriminAja, set by Super Admin owner rank or a signup code); production = 1
+> `mengantar` (the demo store `batiknusantara`, owner-attached account) + 16 `kiriminaja`; platform switch = Mengantar
+> (master kill-switch); COD always KiriminAja. Quotes after both deploys identical to the pre-deploy baseline (demo
+> non-COD → Mengantar `codRequote:true` SPX Rp5.700; demo COD → KiriminAja; permata-store → KiriminAja). Signup codes:
+> 0. Area bridge 6 919 / 7 030 kecamatan, rebuilt on every deploy. **Payments:** "Bayar ulang" live —
+> `/api/public/pay/retry` answers JSON (`not_found` for an unknown order), `/checkout/sukses` ships the button; the
+> 227 pre-existing payment rows have `expires_at` NULL (read as unknown → bounded 24 h). `ops/tokophi-probe.sh` exit 0.
+> Merges do NOT deploy here — trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's
+> production Partner origin + IP allow-list (O2); the first real courier booking + cancel (none yet on either
+> provider); the first real "Bayar ulang" (the `-n` reff_id suffix is unproven on `/submit` production); the
+> AutoLaris QRIS window stays the vendor's 2 h default (PAY-QRIS-EXPIRY, mitigated by PAY-RETRY).
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
