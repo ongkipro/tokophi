@@ -449,8 +449,14 @@ Subscription enforcement is real-time (`computeBilling` in `requireCapability` �
 are read-only immediately, no job needed). But **recurring invoice generation + stored-status
 sync** run via `GET /api/cron/billing` **with `x-cron-secret: $CRON_SECRET` in a HEADER**, and the thing that calls it is the
 `cron` **sidecar** in `docker-compose.coolify.yml`, alongside `cron-tracking` /
-`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` (six loops as of
-2026-09-11 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one). This heading used to read *"schedule this"* and told you to add a **Coolify
+`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` / `cron-plugins`
+(seven loops since KEL-001 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one).
+`cron-plugins` (every 900 s, `GET /api/cron/plugins`) is the retry + lead leg of first-party plugins
+(ADR 0019 — today only Kelola CRM). It is **idle until a merchant activates and connects a plugin**:
+the tick answers `{"ok":true,"stores":0,…}` and writes nothing. It makes outbound calls ONLY to the URL a
+merchant pasted at Pengaturan → Plugin → Kelola; a store whose credential Kelola refused (401/404) is
+skipped until the merchant saves it again. After a deploy that adds it, confirm the container comes up
+`(healthy)` and its first log line is that JSON, not `cron plugins failed`. This heading used to read *"schedule this"* and told you to add a **Coolify
 Scheduled Task** — following that would have created a **second** caller. Verified 2026-08-03:
 `select count(*) from scheduled_tasks` in `coolify-db` is **0**; the sidecar is the only scheduler
 and always has been.

@@ -26,6 +26,8 @@ export const CRON_JOBS: { job: string; label: string; what: string }[] = [
   // Observe-only: reads AutoLaris `advice` for every live bill and records the answer distribution.
   // It settles NOTHING (see the route) — the card shows that it is looking, not that money moved.
   { job: "payment-advice", label: "Rekonsiliasi pembayaran", what: "membaca status tagihan prabayar di gateway (hanya mengamati)" },
+  // KEL-001: retries + leads for first-party plugins (Kelola). Idle (0 stores) until a merchant connects one.
+  { job: "plugins", label: "Plugin toko", what: "mengirim pesanan & lead ke plugin yang diaktifkan merchant" },
 ];
 
 /**

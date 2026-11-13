@@ -527,6 +527,26 @@ services:
       timeout: 5s
       retries: 3
 
+  # First-party plugins (ADR 0019, KEL-001) — retries + leads for every store's ACTIVE plugin (today:
+  # Kelola CRM). Idle until a merchant connects one: with no `store_plugins` row the tick is one
+  # indexed read and `{"stores":0}`. 900 s = a paid prepaid order reaches Kelola within ~15 min of
+  # payment (spec §4.4 ceiling); each row is claimed right before its own POST, so an overlapping tick
+  # cannot double-send. Same header-only CRON_SECRET + `?every=` contract as every loop above.
+  cron-plugins:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      CRON_INTERVAL_SEC: 900
+    command: ["sh", "-c", "while true; do echo \"[cron-plugins] $$(date -Iseconds)\"; wget -qO- --header \"x-cron-secret: $$CRON_SECRET\" \"http://admin:3000/api/cron/plugins?every=$$CRON_INTERVAL_SEC\" || echo 'cron plugins failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # order expiry worker — cancels unpaid orders past expiry and restores stock.
   # Runs every 300 seconds (5 minutes).
   cron-order-expiry:
