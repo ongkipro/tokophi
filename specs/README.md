@@ -173,6 +173,7 @@ when the task depends on the provider's current roster.
 | [0016](decisions/0016-global-buyer-account.md) | **NOT WRITTEN — stub** (Task 5.8 owner decision). Draft "Global buyer identity with isolated per-store customer projections" on unmerged `feature/buyer-account-local`; nothing accepted, runtime not deployed |
 | [0017](decisions/0017-zero-downtime-deploy.md) | **Accepted** — health-first in-place deploy swap on Coolify compose |
 | [0018](decisions/0018-mengantar-per-store-seller-accounts.md) | **Accepted** — Mengantar shipping through a per-store seller account (Partner API) behind a provider switch; KiriminAja = fallback + COD (amends 0004, 0015) |
+| [0019](decisions/0019-first-party-plugins.md) | **Accepted (v1)** — First-party plugins, compiled in and activated per store (Pengaturan → Plugin, owner-only); still no marketplace. First plugin: Kelola CRM (amends the PRD positioning line) |
 
 ---
 

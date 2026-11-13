@@ -131,7 +131,7 @@ Put it in `CHANGELOG.md` / `STATUS.md` / here. If your change alters a contract 
 (a data-layer signature, a payment/shipping flag, a DB column), **say so in the commit body** — that is
 the message the other agent will actually see.
 
-Shopify-style commerce SaaS for Indonesia. **No Themes marketplace, no Apps/Plugins** (the Seller **Tema** menu is the Store Builder for the store's own templates). **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `specs/PRD.md` (in this repo).
+Shopify-style commerce SaaS for Indonesia. **No Themes marketplace, no Apps/Plugins marketplace** (the Seller **Tema** menu is the Store Builder for the store's own templates). The only plugins are **first-party, compiled in, activated per store** at Pengaturan → Plugin (ADR 0019 — first one: Kelola CRM, `apps/admin/lib/plugins/`); a store that never activates one is untouched. **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `specs/PRD.md` (in this repo).
 
 ## 📛 Naming — say "Seller", never "admin panel"
 There are TWO admin surfaces and calling them both "admin" is what has repeatedly confused agents *and* users. The **UI copy** now says:

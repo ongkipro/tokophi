@@ -285,7 +285,7 @@ store_plugins                                    -- AdsBookCMS `plugins`, + stor
   settings jsonb not null default '{}'           -- { webhook_url_masked, push_leads: false }
   secret_enc text                                -- encryptSecret(JSON{webhook_url, webhook_secret}, kelolaScope)
   secret_v int not null default 1                -- scope version, bumped on re-paste (mengantarKeyScope shape)
-  connected_at timestamptz                       -- last successful credential save; nothing older is ever pushed
+  connected_at timestamptz                       -- FIRST successful connection (kept on re-save, cleared on disconnect); nothing older is pushed
   broken_at timestamptz                          -- set on 401/404; cleared by re-saving credentials
   activated_at timestamptz, updated_at timestamptz not null default now()
   primary key (store_id, plugin)
@@ -349,7 +349,8 @@ repo, do not silently diverge.
    prepaid order reaches Kelola within ~15 min of its payment. Owner pool, cross-tenant:
    - Only stores with `enabled and broken_at is null`; **every query carries an explicit `store_id`**.
    - Per store per tick: at most **20** orders + 20 leads, oldest first, backoff by `attempts`
-     (1 m · 5 m · 30 m · 2 h, then hourly) — so one store with a backlog cannot starve the rest.
+     measured from `claimed_at` = the last attempt (5 m · 30 m · then every 2 h; never shorter than the
+     5-minute lease) — so one store with a backlog cannot starve the rest.
    - Response handling (§1.5): 201/`duplikat` → `synced_at`; 400 → `gave_up_at` + `path`; 401/404 →
      set `broken_at` and **stop that store for this tick**; 409/5xx/network → release the lease,
      `attempts+1`.
@@ -361,7 +362,8 @@ repo, do not silently diverge.
 4. **Order detail panel** — only while the plugin is active: "Terkirim ke Kelola · <waktu>" / "Gagal:
    <last_error>" / "Menunggu pembayaran" (prepaid, not yet eligible) + **Kirim ulang** (`orders:write`;
    clears `gave_up_at`, runs the same claim).
-5. **Settings page** (`settingsHref`, owner only, capability `plugins:manage`):
+5. **Settings** — as built: a **section of Pengaturan** (`/pengaturan?section=plugin`, the same deep-link shape as
+   `?section=alamat`), not a new route, so the page map gains nothing. Owner only, capability `plugins:manage`:
    - Pengaturan → Plugin: list of compiled-in plugins with Aktifkan / Nonaktifkan / Hapus data
      (`useConfirm`), exactly AdsBookCMS's list.
    - Kelola page: paste webhook URL + secret (normalised, masked after save, never returned),
@@ -428,6 +430,24 @@ repo, do not silently diverge.
 - Same settings shape (`webhook_url`, `webhook_secret`), same connection-test messages, same menu
   name, same manifest fields. A merchant moving between the products re-pastes the same pair.
 
+### 4.8 As built (PR 1, 2026-11-13) — where the code differs from the text above, the code wins
+
+- **Leads wait for the storefront's sweep.** A session is pushed only once it is STORED as `ditinggal`, and the
+  aktif→ditinggal flip is the storefront's opportunistic sweep (`checkout-session.ts`), which runs only while
+  that store receives checkout traffic — a quiet store's leads wait for the next shopper. Accepted ceiling;
+  upgrade path is moving that sweep into a cron.
+- **`saveKelolaConnection` stores nothing unless Kelola accepted the signed test** (400 on an empty body =
+  URL + secret valid). An empty secret on re-save keeps the stored one. The tenant transaction is NOT held
+  across the test call: the action runs each statement in its own `withTenant`.
+- **"Kirim ulang"** clears a give-up, ignores the 7-day window and `connected_at`, keeps the payment/status
+  rule and the 5-minute lease. Keyed on the order NUMBER (the detail route), resolved under RLS.
+- **The order hook is wrapped in try/catch**: `after()` throws outside a request scope, and the order is
+  already committed at that point — a throw must not become a 500. The cron covers anything it skips.
+- **`gratisOngkir` and `kelurahan` are sent** (Kelola accepts both, §1.3); AdsBookCMS does not send them yet —
+  the same `ongkir: 0` re-pricing defect exists there (shared-fix rule: raise it on that repo).
+- `redactKey` moved to `@tokophi/lib/redact` (re-exported from `mengantar.ts`) — one sanitiser for every
+  provider whose token rides in a URL.
+
 ---
 
 ## 5. Retiring the current CRM
@@ -446,7 +466,7 @@ What exists (verified 2026-11-13):
 Order of removal (each step its own PR, each leaves the build green):
 
 1. **Ship the Kelola plugin first** (§4). Don't remove a working tool before its replacement exists.
-2. **Hide** — remove CRM nav + routes (`/crm/*` → redirect to `/pengaturan/plugin`), retire
+2. **Hide** — remove CRM nav + routes (`/crm/*` → redirect to `/pengaturan?section=plugin`), retire
    `crm:write` from the matrix and census. Keep the Keranjang screen's local "WA dibuka" button — the
    no-plugin fallback — so `wa_templates` + `followups` type `keranjang` **stay**.
 3. **Data** — production has real rows in these tables (local DB is a prod copy). Before any drop: count

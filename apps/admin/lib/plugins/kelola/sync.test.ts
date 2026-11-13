@@ -254,6 +254,24 @@ suite("Kelola plugin — dormant, eligibility, claim, outcomes, isolation", () =
     expect(await sync.drainKelolaLeads(await store(on.storeId), on.storeId, k.fetch)).toBe(0);
   });
 
+  it("the cron: a broken store is skipped untouched, and one failing store does not stop the next", async () => {
+    const { runPluginCron } = await import("../registry");
+    const broken = await newStore();
+    await newOrder(broken.storeId);
+    await client`update store_plugins set broken_at = now() where store_id = ${broken.storeId}`;
+    // Two stores with work and no injected fetch: under NODE_ENV=test each push REFUSES (no network
+    // write from a test) and throws. If the first failure stopped the loop, the second would be absent.
+    const f1 = await newStore();
+    await newOrder(f1.storeId);
+    const f2 = await newStore();
+    await newOrder(f2.storeId);
+    const r = await runPluginCron(new Date());
+    expect(r.failures).toEqual(expect.arrayContaining([`kelola:${f1.storeId}`, `kelola:${f2.storeId}`]));
+    expect(r.failures).not.toContain(`kelola:${broken.storeId}`);
+    const [touched] = await client<{ n: number }[]>`select count(*)::int as n from plugin_kelola_orders where store_id = ${broken.storeId}`;
+    expect(touched.n).toBe(0);
+  });
+
   it("saving the connection: a refused test stores nothing; success seals it; a re-save keeps connected_at", async () => {
     const { db } = await import("@tokophi/db");
     const [st] = await client<{ id: string }[]>`
