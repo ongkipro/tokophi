@@ -1,9 +1,9 @@
-# Task KEL-001 — First-party Plugin layer + Kelola CRM plugin; retire the in-house CRM
+# Task KEL-001 — First-party Plugin layer + Kelola CRM plugin (Aktif / Nonaktif); retire the in-house CRM later
 
-- **Branch / worktree:** `feat/kelola-plugin` at `~/Projects/tokophi-kelola` (from `origin/main` `68947858`, 2026-11-13)
+- **Branch / worktree:** **`feat/kelola-plugin-v2`** (takeover, from `feat/kelola-plugin` 50cb2525 + `origin/main` 50bd3000). The paused `feat/kelola-plugin` at `~/Projects/tokophi-kelola` (DB `tokophi_kelola`) is left untouched — it belongs to another session.
 - **Spec (read first):** `specs/docs/KELOLA_PLUGIN_SPEC.md` — Kelola API (§1–2), fit (§3), plugin layer (§4), CRM retirement (§5), acceptance (§6), owner decisions (§7)
 - **Reference implementation:** AdsBookCMS (`~/Projects/adsbookcms`) — `DECISIONS.md` ADR-027 + ADR-028, `src/plugins/registry.ts`, `src/plugins/kelola/{index,sync,sync.test}.ts`, `src/pages/admin/settings/plugins/kelola.astro`, `src/pages/api/admin/plugins/*`. `git fetch` it first; port from `origin/main`.
-- **Status:** ⏸ **PAUSED 2026-11-13** — owner: *"kelola kan masih dalam tahap pengembangan, biarkan aja dulu"* (relayed by session `tokophi-resume`). PR 1 is built, verified and committed **locally only** on `feat/kelola-plugin` at `4ce5782d` — not pushed, no PR. DB `tokophi_kelola` left as is. PR 2 also waits for the #418 + CRM-data decisions.
+- **Status:** [x] **plugin layer done on `feat/kelola-plugin-v2`** (2026-11-13, KelolaPluginAgent) — PR open, NOT merged (owner-gated; adds the `cron-plugins` sidecar → manual deploy). Previously ⏸ PAUSED 2026-11-13 (owner: *"kelola kan masih dalam tahap pengembangan, biarkan aja dulu"*); resumed by owner direction *"sistem yang dibangun panel 2 kau sempurnakan dan merubah untuk plugins (aktif, non aktif) kelolatim"*. PR 2 (retire `/crm`) is NOT in scope; PR #418 left alone.
 - **Owner direction (2026-11-13):** current Seller CRM is cleaned out; CRM moves to Kelola (`kelolatim.com`) as a plugin, following the AdsBookCMS plugin contract.
 
 ## Defaults in force until the owner answers spec §7
@@ -37,7 +37,16 @@
 - [x] Pengaturan → Plugin (as built: a Pengaturan SECTION, `/pengaturan?section=plugin` — no new route, so no nav entry and no page-map row) — list, Kelola settings (paste URL + secret, Tes koneksi, toggle leads, sync summary, UU PDP line), order-detail panel + Kirim ulang; nav; regenerate `PAGE_MAP.md`
 - [x] `codeOnly` guard: nothing under `lib/plugins/**` writes `orders`
 
-### PR 2 — retire CRM screens
+### v2 takeover — Aktif / Nonaktif (2026-11-13, KelolaPluginAgent, `feat/kelola-plugin-v2`)
+- [x] Merge `origin/main` (no rebase): migration renumbered **and re-stamped** `0117_store_plugins_kelola` → `0119_store_plugins_kelola` (stamp 1787545951751 > 0118's 1787545891751); old tag RETIRED in `packages/db/src/verify-migrations.ts`
+- [x] ADR renumbered `0019-first-party-plugins` → **`0021-first-party-plugins`** (0019 = store-level shipping provider on main, 0020 reserved by `feat/pricing-178k-code-discount`); every reference updated; DECISIONS next-free → 0022
+- [x] Prepaid-eligibility + payload method read `latestPaymentFirst()` (PAY-RETRY added `created_at desc`); guard `lib/plugins/payment-definition.test.ts`
+- [x] Aktif / Nonaktif semantics (spec §4.9, ADR 0021 §2.8): `store_plugins.disabled_at`; Nonaktif keeps credential + history; re-activation marks what arrived while off as skipped (never back-filled); "Hapus koneksi" = uninstall; "Putuskan" dropped
+- [x] UI: Switch + Aktif/Nonaktif label, read-only Kelola card while off, "Dilewati (nonaktif)" counter, order panel names a skipped order
+- [x] Re-verified after the merge: claim-before-POST lease + 15 s timeout, `after()` post-commit position guard, no `orders` writes from `lib/plugins/**`, explicit `store_id`, host pin + 12 refused shapes, token redaction, provider-label scope
+- [x] Docs: ADR 0021, spec §4.8/§4.9, SECURITY.md (PII egress), DEPLOY.md, TASKS, STATUS, CHANGELOG, BUILD-LOG, counts, PAGE_MAP
+
+### PR 2 — retire CRM screens (NOT in scope of the v2 takeover)
 - [ ] Remove `/crm/*` routes + nav group, redirect `/crm*` → `/pengaturan?section=plugin`; retire `crm:write` (census); keep the Keranjang `keranjang` followup path
 - [ ] Docs: `STATUS.md`, `CODE_MAP.md`, `FLOWS.md`, `UI_INVENTORY.md`, `apps/docs/.../peran-tim.md`
 
@@ -57,6 +66,8 @@
 - BUILD-LOG entry + TASKS.md `[x]` + STATUS.md synced.
 
 ## Log
+
+- 2026-11-13 — KelolaPluginAgent: TAKEOVER on `feat/kelola-plugin-v2` (owner: "plugins (aktif, non aktif) kelolatim"). Merged main, renumbered 0117 → 0119 (re-stamped) and ADR 0019 → 0021, moved the payment rule onto `latestPaymentFirst()`, built Aktif / Nonaktif (no back-fill on re-activation), dropped "Putuskan". Gates + mutation proofs in BUILD-LOG `KEL-001 v2`.
 
 - 2026-11-13 — Main Session: PAUSED by owner direction (Kelola still in development). Last commit `4ce5782d` (SSRF host pin from review). Before resuming: `git fetch` + merge `origin/main`, re-check the migration number (0117 may be taken by then — renumber AND re-stamp), **re-scan `specs/decisions/` and renumber ADR 0019 → next free** (branch `feat/store-shipping-provider` drafts its own ADR 0019 and will likely merge first; update every `ADR 0019` / `0019-first-party-plugins` reference: ADR file, DECISIONS.md row + next-free line, specs/README.md, PRD, AGENTS.md, spec, task, code comments in `lib/plugins/**`, `rbac-policy.ts`, order route, compose, DEPLOY.md), re-run `test:db`, then push/PR only with the owner's OK.
 - 2026-11-13 — Main Session: PR 1 built (8 commits on `feat/kelola-plugin`, 497118a3…). Gates: `test:db` 227 files / 2312 tests green before the last two guards (+ plugin suites 39/39 after), lint 0 errors, `build:admin` green, browser pass on `next start` at 390/1280 with 0 console errors. Details + mutation proofs in BUILD-LOG `KEL-001`.

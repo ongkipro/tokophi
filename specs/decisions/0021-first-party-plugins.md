@@ -1,7 +1,11 @@
 # ADR 0021 — First-party plugins: compiled in, activated per store, never a marketplace
 
-**Status:** accepted for v1 · **Date:** 2026-11-13 · **Decided by:** the owner's direction of 2026-11-13 (the Seller
-CRM is retired; CRM moves to Kelola, `kelolatim.com`, delivered as a plugin). The boundary defaults below are
+**Status:** accepted for v1 · **Date:** 2026-11-13 · **Decided by:** the owner's direction of 2026-11-13 (CRM moves
+to Kelola, `kelolatim.com`, delivered as a plugin; later the same day: "plugins (aktif, non aktif) kelolatim" — a
+store switches each plugin on and off). Retiring the in-house `/crm` screens is a SEPARATE later step, not part of
+this ADR's first delivery (KEL-001 "PR 2"; PR #418 stays open).
+**Numbering:** drafted as ADR 0019 on the paused `feat/kelola-plugin`; renumbered to 0021 on takeover (0019 = store-level
+shipping provider on main, 0020 reserved by the pricing branch). The boundary defaults below are
 still open for confirmation in `specs/docs/KELOLA_PLUGIN_SPEC.md` §7 — a change there amends this ADR.
 **Amends:** PRD positioning ("No Apps / plugins marketplace") — the marketplace ban stands; first-party plugins
 are allowed. **Reference implementation:** AdsBookCMS ADR-027 + ADR-028 (`ongkipro/adsbookcms`).
@@ -29,7 +33,7 @@ workspace receiving identical data from both products.
    `order-hook-position.test.ts`), and `runPluginCron` from `api/cron/plugins` (`cron-plugins` sidecar,
    900 s). Each plugin's failure is isolated and logged; it never fails an order or the cron.
 4. **Schema** — forced difference from AdsBookCMS (one Postgres, many tenants): plugin tables ship in a
-   normal hand-written migration as `plugin_<id>_*`, store-scoped with RLS; uninstall ("Hapus data")
+   normal hand-written migration as `plugin_<id>_*`, store-scoped with RLS; uninstall ("Hapus koneksi")
    deletes THIS store's rows rather than dropping tables. **No plugin adds columns to core tables** —
    AdsBookCMS added `orders.kelola_*` and removed them (its 0066); we start where it ended.
 5. **Credentials** are tenant-owned (ADR 0012 shape): sealed with `encryptSecret` under
@@ -39,6 +43,18 @@ workspace receiving identical data from both products.
    plugin like Kelola ships every order's shopper name, WhatsApp and address to a processor.
 7. **A plugin never writes `orders.status`** or any money/ledger row. `applyOrderStatusChange` stays the one
    writer. Kelola v1 is a one-way CRM mirror (spec §3.1 option A).
+8. **Aktif / Nonaktif is a per-store switch with fixed semantics** (`lib/plugins/registry.ts`):
+
+   | Action (Seller copy) | What changes | What the hooks do |
+   |---|---|---|
+   | **Aktifkan** (first time) | `store_plugins` row, `enabled` | nothing until the plugin is CONNECTED (Kelola: credential accepted → `connected_at`); nothing older is ever sent |
+   | **Nonaktifkan** | `enabled = false`, `disabled_at = now()`; credential, settings, history KEPT | the order hook and the cron skip the store at once (both read `enabled` first); the plugin's own read refuses too |
+   | **Aktifkan** (again) | `enabled`, `disabled_at = null`; the plugin's `onResume` marks what arrived while off as skipped, in the same transaction | pushes resume; work pending from BEFORE the switch-off resumes; what arrived while off is **never back-filled** (a person may still send one order with "Kirim ulang") |
+   | **Hapus koneksi** | uninstall: this store's plugin rows and its `store_plugins` row (credential included) deleted | dormant; a later activation starts unconnected |
+
+   Not back-filling is chosen over "catch up inside the 7-day window" because the seller said "off" for those
+   orders and PII already sent cannot be recalled. Neither choice could double-send — every POST still passes the
+   plugin's claim statement — so the decision rests on consent alone.
 
 ## 3. Consequences
 

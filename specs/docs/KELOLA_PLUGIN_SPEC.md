@@ -1,12 +1,14 @@
 # Kelola plugin — API reference + plan to replace the in-house CRM
 
-> **Status: PROPOSAL (2026-11-13), revised the same day against AdsBookCMS.** Nothing here is built. Owner direction: the current Seller CRM
+> **Status: plugin layer BUILT (§4.8 as built, §4.9 Aktif / Nonaktif) on `feat/kelola-plugin-v2` — not merged, not
+> deployed (2026-11-13).** The rest of this header is the original proposal; where the text and §4.8–§4.9 differ,
+> §4.8–§4.9 and the code win. CRM retirement (§5) is NOT in this delivery. Original owner direction: the current Seller CRM
 > (`/crm`, `/crm/followup`, `/crm/pipeline`, `/crm/template`) is retired and its job moves to an
 > external CRM, **Kelola** (`kelolatim.com`), delivered as the first plugin of a new TokoΦ plugin layer.
 >
 > ⚠️ **This reverses a written product rule.** `specs/PRD.md` (§ positioning table) says
 > "❌ No Apps / plugins marketplace. The feature set is curated in-core." Before any code lands this
-> needs **ADR 0021** recording the reversal and its boundary (see §4.1 — the recommendation is
+> needs **ADR 0021** (drafted as 0019; renumbered on takeover) recording the reversal and its boundary (see §4.1 — the recommendation is
 > *first-party integrations only, still no third-party marketplace*), and the PRD line must be edited
 > in the same PR.
 
@@ -275,7 +277,7 @@ type PluginContext = { storeId: string; settings: Record<string, unknown> };
 | `plugins.settings` JSON incl. secret | `store_plugins.settings` (non-secret) + `secret_enc` via `encryptSecret` |
 | env pair `KELOLA_ORDER_WEBHOOK_URL/_SECRET` fallback | **dropped** — multi-tenant; a platform-wide env pair would push every store to one Kelola |
 
-### 4.3 Data — migration `0117`, hand-written, idempotent (`specs/docs/rules/migrations.md`)
+### 4.3 Data — migration `0119` (drafted as `0117`; renumbered on takeover), hand-written, idempotent (`specs/docs/rules/migrations.md`)
 
 ```
 store_plugins                                    -- AdsBookCMS `plugins`, + store_id
@@ -364,14 +366,14 @@ repo, do not silently diverge.
    clears `gave_up_at`, runs the same claim).
 5. **Settings** — as built: a **section of Pengaturan** (`/pengaturan?section=plugin`, the same deep-link shape as
    `?section=alamat`), not a new route, so the page map gains nothing. Owner only, capability `plugins:manage`:
-   - Pengaturan → Plugin: list of compiled-in plugins with Aktifkan / Nonaktifkan / Hapus data
+   - Pengaturan → Plugin: list of compiled-in plugins, each with an **Aktif / Nonaktif** switch and **Hapus koneksi**
      (`useConfirm`), exactly AdsBookCMS's list.
    - Kelola page: paste webhook URL + secret (normalised, masked after save, never returned),
      **Tes koneksi** (AdsBookCMS trick: a deliberately invalid signed body → `400` = URL + secret
      accepted, `404` = unknown URL, `401` = wrong secret/clock), toggle leads (default off), sync
      summary (synced / failing / given up / outside the 7-day window), broken banner, and the UU PDP
      disclosure covering **orders and leads** (§4.5).
-   - Deactivate keeps settings + rows; **Hapus data** deletes them (§4.2 table).
+   - Nonaktif keeps settings + credential + rows; **Hapus koneksi** deletes them (§4.2 table, §4.9).
 
 **Known ceilings — deliberate, stated so nobody mistakes them for coverage:**
 
@@ -452,10 +454,34 @@ repo, do not silently diverge.
   code change. AdsBookCMS has the same hole (shared-fix rule). "Tes koneksi" shows only the classified
   message, never Kelola's response body.
 - **`connected_at` is set on the FIRST connect and kept on a re-save** (so orders placed while a credential
-  was broken still go out); **"Putuskan" clears it, and a later reconnect re-floors the window** at the new
-  connection — deliberate: orders taken while the store was disconnected are never sent.
+  was broken still go out); **"Hapus koneksi" deletes it with the row, and a later reconnect re-floors the
+  window** at the new connection — deliberate: orders taken while the store was disconnected are never sent.
+  (The paused branch also had a separate "Putuskan" that cleared only the credential; v2 dropped it — one way
+  to stop sending is Nonaktif, one way to remove everything is Hapus koneksi.)
 - `redactKey` moved to `@tokophi/lib/redact` (re-exported from `mengantar.ts`) — one sanitiser for every
   provider whose token rides in a URL.
+- **The payment rule reads `latestPaymentFirst()`** (`lib/data/order-payment.ts`) — the paused branch had a
+  hand-written `paid_at desc nulls last, id desc` that fell behind when PAY-RETRY (0118) added `created_at desc`
+  to the one definition. Guard: `lib/plugins/payment-definition.test.ts`.
+
+### 4.9 Aktif / Nonaktif (v2, owner 2026-11-13: "plugins (aktif, non aktif) kelolatim")
+
+| Seller action | Row change | Effect on the order hook + cron | Orders that arrive meanwhile |
+|---|---|---|---|
+| never activated | no row | dormant: one indexed read per order, zero requests | never sent |
+| **Aktifkan**, not yet connected | `enabled`, no `connected_at` | `loadKelolaStore` → null, nothing sent | never sent (floor = first `connected_at`) |
+| Aktif + connected | `enabled`, `connected_at` | COD at creation, prepaid once `berhasil`, cron every 15 min | sent |
+| credential refused (401/404) | `broken_at` | skipped until re-saved | caught up on re-save, inside the 7-day window |
+| **Nonaktifkan** | `enabled = false`, `disabled_at = now()`; credential + history kept | both legs skip the store immediately; Kirim ulang refused | — |
+| **Aktifkan** again | `enabled`, `disabled_at = null`; `skipWhileOff` writes a SKIPPED row (gave_up_at, attempts 0) for each order / abandoned checkout since `disabled_at` | resume; rows pending from before the switch-off continue | **never back-filled**; one at a time via Kirim ulang |
+| **Hapus koneksi** | uninstall: plugin rows + `store_plugins` row deleted | dormant | never sent; a reconnect starts a new floor |
+
+Why not back-fill (the alternative was "catch up within 7 days on re-activation"): both options are
+single-send — the claim statement makes a double POST impossible either way — so the choice is about consent.
+The seller switched the plugin off for those orders, and shopper PII sent anyway cannot be recalled. A
+skipped order shows "Tidak dikirim otomatis: pesanan masuk saat plugin Kelola nonaktif." on its detail panel,
+and the settings summary counts them as "Dilewati (nonaktif)". Tests: `sync.test.ts` → "Aktif / Nonaktif /
+Hapus koneksi" (mutation-proven: hook and cron ignoring `enabled`, resume not skipping, `disabled_at` not set).
 
 ---
 

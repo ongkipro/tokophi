@@ -50,14 +50,14 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 4 | 21 |
+| Seller (merchant panel) | 56 | 4 | 22 |
 | Super Admin (platform control plane) | 14 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 4 layouts · 21 API routes
+56 pages · 4 layouts · 22 API routes
 
 ### Pages
 
@@ -143,7 +143,7 @@
 | `/api/health/env` | Reports which integrations are configured (header-gated), used by the deploy probe. | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill. | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-sorting-code.test.ts` `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/ongkir/route.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` |
-| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
+| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/plugins/order-hook-position.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
 | `/api/public/pay/callback` | PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`. | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/pay/retry/route.test.ts` `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/fee-truth.test.ts` |
 | `/api/public/pay/retry` | "Bayar ulang" (PAY-RETRY) — a NEW bill for the SAME order once the last one expired or failed; one-order token, row-locked, never two live bills. | OPTIONS POST | `apps/admin/app/api/public/pay/retry/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/pay-retry.test.ts` |
 | `/api/public/promo` | Voucher check for the checkout (deliberately specific error copy). | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
@@ -327,7 +327,7 @@
 | `payment-settings.ts` | `getPlatformChannels` |
 | `payments.ts` | `createOrderPayment` |
 | `picker.ts` | `pickerCategoryImages` `pickerCategoryLinks` `pickerPageLinks` `pickerProductLinks` `pickerProducts` |
-| `plugins.ts` | `disconnectKelolaAction` `getKelolaOrderPanel` `getPluginCard` `removePluginData` `resendKelolaOrder` `saveKelola` `setKelolaLeads` `setPluginActive` |
+| `plugins.ts` | `getKelolaOrderPanel` `getPluginCard` `removePluginData` `resendKelolaOrder` `saveKelola` `setKelolaLeads` `setPluginActive` |
 | `products.ts` | `bulkDeleteProducts` `bulkSetProductStatus` `createProduct` `deleteProduct` `duplicateProduct` `updateProduct` |
 | `profile.ts` | `getProfile` `updateProfile` |
 | `promo-hub.ts` | `getPromoHub` `setPromoHub` |

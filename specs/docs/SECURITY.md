@@ -56,6 +56,28 @@ nothing under `apps/storefront`, `apps/landing` or any client component imports 
   a leaked token: someone renews THAT order's bill for the same amount to the same shop — it cannot
   move money, change the amount, or touch another order.
 
+**Observed (KEL-001, ADR 0021 — pending merge on `feat/kelola-plugin-v2`): outbound shopper-PII egress to
+`kelolatim.com`, per store, only when that store's OWNER switched it on.** The Kelola CRM plugin POSTs each
+eligible order (shopper name, WhatsApp, full address, items, totals) and — opt-in — abandoned checkouts with a
+phone to Kelola, from server code in `admin` only (the post-commit `after()` in `/api/public/order` and the
+`cron-plugins` sidecar). Boundaries:
+- **Who can open it:** `plugins:manage`, OWNER ONLY (not `integrations:write`, which `advertiser` holds);
+  classified in `rbac-census.test.ts` with an every-role sweep. The Seller screen carries the UU PDP
+  processor disclosure; the storefront privacy page still needs a processor line (owner sign-off, open).
+- **Where it can go:** the webhook URL is pinned to `https://kelolatim.com/api/public/toko/order/<token>`
+  exactly — https, no port, no userinfo, no subdomain, no fragment (`normalizeKelolaWebhookUrl`; 12 refused
+  shapes in `wire.test.ts`, incl. private/loopback IPs and `admin:3000`). An open host would be SSRF from inside
+  the admin container plus a PII exfiltration path. A new Kelola origin is a code change.
+- **When it flows:** only while the plugin is **Aktif AND connected** (`enabled`, `connected_at`, no
+  `broken_at`). **Nonaktif stops both legs immediately**, and what arrives while off is never back-filled on
+  re-activation (spec §4.9) — the seller's "off" is consent withdrawn for those orders. Dormant stores: zero
+  outbound requests, one indexed read per order. Prepaid orders only once paid; never `batal`/`retur`; 7-day window.
+- **What comes back:** nothing is consumed (no inbound Kelola route in v1); Kelola's response text stays
+  seller-side and token-redacted (`@tokophi/lib/redact`) in logs and `plugin_kelola_*.last_error`; it never
+  reaches a shopper (ADR 0004 pattern). "Kelola" is a seller-chosen integration: named on Seller screens,
+  never on shopper surfaces (`provider-label.test.ts` scope). No plugin path writes `orders`
+  (`lib/plugins/no-order-writes.test.ts`).
+
 ---
 
 ## 2. Identity
@@ -336,6 +358,13 @@ architecture decision before the PostgREST cutover.
   (`configuration_blocked`) while `INTEGRATION_TOKEN_KEY` is unset rather than storing a key in clear.
   ⚠️ An ops script that seals a key (`ops/mengantar-attach-own-key.ts`) must run with the TARGET
   deployment's `INTEGRATION_TOKEN_KEY`, or it writes a blob the app cannot open.
+- **Observed (KEL-001, pending merge).** The Kelola plugin seals `{webhook_url, webhook_secret}` TOGETHER in
+  `store_plugins.secret_enc` (the URL path carries Kelola's store token, so the URL is a credential too) under
+  scope `kelola:<store_id>:v<secret_v>` (`kelolaScope`) — a blob replayed into another store or an older version
+  does not decrypt, and `secret_v` bumps on every accepted re-save. Nothing is stored unless Kelola accepted a
+  signed test call; the browser only ever sees the masked URL. **Nonaktif keeps the sealed blob** (re-activation
+  needs no re-typing); **"Hapus koneksi" deletes it** with the store's plugin rows. With `INTEGRATION_TOKEN_KEY`
+  unset the connect form refuses to save rather than storing in clear.
 - **Decision.** Its key is derived with **scrypt**, not a bare SHA-256, because the env var is allowed
   to be a human-chosen string; scrypt makes offline GPU cracking expensive. Derived once and cached.
 - **Observed, and state it plainly:** everything else — orders, customer names, phone numbers,
@@ -423,6 +452,7 @@ recommendation this repository cannot implement (zone configuration).
 | ✅ **N1 — CLOSED 2026-08-21 (Task 4.11 / SEC-10).** The URL carried a 2-minute session-shaped JWT: verified, never spent, so REUSABLE for its whole life from history, `Referer`, proxy logs or a pasted ticket — and the session it minted lasted 7 days with no operator marker on it. | The URL now carries a 256-bit **opaque** handle backed by `impersonation_grants` (0098), spent by one atomic `update … where consumed_at is null and expires_at > now()`. Replay/tamper/expiry all match zero rows. The session is **30 minutes** and carries the signed operator identity, which `requireCapability` writes into `platform_activity` on every gated write; `/impersonate/exit` ends it on demand. | It is closed — do not reopen it by putting any signed token back in a URL. `apps/admin/lib/impersonation.test.ts` fails if `jwtVerify` returns to the route or `signImpersonation` comes back. |
 | **N16 — `tokophi_app` DML on platform tables.** | Enforced by app code today. | The PostgREST cutover. |
 | **No compliance document.** | Beta; deferred deliberately. | Leaving beta, or the first real DSAR. |
+| **Kelola plugin (pending merge): no storefront processor line yet, and post-push state is never synced.** A store that activates Kelola ships shopper PII to a processor; the Seller screen discloses it, the shopper-facing privacy page does not yet. Kelola is create-only, so an order cancelled after the push stays live there until CS closes it. | Opt-in per store, owner-only, dormant by default; one-way mirror that never writes `orders`. | Owner sign-off on the privacy line before the first store activates; a Kelola update endpoint or the deferred receiver (spec §4.6). |
 | **Mengantar production Partner API not reachable (O2).** `MENGANTAR_ORIGINS.production.partner` is `null` and the host's egress IP is not yet confirmed on Mengantar's allow-list (DEPLOY.md § Mengantar), so no store can be registered in production; the stored production Partner credential (if any) is untested. | Every Partner call refuses before sending; stores without an account fall back to KiriminAja (D11). Production Mengantar today is one owner-attached account (O11). | Mengantar publishes the origin + allow-lists the IP → one-line code PR, then the DEPLOY.md runbook. |
 | **Mengantar `idempotencyKey` not relied on in production.** It is sent on every booking, but a retry after an unreadable answer could still be a second parcel and a second wallet debit. | Every unreadable `POST /order` is `unknown` and blocks re-booking until an operator reconciles it — no blind retry exists. | Replay behaviour confirmed against production. |
 

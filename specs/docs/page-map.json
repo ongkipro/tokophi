@@ -3601,7 +3601,6 @@
       {
         "module": "plugins.ts",
         "exports": [
-          "disconnectKelolaAction",
           "getKelolaOrderPanel",
           "getPluginCard",
           "removePluginData",

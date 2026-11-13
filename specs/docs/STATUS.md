@@ -17,6 +17,13 @@
 > provider); the first real "Bayar ulang" (the `-n` reff_id suffix is unproven on `/submit` production); the
 > AutoLaris QRIS window stays the vendor's 2 h default (PAY-QRIS-EXPIRY, mitigated by PAY-RETRY).
 
+> **PENDING — not on production — KEL-001 first-party plugins + Kelola CRM (branch `feat/kelola-plugin-v2`, 2026-11-13).**
+> Taken over from the paused `feat/kelola-plugin`. Adds migration `0119_store_plugins_kelola` (3 store-scoped RLS
+> tables → **91 tables / 120 migrations** in the repo once merged; production stays 88 / 119 until the deploy),
+> Pengaturan → Plugin with an **Aktif / Nonaktif** switch per plugin, and a NEW `cron-plugins` sidecar — so the
+> merge needs a **manual deploy** (DEPLOY.md). Every store is dormant until its owner activates AND connects Kelola:
+> zero outbound requests, one indexed read per order. No real Kelola call has been made from TokoΦ yet.
+
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
 > `volumdev` (`45.77.33.112`, the box that runs all 18 containers) was **suspended for an unpaid
@@ -74,7 +81,7 @@
 >
 > **Release blockers — recounted 2026-08-24 against evidence, not against stale flags.** **Stage 4 is COMPLETE**: all 13 P0 tasks carry documented completion evidence (BUILD-LOG entries and/or `[x]` flags — reconciled 2026-08-24 after the flags were found under-reporting by 16 tasks). The active queue is now **14 P1 open** (5.1, 5.4–5.9, 5.12–5.15, 5.18–5.20 — of which 5.8/5.19/5.20 are owner-gated decisions/credentials and 5.12 is blocked on GitHub Actions billing) **and 7 P2 open** (6.1, 6.3, 6.4, 6.6–6.9 — 6.1 is blocked on 5.12–5.15). No production release sign-off until the Stage 7 executable gate passes; that gate has not been run.
 >
-> **Data/security status:** the 119-entry migration journal is healthy through `0118_pay_retry` (`0117_store_shipping_provider` before it), and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
+> **Data/security status:** the 120-entry migration journal is healthy through `0119_store_plugins_kelola` (on branch `feat/kelola-plugin-v2` until it merges — production stays at 119 entries, head `0118_pay_retry`, until then; `0117_store_shipping_provider` before it), and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >
