@@ -2500,7 +2500,9 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only."
         },
         {
@@ -2580,7 +2582,9 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction."
         },
         {
@@ -2948,7 +2952,9 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "tokophi.com front door."
         },
         {

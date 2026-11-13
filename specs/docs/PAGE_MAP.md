@@ -196,9 +196,9 @@
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
 | `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
-| `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | `public-api` | ✓ |  | — |
+| `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
 | `/halaman/[handle]` | Static page. | `apps/storefront/src/pages/halaman/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
-| `/` | Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction. | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
+| `/` | Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction. | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
 | `/kategori/[handle]` | One collection: CategoryHero always, then the `category` template body. | `apps/storefront/src/pages/kategori/[handle].astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
 | `/kategori` | All collections. | `apps/storefront/src/pages/kategori/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | `apps/storefront/src/lib/safe-href.test.ts` |
 | `/keranjang` | Cart (client-side lines; the server prices everything at order time). | `apps/storefront/src/pages/keranjang.astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
@@ -239,7 +239,7 @@
 | `/demo` | What to try on the demo storefront (batiknusantara.tokophi.id), with its real screens. | `apps/landing/src/pages/demo.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/fitur` | Every feature in the one plan, grouped (store, sales, shipping, marketing, operations) with real screenshots. | `apps/landing/src/pages/fitur.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/harga` | Subscription pricing (one plan, monthly/annual switch) and the who-pays-which-fee table. | `apps/landing/src/pages/harga.astro` | `MarketingLayout` | — | — |  |  | — |
-| `/` | tokophi.com front door. | `apps/landing/src/pages/index.astro` | `MarketingLayout` | — | — |  |  | — |
+| `/` | tokophi.com front door. | `apps/landing/src/pages/index.astro` | `MarketingLayout` | — | — |  |  | `packages/lib/src/provider-label.test.ts` |
 | `/kontak` | Contact. | `apps/landing/src/pages/kontak.astro` | `Base` | — | `identity` `navigation` |  |  | — |
 | `/pembayaran-pengiriman` | Payment channels, COD rules, couriers, payout, and the who-pays-which-fee table, all from code constants. | `apps/landing/src/pages/pembayaran-pengiriman.astro` | `MarketingLayout` | — | `offer` |  |  | — |
 | `/privasi` | Privacy policy. | `apps/landing/src/pages/privasi.astro` | `Base` | — | `identity` |  |  | — |
