@@ -288,7 +288,7 @@ async function handle(req: Request) {
       .where(and(eq(schema.payments.id, claim.paymentId), eq(schema.payments.requestState, "in_progress")));
   };
   if (!autolarisConfigured()) {
-    await finish({ status: "gagal", requestState: "failed", requestError: "AutoLaris not configured" });
+    await finish({ status: "gagal", requestState: "failed", requestError: "Payment gateway belum dikonfigurasi oleh platform." });
     return json({ ok: false, code: "payment_start_failed", error: PAY_START_FAILED }, 503);
   }
   const amount = claim.from.total && claim.from.total > 0 ? claim.from.total : claim.from.amountIdr;

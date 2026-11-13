@@ -1310,7 +1310,7 @@ export function OrderDetail({
                       const key = a.expired ? "kedaluwarsa" : a.status;
                       return (
                         <li key={`${a.reffId ?? "bill"}-${i}`} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="min-w-0 truncate text-muted-foreground">
+                          <span className="min-w-0 text-muted-foreground">
                             {i + 1}. {a.createdAtLabel}
                             {a.channelCode ? ` · ${a.channelCode}` : ""}
                           </span>
