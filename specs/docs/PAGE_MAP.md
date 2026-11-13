@@ -51,7 +51,7 @@
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
 | Seller (merchant panel) | 56 | 4 | 20 |
-| Super Admin (platform control plane) | 13 | 2 | 2 |
+| Super Admin (platform control plane) | 14 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 
@@ -151,13 +151,14 @@
 
 ## Super Admin (platform control plane) — `apps/super-admin`
 
-13 pages · 2 layouts · 2 API routes
+14 pages · 2 layouts · 2 API routes
 
 ### Pages
 
 | URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `/analitik` | Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice). | page | `apps/super-admin/app/(platform)/analitik/page.tsx` | — | `data` | — | — | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
+| `/kode-daftar` | 'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner). | page | `apps/super-admin/app/(platform)/kode-daftar/page.tsx` | `kode-daftar-client.tsx` | — | `actions` | `route:/kode-daftar` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` `apps/super-admin/lib/store-shipping-provider.test.ts` |
 | `/` | layout | layout | `apps/super-admin/app/(platform)/layout.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `platform-session` | — | ✓ | — |
 | `/log-sistem` | 'Log Sistem' — the whole `platform_activity` audit log, filtered and paged in the database. | page | `apps/super-admin/app/(platform)/log-sistem/page.tsx` | — | `data` | — | `route:/log-sistem` | — | ✓ | `apps/super-admin/lib/activity-log.test.ts` `apps/super-admin/lib/audit-writes.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | Platform dashboard (MRR, revenue, merchant float, latest invoices) — `admin` rank; support is forwarded to its landing. | page | `apps/super-admin/app/(platform)/page.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `route:/` | — | ✓ | — |
@@ -167,7 +168,7 @@
 | `/pengiriman` | 'Pengiriman' — Mengantar Partner Business API oversight: every store's own Mengantar seller account (state, seller id, last error; admin retries registration, owner rotates the key) and unknown-outcome bookings (owner adopts from a verified pull with the store's key, or releases; reason required). | page | `apps/super-admin/app/(platform)/pengiriman/page.tsx` | `pengiriman-client.tsx` | — | `actions` | `route:/pengiriman` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
 | `/tiket/[id]` | One ticket thread (reply, close). | page | `apps/super-admin/app/(platform)/tiket/[id]/page.tsx` | `thread-client.tsx` | `data` | `actions` | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/tiket` | 'Tiket' — merchant support desk. | page | `apps/super-admin/app/(platform)/tiket/page.tsx` | `tiket-client.tsx` | `data` | — | `route:/tiket` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
-| `/toko/[id]` | Store detail: billing, users (add/reset — credential shown once), suspend with a reason, comp a month, 'Buka Dashboard Seller'. | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` |
+| `/toko/[id]` | Store detail: billing, users (add/reset — credential shown once), suspend with a reason, comp a month, 'Buka Dashboard Seller'. | page | `apps/super-admin/app/(platform)/toko/[id]/page.tsx` | `saldo-section.tsx` `shipping-provider-card.tsx` `store-detail.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` |
 | `/toko` | 'Toko' — all stores by lifecycle segment (trial / first month / regular / VIP) + review queue. | page | `apps/super-admin/app/(platform)/toko/page.tsx` | `toko-client.tsx` | `data` | `actions` | `route:/toko` | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` `apps/super-admin/lib/add-store-user.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/update-log` | 'Update Log' — the product changelog shown to operators (`dev-logs.ts`), paged. | page | `apps/super-admin/app/(platform)/update-log/page.tsx` | `update-log-client.tsx` | — | — | `route:/update-log` | — |  | `apps/super-admin/lib/list-page.test.ts` `apps/super-admin/lib/route-roles.test.ts` |
 | `/` | layout | layout | `apps/super-admin/app/layout.tsx` | — | — | — | — | — |  | — |
@@ -329,7 +330,7 @@
 | `promo-hub.ts` | `getPromoHub` `setPromoHub` |
 | `promo.ts` | `generatePromoContent` `savePromoPage` |
 | `purchases.ts` | `cancelPurchaseOrder` `createPurchaseOrder` `receivePurchaseOrder` `unreceivePurchaseOrder` |
-| `register.ts` | `registerStore` |
+| `register.ts` | `checkSignupCode` `registerStore` |
 | `rekening.ts` | `getBankAccount` |
 | `reviews.ts` | `deleteReview` `replyToReview` `setReviewStatus` |
 | `security.ts` | `changePassword` `disable2FA` `enable2FA` `getSecurity` `setup2FA` |
@@ -348,7 +349,7 @@
 
 | module | exports |
 |---|---|
-| `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `reconcileMengantarBooking` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `retryStoreMengantar` `rotateStoreMengantar` `saveCodAllowed` `saveCouriers` `saveGateways` `saveMengantarPartner` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `saveProviderOrderPrefix` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setShippingProvider` `setStoreComped` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
+| `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createSignupCode` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `reconcileMengantarBooking` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `retryStoreMengantar` `rotateStoreMengantar` `saveCodAllowed` `saveCouriers` `saveGateways` `saveMengantarPartner` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `saveProviderOrderPrefix` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setShippingProvider` `setSignupCodeActive` `setStoreComped` `setStoreShippingProvider` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
 | `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
 | `comp-invoice.ts` | `buildCompInvoice` |
 | `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getKiriminajaBalance` `getKiriminajaProbe` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getProviderStatus` `getRefundSummary` `getRefunds` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
@@ -369,6 +370,8 @@
 | `refused.ts` | `refused` |
 | `route-roles.ts` | `ROUTE_RULES` `canOpenPath` `landingForRole` `minRoleForPath` `reasonForPath` |
 | `session.ts` | `SESSION_COOKIE` `signSession` |
+| `shipping-data.ts` | `getStoreShipping` `listSignupCodes` |
+| `store-shipping-provider.ts` | `PROVIDER_LABEL` `SHIPPING_PROVIDER_MIN_RANK` `SIGNUP_CODE_NOTE_MAX` `STORE_PROVIDER_REASON_MIN` `createSignupCodeWith` `isShippingProvider` `setSignupCodeActiveWith` `setStoreShippingProviderWith` |
 | `subscription-kpi.ts` | `periodBackedBy` `subscriptionKpiBucket` |
 | `types.ts` | — |
 

@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { mengantarNotice, mengantarReadiness, type MengantarReadinessInput } from "./mengantar-readiness";
 
-const READY: MengantarReadinessInput = { switchOn: true, envNamed: true, canRegister: true, state: "connected", hasPickupArea: true, hasPickupAddress: true };
+const READY: MengantarReadinessInput = { storeOnMengantar: true, switchOn: true, envNamed: true, canRegister: true, state: "connected", hasPickupArea: true, hasPickupAddress: true };
 
 describe("mengantarReadiness — the first broken link, in quoteShipping's order", () => {
   it("everything holds → active", () => {
     expect(mengantarReadiness(READY)).toEqual({ active: true, reason: null, fix: null });
+  });
+
+  it("ADR 0019: a store NOT set to Mengantar is never active and has nothing to fix — even when connected", () => {
+    expect(mengantarReadiness({ ...READY, storeOnMengantar: false })).toMatchObject({ active: false, fix: null });
+    expect(mengantarNotice(mengantarReadiness({ ...READY, storeOnMengantar: false, state: "none" }), true)).toBeNull();
   });
 
   it("platform switch off, or MENGANTAR_ENV unnamed → not active, nothing the seller can fix", () => {

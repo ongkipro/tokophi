@@ -152,7 +152,10 @@ export async function reconcileUnknownBookingWith(deps: MgOpsDeps, operator: str
 export type StoreAccountRow = {
   storeId: string;
   storeName: string;
+  /** ADR 0019: `stores.shipping_provider` — a row whose store is on KiriminAja is history, not in use. */
+  provider: string;
   env: string;
+  /** `none` = the store is on Mengantar but has no account row in this env yet. */
   state: string;
   sellerId: string | null;
   partnerId: string | null;
@@ -162,25 +165,37 @@ export type StoreAccountRow = {
   updatedAt: Date;
 };
 
-/** Every store's Mengantar seller account in the active env — oversight for Super Admin (no keys, a 4-char hint only). */
+/**
+ * Every store on Mengantar, and every store holding a Mengantar account row, in the active env — oversight
+ * for Super Admin (no keys, a 4-char hint only). ADR 0019: a store set to Mengantar with NO row yet is
+ * listed too (state `none`), so "on Mengantar but nothing queued" is visible, and each row says which
+ * provider the store is on (a row of a KiriminAja store is kept history, not in use).
+ */
 export async function listMengantarAccounts(env: string): Promise<StoreAccountRow[]> {
   const rows = await db
     .select({
-      storeId: schema.storeMengantarAccounts.storeId,
+      storeId: schema.stores.id,
       storeName: schema.stores.name,
-      env: schema.storeMengantarAccounts.env,
-      state: schema.storeMengantarAccounts.state,
+      provider: schema.stores.shippingProvider,
+      // Columns named in full inside `sql`: drizzle renders an interpolated column UNQUALIFIED there, and
+      // with two tables joined an unqualified name is ambiguous or, worse, the wrong table's.
+      env: sql<string>`coalesce("store_mengantar_accounts"."env", ${env})`,
+      state: sql<string>`coalesce("store_mengantar_accounts"."state", 'none')`,
       sellerId: schema.storeMengantarAccounts.sellerId,
       partnerId: schema.storeMengantarAccounts.partnerId,
       keyHint: schema.storeMengantarAccounts.keyHint,
       lastErrorCode: schema.storeMengantarAccounts.lastErrorCode,
       lastError: schema.storeMengantarAccounts.lastError,
-      updatedAt: schema.storeMengantarAccounts.updatedAt,
+      updatedAt: sql<Date>`coalesce("store_mengantar_accounts"."updated_at", "stores"."created_at")`,
     })
-    .from(schema.storeMengantarAccounts)
-    .innerJoin(schema.stores, eq(schema.stores.id, schema.storeMengantarAccounts.storeId))
-    .where(eq(schema.storeMengantarAccounts.env, env))
-    .orderBy(sql`${schema.storeMengantarAccounts.state} = 'connected'`, schema.storeMengantarAccounts.updatedAt);
+    .from(schema.stores)
+    .leftJoin(schema.storeMengantarAccounts, and(eq(schema.storeMengantarAccounts.storeId, schema.stores.id), eq(schema.storeMengantarAccounts.env, env)))
+    .where(sql`"stores"."shipping_provider" = 'mengantar' or "store_mengantar_accounts"."store_id" is not null`)
+    .orderBy(
+      sql`"stores"."shipping_provider" <> 'mengantar'`,
+      sql`"store_mengantar_accounts"."state" = 'connected'`,
+      sql`coalesce("store_mengantar_accounts"."updated_at", "stores"."created_at")`,
+    );
   return rows.map((r) => ({ ...r, updatedAt: new Date(r.updatedAt) }));
 }
 

@@ -103,7 +103,7 @@ async function main() {
     store = await db.transaction(async (tx) => {
       const [acc] = await tx.insert(schema.accounts).values({ name: `Mengantar sandbox ${TAG}` }).returning();
       const [u] = await tx.insert(schema.users).values({ email: EMAIL!, name: "Pemilik Uji Sandbox" }).returning();
-      const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name: `Toko Uji Mengantar ${TAG}`, slug, status: "active", approvedAt: new Date() }).returning({ id: schema.stores.id });
+      const [st] = await tx.insert(schema.stores).values({ accountId: acc.id, name: `Toko Uji Mengantar ${TAG}`, slug, status: "active", approvedAt: new Date(), shippingProvider: "mengantar" /* ADR 0019: only a Mengantar store is registered */ }).returning({ id: schema.stores.id });
       await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
       await tx.insert(schema.storeSettings).values({
         storeId: st.id,

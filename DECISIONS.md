@@ -28,7 +28,8 @@ Updated: 2026-11-13
 | ADR 0015 | accepted (owner, issue #180); amended by 0018 for Mengantar-booked orders (no ledger shipping debit) | Net Seller proceeds + shipping reconciliation (`order-finance.ts`) | 2026-08-12 | `0015-net-seller-proceeds-and-shipping-reconciliation.md` |
 | ADR 0016 | **proposed — placeholder, not decided** (Task 5.8) | Global buyer account; the file is a stub so existing links resolve, the decision is not taken | — | `0016-global-buyer-account.md` |
 | ADR 0017 | accepted (structural changes; the ~0 s options remain an owner decision) | Deploy window: health-first in-place swap on Coolify compose — consistent container names, `migrate` gate dropped from routed apps, `start_interval: 2s`; **81–115 s → 7–8 s** accepted as the floor (0016 reserved for Task 5.8) | 2026-08-28 | `0017-zero-downtime-deploy.md` |
-| ADR 0018 | accepted (owner O1–O11, 2026-11-05/12) | Mengantar shipping: TokoΦ registers a **per-store Mengantar seller account** (Partner API) behind a platform provider switch; KiriminAja stays the fallback and the COD path; seller wallet pays the courier (no ledger debit); demo store on an owner-attached account until the production Partner origin exists | 2026-11-05 | `0018-mengantar-per-store-seller-accounts.md` |
+| ADR 0018 | accepted (owner O1–O11, 2026-11-05/12); dispatch D11 + auto-registration D14 amended by 0019 | Mengantar shipping: TokoΦ registers a **per-store Mengantar seller account** (Partner API) behind a platform provider switch; KiriminAja stays the fallback and the COD path; seller wallet pays the courier (no ledger debit); demo store on an owner-attached account until the production Partner origin exists | 2026-11-05 | `0018-mengantar-per-store-seller-accounts.md` |
+| ADR 0019 | accepted (owner, 2026-11-13; rank owner-confirmable — one constant) | Shipping provider **per store** (`stores.shipping_provider`, default KiriminAja), set by Super Admin or a **signup code** (`signup_codes`); the platform switch stays the master kill-switch; a Mengantar account is registered ONLY for a store set to Mengantar (checked at the sink); Mengantar consent on `/daftar` only for a Mengantar code | 2026-11-13 | `0019-store-level-shipping-provider.md` |
 
 ## Owner rulings without an ADR (recorded in `AGENTS.md` unless noted)
 
@@ -50,4 +51,4 @@ Updated: 2026-11-13
 | DEC-014 | accepted (owner) | Git history is **not rewritten** to remove AI co-author trailers on 282 historical commits — the cost (force-push over 1 163 commits, ~137 branches orphaned, a production rebuild) outweighs a cosmetic avatar; PR bodies were cleaned instead (131) and no new trailer is written | 2026-09-10 | BUILD-LOG 2026-09-10; global CLAUDE.md rule |
 
 Use stable IDs (`DEC-nnn`). When a ruling needs alternatives and consequences spelled out, write the
-ADR in `specs/decisions/` (0016 is RESERVED for the buyer-account decision, Task 5.8 — `0016-global-buyer-account.md`, not yet written; next free number is **0018**) and link it here.
+ADR in `specs/decisions/` (0016 is RESERVED for the buyer-account decision, Task 5.8 — `0016-global-buyer-account.md`, not yet written; next free number is **0020**) and link it here.

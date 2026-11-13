@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { kaShippingPrice, kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { mgEstimate, mgCourierCode, mgPickupModeFromEnv, mgUnbookableInMode, MengantarNotWhitelistedError, type MgPickupMode, type MgRate } from "@tokophi/lib/mengantar";
 import { getProviderConfig, DEFAULT_SHIPPING_PROVIDER, type MengantarConfig, type ShippingProvider } from "@tokophi/lib/provider-config";
-import { openStoreMengantar, refreshStoreMengantarKey } from "@tokophi/db/mengantar-account";
+import { openStoreMengantar, refreshStoreMengantarKey, storeShippingProvider } from "@tokophi/db/mengantar-account";
 import { cacheGet, cacheSet } from "@tokophi/lib/cache";
 import { courierName, isInstantCourier, isInstantService } from "@tokophi/lib/couriers";
 import { resolveArea, mengantarDestination } from "@/lib/data/areas";
@@ -155,11 +155,15 @@ export async function shippingConfigured(): Promise<boolean> {
  * THE DISPATCH. Quote and re-quote both come through here, so a checkout's price and the order's
  * stored price come from the same provider for the same (store, switch, COD) inputs.
  *
- *   · switch = Mengantar AND not COD AND the store has a CONNECTED Mengantar account → Mengantar, with
- *     THE STORE'S OWN seller key (partner model).
- *   · anything else → the default provider. A store that is not connected FALLS BACK (owner O6); COD
- *     always goes the default way. The quote's `provider` field says which one actually priced it, and
- *     `/api/public/order` stamps exactly that onto `orders.shipping_provider`.
+ * ADR 0019 (owner 2026-11-13) — the provider is a fact about the STORE (`stores.shipping_provider`, set by
+ * Super Admin or a signup code), and the platform switch is the master kill-switch above it:
+ *
+ *   · Mengantar ⇔ switch = Mengantar ∧ not COD ∧ MENGANTAR_ENV named here ∧ store set to Mengantar
+ *     ∧ the store has a CONNECTED Mengantar account — quoted with THE STORE'S OWN seller key.
+ *   · anything else → KiriminAja (the default provider). A KiriminAja store with a connected account
+ *     (moved back by an operator) quotes KiriminAja; a Mengantar store that is not connected FALLS BACK
+ *     (owner O6); COD always goes the default way (O4). The quote's `provider` field says which one
+ *     actually priced it, and `/api/public/order` stamps exactly that onto `orders.shipping_provider`.
  *
  *   · a connected store whose Mengantar quote fails or prices nothing → the default provider as well.
  *
@@ -175,7 +179,9 @@ export async function quoteShipping(input: QuoteInput): Promise<Quote> {
   // (and it also covers a provider chosen by the `SHIPPING_PROVIDER` env with no DB row).
   if (cfg.shipping === "mengantar" && !input.cod && cfg.mengantar.envSource !== "env") {
     console.warn("[shipping/quote] shipping provider is mengantar but MENGANTAR_ENV is not set in this process — quoting the default provider");
-  } else if (cfg.shipping === "mengantar" && !input.cod) {
+  } else if (cfg.shipping === "mengantar" && !input.cod && (await storeShippingProvider(input.storeId)) === "mengantar") {
+    // The store's own provider is read BEFORE its account is opened: a KiriminAja store never touches
+    // its sealed key, connected or not.
     const acc = await openStoreMengantar(input.storeId);
     if (acc.ok) {
       const mg = await quoteMengantar(input, acc.cfg);

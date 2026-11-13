@@ -1794,6 +1794,30 @@
           "whatItIs": "Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice)."
         },
         {
+          "url": "/kode-daftar",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/kode-daftar/page.tsx",
+          "clients": [
+            "kode-daftar-client.tsx"
+          ],
+          "data": [],
+          "actions": [
+            "actions"
+          ],
+          "gate": [
+            "route:/kode-daftar"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/super-admin/lib/route-roles.test.ts",
+            "apps/super-admin/lib/store-shipping-provider.test.ts"
+          ],
+          "whatItIs": "'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner)."
+        },
+        {
           "url": "/",
           "kind": "layout",
           "methods": [],
@@ -2025,6 +2049,7 @@
           "file": "apps/super-admin/app/(platform)/toko/[id]/page.tsx",
           "clients": [
             "saldo-section.tsx",
+            "shipping-provider-card.tsx",
             "store-detail.tsx"
           ],
           "data": [
@@ -3569,6 +3594,7 @@
       {
         "module": "register.ts",
         "exports": [
+          "checkSignupCode",
           "registerStore"
         ]
       },
@@ -3709,6 +3735,7 @@
           "approveStore",
           "compStore",
           "createManualInvoice",
+          "createSignupCode",
           "createStore",
           "extendTrial",
           "impersonateStore",
@@ -3740,7 +3767,9 @@
           "setInvoiceStatus",
           "setProviderEnv",
           "setShippingProvider",
+          "setSignupCodeActive",
           "setStoreComped",
+          "setStoreShippingProvider",
           "setStoreUserRole",
           "setSubscriptionPpn",
           "setTicketStatus",
@@ -3960,6 +3989,26 @@
         "exports": [
           "SESSION_COOKIE",
           "signSession"
+        ]
+      },
+      {
+        "module": "shipping-data.ts",
+        "exports": [
+          "getStoreShipping",
+          "listSignupCodes"
+        ]
+      },
+      {
+        "module": "store-shipping-provider.ts",
+        "exports": [
+          "PROVIDER_LABEL",
+          "SHIPPING_PROVIDER_MIN_RANK",
+          "SIGNUP_CODE_NOTE_MAX",
+          "STORE_PROVIDER_REASON_MIN",
+          "createSignupCodeWith",
+          "isShippingProvider",
+          "setSignupCodeActiveWith",
+          "setStoreShippingProviderWith"
         ]
       },
       {

@@ -5,6 +5,12 @@ in `specs/docs/tasks/2026-11-05-shipping-mengantar-decisions.md` (D7–D18 and t
 **Amends:** ADR 0004 (who owns the courier account), ADR 0015 (shipping money on a Mengantar-booked order)
 **Supersedes:** none — KiriminAja stays the default provider and the COD path
 
+> **Amended 2026-11-13 by [ADR 0019](0019-store-level-shipping-provider.md):** the provider is now chosen PER
+> STORE (`stores.shipping_provider`, Super Admin or a signup code; default KiriminAja). D11 gains "∧ the store is
+> set to Mengantar"; D14's automatic registration applies only to such stores (signup with a Mengantar code,
+> or a store an operator moved), and `createStore` no longer queues an account. The switch below stays as the
+> platform master kill-switch. Everything else in this record stands.
+
 ## 1. Context
 
 Until 2026-11, every shipment went through ONE platform-owned aggregator account (KiriminAja, ADR 0004): the

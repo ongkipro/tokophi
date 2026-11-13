@@ -13,6 +13,8 @@ import {
 } from "@/lib/provision";
 import { rateLimit } from "@tokophi/lib/cache";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
+import { normalizeSignupCode } from "@tokophi/lib/signup-code";
+import { lookupSignupCode } from "@/lib/signup-code";
 
 export type RegisterState = { error?: string };
 
@@ -56,6 +58,12 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
     return v || null;
   };
   const kecId = Number(formData.get("senderKecamatanId") ?? "");
+  // ADR 0019 — the signup code, and the code the Mengantar consent sentence was SHOWN for (a hidden
+  // field the form fills only while the sentence is on screen). Consent counts only when the two match:
+  // the agreement is bound to the code it was given for, never inferred.
+  const signupCode = String(formData.get("signupCode") ?? "");
+  const consentFor = normalizeSignupCode(formData.get("mengantarConsentFor"));
+  const mengantarConsent = !!consentFor && consentFor === normalizeSignupCode(signupCode);
 
   if (!storeName || !ownerName || !email || !password) return { error: "Semua kolom wajib diisi." };
   if (!EMAIL_RE.test(email)) return { error: "Format email tidak valid." };
@@ -85,6 +93,8 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
       senderKecamatanName: opt("senderKecamatanName"),
       senderKelurahanName: opt("senderKelurahanName"),
       senderPostcode: opt("senderPostcode"),
+      signupCode,
+      mengantarConsent,
     });
   } catch (e) {
     if (e instanceof SignupClosedError) return { error: CLOSED_MSG };
@@ -97,4 +107,33 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
   const token = await signSession({ userId: r.userId, storeId: r.storeId, role: r.role, email: r.email, name: r.name });
   (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_MAX_AGE));
   redirect(`/store/${r.slug}`);
+}
+
+// Below `registerStore` on purpose: `signup-metered.test.ts` reads the FIRST `rateLimit(` call in this file
+// as the signup door's limiter and proves it runs before the email oracle.
+
+/**
+ * What the /daftar form learns about a typed code — never the default provider's name (ADR 0004).
+ * `valid: null` = not checked (the person hit the limiter): the form neither blocks nor shows the Mengantar
+ * consent, and the signup boundary decides. A Mengantar store created that way waits for the owner's click.
+ */
+export type SignupCodeCheck = { valid: boolean | null; mengantar: boolean };
+
+/**
+ * ADR 0019 — does the code the person is typing exist, and does it put the store on Mengantar (which is
+ * when the Mengantar consent sentence must appear, partner docs)? Advisory only: `provisionStore`
+ * re-reads the code inside its transaction and is the boundary.
+ *
+ * It IS a code oracle, so it is metered like the signup door beside it (a floor, not a wall — see the
+ * note on `registerStore`). What a guessed code buys is small and bounded: a self-serve store on a
+ * provider, still locked until an operator approves it (0090) — no account is registered before that.
+ */
+export async function checkSignupCode(raw: string): Promise<SignupCodeCheck> {
+  const code = normalizeSignupCode(raw);
+  if (!code) return { valid: false, mengantar: false };
+  const h = await headers();
+  const ip = h.get("cf-connecting-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  if (!rateLimit(`signup-code:admin:${ip}`, 30, 600_000).ok) return { valid: null, mengantar: false };
+  const hit = await lookupSignupCode(code);
+  return { valid: !!hit, mengantar: hit?.provider === "mengantar" };
 }

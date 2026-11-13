@@ -4,6 +4,8 @@ import { requireCapability } from "@/lib/rbac";
 import { getSession } from "@/lib/auth";
 import {
   connectStoreMengantar,
+  NOT_ON_MENGANTAR_MSG,
+  storeShippingProvider,
   mengantarAccountStatus,
   requeueMengantar,
   sellerConnectRefusal,
@@ -36,7 +38,7 @@ export type MengantarCardState = Omit<MgAccountStatus, "retryAfterAt" | "connect
 const canRegister = (m: { partnerBase: string | null; partnerId: string | null; partnerSecret: string | null }) => !!(m.partnerBase && m.partnerId && m.partnerSecret);
 
 /** One computation for every screen that says whether checkout uses Mengantar (card + Jasa Kirim). */
-async function readinessFor(storeId: string, state: string, lastErrorCode: string | null): Promise<MengantarReadiness> {
+async function readinessFor(storeId: string, state: string, lastErrorCode: string | null, storeOnMengantar: boolean): Promise<MengantarReadiness> {
   const [cfg, [pickup]] = await Promise.all([
     getProviderConfig(),
     withTenant(storeId, (db) =>
@@ -47,6 +49,7 @@ async function readinessFor(storeId: string, state: string, lastErrorCode: strin
     ),
   ]);
   return mengantarReadiness({
+    storeOnMengantar,
     switchOn: cfg.shipping === "mengantar",
     envNamed: cfg.mengantar.envSource === "env",
     canRegister: canRegister(cfg.mengantar),
@@ -64,8 +67,9 @@ async function readinessFor(storeId: string, state: string, lastErrorCode: strin
 export async function getShippingViaMengantar(): Promise<boolean> {
   const session = await getSession();
   if (!session) return false;
+  if ((await storeShippingProvider(session.storeId)) !== "mengantar") return false; // ADR 0019
   const s = await mengantarAccountStatus(session.storeId);
-  return (await readinessFor(session.storeId, s.state, s.lastErrorCode)).active;
+  return (await readinessFor(session.storeId, s.state, s.lastErrorCode, true)).active;
 }
 
 /**
@@ -77,17 +81,24 @@ export async function getMengantarDashboardNotice(): Promise<MengantarNotice | n
   if (!session) return null;
   const canFix = can(session.role, "settings:write");
   if (!canFix) return null; // nobody to act → skip the reads entirely
+  // ADR 0019 / ADR 0004: a store on the default provider sees no Mengantar banner — it has nothing to connect.
+  if ((await storeShippingProvider(session.storeId)) !== "mengantar") return null;
   const s = await mengantarAccountStatus(session.storeId);
-  return mengantarNotice(await readinessFor(session.storeId, s.state, s.lastErrorCode), canFix);
+  return mengantarNotice(await readinessFor(session.storeId, s.state, s.lastErrorCode, true), canFix);
 }
 
-/** Read for the Pengaturan card (owner-only screen section; the read itself names no secret). */
-export async function getMengantarCard(): Promise<MengantarCardState> {
+/**
+ * Read for the Pengaturan card (owner-only screen section; the read itself names no secret).
+ * `null` = this store is NOT on Mengantar (ADR 0019) → the card renders nothing: a KiriminAja seller is
+ * never shown a provider brand or a button for an account TokoΦ will not create (ADR 0004).
+ */
+export async function getMengantarCard(): Promise<MengantarCardState | null> {
   const { storeId } = await requireCapability("settings:write");
+  if ((await storeShippingProvider(storeId)) !== "mengantar") return null;
   const s = await mengantarAccountStatus(storeId);
   const [balance, checkout, cfg] = await Promise.all([
     s.state === "connected" ? mengantarStoreBalance(storeId) : Promise.resolve(null),
-    readinessFor(storeId, s.state, s.lastErrorCode),
+    readinessFor(storeId, s.state, s.lastErrorCode, true),
     getProviderConfig(),
   ]);
   return {
@@ -114,6 +125,9 @@ export async function connectMengantar(): Promise<{ ok: boolean; message: string
   // Super Admin could consent for the owner — the exact thing the operator path (`source: "operator"`) is
   // not allowed to do.
   if (session.imp) return { ok: false, message: "Persetujuan Mengantar hanya bisa diberikan pemilik toko sendiri, bukan dari Super Admin." };
+  // ADR 0019: the seller never chooses the provider — a store TokoΦ has not put on Mengantar gets no account
+  // (`connectStoreMengantar` refuses too; this answers before any consent is written in the owner's name).
+  if ((await storeShippingProvider(session.storeId)) !== "mengantar") return { ok: false, message: NOT_ON_MENGANTAR_MSG };
   const before = await mengantarAccountStatus(session.storeId);
   if (before.state === "connected") return { ok: true, message: "Akun Mengantar toko sudah terhubung." };
   const refusal = sellerConnectRefusal(before, Date.now());
