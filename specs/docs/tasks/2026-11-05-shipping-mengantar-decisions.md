@@ -54,7 +54,38 @@ registered on the existing Mengantar seller account — Jl. Pakis Tirtosari X No
 
 Still open: O2 (production Partner origin + allow-listed IP), O8 (which Mengantar Terms/Privacy versions the
 consent line cites — the Seller card shows a plain consent sentence today), D12, and whether `idempotencyKey`
-replays in the sandbox (sent, not relied on).
+replays in PRODUCTION (sent, not relied on — the sandbox half is answered below).
+
+### `idempotencyKey` replay — sandbox measured twice (SHIP-MENGANTAR-IDEMPOTENCY, 2026-11-13)
+
+**Verdict (sandbox): the same key + the same body creates ONE shipment.** Re-measured 2026-11-13 07:50 UTC with
+`ops/mengantar-sandbox-idempotency.ts` (real client `mgCreateOrder`, sandbox origin hard-coded, a sandbox seller key
+read in-process from `secrets-env`, JT drop-off, 1 kg non-COD, one `destinationMark` per run, sequential calls):
+
+| Call | Key / body | HTTP | Result |
+|---|---|---|---|
+| A | K1 / P | 200 | `_id …7659`, ORDER_ID `261113AI5F2J`, batch `26111314T6Z3Y4` |
+| B | K1 / P (replay, +3 s) | 200 | the SAME `_id`, ORDER_ID and batch as A — no second shipment |
+| C | K2 / P (control) | 200 | a NEW `_id …768d` (ORDER_ID `261113JBNWE4`) — Mengantar does not dedupe on `destinationMark` |
+| D | K1 / P′ (one field changed) | 422 | `IDEMPOTENCY_KEY_REUSED`; our client throws `MengantarOutcomeUnknownError` (conservative) |
+
+Read-back (`GET /order?batch=` per batch + `?order_id=` per ORDER_ID): exactly **2** live shipments carried the run's
+mark (A=B and C). Both cancelled (`DELETE /order` → `deletedCount` 1 each); afterwards both batches list 0 rows and
+both ORDER_IDs read back `isDeleted: true`. **Leftovers: none.** Same result as the first probe (2026-11-05, BUILD-LOG).
+
+Limits of the evidence: sandbox only (production still unproven — measuring it books a real parcel on a real wallet);
+both bookings came back `isPaid:false`, `cnote_no:null` (sandbox wallet did not pay), so a replay of a PAID booking
+was not observed; the 24 h retention (M19) and a replay while the first request is still in flight were not tested
+(the second would violate the one-POST-per-account rule).
+
+What it means for our code: the key is minted per ATTEMPT (`tokophi-${bookingId}`,
+`apps/admin/lib/mengantar-shipping.ts:543`), so it is only ever re-sent inside `createWith409Retry` (`:364-371`).
+A lost answer does not replay — it leaves the booking `unknown` (`:561`) and the claim (`:454-513`, partial unique
+index `shipment_one_active_per_order`) refuses every re-book until an operator reconciles. So no double-book window
+exists today whichever way production behaves; the key is a second net, not the first. Possible follow-up (not
+done, main-session decision): an `unknown` booking younger than 24 h could be reconciled by RE-SENDING its stored
+payload with the SAME key — in the sandbox that returns the original `_id` instead of a second parcel — but only
+after the same is seen in production.
 
 
 
