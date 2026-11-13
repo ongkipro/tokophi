@@ -44,7 +44,7 @@ comment on column "store_plugins"."settings" is
 comment on column "store_plugins"."secret_enc" is
   'AES-GCM (INTEGRATION_TOKEN_KEY), scope <plugin>:<store_id>:v<secret_v>. For kelola: JSON {webhook_url, webhook_secret} — the URL carries Kelola''s token. Never returned to a browser, never logged.';--> statement-breakpoint
 comment on column "store_plugins"."connected_at" is
-  'Last successful credential save. Nothing placed before it is ever pushed (spec §4.4, no backfill).';--> statement-breakpoint
+  'FIRST successful connection (kept on a re-save; cleared on disconnect). Nothing placed before it is ever pushed (spec §4.4, no backfill). Moving it on a re-save would drop every order placed while the credential was broken.';--> statement-breakpoint
 comment on column "store_plugins"."broken_at" is
   'Set when the provider answered 401/404 (credential refused). The cron skips the store until the credential is saved again, which clears it.';--> statement-breakpoint
 
