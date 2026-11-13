@@ -1,33 +1,24 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **PENDING — not on production (2026-11-13, BILL-PRICE-2026-11, ADR 0020, branch `feat/pricing-178k-code-discount`).**
-> New subscription price Rp178.500/mo, annual Rp1.713.600 (×12 −20%), no Rp50rb first-month promo, signup-code
-> discount on the first paid invoice (migration `0119`). Until that PR is merged AND deployed by hand, production still
-> bills Rp275.000 / Rp2.700.000 with the Rp50.000 first month and the landing still shows those prices.
-
-> **Current state — 2026-11-13 13:40 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`ea675ef7`** (deploy of PR #465 PAY-RETRY, on
-> top of #466 store-level shipping provider, #464, #463, #462), admin / super-admin / storefront / landing `(healthy)`
-> on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`. **Migrations: 119 on production (head
-> `0118_pay_retry`, max stamp 1787545891751).** **Shipping (ADR 0018 + 0019):** the provider is per store
-> (`stores.shipping_provider`, default KiriminAja, set by Super Admin owner rank or a signup code); production = 1
-> `mengantar` (the demo store `batiknusantara`, owner-attached account) + 16 `kiriminaja`; platform switch = Mengantar
-> (master kill-switch); COD always KiriminAja. Quotes after both deploys identical to the pre-deploy baseline (demo
-> non-COD → Mengantar `codRequote:true` SPX Rp5.700; demo COD → KiriminAja; permata-store → KiriminAja). Signup codes:
-> 0. Area bridge 6 919 / 7 030 kecamatan, rebuilt on every deploy. **Payments:** "Bayar ulang" live —
-> `/api/public/pay/retry` answers JSON (`not_found` for an unknown order), `/checkout/sukses` ships the button; the
-> 227 pre-existing payment rows have `expires_at` NULL (read as unknown → bounded 24 h). `ops/tokophi-probe.sh` exit 0.
-> Merges do NOT deploy here — trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's
-> production Partner origin + IP allow-list (O2); the first real courier booking + cancel (none yet on either
-> provider); the first real "Bayar ulang" (the `-n` reff_id suffix is unproven on `/submit` production); the
-> AutoLaris QRIS window stays the vendor's 2 h default (PAY-QRIS-EXPIRY, mitigated by PAY-RETRY).
-
-> **PENDING — not on production — KEL-001 first-party plugins + Kelola CRM (branch `feat/kelola-plugin-v2`, 2026-11-13).**
-> Taken over from the paused `feat/kelola-plugin`. Adds migration `0120_store_plugins_kelola` (3 store-scoped RLS
-> tables → **91 tables / 121 migrations** in the repo once merged; production stays 88 / 120 until the deploy),
-> Pengaturan → Plugin with an **Aktif / Nonaktif** switch per plugin, and a NEW `cron-plugins` sidecar — so the
-> merge needs a **manual deploy** (DEPLOY.md). Every store is dormant until its owner activates AND connects Kelola:
-> zero outbound requests, one indexed read per order. No real Kelola call has been made from TokoΦ yet.
+> **Current state — 2026-11-13 16:35 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`41717f51`** (deploy of PR #469 KEL-001 plugins, on
+> top of #468 pricing, #465 PAY-RETRY, #466 store-level shipping provider), admin / super-admin / storefront / landing
+> `(healthy)` on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`; NEW sidecar **`cron-plugins`**
+> `(healthy)`, first tick `{"ok":true,"stores":0}`. **Schema: 91 tables · 121 migrations on production (head `0120_store_plugins_kelola`,
+> max stamp 1787546011751)**. **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
+> Rp50rb promo; a signup code may carry a first-paid-invoice discount (default Rp100.000) — landing `/harga` shows the
+> new prices; the 12 `menunggu` invoices issued before the deploy kept their amounts (Rp1.116.000 total, unchanged);
+> signup codes: 0. **Plugins (ADR 0021):** Pengaturan → Plugin, Kelola CRM with Aktif / Nonaktif; `store_plugins` = 0,
+> so every store is dormant (zero outbound requests); `/api/cron/plugins` without the secret → 401 JSON.
+> **Shipping (ADR 0018 + 0019):** provider per store, production = 1 `mengantar` (demo store, owner-attached) + 16
+> `kiriminaja`; platform switch = Mengantar (kill-switch); COD always KiriminAja; quotes identical to the pre-deploy
+> baseline across all three deploys (demo non-COD → Mengantar `codRequote:true` SPX Rp5.700; demo COD → KiriminAja).
+> **Payments:** "Bayar ulang" live (`/api/public/pay/retry`). **Disk:** four deploys in one day left 22 GB of build
+> cache (67 % used, probe FAIL at the 65 % line); `tokophi-docker-cleanup.sh` run by hand with
+> `TOKOPHI_CLEANUP_AGGRESSIVE_PCT=65` (cache only, rollback images kept) → 50 %, probe exit 0. Merges do NOT deploy
+> here — trigger by hand. Still open: no alert channel; Mengantar production Partner origin + IP allow-list (O2); the
+> first real courier booking + cancel; the first real "Bayar ulang" (`-n` reff_id unproven on `/submit`); the UU PDP
+> processor line on the storefront privacy page before any store activates Kelola (owner approval).
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
