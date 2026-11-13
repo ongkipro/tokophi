@@ -4,7 +4,7 @@
 > `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`41717f51`** (deploy of PR #469 KEL-001 plugins, on
 > top of #468 pricing, #465 PAY-RETRY, #466 store-level shipping provider), admin / super-admin / storefront / landing
 > `(healthy)` on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`; NEW sidecar **`cron-plugins`**
-> `(healthy)`, first tick `{"ok":true,"stores":0}`. **Migrations: 121 on production (head `0120_store_plugins_kelola`,
+> `(healthy)`, first tick `{"ok":true,"stores":0}`. **Schema: 91 tables · 121 migrations on production (head `0120_store_plugins_kelola`,
 > max stamp 1787546011751)**. **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
 > Rp50rb promo; a signup code may carry a first-paid-invoice discount (default Rp100.000) — landing `/harga` shows the
 > new prices; the 12 `menunggu` invoices issued before the deploy kept their amounts (Rp1.116.000 total, unchanged);
