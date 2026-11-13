@@ -2399,7 +2399,8 @@
             "checkout"
           ],
           "lib": [
-            "cart-variant"
+            "cart-variant",
+            "public-api"
           ],
           "locals": true,
           "db": false,
@@ -4145,6 +4146,16 @@
           "feedDocument",
           "feedItems",
           "xml"
+        ]
+      },
+      {
+        "module": "public-api.ts",
+        "exports": [
+          "CLIENT_API_URLS",
+          "ONGKIR_API",
+          "ORDER_API",
+          "PROMO_API",
+          "STOREFRONT_CSP"
         ]
       },
       {
