@@ -5188,3 +5188,33 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
     "Tagihan 1"; landing `/harga/` title/description/JSON-LD 178500/1713600, annual toggle, no old price on the page.
 - **Not verified:** a real provider payment/callback for a discounted invoice (stubbed); the Google signup door with a code;
   production. Before merge: re-check migration 0119 / ADR 0020 numbers against `main`.
+
+### [2026-11-13 16:40 UTC] — DEPLOY · #468 (pricing, ADR 0020) and #469 (Kelola plugin, ADR 0021) live; disk cleanup
+- **Executor:** Main Session. Owner: "ya rekomendasimu jalankan, review, audit dan sempurnakan".
+- **#468** merged `47fd8266` (branch already contained main; CI green). Deploy `yzttsy6ptv6ntnzkh8lmos5v` took ~20 min
+  (host busy); four surfaces `(healthy)` on `…:47fd8266…` twice; 120 migrations (max stamp 1787545951751).
+  Before → after: landing `/harga` Rp275.000 / Rp50.000 / Rp2.700.000 → 178.500 / 1.713.600 (no 275.000/50.000 left);
+  invoices before/after identical (gagal 3 · 666 000, menunggu 12 · 1 116 000, dibayar 28 · 1 526 250) — issued
+  invoices keep their amounts; admin/super-admin logs clean.
+- **#469**: both branches had written `0119` with the SAME stamp 1787545951751 → merged main into
+  `feat/kelola-plugin-v2`, renumbered `0119_store_plugins_kelola` → `0120`, re-stamped 1787546011751, RETIRED entry;
+  8 doc conflicts resolved keeping both PRs' facts (ADR 0020 + 0021 rows, both CHANGELOG entries, both partial
+  indexes in the schema-indexes known-sql map, counts 91 tables / 121 migrations head 0120); `verify-migrations` ✓;
+  full `test:db` on a fresh DB 236 files / 2437 tests passed; CI green; merged `41717f51`; deploy
+  `ofygufuojsgbe4mqfxd86aa9`; four surfaces `(healthy)` twice; 121 migrations (max stamp 1787546011751); NEW
+  `cron-plugins` `(healthy)`, first tick `{"ok":true,"stores":0,"counts":{},"failures":[]}`; `store_plugins` = 0.
+  `GET /api/cron/plugins` before: Next HTML 404 (no route); after: 401 JSON without the secret. Quotes unchanged
+  (demo non-COD Mengantar SPX 5700 `codRequote:true`; demo COD KiriminAja).
+- **Disk:** after four deploys in one day the probe FAILED `disk (1/3) — 67% used, 29GB free` (limit 65 %). `docker system
+  df`: build cache 22.34 GB, all < 24 h old, so the hourly `tokophi-docker-cleanup.sh` (non-pressure mode prunes cache
+  only past 24 h; pressure mode starts at 70 %) would not have freed it. Ran the SAME script by hand with
+  `TOKOPHI_CLEANUP_AGGRESSIVE_PCT=65` (no Coolify helper running): build cache pruned (22.34 GB), "pressure cleared:
+  retained unused rollback images", 67 % → 50 %; probe re-run exit 0 (disk 50 %, 44 GB free). The 65 % alert vs 70 %
+  aggressive gap is deliberate (DEPLOY.md: an investigation window). Lesson: on a multi-deploy day, prune build cache
+  by hand once the probe trips — cache is disposable; never `--volumes`.
+- **Cleanup:** removed this session's finished worktrees (pay-retry, store-shipping-provider, pricing, kelola-v2 and the
+  docs worktrees — all clean, pushed and in main) and dropped its scratch DBs (tokophi_payretry_test/_e2e,
+  tokophi_shipprov/_test, tokophi_mgready_test, tokophi_shipping, tokophi_bp2611_test/_ui, tokophi_merge465_test,
+  tokophi_merge469_test, tokophi_kelola2/_test). Kept: `tokophi`, `tokophi_test`, `tokophi_pre_sync_20261011` (never
+  dropped by rule), the paused-branch worktree `~/Projects/tokophi-kelola` + `tokophi_kelola` (a live session still
+  runs there; its branch is fully in main), and every older worktree/DB that holds uncommitted or unpushed work.
