@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-06 UTC] — DEPLOY · #454 → #428 → #429 to production (`8cffdc7e`, then `f6ba56e8`)
+Executor: Main Session (Claude Code); owner order via supervisor ("review, commit, push, deploy" — scope #454/#428/#429 only).
+- **Baseline before:** `0e4d950a` on all five surfaces, 117 migrations, `ops/tokophi-probe.sh` exit 0, deploy queue empty, disk 42 %.
+- **#454** merged `711652cc` (docs, no own deploy). #428 and #429 then conflicted only in BUILD-LOG/OPEN.md → `origin/main` merged into each (no force-push), CI re-run green on every head before its merge.
+- **#428** merged `8cffdc7e`; deploy `smuq3rfq4jlzts5bqrrgjlnn` finished 22:04 UTC. Five surfaces `(healthy)` on the sha, migrate/seed exit 0, 117 migrations, probe exit 0, storefront `AUTH_SECRET` present, cron-tracking `ok:true errors:0`, failed login (non-existent email) → generic error, 0 console errors.
+- **#429** merged `f6ba56e8`; deploy `o3jql9puktcwlpabtiv5svba` finished 22:27 UTC. Same checks green; `/files` → 307 to login as expected; disk 58 %.
+- **Not verified:** logged-in flows (2FA, email change, recovery link, Files paging) and the lockout — see `RELEASE.md`.
+- **Production writes:** none beyond the two deploys (the one failed-login attempt is ordinary traffic).
+
 ### [2026-11-06 UTC] — DOCS · repo-truth sync after the dedicated-host cutover (branch `docs/sync-2026-11-06`)
 Executor: Main Session (Claude Code), supervisor decision on behalf of the owner (docs only, PR, no deploy).
 - **Why:** the primary checkout (branch `docs/split-agents-md`) held uncommitted docs from two earlier sessions: a 2026-10-11 `STATUS.md`/`RELEASE.md` snapshot (still describing `volumdev`), a 2026-10-29 BUILD-LOG note, a 2026-10-29 `OPEN.md` handoff and the untracked dedicated-host bootstrap record. `main`'s `DEPLOY.md` and BUILD-LOG already linked that record, but it was never committed — a dead link. Those files were left untouched in the primary checkout; this branch rebuilds the still-true parts from current facts.
