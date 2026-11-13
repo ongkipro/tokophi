@@ -58,6 +58,7 @@ const pick = (r: Row) => ({
 
 // A recording transport: the real fetch, plus the raw facts of each POST /order answer.
 let last: { http: number; success: unknown; code: unknown; message: unknown; items: ReturnType<typeof pick>[]; idemSent: boolean } | null = null;
+const lastSeen = () => last;
 const recording: typeof fetch = async (input, init) => {
   const res = await fetch(input, init);
   const url = String(input);
@@ -93,8 +94,11 @@ async function create(label: string, payload: MgCreateOrderInput, idempotencyKey
     } catch (e) {
       result = { thrown: e instanceof Error ? e.name : "unknown", message: red(e instanceof Error ? e.message : String(e)) };
     }
-    say(label, { attempt, client: result, raw: last });
-    if (last?.http !== 409) return last;
+    // `last` is written by the fetch hook during the await; TS keeps the `= null` narrowing, so re-read it
+    // through a function (its return type is the declared type, not the narrowed one).
+    const raw = lastSeen();
+    say(label, { attempt, client: result, raw });
+    if (raw?.http !== 409) return raw;
     await sleep(3000 * (attempt + 1)); // 409 = a batch in flight on this account; nothing created
   }
   return last;
