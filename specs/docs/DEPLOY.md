@@ -449,8 +449,20 @@ Subscription enforcement is real-time (`computeBilling` in `requireCapability` �
 are read-only immediately, no job needed). But **recurring invoice generation + stored-status
 sync** run via `GET /api/cron/billing` **with `x-cron-secret: $CRON_SECRET` in a HEADER**, and the thing that calls it is the
 `cron` **sidecar** in `docker-compose.coolify.yml`, alongside `cron-tracking` /
-`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` (six loops as of
-2026-09-11 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one). This heading used to read *"schedule this"* and told you to add a **Coolify
+`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` / `cron-plugins`
+(seven loops since KEL-001 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one).
+`cron-plugins` (every 900 s, `GET /api/cron/plugins`) is the retry + lead leg of first-party plugins
+(ADR 0021 — today only Kelola CRM). It is **idle until a merchant activates and connects a plugin**:
+the tick answers `{"ok":true,"stores":0,…}` and writes nothing. It makes outbound calls ONLY to the URL a
+merchant pasted at Pengaturan → Plugin → Kelola; a store whose credential Kelola refused (401/404) is
+skipped until the merchant saves it again, and a store whose owner switched the plugin **Nonaktif** is not
+listed at all (`store_plugins.enabled`). **First deploy of KEL-001 (PR from `feat/kelola-plugin-v2`) is MANUAL**:
+it adds this sidecar and migration `0120_store_plugins_kelola`, so after the merge trigger the deploy by hand
+(checklist below), then confirm (1) `select max(created_at) from drizzle.__drizzle_migrations` =
+`1787546011751` (0120 applied, not skipped), (2) the `cron-plugins-*` container is up and its first log line is
+the JSON, not `cron plugins failed`, (3) Super Admin → Analitik → Sistem lists "Plugin toko" (job `plugins`) with interval 900 s.
+It needs no new env var — `CRON_SECRET` (the route) and `INTEGRATION_TOKEN_KEY` (sealing the Kelola credential;
+without it the Seller connect form refuses to save) are already set on the admin container. This heading used to read *"schedule this"* and told you to add a **Coolify
 Scheduled Task** — following that would have created a **second** caller. Verified 2026-08-03:
 `select count(*) from scheduled_tasks` in `coolify-db` is **0**; the sidecar is the only scheduler
 and always has been.

@@ -122,6 +122,7 @@ const INDEX_CENSUS: Record<string, Census> = {
   // 0119 (ADR 0020, potongan kode di tagihan pertama). Saudara `invoices_one_comp_per_grant`: tabel yang sama,
   // index parsial yang sama bentuknya.
   invoices_one_live_code_discount: "sql-only: unique parsial (store_id) where code_discount_idr > 0 and status = 'menunggu' — paling banyak SATU tagihan berpotongan yang hidup per toko",
+  store_plugins_active_idx: "sql-only: index parsial (plugin) where enabled and broken_at is null — daftar toko yang disapu cron plugin (0120, KEL-001)",
 };
 
 /** Nama index → tabel, DITURUNKAN dari berkas migrasi. Tidak pernah ditulis tangan. */

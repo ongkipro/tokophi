@@ -25,7 +25,7 @@ e-wallets, payday cycles.
 | | |
 |---|---|
 | ✅ **Self-serve store builder** (ADR 0009) — but **section-based, not free-form**. A curated registry (Hero, Product Grid, …), not arbitrary HTML/CSS/Liquid. | ❌ **No Themes menu.** No Liquid. No theme marketplace. |
-| ✅ **Checkout is locked and uniform** across every store (branding tokens only). | ❌ **No Apps / plugins marketplace.** The feature set is curated in-core. |
+| ✅ **Checkout is locked and uniform** across every store (branding tokens only). | ❌ **No Apps / plugins marketplace.** The feature set is curated in-core; the only plugins are **first-party**, compiled in and activated per store (ADR 0021 — e.g. Kelola CRM). |
 | ✅ **Payments and shipping are platform-managed** — the merchant "terima matang" (ADR 0004). Since 2026-11 a store may ship through **its own Mengantar seller account**, which TokoΦ registers for it (no key field, owner consent; ADR 0018); KiriminAja stays the fallback and the COD path. | ❌ **No plan tiers.** One plan, all features. |
 | ✅ **The platform holds the money and pays the merchant out.** That makes us a custodian, and it is the single most consequential thing about this product. | ❌ **Provider brands are never shown** to shoppers, nor to merchants — except "Mengantar", the seller's own account (ADR 0004 addendum, ADR 0018). |
 

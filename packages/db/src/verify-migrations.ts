@@ -78,6 +78,16 @@ const RETIRED: Record<string, string> = {
     "renumbered to 0118_pay_retry after feat/store-shipping-provider (PR #466) landed its own " +
     "0117_store_shipping_provider while this entry was open (PR #465). Same SQL. Both branches had " +
     "stamped 1787545831751; re-stamped to 1787545891751 (above 0117's), so the deploy applies it.",
+  "0117_store_plugins_kelola":
+    "renumbered to 0119_store_plugins_kelola (KEL-001, taken over on feat/kelola-plugin-v2) after " +
+    "main landed 0117_store_shipping_provider (PR #466) and 0118_pay_retry (PR #465) while the " +
+    "paused feat/kelola-plugin branch held 0117. Same SQL. Its old stamp 1787545871751 sat BELOW " +
+    "0118's 1787545891751, so keeping it would have been skipped on every database that already " +
+    "ran 0118; re-stamped to 1787545951751 (above 0118's).",
+  "0119_store_plugins_kelola":
+    "renumbered to 0120_store_plugins_kelola after PR #468 landed 0119_subscription_code_discount " +
+    "with the SAME stamp 1787545951751 while this entry was open (PR #469). Same SQL; re-stamped to " +
+    "1787546011751 (above 0119's) so the deploy applies it instead of skipping it.",
 };
 
 type Entry = { idx: number; version: string; when: number; tag: string; breakpoints: boolean };

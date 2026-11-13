@@ -2,7 +2,19 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
-## 2026-11-13 — Harga langganan baru + potongan kode untuk tagihan pertama (ADR 0020, BILL-PRICE-2026-11) — PR terbuka, belum dirilis
+## 2026-11-13 — Plugin toko: Kelola CRM, Aktif / Nonaktif (KEL-001, ADR 0021) — PR #469
+
+- **Pengaturan → Plugin** (khusus Pemilik toko): daftar plugin buatan TokoΦ, masing-masing dengan saklar
+  **Aktif / Nonaktif**. Plugin pertama: **Kelola CRM** (`kelolatim.com`) — pesanan COD dikirim ke Penjualan
+  Kelola saat dibuat, pesanan prabayar setelah lunas; keranjang yang ditinggal opsional. Status pesanan tetap
+  diatur di TokoΦ (satu arah).
+- **Nonaktif** = berhenti mengirim saat itu juga; URL, secret dan riwayat tetap tersimpan sehingga mengaktifkan
+  lagi tidak perlu menempel ulang. Pesanan yang masuk selama nonaktif **tidak dikirim otomatis** saat diaktifkan
+  lagi (bisa dikirim satu per satu lewat "Kirim ulang"). **Hapus koneksi** menghapus kredensial dan riwayat.
+- Toko yang tidak mengaktifkan plugin tidak berubah sama sekali (tanpa permintaan keluar). URL webhook hanya
+  diterima dari `kelolatim.com`. Migrasi `0120`, sidecar baru `cron-plugins` (deploy manual).
+
+## 2026-11-13 — Harga langganan baru + potongan kode untuk tagihan pertama (ADR 0020, BILL-PRICE-2026-11) — PR #468
 
 - **Harga langganan: Rp178.500/bulan** (DPP; PPN mengikuti saklar global seperti sebelumnya), **tahunan Rp1.713.600**
   (= bulanan × 12 dikurangi 20%, setara Rp142.800/bulan). Uji coba tetap 3 hari. **Promo bulan pertama Rp50.000

@@ -841,6 +841,13 @@
       "when": 1787545951751,
       "tag": "0119_subscription_code_discount",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1787546011751,
+      "tag": "0120_store_plugins_kelola",
+      "breakpoints": true
     }
   ]
 }

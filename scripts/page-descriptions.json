@@ -65,6 +65,7 @@
     "admin:/api/cron/domains": "Custom-domain verification sweep.",
     "admin:/api/cron/order-expiry": "Expires unpaid prepaid orders after their window.",
     "admin:/api/cron/payment-advice": "Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing.",
+    "admin:/api/cron/plugins": "Every 15 min: retries + leads for each store's active first-party plugin (Kelola CRM); idle until a merchant connects one.",
     "admin:/api/cron/tracking": "Every 15 min pulls KiriminAja tracking for booked orders (`parseKaTracking`: `details` + package `status_code`): fills a REAL `orders.awb` (never `MOCK-<ref>`), the sorting code, and advances status forward-only.",
     "admin:/api/cron/tracking-events": "Every 60 s delivers queued conversions (Meta CAPI / GA4 / TikTok) with retries + dead-letter.",
     "admin:/api/csp-report": "CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing.",

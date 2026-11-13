@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { db, schema } from "@tokophi/db";
+import { runOrderCreated } from "@/lib/plugins/registry";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { alCreateOrder, autolarisConfigured } from "@tokophi/lib/autolaris";
 import { calculateOrderFinance } from "@tokophi/lib/order-finance";
@@ -1273,6 +1274,22 @@ async function handle(req: Request) {
     } catch (err) {
       console.error("[order] checkout session recover failed", err);
     }
+  }
+
+  // ── First-party plugins (ADR 0021, KEL-001) ──────────────────────────────────────────────────
+  // Scheduled HERE, after `db.transaction(…)` has returned: `after()` runs its callback even when the
+  // response fails, so registering it any earlier would push an order that rolled back. The callback
+  // runs after the shopper's response is sent, never throws, and with no plugin active costs one
+  // indexed read. This is the ONLY plugin line in this route — eligibility (e.g. "prepaid only once
+  // paid") is decided inside the plugin, and the cron catches whatever this leg skips.
+  // `lib/plugins/order-hook-position.test.ts` pins the position.
+  // The try/catch is load-bearing: the order is ALREADY COMMITTED here, so a throw (e.g. `after`
+  // outside a request scope) must not turn it into a 500 the shopper retries into a 409. Nothing is
+  // lost — the plugin cron picks up any order this leg did not send.
+  try {
+    after(() => runOrderCreated(store.id, order.id));
+  } catch (err) {
+    console.error("[order] plugin hook not scheduled", err);
   }
 
   // NOTE: the instant (same-day GoSend/Grab) dispatch that used to run here was REMOVED. A web order

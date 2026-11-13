@@ -59,7 +59,8 @@ import type { Order, OrderStatus } from "@/lib/types/domain";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
-import { Separator } from "@tokophi/ui/separator";
+import { Separator } from "@tokophi/ui/separator"
+import { KelolaOrderPanel } from "@/components/admin/kelola-order-panel";
 import { Textarea } from "@tokophi/ui/textarea";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import {
@@ -1391,6 +1392,9 @@ export function OrderDetail({
               </div>
             </CardContent>
           </Card>
+
+          {/* KEL-001: renders nothing unless this store's Kelola plugin is active and connected. */}
+          <KelolaOrderPanel orderNumber={order.id.replace("#", "")} />
 
           <Card>
             <CardHeader>

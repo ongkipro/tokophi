@@ -89,6 +89,7 @@ describe("no first-party secret in a cron URL — source scan", () => {
     "apps/admin/app/api/cron/tracking-events/route.ts",
     "apps/admin/app/api/cron/order-expiry/route.ts",
     "apps/admin/app/api/cron/domains/route.ts",
+    "apps/admin/app/api/cron/plugins/route.ts",
     "apps/admin/app/api/health/env/route.ts",
   ];
   const QUERY_SECRET = /searchParams\s*\.\s*get\s*\(\s*["']secret["']\s*\)/;
@@ -116,9 +117,10 @@ describe("no first-party secret in a cron URL — source scan", () => {
       .split("\n")
       .filter((line) => /^\s*command:/.test(line) && line.includes("/api/cron/"));
 
-    // Six since 2026-09-11: `cron-payment-advice` (observe-only reconciliation). This count is the
-    // review gate for a new loop — bump it only after checking the line below passes for the newcomer.
-    expect(cronCommands.length).toBe(6);
+    // Six since 2026-09-11: `cron-payment-advice` (observe-only reconciliation). Seven since KEL-001:
+    // `cron-plugins`. This count is the review gate for a new loop — bump it only after checking the
+    // line below passes for the newcomer.
+    expect(cronCommands.length).toBe(7);
     for (const line of cronCommands) {
       expect(line).not.toMatch(URL_SECRET);
       expect(line).toContain("x-cron-secret: $$CRON_SECRET");

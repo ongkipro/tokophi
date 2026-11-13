@@ -1,5 +1,6 @@
 import "server-only";
 import type { MengantarConfig } from "./provider-config";
+import { redactKey } from "./redact";
 
 // Mengantar PUBLIC API client — the shipment half. PARTNER model (owner 2026-11-05, supersedes D1/D4):
 // every store has ITS OWN Mengantar seller account; every call here takes that seller's `cfg`
@@ -115,13 +116,9 @@ export type MgCallOptions = {
   timeoutMs?: number;
 };
 
-/** Replace the key — raw and URL-encoded — with `[REDACTED]`. The one sanitiser every message passes. */
-export function redactKey(message: string, key: string | null | undefined): string {
-  if (!key) return message;
-  let out = message;
-  for (const s of new Set([key, encodeURIComponent(key)])) if (s) out = out.split(s).join("[REDACTED]");
-  return out;
-}
+/** Replace the key — raw and URL-encoded — with `[REDACTED]`. The one sanitiser every message passes.
+ *  Lives in `./redact` (shared with the Kelola plugin); re-exported so every caller keeps its import. */
+export { redactKey };
 
 /** Rule 4: tests can never reach the production API through a write. */
 function assertWriteAllowed(fn: string, opts: MgCallOptions | undefined): void {

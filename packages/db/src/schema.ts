@@ -1996,6 +1996,61 @@ export const storeMengantarAccounts = pgTable(
   (t) => [primaryKey({ columns: [t.storeId, t.env], name: "store_mengantar_accounts_pk" })],
 );
 
+// KEL-001 / ADR 0021 (migration 0120): first-party plugins a store has activated — AdsBookCMS
+// `plugins` + store_id. No row = dormant. `settings` is non-secret; credentials live sealed in
+// `secretEnc` (scope `<plugin>:<store_id>:v<secretV>`). Store-scoped → RLS.
+export const storePlugins = pgTable(
+  "store_plugins",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    plugin: text().notNull(),
+    enabled: boolean().notNull().default(false),
+    settings: jsonb().notNull().default({}),
+    secretEnc: text(),
+    secretV: integer().notNull().default(0),
+    connectedAt: ts(),
+    brokenAt: ts(),
+    activatedAt: ts(),
+    // When the store last switched it OFF (null while on). Re-activation marks what arrived since as
+    // skipped — never back-filled (KEL-001, owner "aktif / nonaktif").
+    disabledAt: ts(),
+    updatedAt: ts().notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.plugin], name: "store_plugins_pk" })],
+);
+
+// The Kelola plugin's own push state (0120). NO foreign key to orders / checkout_sessions on purpose:
+// a plugin never blocks the core from deleting a row. claimedAt = the 5-minute send lease.
+export const pluginKelolaOrders = pgTable(
+  "plugin_kelola_orders",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    orderId: uuid().notNull(),
+    claimedAt: ts(),
+    syncedAt: ts(),
+    gaveUpAt: ts(),
+    attempts: integer().notNull().default(0),
+    lastError: text(),
+    lastNote: text(),
+    remoteId: text(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.orderId], name: "plugin_kelola_orders_pk" })],
+);
+
+export const pluginKelolaLeads = pgTable(
+  "plugin_kelola_leads",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    sessionId: uuid().notNull(),
+    claimedAt: ts(),
+    syncedAt: ts(),
+    gaveUpAt: ts(),
+    attempts: integer().notNull().default(0),
+    lastError: text(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.sessionId], name: "plugin_kelola_leads_pk" })],
+);
+
 export const platformCouriers = pgTable("platform_couriers", {
   id: pk(),
   courier: text().notNull(),

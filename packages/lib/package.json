@@ -9,6 +9,7 @@
     "./kiriminaja": "./src/kiriminaja.ts",
     "./kiriminaja-tracking": "./src/kiriminaja-tracking.ts",
     "./mengantar": "./src/mengantar.ts",
+    "./redact": "./src/redact.ts",
     "./mengantar-partner": "./src/mengantar-partner.ts",
     "./autolaris": "./src/autolaris.ts",
     "./cache": "./src/cache.ts",
