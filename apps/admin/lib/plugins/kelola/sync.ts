@@ -421,10 +421,11 @@ export async function drainKelolaLeads(store: KelolaStore, storeId: string, fetc
 // ── read models for the Seller screens ─────────────────────────────────────────────────────────
 
 /** The order-detail panel. */
-export async function kelolaOrderState(q: Q, storeId: string, orderId: string) {
-  const [r] = await rows<{
-    synced_at: Date | null; gave_up_at: Date | null; attempts: number; last_error: string | null; last_note: string | null;
-  }>(q, sql`select synced_at, gave_up_at, attempts, last_error, last_note
+export type KelolaOrderState = {
+  synced_at: Date | null; gave_up_at: Date | null; attempts: number; last_error: string | null; last_note: string | null;
+};
+export async function kelolaOrderState(q: Q, storeId: string, orderId: string): Promise<KelolaOrderState | null> {
+  const [r] = await rows<KelolaOrderState>(q, sql`select synced_at, gave_up_at, attempts, last_error, last_note
               from plugin_kelola_orders where store_id = ${storeId} and order_id = ${orderId}`);
   return r ?? null;
 }

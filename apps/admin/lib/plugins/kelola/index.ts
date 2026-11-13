@@ -14,7 +14,7 @@ export const kelolaPlugin: Plugin = {
   name: "Kelola CRM",
   description:
     "Kirim setiap pesanan ke Penjualan Kelola, dan (opsional) keranjang yang ditinggal ke Data tertinggal untuk di-follow up CS.",
-  settingsHref: "/pengaturan/plugin/kelola",
+  settingsHref: "/pengaturan?section=plugin",
   async uninstall(q, storeId) {
     await q.execute(sql`delete from plugin_kelola_orders where store_id = ${storeId}`);
     await q.execute(sql`delete from plugin_kelola_leads where store_id = ${storeId}`);

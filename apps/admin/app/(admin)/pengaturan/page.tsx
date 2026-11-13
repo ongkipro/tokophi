@@ -10,6 +10,7 @@ import {
   Truck,
   Users,
   Store,
+  Plug,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -35,6 +36,7 @@ import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-ca
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
+import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -49,6 +51,7 @@ type Section =
   | "rekening"
   | "pajak"
   | "pengguna"
+  | "plugin"
   | "notifikasi"
 
 const SECTIONS: {
@@ -64,6 +67,8 @@ const SECTIONS: {
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
+  // ADR 0019 (KEL-001): first-party plugins, deep link `/pengaturan?section=plugin`.
+  { id: "plugin", label: "Plugin", desc: "Kelola CRM & lainnya", icon: <Plug /> },
   {
     id: "notifikasi",
     label: "Notifikasi",
@@ -243,6 +248,8 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
 
           {/* PENGGUNA — real store_users list + invite/role/remove (lib/actions/users.ts) */}
           {section === "pengguna" && <PenggunaCard />}
+
+          {section === "plugin" && <PluginCard />}
 
           {/* NOTIFIKASI */}
           {section === "notifikasi" && (

@@ -32,7 +32,11 @@ export type Capability =
   // Owner-only (2026-07-30 decision) — the narrowest fix that does not pretend a regex sanitizer is
   // one. Editing the REST of a landing (title, slug, product, funnel config) still needs only
   // `content:write`: the escalation is on the executable markup, not on the feature.
-  | "landing:html";
+  | "landing:html"
+  // First-party plugins (ADR 0019, KEL-001) — activating one and pasting its credential. Owner-only
+  // and DELIBERATELY NOT `integrations:write`: that one is held by `advertiser` (pixels), while a
+  // plugin like Kelola ships every order's shopper name, WhatsApp and address to a third party.
+  | "plugins:manage";
 
 // ⚠️ ADDING A CAPABILITY HERE GRANTS IT TO `admin` BY DEFAULT — see the `admin` row below, which is
 // built by SUBTRACTION. `apps/admin/lib/rbac-census.test.ts` holds a `Record<Capability, …>` naming
@@ -56,6 +60,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   "theme:write",
   "integrations:write",
   "landing:html",
+  "plugins:manage",
 ];
 
 // Who can do what.
@@ -70,7 +75,7 @@ export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
   owner: ALL_CAPABILITIES,
   // A tracking/Meta connection stores tenant secrets + is a store-level setting → owner-only, like settings.
   admin: ALL_CAPABILITIES.filter(
-    (c) => c !== "settings:write" && c !== "integrations:write" && c !== "landing:html",
+    (c) => c !== "settings:write" && c !== "integrations:write" && c !== "landing:html" && c !== "plugins:manage",
   ),
   staff: [
     "products:write",
