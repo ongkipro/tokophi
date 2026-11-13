@@ -121,7 +121,7 @@ describe("the shopper's token", () => {
     const h = hashPayToken(t);
     expect(payTokenMatches(t, h)).toBe(true);
     expect(payTokenMatches(mintPayToken(), h)).toBe(false);
-    expect(payTokenMatches(t, null)).toBe(false); // COD / pre-0117 order
+    expect(payTokenMatches(t, null)).toBe(false); // COD / pre-0118 order
     expect(payTokenMatches("PHI-555925447U5H", h)).toBe(false); // an order number is not a key
     expect(payTokenMatches(undefined, h)).toBe(false);
     expect(payTokenMatches(h, h)).toBe(false); // the stored hash itself does not open the door

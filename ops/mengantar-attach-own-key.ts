@@ -77,7 +77,10 @@ async function main() {
     .limit(1);
   const T = schema.storeMengantarAccounts;
   const [cur] = await db.select({ state: T.state, v: T.keyVersion, sellerId: T.sellerId }).from(T).where(and(eq(T.storeId, st.id), eq(T.env, env))).limit(1);
-  say("store", { slug: SLUG, storeId: st.id, owner: !!owner, current: cur ?? null });
+  // ADR 0019: an attached account is only QUOTED for a store set to Mengantar. This script does not move the
+  // store (that is the audited Super Admin action, "Penyedia pengiriman" on the store page); it says so.
+  const [prov] = await db.select({ p: schema.stores.shippingProvider }).from(schema.stores).where(eq(schema.stores.id, st.id)).limit(1);
+  say("store", { slug: SLUG, storeId: st.id, owner: !!owner, current: cur ?? null, shippingProvider: prov?.p ?? null });
   if (!WRITE) {
     say("check", { wrote: false, hint: "re-run with --write" });
     return;
@@ -109,6 +112,9 @@ async function main() {
     .onConflictDoUpdate({ target: [T.storeId, T.env], set })
     .returning({ state: T.state, sellerId: T.sellerId, v: T.keyVersion, partnerId: T.partnerId, pickup: T.pickupAddressId });
   say("written", { ...w, at: now.toISOString() });
+  if (prov?.p !== "mengantar") {
+    say("note", { quoting: "kiriminaja", hint: "set Super Admin → Toko → Penyedia pengiriman = Mengantar for this store to quote through the attached account (ADR 0019)" });
+  }
 }
 
 main()

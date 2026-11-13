@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // orders.placed_at is the clock for the ORDER's life (24 h). The instruction's own expiry
-    // (`payments.expires_at`, 0117 — `/submit` answers +2 h) only delays a cancellation while a bill
+    // (`payments.expires_at`, 0118 — `/submit` answers +2 h) only delays a cancellation while a bill
     // is still payable; see expireCandidate. The
     // EXISTS clauses deliberately identify payment METHOD rather than trusting financial_status alone:
     // COD also stays pending until delivery and must never be reclaimed by this worker.

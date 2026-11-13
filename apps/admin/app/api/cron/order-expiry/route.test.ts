@@ -197,7 +197,7 @@ describe("GET /api/cron/order-expiry", () => {
   // PAY-RETRY: "Bayar ulang" can hand a shopper a fresh QR late in the order's life. Cancelling under
   // a payable bill is how a buyer pays for an order that no longer exists, so the cron WAITS while an
   // instruction is live or being minted — and only then. An expired one, or one whose expiry is
-  // unknown (pre-0117 rows: today's behaviour), does not hold the order open.
+  // unknown (pre-0118 rows: today's behaviour), does not hold the order open.
   it("waits while a retried instruction is still payable or being minted, and only then", async () => {
     const mins = (m: number) => new Date(NOW.getTime() + m * 60_000);
     const cases: TxCase[] = [

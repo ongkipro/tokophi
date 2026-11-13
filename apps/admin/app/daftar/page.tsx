@@ -3,6 +3,8 @@ import { FrontDoorShell, MARKETING_HOME } from "@/components/admin/front-door/fr
 import { googleEnabled } from "@/lib/google";
 import { signupOpen } from "@/lib/provision";
 import { DaftarForm } from "./daftar-form";
+import { lookupSignupCode } from "@/lib/signup-code";
+import { normalizeSignupCode, SIGNUP_CODE_UNKNOWN_MSG } from "@tokophi/lib/signup-code";
 
 const NOTICES: Record<string, string> = {
   google_gagal: "Gagal mendaftar dengan Google. Coba lagi.",
@@ -14,6 +16,8 @@ const NOTICES: Record<string, string> = {
   // route whose whole job is to land the person somewhere they can read.
   nama_google: "Nama akun Google-mu tidak bisa dipakai sebagai nama toko. Daftar lewat formulir di bawah.",
   bentrok: "Email atau nama toko itu baru saja dipakai. Coba lagi.",
+  // ADR 0019 — the Google door refused the signup code (unknown, inactive or malformed).
+  kode: SIGNUP_CODE_UNKNOWN_MSG,
 };
 
 // Public self-serve signup (outside the (admin) route group, like /login — middleware lets it
@@ -22,8 +26,8 @@ const NOTICES: Record<string, string> = {
 // While signup is CLOSED (SIGNUP_ENABLED unset — see lib/provision) this page renders an explanation
 // instead of the form. That is UX only: `provisionStore` is the boundary that actually refuses, so
 // the form being hidden is not what keeps a store from being created.
-export default async function DaftarPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function DaftarPage({ searchParams }: { searchParams: Promise<{ error?: string; kode?: string }> }) {
+  const { error, kode } = await searchParams;
 
   if (!signupOpen()) {
     // Keadaan tertutup memakai kerangka yang SAMA dengan formulirnya. Sebelumnya ia satu kartu
@@ -79,7 +83,24 @@ export default async function DaftarPage({ searchParams }: { searchParams: Promi
         </>
       }
     >
-      <DaftarForm googleEnabled={googleEnabled()} notice={error ? (NOTICES[error] ?? "Gagal mendaftar.") : undefined} />
+      <DaftarForm
+        googleEnabled={googleEnabled()}
+        notice={error ? (NOTICES[error] ?? "Gagal mendaftar.") : undefined}
+        {...(await codePrefill(kode))}
+      />
     </FrontDoorShell>
   );
+}
+
+/**
+ * ADR 0019 — `/daftar?kode=…` (the link an operator hands out) pre-fills the code and answers it on the
+ * server, so a Mengantar link shows the Mengantar consent on first paint with no client round trip. Only
+ * the canonical form is echoed back into the page; anything else is pre-filled as typed and flagged.
+ */
+async function codePrefill(raw: string | undefined) {
+  const typed = String(raw ?? "").slice(0, 32);
+  const code = normalizeSignupCode(typed);
+  if (!code) return { initialCode: typed, initialCheck: null };
+  const hit = await lookupSignupCode(code);
+  return { initialCode: code, initialCheck: { code, valid: !!hit, mengantar: hit?.provider === "mengantar" } };
 }

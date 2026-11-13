@@ -196,7 +196,7 @@ paths:
       description: |
         PAY-RETRY. Authorised by the one-order `token` the order API returned to the
         checkout (`payToken`); the order number alone authorises nothing, and an
-        unknown order, a wrong token, another store, a COD order and a pre-0117 order
+        unknown order, a wrong token, another store, a COD order and a pre-0118 order
         all answer the same 404. A new instruction is issued only when every previous
         one is failed or provably expired, the order is still new and unpaid, and the
         attempt limit is not reached — decided under the order's row lock, so an order

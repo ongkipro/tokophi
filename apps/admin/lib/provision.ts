@@ -1,11 +1,13 @@
 import "server-only";
 import { db, schema } from "@tokophi/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { BILLING } from "@tokophi/lib/billing";
 import { normalizePhone } from "@tokophi/lib/validate";
 import { NAME_MAX, STORE_NAME_MIN, isReservedSlug, slugify } from "@tokophi/lib/store-slug";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 import { enqueueMengantarConnect } from "@tokophi/db/mengantar-account";
+import { normalizeSignupCode, SIGNUP_CODE_UNKNOWN_MSG } from "@tokophi/lib/signup-code";
+import { DEFAULT_SHIPPING_PROVIDER, type ShippingProvider } from "@tokophi/lib/provider-config";
 
 // Self-serve onboarding (Daftar + Google auto-provision). Mirrors the super-admin's
 // `createStore` one-txn tenant bootstrap (account → user → store → membership → location →
@@ -45,6 +47,22 @@ export type ProvisionInput = {
   senderKecamatanName?: string | null;
   senderKelurahanName?: string | null;
   senderPostcode?: string | null;
+  /**
+   * ADR 0019 — an optional SIGNUP CODE made in Super Admin (`signup_codes`). An active code decides the
+   * store's shipping provider; no code = KiriminAja (owner 2026-11-13: "default pakai KiriminAja").
+   * An unknown, inactive or malformed code is REFUSED (`SignupCodeError`), never ignored: a typo silently
+   * landing the store on the wrong provider is the worse failure — the merchant who was given a code
+   * would never learn it did nothing.
+   */
+  signupCode?: string | null;
+  /**
+   * The Mengantar consent sentence was SHOWN for this exact code (the form posts the code it rendered the
+   * sentence for; the Google door carries the same flag through its cookie). Only meaningful when the
+   * code maps to Mengantar — then it is what records the owner's consent (partner docs: it "has to happen
+   * on your side"). False → the account is queued WITHOUT consent and waits for the owner's click in
+   * Pengaturan → Pengiriman, exactly like an operator-created store. Never registered without it.
+   */
+  mengantarConsent?: boolean;
 };
 
 export type ProvisionResult = {
@@ -54,6 +72,8 @@ export type ProvisionResult = {
   email: string;
   name: string;
   slug: string;
+  /** ADR 0019: the provider the store was created on (from its signup code; default = the default provider). */
+  shippingProvider: ShippingProvider;
 };
 
 // `slugify` moved to `@tokophi/lib/store-slug` — super-admin's `createStore` had its OWN copy and the
@@ -137,6 +157,14 @@ export class ProvisionInputError extends Error {
  * an unhandled throw, i.e. a Next error digest, on a form that is otherwise careful to return a
  * sentence the person can act on. The constraint is the lock; this is how the lock reports itself.
  */
+/** ADR 0019: the signup code is unknown, inactive or malformed. One sentence for all three (no oracle on WHY). */
+export class SignupCodeError extends ProvisionInputError {
+  constructor() {
+    super(SIGNUP_CODE_UNKNOWN_MSG);
+    this.name = "SignupCodeError";
+  }
+}
+
 export class ProvisionConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -203,6 +231,9 @@ export async function provisionStore(input: ProvisionInput): Promise<ProvisionRe
   if (input.senderPostcode && !/^\d{5}$/.test(input.senderPostcode.trim())) {
     throw new ProvisionInputError("Kode pos harus 5 angka.");
   }
+  // Shape first (cheap, no DB); whether it is a LIVE code is decided inside the transaction below.
+  const signupCode = normalizeSignupCode(input.signupCode);
+  if (signupCode === null) throw new SignupCodeError();
 
   const base = slugify(storeName) || slugify(email.split("@")[0]) || "toko";
   const slug = await uniqueSlug(base);
@@ -210,19 +241,24 @@ export async function provisionStore(input: ProvisionInput): Promise<ProvisionRe
 
   let r: ProvisionResult;
   try {
-    r = await insertTenant({ input, email, storeName, ownerName, slug, trialEndsAt });
+    r = await insertTenant({ input, email, storeName, ownerName, slug, trialEndsAt, signupCode });
   } catch (e) {
     // The check-then-insert races, caught where the DB actually decides them.
     const constraint = uniqueViolationConstraint(e);
     if (constraint !== null) throw new ProvisionConflictError(CONFLICT_MESSAGES[constraint] ?? SLUG_TAKEN_MSG);
     throw e;
   }
-  // Mengantar Partner Business API (owner O10): the store's own Mengantar seller account is created
-  // AUTOMATICALLY at signup — queued here, AFTER the commit, and never awaited on the provider: a
-  // Mengantar outage cannot fail or slow store creation. ⚠️ The registration itself waits for the
-  // store's APPROVAL (`connectStoreMengantar` checks `approved_at`): this door proves nothing about
-  // the email, and an account at Mengantar must not be opened in a stranger's name.
-  await enqueueMengantarConnect(r.storeId, { source: "signup", actorUserId: r.userId });
+  // Mengantar Partner Business API — ONLY for a store a Mengantar signup code put on Mengantar (ADR 0019;
+  // a KiriminAja store gets no account and no row: "kalo Mengantar harus double register"). Queued here,
+  // AFTER the commit, and never awaited on the provider: a Mengantar outage cannot fail or slow store
+  // creation. ⚠️ The registration itself waits for the store's APPROVAL (`connectStoreMengantar` checks
+  // `approved_at`): this door proves nothing about the email, and an account at Mengantar must not be
+  // opened in a stranger's name. Consent is recorded only when the sentence was shown for this code;
+  // otherwise the row waits for the owner's click (`awaiting_consent`). `enqueueMengantarConnect` checks
+  // the store's provider again itself — this `if` only saves a read.
+  if (r.shippingProvider === "mengantar") {
+    await enqueueMengantarConnect(r.storeId, { source: "signup", actorUserId: input.mengantarConsent ? r.userId : null });
+  }
   return r;
 }
 
@@ -233,6 +269,8 @@ type InsertTenantArgs = {
   ownerName: string;
   slug: string;
   trialEndsAt: Date;
+  /** Canonical code, or "" for none (already shape-checked). */
+  signupCode: string;
 };
 
 async function insertTenant({
@@ -242,8 +280,23 @@ async function insertTenant({
   ownerName,
   slug,
   trialEndsAt,
+  signupCode,
 }: InsertTenantArgs): Promise<ProvisionResult> {
   return db.transaction(async (tx) => {
+    // ADR 0019 — the code is read INSIDE the transaction, `FOR SHARE`: an operator deactivating it at this
+    // instant either waits for this signup or wins and this signup is refused — never a store created on a
+    // code that was already off. Owner pool: `signup_codes` has RLS with no policy (0117).
+    let shippingProvider: ShippingProvider = DEFAULT_SHIPPING_PROVIDER;
+    if (signupCode) {
+      const [code] = await tx
+        .select({ provider: schema.signupCodes.shippingProvider })
+        .from(schema.signupCodes)
+        .where(and(eq(schema.signupCodes.code, signupCode), eq(schema.signupCodes.active, true)))
+        .limit(1)
+        .for("share");
+      if (!code) throw new SignupCodeError();
+      shippingProvider = code.provider === "mengantar" ? "mengantar" : DEFAULT_SHIPPING_PROVIDER;
+    }
     const [acc] = await tx.insert(schema.accounts).values({ name: storeName }).returning();
     const [u] = input.userId
       ? [{ id: input.userId }]
@@ -292,6 +345,9 @@ async function insertTenant({
         // re-key that switching costs. The column defaults to 'handle' for stores that already exist
         // and may already have a catalog ingested somewhere; a store created now has none.
         catalogIdScheme: "number",
+        // ADR 0019: from the signup code (default KiriminAja). Never from anything else the form posts.
+        shippingProvider,
+        signupCode: signupCode || null,
       })
       .returning();
     await tx.insert(schema.storeUsers).values({ storeId: st.id, userId: u.id, role: "owner", acceptedAt: new Date() });
@@ -314,9 +370,9 @@ async function insertTenant({
       kind: "signup",
       // The feed is the control plane's inbox — it has to say that something is WAITING, not merely
       // that something happened, or the queue is only discoverable by browsing the store list.
-      text: `Toko baru "${storeName}" mendaftar (${email}) — menunggu persetujuan`,
+      text: `Toko baru "${storeName}" mendaftar (${email})${signupCode ? ` dengan kode ${signupCode} (penyedia pengiriman: ${shippingProvider})` : ""} — menunggu persetujuan`,
       storeId: st.id,
     });
-    return { userId: u.id, storeId: st.id, role: "owner", email, name: ownerName, slug };
+    return { userId: u.id, storeId: st.id, role: "owner", email, name: ownerName, slug, shippingProvider };
   });
 }

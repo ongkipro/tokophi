@@ -2,6 +2,18 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-13 — Penyedia pengiriman per toko + kode daftar (ADR 0019, PR #466)
+
+- **Penyedia pengiriman kini dipilih per toko** (`stores.shipping_provider`, migrasi `0117`): default KiriminAja;
+  Super Admin memindahkan satu toko ke Mengantar (atau balik) dari halaman toko — peran owner, alasan wajib,
+  tercatat di log. Seller tidak memilih. Saklar platform tetap ada sebagai saklar darurat (KiriminAja = Mengantar
+  mati untuk semua toko). COD tetap KiriminAja.
+- **Kode daftar** (Super Admin → Kode Daftar): kode yang dimasukkan di `/daftar` (atau `?kode=`) menentukan
+  penyedia toko baru. Kode salah/nonaktif ditolak dengan satu kalimat jelas. Persetujuan Mengantar di halaman
+  daftar hanya muncul untuk kode Mengantar.
+- **Akun Mengantar hanya dibuat untuk toko yang diatur ke Mengantar** — tidak lagi untuk setiap toko yang
+  mendaftar. Seller KiriminAja tidak melihat kartu/banner Mengantar apa pun.
+
 ## 2026-11-13 — "Bayar ulang": tagihan baru untuk pesanan yang sama (PAY-RETRY)
 
 - **Pembeli yang telat bayar (QRIS/VA/e-wallet kedaluwarsa) atau tagihannya gagal dibuat** kini bisa menekan
@@ -11,7 +23,7 @@ All notable changes. Dates are absolute. Phase: local backend done (Postgres + D
 - **Uang yang masuk dua kali atau masuk setelah pesanan dibatalkan** kini tercatat sebagai `refunds`
   (Super Admin → Pencairan), bukan sekadar log. Ledger tetap satu penjualan per pesanan.
 - **Jam "Bayar sebelum"** kini dibaca sebagai WIB di server (sebelumnya meleset 1–2 jam untuk pembeli di
-  WITA/WIT, dan hilang di Safari). Kedaluwarsa tagihan disimpan (`payments.expires_at`, migrasi `0117`).
+  WITA/WIT, dan hilang di Safari). Kedaluwarsa tagihan disimpan (`payments.expires_at`, migrasi `0118`).
 - **Seller:** tagihan kedaluwarsa tidak lagi memblokir "Buat tagihan"; detail pesanan menampilkan status
   "Kedaluwarsa", "Berlaku sampai", dan riwayat tagihan. Cron pembatalan menunggu selama tagihan masih hidup.
 

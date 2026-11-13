@@ -17,7 +17,7 @@ export const RETRY_CLOSE_MARGIN_MS = 15 * 60 * 1000;
 /**
  * How long an instruction of UNKNOWN expiry is presumed payable, from the moment it was issued.
  *
- * Unknown = `expires_at` NULL: every pre-0117 row, an answer we could not parse, a provider call that
+ * Unknown = `expires_at` NULL: every pre-0118 row, an answer we could not parse, a provider call that
  * threw after the vendor may already have created the bill. 24 h is the longest window this account
  * has ever been given (`create_payment` +24 h; `/submit` answered +2 h). Presuming it payable for
  * that long is the conservative reading: a dead bill read as live costs a shopper a WhatsApp to the
@@ -131,7 +131,7 @@ export const retryReffId = (orderNumber: string, n: number) => (n <= 1 ? orderNu
 export const mintPayToken = () => randomBytes(32).toString("base64url");
 export const hashPayToken = (token: string) => createHash("sha256").update(token, "utf8").digest("hex");
 
-/** Constant-time. A missing hash (COD, pre-0117) or a malformed token is simply "no". */
+/** Constant-time. A missing hash (COD, pre-0118) or a malformed token is simply "no". */
 export function payTokenMatches(token: unknown, storedHash: string | null | undefined): boolean {
   if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
   if (!storedHash || !/^[0-9a-f]{64}$/.test(storedHash)) return false;

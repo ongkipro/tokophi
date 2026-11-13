@@ -1,4 +1,4 @@
-import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, LifeBuoy, Banknote, History, ScrollText, Truck, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Store, CreditCard, BarChart3, Settings, LifeBuoy, Banknote, History, ScrollText, Truck, Ticket, type LucideIcon } from "lucide-react";
 import { canOpenPath } from "./route-roles";
 
 /**
@@ -23,6 +23,7 @@ export const NAV: NavItem[] = [
   { label: "Log Sistem", href: "/log-sistem", icon: ScrollText, group: "Pantau" },
   { label: "Update Log", href: "/update-log", icon: History, group: "Pantau" },
   { label: "Paket & Billing", href: "/paket", icon: CreditCard, group: "Konfigurasi" },
+  { label: "Kode Daftar", href: "/kode-daftar", icon: Ticket, group: "Konfigurasi" },
   { label: "Pengaturan", href: "/pengaturan", icon: Settings, group: "Konfigurasi" },
 ];
 

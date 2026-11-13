@@ -25,8 +25,8 @@ alter table "payments" add column if not exists "expires_at" timestamp with time
 alter table "payments" add column if not exists "created_at" timestamp with time zone default now() not null;--> statement-breakpoint
 alter table "orders" add column if not exists "pay_token_hash" text;--> statement-breakpoint
 comment on column "payments"."expires_at" is
-  'When the provider stops accepting this instruction (AutoLaris payment_info.expired, parsed as WIB). NULL = unknown (pre-0117 rows, unparseable answer); lib/pay-retry.ts bounds an unknown expiry conservatively. PAY-RETRY.';--> statement-breakpoint
+  'When the provider stops accepting this instruction (AutoLaris payment_info.expired, parsed as WIB). NULL = unknown (pre-0118 rows, unparseable answer); lib/pay-retry.ts bounds an unknown expiry conservatively. PAY-RETRY.';--> statement-breakpoint
 comment on column "payments"."created_at" is
-  'Attempt order for an order with several instructions (PAY-RETRY). Pre-0117 rows carry the migration instant; id breaks the tie.';--> statement-breakpoint
+  'Attempt order for an order with several instructions (PAY-RETRY). Pre-0118 rows carry the migration instant; id breaks the tie.';--> statement-breakpoint
 comment on column "orders"."pay_token_hash" is
-  'sha256 hex of the shopper-held secret that authorises /api/public/pay/retry for THIS order. Never the token itself. NULL = COD or placed before 0117 (no self-service retry). PAY-RETRY.';
+  'sha256 hex of the shopper-held secret that authorises /api/public/pay/retry for THIS order. Never the token itself. NULL = COD or placed before 0118 (no self-service retry). PAY-RETRY.';

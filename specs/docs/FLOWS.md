@@ -344,14 +344,16 @@ sequenceDiagram
 Tracking: the storefront has **no** `/api/track`-style shipment lookup; `kaTrack()` exists in `packages/lib` and is
 reachable from the merchant admin only.
 
-### 5.1 Mengantar path (ADR 0018, live since 2026-11-12 for the demo store)
+### 5.1 Mengantar path (ADR 0018 + ADR 0019, live since 2026-11-12 for the demo store)
 
-The diagram above is the KiriminAja path. Since migration `0116` a second provider sits behind the platform
-switch `shipping_provider_config.active_provider`; which one serves an order is decided per order and stamped:
+The diagram above is the KiriminAja path. Since migration `0116` a second provider exists; since `0117`
+(ADR 0019) it is chosen PER STORE (`stores.shipping_provider`, set by Super Admin or a signup code; default
+KiriminAja), under the platform master switch `shipping_provider_config.active_provider`. Which one serves an
+order is decided per order and stamped:
 
 ```mermaid
 flowchart TD
-    Q["POST /api/public/ongkir — quoteShipping()<br/>(apps/admin/lib/shipping-quote.ts)"] --> C{"switch = mengantar<br/>∧ not COD<br/>∧ store account connected<br/>for MENGANTAR_ENV?"}
+    Q["POST /api/public/ongkir — quoteShipping()<br/>(apps/admin/lib/shipping-quote.ts)"] --> C{"switch = mengantar<br/>∧ not COD<br/>∧ store set to Mengantar<br/>∧ store account connected<br/>for MENGANTAR_ENV?"}
     C -- yes --> M["Mengantar estimate with THE STORE'S seller key<br/>origin = sender kecamatan → mengantar_areas bridge<br/>answer carries codRequote: true"]
     C -- no --> K["KiriminAja (the path above)"]
     M --> O["POST /api/public/order re-quotes;<br/>orders.shipping_provider = 'mengantar', mg_env, mg_seller_id"]
@@ -363,6 +365,11 @@ flowchart TD
 - Picking COD on a connected store re-quotes the same destination on the default provider (`codRequote`), so the
   rates on screen always match the payment method; Mengantar never carries COD (O4/O6).
 - Cancel goes through the provider that booked it (Mengantar cancels by its own `_id`; KiriminAja by AWB only).
+- **Who is on Mengantar (ADR 0019):** a store is born on KiriminAja. Super Admin moves it (store page →
+  "Penyedia pengiriman", owner rank, reason, audited), or a self-serve signup enters a Mengantar signup code
+  (`/daftar?kode=`, made at Super Admin → Kode Daftar). Only then is its Mengantar account queued — registered
+  after approval and with the owner's consent (shown on `/daftar` only for a Mengantar code, or the
+  "Hubungkan Mengantar" click). Moving a store back to KiriminAja leaves its account and its orders' stamps.
 - Rules and traps: `specs/docs/rules/shipping-cod.md` → Mengantar; secrets: `specs/docs/SECURITY.md`.
 
 ---

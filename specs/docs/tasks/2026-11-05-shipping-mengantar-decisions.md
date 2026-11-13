@@ -33,7 +33,26 @@ Partner Business API. Contract details: Mengantar partner docs (private, kept of
 | D17 | Environment | Sandbox first | `MENGANTAR_ENV` = `sandbox` (default) \| `production`, fixed origin table. Production Partner origin is unknown → production onboarding is queued (`configuration_blocked`) until Mengantar provides it (+ the allow-listed VPS IP). |
 | D18 | Pickup mode | — | Sandbox lists no pickup slots, so `MENGANTAR_PICKUP_MODE=dropOff` (or the booking option) books drop-off; production default stays `scheduledPickup` (with the now-required `volume`). |
 
-## Owner direction 2026-11-12 — every store on its own Mengantar account (NOT implemented yet)
+## Owner ruling 2026-11-13 — the provider is chosen PER STORE (ADR 0019, `SHIP-PROVIDER-PER-STORE`)
+
+Owner: *"jadi ada 2 → seller bisa KiriminAja (ekspedisinya) atau Mengantar. Super admin yang menentukan dan atau
+via code ketika register."* · *"default pakai KiriminAja, soalnya kalo Mengantar harus double register"* ·
+*"bentuk kode daftar dari super admin aja, yang boleh mengganti ya super admin"*. This settles the 2026-11-12
+direction below the other way: Mengantar is per store and opt-in by the platform, not mandatory.
+
+| # | Point | Ruling / default | Code |
+|---|---|---|---|
+| P1 | Who decides a store's provider | Super Admin, or a signup code at registration; never the seller | `stores.shipping_provider` (0117), `setStoreShippingProvider` |
+| P2 | Default | KiriminAja; a Mengantar account only for a store set to Mengantar | sink checks in `mengantar-account.ts`; `createStore` no longer queues |
+| P3 | Signup codes | made in Super Admin (owner-confirmed), each maps to a provider; unknown/inactive → refused | `signup_codes`, `/kode-daftar`, `provisionStore` |
+| P4 | Rank | "super admin" — rank not named; **default owner**, ONE constant `SHIPPING_PROVIDER_MIN_RANK` (owner-confirmable, one line to lower) | `store-shipping-provider.ts`, `route-roles.ts` |
+| P5 | Platform switch | kept as the master kill-switch (`kiriminaja` = Mengantar off for all) | `quoteShipping` |
+| P6 | COD | unchanged — always KiriminAja (O4/O6) | `quoteShipping` |
+
+Production effect of 0117: only stores already holding a `connected` account become `mengantar` — the demo store
+`batiknusantara`. Stores whose signup queued a `pending` row become KiriminAja and are no longer registered.
+
+## Owner direction 2026-11-12 — every store on its own Mengantar account (NOT implemented yet) — superseded 2026-11-13 by ADR 0019 (above)
 
 Owner: *"nanti masing-masing toko wajib pakai akun mengantar / register akun mengantar ulang yang belum sync
 dengan mengantar"*. Target state: no store stays on the KiriminAja fallback for lack of an account; every

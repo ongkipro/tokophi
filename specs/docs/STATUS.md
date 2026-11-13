@@ -13,9 +13,11 @@
 > trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's production Partner origin +
 > IP allow-list (O2) before any other store can register; the first real Mengantar booking + cancel; the
 > AutoLaris QRIS window is the vendor's 2 h default (`/submit` sends no `expired` — task PAY-QRIS-EXPIRY).
-> **Branch `feat/pay-retry` (PAY-RETRY, NOT merged/deployed):** "Bayar ulang" on `/checkout/sukses` + public
-> route `/api/public/pay/retry`, migration `0117_pay_retry` (repo journal 118; production stays 117 until it
-> deploys). Spec `specs/docs/tasks/2026-11-13-pay-retry.md`.
+> **2026-11-13:** PR #466 (ADR 0019, migration `0117_store_shipping_provider`) merged + deploying — the provider
+> choice moved to the store (`stores.shipping_provider`, Super Admin / signup code, default KiriminAja); its backfill
+> flips only stores with a `connected` Mengantar account (production: the demo store alone), so production quotes as
+> before. **Branch `feat/pay-retry` (PAY-RETRY, PR #465, next):** "Bayar ulang" on `/checkout/sukses` + public route
+> `/api/public/pay/retry`, migration renumbered to `0118_pay_retry` (repo journal 119). Spec `specs/docs/tasks/2026-11-13-pay-retry.md`.
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
@@ -74,7 +76,7 @@
 >
 > **Release blockers — recounted 2026-08-24 against evidence, not against stale flags.** **Stage 4 is COMPLETE**: all 13 P0 tasks carry documented completion evidence (BUILD-LOG entries and/or `[x]` flags — reconciled 2026-08-24 after the flags were found under-reporting by 16 tasks). The active queue is now **14 P1 open** (5.1, 5.4–5.9, 5.12–5.15, 5.18–5.20 — of which 5.8/5.19/5.20 are owner-gated decisions/credentials and 5.12 is blocked on GitHub Actions billing) **and 7 P2 open** (6.1, 6.3, 6.4, 6.6–6.9 — 6.1 is blocked on 5.12–5.15). No production release sign-off until the Stage 7 executable gate passes; that gate has not been run.
 >
-> **Data/security status:** the 118-entry migration journal is healthy through `0117_pay_retry` (production: 117 through `0116_mengantar_shipping` until PAY-RETRY deploys), and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
+> **Data/security status:** the 119-entry migration journal is healthy through `0118_pay_retry` (`0117_store_shipping_provider` before it), and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >

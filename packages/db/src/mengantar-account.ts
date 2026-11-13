@@ -10,6 +10,7 @@ import {
   type MengantarConfig,
   type MengantarPartnerConfig,
   type ProviderEnv,
+  type ShippingProvider,
 } from "@tokophi/lib/provider-config";
 import {
   MengantarPartnerConfigError,
@@ -42,6 +43,11 @@ import {
 //     version. A lost regenerate answer is recovered with `sellers/api-key`, never a second regenerate.
 //   · `enqueueMengantarConnect` / `retryMengantarAccounts` — provisioning never waits on, or fails
 //     because of, Mengantar (O10): the row is queued `pending` and the cron retries it.
+//   · `storeShippingProvider` — ADR 0019: an account is registered ONLY for a store whose
+//     `stores.shipping_provider` is 'mengantar' (set by Super Admin or a signup code; default KiriminAja,
+//     owner 2026-11-13: "kalo Mengantar harus double register"). Enforced HERE, at the sink — enqueue,
+//     requeue, connect and the retry sweep — so no caller (signup, createStore, approval, the cron, the
+//     Seller button, an operator retry) can register a KiriminAja store by forgetting to ask.
 //
 // POOL: owner `db`, with an EXPLICIT `store_id` filter on every statement (AGENTS.md: the WHERE is the
 // rule, RLS is the net). Callers are the public routes, the cron, provisioning and Super Admin — none
@@ -54,6 +60,15 @@ export type MgAccountState = "pending" | "registering" | "connected" | "email_ta
 
 /** GCM scope of a seller key: bound to the store, env, seller AND key version — a blob replayed into another row, env, seller or version does not decrypt. */
 export const mengantarKeyScope = (storeId: string, env: ProviderEnv, sellerId: string, version: number) => `mengantar:${storeId}:${env}:${sellerId}:v${version}`;
+
+/** ADR 0019: the provider THIS store is on (`stores.shipping_provider`). No such store → the default. */
+export async function storeShippingProvider(storeId: string): Promise<ShippingProvider> {
+  const [r] = await db.select({ p: stores.shippingProvider }).from(stores).where(eq(stores.id, storeId)).limit(1);
+  return r?.p === "mengantar" ? "mengantar" : "kiriminaja";
+}
+
+/** What a KiriminAja store is told when something asks to register it. No default-provider brand (ADR 0004). */
+export const NOT_ON_MENGANTAR_MSG = "Toko ini memakai pengiriman standar TokoΦ — akun Mengantar hanya dibuat untuk toko yang diatur TokoΦ memakai Mengantar.";
 
 /** How long a `registering`/`rotating` claim is considered in flight before the retry sweep may take it. */
 export const MG_CLAIM_STALE_MS = 2 * 60 * 1000;
@@ -337,6 +352,13 @@ export async function connectStoreMengantar(storeId: string, o: ConnectOptions):
   try {
     const popts = await partnerOpts(o);
     env = popts.cfg.env;
+    // ADR 0019 — FIRST, before any row is written: only a store set to Mengantar gets an account. The one
+    // exception is a `registering` row (a register call that may already have landed before an operator
+    // moved the store away): it is let through to RECONCILE, never abandoned half-made.
+    if ((await storeShippingProvider(storeId)) !== "mengantar") {
+      const [cur] = await db.select({ state: storeMengantarAccounts.state }).from(storeMengantarAccounts).where(where(storeId, env)).limit(1);
+      if (cur?.state !== "registering") return { state: (cur?.state as MgAccountState | undefined) ?? "none", message: NOT_ON_MENGANTAR_MSG };
+    }
     await ensureRow(storeId, env, o);
     if (o.actorUserId) {
       // An owner who clicks (or signs up) records the consent; a cron retry never overwrites it.
@@ -554,6 +576,8 @@ async function seal(
  */
 export async function enqueueMengantarConnect(storeId: string, o: ConnectOptions): Promise<void> {
   try {
+    // ADR 0019: a KiriminAja store gets no row at all — nothing queued, nothing for the sweep to find.
+    if ((await storeShippingProvider(storeId)) !== "mengantar") return;
     const env = (o.partner?.cfg ?? (await getProviderConfig()).mengantar).env;
     await ensureRow(storeId, env, o);
   } catch (e) {
@@ -580,6 +604,7 @@ export function sellerConnectRefusal(st: Pick<MgAccountStatus, "state" | "update
 
 /** Put a terminal row back in the queue (owner clicked "Hubungkan" again, operator retry). */
 export async function requeueMengantar(storeId: string, o: ConnectOptions): Promise<void> {
+  if ((await storeShippingProvider(storeId)) !== "mengantar") return; // ADR 0019 — never (re)queue a KiriminAja store
   const env = (o.partner?.cfg ?? (await getProviderConfig()).mengantar).env;
   await ensureRow(storeId, env, o);
   // A provider rate limit SURVIVES a click (GeraiExpress SEC-05): only other waits are cleared.
@@ -737,6 +762,7 @@ export async function retryMengantarAccounts(o: { limit?: number; partner?: Part
       insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consent_by, consented_at)
       select s.store_id, 'production', 'tokophi:store:' || s.store_id::text, 'pending', s.consent_source, s.consent_by, s.consented_at
         from store_mengantar_accounts s
+        join stores st on st.id = s.store_id and st.shipping_provider = 'mengantar'
        where s.env = 'sandbox' and s.consented_at is not null
       on conflict do nothing`);
   }
@@ -746,7 +772,11 @@ export async function retryMengantarAccounts(o: { limit?: number; partner?: Part
     .where(
       and(
         eq(storeMengantarAccounts.env, env),
-        sql`((${storeMengantarAccounts.state} = 'pending' and (${storeMengantarAccounts.retryAfterAt} is null or ${storeMengantarAccounts.retryAfterAt} <= ${new Date(now()).toISOString()}::timestamptz))
+        // ADR 0019: a queued row of a store that is NOT on Mengantar (moved back by an operator, or queued
+        // before 0117) is never picked — it would spend the shared partner budget on a refusal. In-flight
+        // `registering` / `rotating` rows are still finished whatever the store is on.
+        sql`((${storeMengantarAccounts.state} = 'pending' and (${storeMengantarAccounts.retryAfterAt} is null or ${storeMengantarAccounts.retryAfterAt} <= ${new Date(now()).toISOString()}::timestamptz)
+              and exists (select 1 from stores st where st.id = "store_mengantar_accounts"."store_id" and st.shipping_provider = 'mengantar'))
           or (${storeMengantarAccounts.state} in ('registering', 'rotating') and ${storeMengantarAccounts.updatedAt} < ${stale.toISOString()}::timestamptz))`,
       ),
     )

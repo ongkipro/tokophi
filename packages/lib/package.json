@@ -35,6 +35,7 @@
     "./csp": "./src/csp.ts",
     "./session-cookie": "./src/session-cookie.ts",
     "./store-slug": "./src/store-slug.ts",
+    "./signup-code": "./src/signup-code.ts",
     "./platform-theme": "./src/platform-theme.ts",
     "./session-revocation": "./src/session-revocation.ts",
     "./impersonation": "./src/impersonation.ts",

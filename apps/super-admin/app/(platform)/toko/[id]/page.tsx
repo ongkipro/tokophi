@@ -9,6 +9,7 @@ import {
 } from "@/lib/data";
 import { getStoreHealth } from "@/lib/health";
 import { StoreDetail } from "./store-detail";
+import { getStoreShipping } from "@/lib/shipping-data";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function StoreDetailPage({
   // `/produk/…` takes the catalog NUMBER, so merchants do try `/<this route>/1042`. See @tokophi/lib/uuid.
   if (!isUuid(id)) notFound();
   const { tx } = await searchParams;
-  const [store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals] = await Promise.all([
+  const [store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals, shipping] = await Promise.all([
     getStoreById(id),
     getStoreHealth(id),
     getStoreBilling(id),
@@ -43,12 +44,13 @@ export default async function StoreDetailPage({
     getStoreMovements(id, Number(tx) || 1),
     getStorePayouts(id),
     getStoreMoneySignals(id),
+    getStoreShipping(id),
   ]);
   if (!store) notFound();
   return (
     <StoreDetail
       store={store} health={health} billing={billing} invoices={invoices} users={users} activity={activity} comp={comp}
-      balance={balance} movements={movements} payouts={payouts} signals={signals}
+      balance={balance} movements={movements} payouts={payouts} signals={signals} shipping={shipping}
     />
   );
 }

@@ -512,7 +512,7 @@ export async function createOrderPayment(
         qr: providerResult.qr,
         url: providerResult.url,
         paymentCode: providerResult.paymentCode,
-        // PAY-RETRY (0117): kept, so the next "is a bill live?" question has an answer.
+        // PAY-RETRY (0118): kept, so the next "is a bill live?" question has an answer.
         expiresAt: providerResult.expiresAt ? new Date(providerResult.expiresAt) : null,
       })
       .where(

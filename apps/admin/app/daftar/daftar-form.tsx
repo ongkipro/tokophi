@@ -2,14 +2,18 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { Check, Loader2, Search } from "lucide-react";
-import { registerStore } from "@/lib/actions/register";
+import { checkSignupCode, registerStore, type SignupCodeCheck } from "@/lib/actions/register";
 import { slugify } from "@tokophi/lib/store-slug";
+import { normalizeSignupCode, SIGNUP_CODE_UNKNOWN_MSG } from "@tokophi/lib/signup-code";
 import { STORE_NAME_EVENT } from "@/components/admin/front-door/address-plate";
 import { Button } from "@tokophi/ui/button";
 import { Input } from "@tokophi/ui/input";
 import { Label } from "@tokophi/ui/label";
 import { GoogleButton } from "./google-button";
-import { MengantarConsent } from "@/components/admin/mengantar-consent";
+import { MengantarConsent, TOKOPHI_PRIVACY_URL } from "@/components/admin/mengantar-consent";
+
+/** A code check, bound to the canonical code it answers for (a stale answer for older typing is ignored). */
+export type CodeCheck = SignupCodeCheck & { code: string };
 
 const STEPS = ["Buat akun", "Profil pemilik", "Alamat penjemputan"] as const;
 
@@ -42,12 +46,56 @@ const STEPS = ["Buat akun", "Profil pemilik", "Alamat penjemputan"] as const;
  * Only steps ①/② carry `required`, and `next()` refuses to walk past an invalid one, so a hidden
  * required field can never block the submit with an error pointing at something off screen.
  */
-export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; notice?: string }) {
+export function DaftarForm({
+  googleEnabled,
+  notice,
+  initialCode = "",
+  initialCheck = null,
+}: {
+  googleEnabled: boolean;
+  notice?: string;
+  /** `?kode=` from the link an operator handed out (ADR 0019). */
+  initialCode?: string;
+  /** The server's answer for `initialCode`, so a Mengantar link shows its consent on first paint. */
+  initialCheck?: CodeCheck | null;
+}) {
   const [state, action, pending] = useActionState(registerStore, {});
   const [step, setStep] = React.useState(0);
   const [storeName, setStoreName] = React.useState("");
   const [stepError, setStepError] = React.useState<string | null>(null);
   const stepRef = React.useRef<HTMLDivElement>(null);
+
+  // ── SIGNUP CODE (ADR 0019) ─────────────────────────────────────────────────────────────────────
+  // Optional. A code made in Super Admin decides the store's shipping provider; none = the default. The
+  // check below is advisory (UX): `provisionStore` re-reads the code in its transaction and refuses an
+  // unknown one. What the check DOES decide is whether the Mengantar consent sentence is on screen —
+  // only for a code that maps to Mengantar — and the hidden `mengantarConsentFor` field posts the code
+  // the sentence was shown for, so the server records consent only for what the person actually saw.
+  const [code, setCode] = React.useState(initialCode);
+  const [check, setCheck] = React.useState<CodeCheck | null>(initialCheck);
+  const codeRef = React.useRef<HTMLInputElement>(null);
+  const norm = normalizeSignupCode(code);
+  const current = check && norm && check.code === norm ? check : null;
+  const codeBad = norm === null || current?.valid === false;
+  const consentShown = !!current?.mengantar;
+  React.useEffect(() => {
+    if (!norm || check?.code === norm) return;
+    let live = true;
+    const t = setTimeout(() => {
+      checkSignupCode(norm)
+        .then((r) => live && setCheck({ ...r, code: norm }))
+        .catch(() => {}); // a failed check leaves the field "unchecked"; the server still decides
+    }, 350);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [norm, check?.code]);
+  // A code we KNOW is wrong blocks "Lanjut" at step ① (`next()` reads `:invalid`) with the same sentence
+  // the server would give — before three steps of typing, not after.
+  React.useEffect(() => {
+    codeRef.current?.setCustomValidity(codeBad ? SIGNUP_CODE_UNKNOWN_MSG : "");
+  }, [codeBad]);
 
   // Pickup address (step ③) — the same cascade the shopper's checkout uses, through the same public
   // endpoint (`/api/public/ongkir`, ops `search` + `kelurahan`). Same origin as this page, already
@@ -123,7 +171,12 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
     <div className="flex flex-col gap-4">
       {googleEnabled && step === 0 && (
         <>
-          <GoogleButton mode="daftar" label="Daftar dengan Google" />
+          <GoogleButton
+            mode="daftar"
+            label="Daftar dengan Google"
+            signupCode={norm || undefined}
+            mengantarConsent={consentShown}
+          />
           <div className="flex items-center gap-3">
             <span className="h-px flex-1 bg-border" />
             <span className="text-xs text-muted-foreground">atau</span>
@@ -143,6 +196,8 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
       </div>
 
       <form action={action} className="flex flex-col gap-4">
+        {/* The code the Mengantar consent sentence below is showing for — empty when it is not shown. */}
+        <input type="hidden" name="mengantarConsentFor" value={consentShown && norm ? norm : ""} />
         {/* ── ① account ─────────────────────────────────────────────────────────────────────── */}
         <div ref={step === 0 ? stepRef : undefined} className={`flex flex-col gap-4 ${step === 0 ? "" : "hidden"}`}>
           <div className="flex flex-col gap-2">
@@ -182,6 +237,37 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
             <Label htmlFor="password">Kata sandi</Label>
             <Input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="h-11" />
             <p className="text-xs text-muted-foreground">Minimal 8 karakter.</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="signupCode">
+              Kode daftar <span className="font-normal text-muted-foreground">(opsional)</span>
+            </Label>
+            <Input
+              ref={codeRef}
+              id="signupCode"
+              name="signupCode"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={32}
+              placeholder="Mis. MITRA-2026"
+              className="h-11 font-mono uppercase placeholder:font-sans placeholder:normal-case"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              aria-invalid={codeBad || undefined}
+              aria-describedby="signupCode-hint"
+            />
+            <p id="signupCode-hint" aria-live="polite" className={`text-xs ${codeBad ? "text-destructive" : "text-muted-foreground"}`}>
+              {!norm && !codeBad
+                ? "Punya kode dari tim TokoΦ? Masukkan di sini. Kosongkan bila tidak ada."
+                : codeBad
+                  ? SIGNUP_CODE_UNKNOWN_MSG
+                  : current?.valid
+                    ? "Kode diterima."
+                    : current
+                      ? "Kode diperiksa saat toko dibuat."
+                      : "Memeriksa kode…"}
+            </p>
           </div>
         </div>
 
@@ -310,8 +396,20 @@ export function DaftarForm({ googleEnabled, notice }: { googleEnabled: boolean; 
 
       {/* Every path that creates the store — "Daftar dengan Google" on step ①, "Lewati" mid-way, "Selesai"
           at the end — is on this page, so the agreement is shown on every step, not only the last one.
-          Creating the store queues its Mengantar account (owner D14); this is the consent that records. */}
-      <MengantarConsent action="signup" />
+          ADR 0019: a Mengantar account is created ONLY for a store a Mengantar code puts on Mengantar, so
+          the Mengantar sentence appears only for such a code (and the hidden field above binds it to that
+          code). Without one, a KiriminAja store is created and no provider is named at all (ADR 0004). */}
+      {consentShown ? (
+        <MengantarConsent action="signup" />
+      ) : (
+        <p data-signup-privacy className="text-xs leading-relaxed text-muted-foreground">
+          Sebelum membuat toko, baca{" "}
+          <a href={TOKOPHI_PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground underline underline-offset-2 hover:text-primary">
+            Kebijakan Privasi TokoΦ
+          </a>
+          .
+        </p>
+      )}
     </div>
   );
 }

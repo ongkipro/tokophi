@@ -5,8 +5,9 @@ import type { MgRate } from "@tokophi/lib/mengantar";
 
 // 🔴 Mengantar Partner Business API — THE ONE PRICE PRODUCER FOLLOWS THE SWITCH *AND* THE STORE.
 //
-// Switch = Mengantar quotes with THE STORE'S OWN seller key only when the store has a connected
-// account and the order is not COD; otherwise it FALLS BACK to KiriminAja (owner O6).
+// Switch = Mengantar quotes with THE STORE'S OWN seller key only when the STORE is set to Mengantar
+// (ADR 0019, `stores.shipping_provider`), the store has a connected account and the order is not COD;
+// otherwise KiriminAja (owner O6). The switch stays the platform-wide kill-switch above the store.
 //
 // `quoteShipping` is what `/api/public/ongkir` shows the shopper and what `/api/public/order`
 // RE-QUOTES and stores. These tests drive the real function with the platform switch flipped both
@@ -21,8 +22,9 @@ const h = vi.hoisted(() => ({
   kaShippingPrice: vi.fn(),
   weightForCart: vi.fn(),
   open: vi.fn(),
+  storeProvider: vi.fn(),
 }));
-vi.mock("@tokophi/db/mengantar-account", () => ({ openStoreMengantar: h.open }));
+vi.mock("@tokophi/db/mengantar-account", () => ({ openStoreMengantar: h.open, storeShippingProvider: h.storeProvider }));
 
 vi.mock("@tokophi/db", async () => {
   const schemaMod = await import("@tokophi/db/schema");
@@ -70,10 +72,15 @@ const CART = [
   { variantId: "c", qty: 2 },
 ]; // 700 + 800 + 500 = 2000 g → 2 kg
 
-/** The platform switch, and whether THIS store has a connected Mengantar account (its own key). */
-function config(shipping: "kiriminaja" | "mengantar", connected = true) {
+/**
+ * The platform switch, whether THIS store has a connected Mengantar account (its own key), and which
+ * provider Super Admin set the STORE to (ADR 0019). The default `store = "mengantar"` keeps the older
+ * cases below about the Mengantar branch itself; the truth table at the end covers the store column.
+ */
+function config(shipping: "kiriminaja" | "mengantar", connected = true, store: "kiriminaja" | "mengantar" = "mengantar") {
   const rows: ProviderRows = { kiriminaja: null, autolaris: null, mengantar: null, shipping: { activeProvider: shipping } };
   setProviderConfigLoader(async () => rows);
+  h.storeProvider.mockReset().mockResolvedValue(store);
   h.open.mockReset().mockResolvedValue(
     connected
       ? { ok: true, cfg: { env: "sandbox", base: "https://sandbox.mengantar.com", key: FAKE_KEY }, sellerId: "s1", env: "sandbox", pickupAddressId: null }
@@ -331,6 +338,39 @@ describe("quoteShipping — switch = mengantar", () => {
     if (all.ok) expect(all.rates.map((r) => r.code)).toEqual(["jnt"]);
     expect(fetchMock).toHaveBeenCalledTimes(1); // one estimate per route, cached
   });
+});
+
+// ADR 0019 — THE DISPATCH TRUTH TABLE. Every row drives the real `quoteShipping`; "provider" is what the
+// order would be stamped with. `opened` = whether the store's sealed Mengantar key was even read.
+describe("quoteShipping — ADR 0019 dispatch truth table (switch × store × COD × account)", () => {
+  type Row = { sw: "kiriminaja" | "mengantar"; store: "kiriminaja" | "mengantar"; cod: boolean; connected: boolean; want: "kiriminaja" | "mengantar"; opened: boolean };
+  const table: Row[] = [
+    // Platform kill-switch OFF: nobody quotes Mengantar, whatever the store says or holds.
+    { sw: "kiriminaja", store: "mengantar", cod: false, connected: true, want: "kiriminaja", opened: false },
+    { sw: "kiriminaja", store: "kiriminaja", cod: false, connected: true, want: "kiriminaja", opened: false },
+    // Switch ON, store on KiriminAja: KiriminAja — EVEN WITH a connected account (moved back by an operator).
+    { sw: "mengantar", store: "kiriminaja", cod: false, connected: true, want: "kiriminaja", opened: false },
+    { sw: "mengantar", store: "kiriminaja", cod: false, connected: false, want: "kiriminaja", opened: false },
+    // Switch ON, store on Mengantar: Mengantar only when connected and not COD.
+    { sw: "mengantar", store: "mengantar", cod: false, connected: true, want: "mengantar", opened: true },
+    { sw: "mengantar", store: "mengantar", cod: false, connected: false, want: "kiriminaja", opened: true },
+    { sw: "mengantar", store: "mengantar", cod: true, connected: true, want: "kiriminaja", opened: false },
+  ];
+  let dest = 400;
+  for (const r of table) {
+    it(`switch=${r.sw} · store=${r.store} · ${r.cod ? "COD" : "prepaid"} · ${r.connected ? "connected" : "no account"} → ${r.want}`, async () => {
+      config(r.sw, r.connected, r.store);
+      h.kaShippingPrice.mockResolvedValue(KA_SPX);
+      const q = await quoteShipping({ storeId: STORE, destinationId: ++dest, items: CART, cod: r.cod });
+      expect(q).toMatchObject({ ok: true, provider: r.want });
+      expect(h.open.mock.calls.length > 0).toBe(r.opened);
+      expect(fetchMock.mock.calls.length > 0).toBe(r.want === "mengantar");
+      expect(h.kaShippingPrice.mock.calls.length > 0).toBe(r.want === "kiriminaja");
+      // The store's provider is only consulted once the platform switch and COD allow Mengantar at all.
+      expect(h.storeProvider.mock.calls.length > 0).toBe(r.sw === "mengantar" && !r.cod);
+      if (h.storeProvider.mock.calls.length) expect(h.storeProvider).toHaveBeenCalledWith(STORE);
+    });
+  }
 });
 
 describe("mengantarRates — the courier rule (pure)", () => {
