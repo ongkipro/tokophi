@@ -1,4 +1,4 @@
-# ADR 0019 — First-party plugins: compiled in, activated per store, never a marketplace
+# ADR 0021 — First-party plugins: compiled in, activated per store, never a marketplace
 
 **Status:** accepted for v1 · **Date:** 2026-11-13 · **Decided by:** the owner's direction of 2026-11-13 (the Seller
 CRM is retired; CRM moves to Kelola, `kelolatim.com`, delivered as a plugin). The boundary defaults below are

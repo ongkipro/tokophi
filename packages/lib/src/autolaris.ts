@@ -288,6 +288,40 @@ export function expiryStamp(msFromNow: number): string {
   return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
 }
 
+/**
+ * The instant an instruction stops being payable, from the provider's `expired` string — or `null`.
+ *
+ * `/submit` answers `payment_info.expired` as a WIB WALL CLOCK with no zone (`"2026-07-23 14:09:05"`,
+ * the vendor's own sample; production PHI-555925447U5H answered +2 h in that shape). It used to go to
+ * the browser verbatim and `new Date()` there read it in the SHOPPER's zone: correct in Jakarta,
+ * an hour early in Bali (WITA), two in Papua (WIT) — and `Invalid Date` (no countdown at all) on
+ * engines that refuse the space-separated form. Parsed HERE, once, as +07:00 (the same zone
+ * `expiryStamp` proved the vendor reads, 2026-09-01), and handed on as ISO with an offset.
+ *
+ * Also accepts the compact `YYYYMMDDHHMMSS` form (create_payment's request shape) and a string that
+ * already carries a zone. Anything else is `null` — an unknown expiry, which `lib/pay-retry.ts`
+ * bounds conservatively. A guess here would let a live bill read as dead and invite a second one.
+ */
+export function parseAlExpiry(raw: unknown): Date | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+  if (!m) m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(s);
+  if (m) {
+    const [y, mo, d, h, mi, se] = m.slice(1).map((v) => Number(v ?? 0));
+    const ms = Date.UTC(y, mo - 1, d, h - 7, mi, se);
+    const back = new Date(ms + 7 * 3600 * 1000);
+    // Reject 2026-02-31 & co.: Date.UTC rolls them over silently.
+    if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return null;
+    return new Date(ms);
+  }
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+    const t = Date.parse(s);
+    return Number.isFinite(t) ? new Date(t) : null;
+  }
+  return null;
+}
+
 export async function alCreatePayment(input: {
   reffId: string; channelCode: string; amount: number;
   customerId: string; customerName: string; customerPhone: string; customerEmail: string;
@@ -370,7 +404,8 @@ export async function alCreateOrder(input: {
     qr: d.payment_info?.qr || undefined,
     url: d.payment_info?.url || undefined,
     amount: input.amount, admin: d.biaya_admin, total: d.total,
-    expiresAt: d.payment_info?.expired,
+    // ISO with an offset, or absent — never the vendor's zoneless wall clock (see parseAlExpiry).
+    expiresAt: parseAlExpiry(d.payment_info?.expired)?.toISOString(),
   };
 }
 

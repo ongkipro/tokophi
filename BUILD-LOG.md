@@ -8,6 +8,15 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-13 12:30 UTC] — PAY-RETRY · "Bayar ulang": a new payment instruction for the same order (branch `feat/pay-retry`)
+Executor: PayRetryAgent (Claude Code subagent). Owner ask 2026-11-13: "boleh bayar ulang untuk pembeli yang telat membayar, atau case-case yang bisa kamu riset".
+- **Research → spec:** `specs/docs/tasks/2026-11-13-pay-retry.md` (16-case table with evidence, decisions, owner questions O1–O4). Reference model AdsBookCMS `autolaris-payment.ts` (ported as idea: a retry is a new `payments` row, no attempts table, no sweeper).
+- **Built:** migration `0118_pay_retry` (`payments.expires_at`, `payments.created_at`, `orders.pay_token_hash`; idempotent, re-applied twice cleanly); `lib/pay-retry.ts` (`instructionState`/`retryDecision`/token helpers — the ONE answer to "is this bill payable?"); `POST /api/public/pay/retry` (one-order token, row + advisory lock, same money, `<number>-n` reference, provider text never shown); order API mints the token, persists the WIB-parsed expiry (`parseAlExpiry`), marks a REFUSED first bill `gagal` (a THROWN one stays pending); callback closes sibling bills on PAID and writes a `refunds` row for an uncredited payment (`refundUncreditedPayment`: double payment / PAID on a closed order); order-expiry cron waits while a bill is live; Seller re-bill unblocked by expired rows; order detail shows Kedaluwarsa / Berlaku sampai / Riwayat tagihan; `/checkout/sukses` "Buat tagihan baru" on expiry and on a failed first bill; `latestPaymentFirst` tie-breaks on `created_at`.
+- **Files:** `packages/db/drizzle/0118_pay_retry.sql`, `packages/db/drizzle/meta/_journal.json`, `packages/db/src/schema.ts`, `packages/lib/src/autolaris.ts`, `apps/admin/lib/{pay-retry.ts,pay-retry.test.ts,pay-instruction.ts,ledger-credit.ts,actions/payments.ts,data/order-payment.ts,data/order-payment.test.ts,data/order-detail.ts,payment-request.test.ts,public-guard.test.ts,refund-obligation.test.ts}`, `apps/admin/app/api/public/pay/retry/{route.ts,route.test.ts}`, `apps/admin/app/api/public/pay/callback/{route.ts,route.retry.test.ts}`, `apps/admin/app/api/public/order/{route.ts,route.test.ts}`, `apps/admin/app/api/cron/order-expiry/{route.ts,route.test.ts}`, `apps/admin/app/(admin)/pesanan/[id]/order-detail.tsx`, `apps/storefront/src/lib/{public-api.ts,public-api.test.ts}`, `apps/storefront/src/pages/checkout.astro`, `apps/storefront/src/pages/checkout/sukses.astro`, `specs/openapi/storefront-api.yaml`, `scripts/page-descriptions.json`, `specs/docs/{PAGE_MAP.md,page-map.json,FLOWS.md,FINANCE.md,SECURITY.md,SCHEMA.md,CODE_MAP.md,STATUS.md,TASKS.md}`, `AGENTS.md`, `CHANGELOG.md`.
+- **Verification:** new/changed suites on real Postgres (`tokophi_payretry_test`, vendor `fetch` stubbed to an `.invalid` host): pay-retry unit 13/13, retry route 10/10, callback-after-retry 4/4, order route 13/13, seller re-bill 2/2, ordering 3/3, cron 5/5. **12/12 mutation proofs RED** (live bill not refused, any token opens, no locks, no refund row, wrong refund target, cron cancels under live QR, `created_at` dropped, seller blocked by any `menunggu`, expiry read as UTC, refused bill left pending, thrown bill declared dead, COD re-billed) — originals restored and byte-compared. Full `TEST_DB_REQUIRED=1 npm run test:db` (heavy-run, `tokophi_payretry_test`): **227 files / 2315 tests passed**. `tsc -p apps/admin` 0; admin lint 0 errors (warnings pre-existing, none in touched files); `check:storefront` 0 errors / 0 warnings; storefront build ok; `npm run build:admin` ok (`/api/public/pay/retry` in the route table); admin lint 0 errors / 12 warnings (same count before the change set's last edit, none in touched files); `verify-migrations` ✓ (118 entries); `verify:openapi` ok. **Browser** (Playwright, storefront production build :4917 + admin on :3917 against the isolated DB `tokophi_payretry_e2e`, local AutoLaris stub): 390 px expired QRIS → "Waktu pembayaran habis" + **Buat tagihan baru** → new QR, "Bayar sebelum … 20.51 WIB", countdown 01:59:5x; DB: old row `gagal`, `PHI-E2E0000001-2` `menunggu/accepted`, stub saw exactly one `/submit` (reff `-2`, grand_total 100700); 1280 px failed-first-bill → "Tagihan belum terbuat" → new bill; wrong token → "Pesanan tidak ditemukan di perangkat ini…", button removed. No horizontal overflow; console errors only the fixture's missing image and the deliberate 404. Own PIDs stopped; the shared `tokophi` DB was never touched.
+- **CORRECTION (13:25 UTC) — the "2315 passed" above was measured on an UNCOMMITTED tree, and that hid a failure.** `packages/lib/src/provider-label.test.ts` scans `git ls-files`; `pay/retry/route.ts` was untracked when the suite ran, so the guard never saw its `requestError: "AutoLaris not configured"`. CI on PR #465 caught it (1 failed / 2315). Fixed to the brand-neutral "Payment gateway belum dikonfigurasi oleh platform." (the Seller re-bill's sentence); guard proved RED on the old string, green on the new. Lesson: run a guard suite that reads `git ls-files` AFTER `git add`. Full `TEST_DB_REQUIRED=1 npm test` on the committed tree: **227 files / 2315 tests**, storefront `astro check` 0 errors (133 files), landing 0 errors (37 files).
+- **Seller order detail, in a browser** (built admin on :3917, isolated DB, throwaway seller login removed afterwards): `PHI-E2E0000001` → "Menunggu pembayaran", "Berlaku sampai 13 November 2026 pukul 20.51", "Riwayat tagihan (2)" (1. Gagal / kedaluwarsa, 2. Menunggu pembayaran); `PHI-E2E0000003` (one expired `menunggu` row) → "Kedaluwarsa" + "Buat Tagihan" offered. The history lines were truncated in the narrow column → `truncate` removed so the date wraps (re-checked on the dev server). 0 console errors.
+- **Not verified:** no AutoLaris call (sandbox or production) — the suffixed `reff_id` on a live `/submit` is unproven until the first real retry.
 ### [2026-11-13 UTC] — FEAT · KEL-001 PR 1: first-party plugin layer + Kelola CRM plugin (branch `feat/kelola-plugin`)
 Executor: Main Session (Claude Code), owner direction 2026-11-13 ("CRM pindah ke Kelola sebagai plugin"), reviewed step by step by session `tokophi-resume`. Local commits only — not pushed, no PR, no deploy, no real Kelola call.
 - **What:** ADR 0019 (first-party plugins, AdsBookCMS ADR-027/028 contract ported to multi-tenant Postgres) · migration `0117` (`store_plugins`, `plugin_kelola_orders`, `plugin_kelola_leads`, RLS; no `orders.*` column) · `lib/plugins/registry.ts` (two hooks, per-store isolation) · `lib/plugins/kelola/{wire,sync,index}.ts` (wire = verbatim AdsBookCMS port @ 1134137 + gratisOngkir/kelurahan/timeout/redaction) · one post-commit `after()` line in `/api/public/order` · `/api/cron/plugins` + `cron-plugins` sidecar (900 s) · owner-only `plugins:manage` · Pengaturan → Plugin section + order-detail Kelola panel · `redactKey` lifted to `@tokophi/lib/redact` (re-exported).
@@ -5060,3 +5069,77 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
 - **Side finding:** the main checkout (`~/Projects/tokophi`, branch `docs/split-agents-md`) carries an OLD
   `ops/tokophi-probe.sh` that still probes the retired host `45.77.33.112` (ssh FAIL); main's copy is correct.
   Run the probe from a checkout of `main`.
+
+### [2026-11-13 12:42 UTC] — SHIP-PROVIDER-PER-STORE · shipping provider per store, set by Super Admin or a signup code (ADR 0019)
+- **Executor:** sub-agent of the Main Session, isolated worktree, branch `feat/store-shipping-provider` from
+  `origin/main` `50679055`. Owner rulings 2026-11-13 (verbatim in ADR 0019 §1): two providers, Super Admin or a
+  signup code decides, default KiriminAja, codes made in Super Admin. Rank defaulted to OWNER in ONE constant
+  (`SHIPPING_PROVIDER_MIN_RANK`) — owner-confirmable.
+- **Files:** migration `packages/db/drizzle/0117_store_shipping_provider.sql` + journal; `packages/db/src/{schema,mengantar-account,seed-guard}.ts`;
+  `packages/lib/src/signup-code.ts` (+ export); `apps/admin/lib/{shipping-quote,provision,signup-code,mengantar-readiness,google}.ts`,
+  `apps/admin/lib/actions/{register,mengantar}.ts`, `apps/admin/app/daftar/{page,daftar-form,google-button}.tsx`,
+  `apps/admin/app/api/auth/google/{start,callback}/route.ts`, `apps/admin/components/admin/pengaturan/mengantar-card.tsx`;
+  `apps/super-admin/lib/{store-shipping-provider,shipping-data,actions,mengantar-ops,mengantar-credentials,route-roles,nav}.ts`,
+  `apps/super-admin/app/(platform)/kode-daftar/*`, `toko/[id]/{page,store-detail,shipping-provider-card}.tsx`,
+  `pengiriman/{page,pengiriman-client}.tsx`, `pengaturan/mengantar-panel.tsx`; `ops/mengantar-{attach-own-key,sandbox-e2e}.ts`;
+  tests (below); docs: ADR 0019 + note on 0018, `DECISIONS.md`, `specs/README.md`, `rules/shipping-cod.md`, `SECURITY.md`,
+  `FLOWS.md` §5.1, `SCHEMA.md`, `CODE_MAP.md`, `STATUS.md`, `AGENTS.md` (counts), `PAGE_MAP.md` (regen), decisions doc,
+  `TASKS.md`, `CHANGELOG.md`.
+- **Tests (new/changed):** `shipping-quote-mengantar.test.ts` (7-row dispatch truth table), `mengantar-account.test.ts`
+  (suite "ADR 0019 — only a store set to Mengantar gets an account": sink, sweep never registers, sweep budget slot,
+  `registering` still reconciled), `signup-code.test.ts` (NEW, real DB: no code / Mengantar code ± consent / KiriminAja
+  code / inactive+unknown+malformed refused and nothing created / derived usage / FK+CHECK / RLS invisible to
+  `tokophi_app`), `mengantar-consent.test.ts` (sentence only for a Mengantar code, bound to it), `mengantar-readiness.test.ts`,
+  `store-shipping-provider.test.ts` (NEW: decisions, one rank constant, call sites), `route-roles.test.ts` (`/kode-daftar`),
+  `packages/lib/src/signup-code.test.ts` (normaliser = migration CHECK), `schema-indexes.test.ts` (census).
+- **Verification (all against OWN databases in `tokophi-db`: `tokophi_shipprov` + `tokophi_shipprov_test`; the shared
+  `tokophi` DB was not migrated, seeded or written — still 17 stores):**
+  - `TEST_DATABASE_URL=…/tokophi_shipprov_test TEST_DB_REQUIRED=1 heavy-run --lock tokophi-env -- npm run test:db` →
+    **227 files / 2326 tests passed** (first run found 14 failures — doc counts, index census, PAGE_MAP, an unqualified
+    column in a correlated subquery, a brand literal in `provision.ts`, the signup limiter-order guard — all fixed).
+  - `npm run lint -w @tokophi/admin` → 0 errors (12 pre-existing warnings, none in touched files); super-admin lint clean.
+  - `npm run build:admin` + `build:super` → both exit 0 (`DATABASE_URL` = own DB). `tsc --noEmit` admin, super-admin, db clean.
+  - `verify-rls` (own DB) → all ✓, 55/56 store-scoped tables (exception `platform_activity`); `verify-migrations` →
+    "Journal: 118 entri, terakhir 0117_store_shipping_provider … Journal waras". 0117 re-applied by hand → exit 0
+    (idempotent). Backfill proven in a rolled-back txn: connected row → `mengantar`, pending row → stays `kiriminaja`.
+  - **Mutation proofs (13, each on the real file, restored byte-identical):** red for — dispatch ignores the store
+    column; connect sink gate removed; enqueue gate removed; sweep filter removed (after adding the budget-slot test —
+    the first attempt survived because the sink also refuses); signup ignores `active`; consent recorded without the
+    flag; normaliser drifts from the CHECK; audit reports the request not the write; re-queue of an existing account;
+    readiness ignores the store; `/kode-daftar` floor not the constant; plus the inline mutated-copy checks in
+    `mengantar-consent.test.ts` and `store-shipping-provider.test.ts`. Survived by design: `provision.ts`'s own
+    `if (shippingProvider === "mengantar")` (the enqueue sink refuses anyway — documented as a saved read).
+  - **Browser (Playwright, `next start` prod builds on :3410/:3411, own PIDs killed afterwards, 390 px + 1366 px,
+    0 console errors, 0 horizontal overflow, 0 requests to non-local origins):** `/daftar` no code → privacy line, no
+    provider brand; `?kode=mitra-sby` → "MITRA-SBY", "Kode diterima.", Mengantar consent, hidden field = code; typed
+    KiriminAja code → no consent; inactive code → hint + "Lanjut" blocked with focus on the field; full signup with the
+    Mengantar code → store `mengantar`, `signup_code` set, account `pending` + consent `signup`; without code →
+    `kiriminaja`, no row. Super Admin `/kode-daftar` create ×3, deactivate, duplicate refused; store card KiriminAja →
+    Mengantar (reason required; audit line "KiriminAja → Mengantar … Hasil tersimpan: Mengantar … menunggu persetujuan")
+    and back; `/pengiriman` provider column; an `admin`-rank operator → route denied + action refused ("perlu peran
+    owner"). Seller (switch on, `MENGANTAR_ENV=sandbox`, dummy partner id): Mengantar store → banner + card "Perlu
+    persetujuan" + connect button with consent (not clicked); KiriminAja store → no card, no banner, no "Mengantar" text.
+- **Not verified:** Google signup door in a browser (OAuth not configured locally); the "Hubungkan" click (Partner
+  API); a real checkout quote (no provider keys); production. Migration `0117` / ADR `0019` numbers to re-check at merge.
+
+### [2026-11-13 13:40 UTC] — DEPLOY · #464, #466 (store-level shipping provider) and #465 (Bayar ulang) live on production
+- **Executor:** Main Session. Owner: "ya jalankan dan sempurnakan" (merge + deploy in the proposed order).
+- **#464** docs merged `a008c0d4` (no deploy). **#466** merged `10e2195b` after merging main into the branch (clean) and a
+  green CI; manual Coolify deploy `jgfsnltg2mohhp7w2adqevdj`; all four surfaces on `…:10e2195b…` `(healthy)` twice;
+  `migrate` Exited 0 → 118 migrations (max stamp 1787545831751); backfill: `stores.shipping_provider` = 1 mengantar
+  (demo store) / 16 kiriminaja; `signup_codes` 0. **#465** — branch had also claimed `0117`: merged main, renumbered
+  `0117_pay_retry` → `0118_pay_retry`, re-stamped 1787545831751 → 1787545891751, declared in `verify-migrations`
+  RETIRED; resolved 8 doc conflicts keeping both PRs' facts; PAGE_MAP regenerated; `verify-migrations` ✓; full
+  `test:db` on a fresh `tokophi_merge465_test` 2358 passed + 1 doc-count line fixed (CODE_MAP head 0118, 18/18);
+  CI green; merged `ea675ef7`; deploy `bcjsi4ttbu2awv1ltlpv9rrs`; four surfaces `(healthy)` on `…:ea675ef7…` twice;
+  119 migrations (max stamp 1787545891751).
+- **Signals that had to change / stay:** quotes via `POST /api/public/ongkir` captured BEFORE #466 and re-run after each
+  deploy (after `seed` exited, so the Mengantar bridge was rebuilt): demo non-COD → Mengantar `codRequote:true`
+  jne 9000 / spx 5700; demo COD → KiriminAja spx 5700; permata-store → KiriminAja jne 11000 / spx 7273 / jne 9000 —
+  identical (permata's rate ORDER varied, same set). `POST /api/public/pay/retry` before #465: Next's HTML 404 (no
+  route); after: JSON `{"code":"not_found"}` 404. `/checkout/sukses` HTML carries "Buat tagihan baru". Super Admin
+  `/kode-daftar` → 307 (login). Bridge 6 919 after both seeds. Admin/super-admin/storefront logs since deploy: no
+  errors. Browser (Playwright, production): PDP → checkout → Gubeng → Mengantar SPX Rp5.700, console 0 errors (only
+  the known invalid TikTok pixel warning, TRACK-DEMO-TIKTOK-ID). `ops/tokophi-probe.sh` (main's copy) exit 0.
+- **Not yet proven on production:** a real "Bayar ulang" (the `-n` reff_id on `/submit`), a signup with a code, a
+  Super Admin provider switch (no code created, no store moved — nothing was written by the verification).

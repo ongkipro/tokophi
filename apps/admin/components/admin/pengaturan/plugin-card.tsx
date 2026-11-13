@@ -20,7 +20,7 @@ import {
   type PluginCardState,
 } from "@/lib/actions/plugins";
 
-// Pengaturan → Plugin (ADR 0019, KEL-001) — the same list AdsBookCMS shows at Pengaturan → Plugin.
+// Pengaturan → Plugin (ADR 0021, KEL-001) — the same list AdsBookCMS shows at Pengaturan → Plugin.
 // Owner-only (`plugins:manage`): the actions are the boundary, this hides the card from roles that
 // cannot use it. Every action answers `{ ok, message }`; the message is shown either way.
 

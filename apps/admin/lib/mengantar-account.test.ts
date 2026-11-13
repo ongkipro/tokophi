@@ -50,11 +50,14 @@ const opts = (fetch: typeof globalThis.fetch) => ({ source: "pengaturan" as cons
 const listed = (ext: string, sellerId: string, active = true) => ({ body: { success: true, data: { sellers: [{ sellerId, externalUserId: ext, active }], total: 1 } } });
 const emptyList = { body: { success: true, data: { sellers: [], total: 0 } } };
 
-async function newStore(o: { approved?: boolean; phone?: string | null } = {}) {
+// `provider` defaults to 'mengantar': every older case here is about a store that IS on Mengantar. ADR 0019
+// made that a precondition (`stores.shipping_provider`); the suite "only a store set to Mengantar…" below
+// covers the KiriminAja side.
+async function newStore(o: { approved?: boolean; phone?: string | null; provider?: "kiriminaja" | "mengantar" } = {}) {
   const n = storeIds.length;
   const [st] = await client<{ id: string }[]>`
-    insert into stores (account_id, name, slug, status, approved_at)
-    values (${accountId}, ${`Toko MG ${runId}`}, ${`mga-${runId}-${n}`}, 'active', ${o.approved === false ? null : new Date()}) returning id`;
+    insert into stores (account_id, name, slug, status, approved_at, shipping_provider)
+    values (${accountId}, ${`Toko MG ${runId}`}, ${`mga-${runId}-${n}`}, 'active', ${o.approved === false ? null : new Date()}, ${o.provider ?? "mengantar"}) returning id`;
   storeIds.push(st.id);
   const [u] = await client<{ id: string }[]>`insert into users (email, name) values (${`owner-${runId}-${n}@example.test`}, 'Pemilik') returning id`;
   userIds.push(u.id);
@@ -255,6 +258,73 @@ suite("provisioning never waits on, or fails because of, Mengantar", () => {
 
   it("enqueue never throws — not even for a store id that does not exist", async () => {
     await expect(acct.enqueueMengantarConnect(randomUUID(), { source: "signup", partner: { cfg: PCFG, fetch: fakePartner({}).fetch } })).resolves.toBeUndefined();
+  });
+});
+
+suite("ADR 0019 — only a store set to Mengantar gets an account (enforced at the sink, every door)", () => {
+  const rowCount = async (storeId: string) => (await client<{ n: number }[]>`select count(*)::int as n from store_mengantar_accounts where store_id = ${storeId}`)[0].n;
+
+  it("connect / enqueue / requeue on a KiriminAja store: no row, no partner call, a clear sentence", async () => {
+    const { storeId } = await newStore({ provider: "kiriminaja" });
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r).toEqual({ state: "none", message: acct.NOT_ON_MENGANTAR_MSG });
+    expect(r.message).not.toMatch(/kiriminaja/i); // ADR 0004: the default provider is never named
+    await acct.enqueueMengantarConnect(storeId, { source: "signup", actorUserId: CLICKER, partner: { cfg: PCFG, fetch: p.fetch } });
+    await acct.requeueMengantar(storeId, opts(p.fetch));
+    await acct.kickMengantarConnect(storeId, { source: "operator", partner: { cfg: PCFG, fetch: p.fetch } });
+    expect(await rowCount(storeId)).toBe(0);
+    expect(p.calls).toHaveLength(0);
+    expect(await acct.storeShippingProvider(storeId)).toBe("kiriminaja");
+  });
+
+  it("the sweep never registers a consented row of a store moved back to KiriminAja — and picks it up again once moved to Mengantar", async () => {
+    const s = await newStore({ provider: "kiriminaja" });
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending', 'signup', now())`;
+    // Answers per externalUserId: the sweep may also pick other suites' queued rows in this shared test DB,
+    // and each must get ITS OWN seller id (one seller id per env is a DB constraint).
+    const sid = (ext: unknown) => `kb-${String(ext).slice(-12)}`;
+    const p = fakePartner({
+      register: (body) => ({ status: 201, body: { success: true, data: { sellerId: sid(body.externalUserId), email: s.email, apiKey: `API-${sid(body.externalUserId)}` } } }),
+      list: (body) => listed(String(body.externalUserId), sid(body.externalUserId)),
+    });
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 500 });
+    expect(p.calls.filter((c) => c.body.externalUserId === s.ext)).toHaveLength(0);
+    expect((await row(s.storeId)).state).toBe("pending");
+    // Super Admin moves the store to Mengantar → the next tick registers it (the owner had consented).
+    await client`update stores set shipping_provider = 'mengantar' where id = ${s.storeId}`;
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 500 });
+    expect((await row(s.storeId)).state).toBe("connected");
+  });
+
+  it("…and such a row does not even take a slot of the tick's budget (the sweep's own filter, not only the sink)", async () => {
+    // A: KiriminAja store, consented queued row, the OLDEST in the queue. B: Mengantar store, next oldest.
+    // One slot per tick. If the sweep picked A, the slot would be spent on a refusal and B would wait.
+    const a = await newStore({ provider: "kiriminaja" });
+    const b = await newStore();
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at, updated_at)
+                 values (${a.storeId}, 'sandbox', ${a.ext}, 'pending', 'signup', now(), '2000-01-01'), (${b.storeId}, 'sandbox', ${b.ext}, 'pending', 'signup', now(), '2000-01-02')`;
+    const sid = (ext: unknown) => `kq-${String(ext).slice(-12)}`;
+    const p = fakePartner({
+      register: (body) => ({ status: 201, body: { success: true, data: { sellerId: sid(body.externalUserId), email: b.email, apiKey: `API-${sid(body.externalUserId)}` } } }),
+      list: (body) => listed(String(body.externalUserId), sid(body.externalUserId)),
+    });
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 1 });
+    expect((await row(b.storeId)).state).toBe("connected");
+    expect((await row(a.storeId)).state).toBe("pending");
+  });
+
+  it("a `registering` row (a register that may have landed) is still RECONCILED after the store was moved away", async () => {
+    const s = await newStore({ provider: "kiriminaja" });
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at, updated_at)
+                 values (${s.storeId}, 'sandbox', ${s.ext}, 'registering', 'signup', now(), now() - interval '10 minutes')`;
+    const p = fakePartner({
+      register: { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `kr-${runId}`, email: s.email, apiKey: `API-KR-${runId}` } } },
+      list: listed(s.ext, `kr-${runId}`),
+    });
+    expect((await acct.connectStoreMengantar(s.storeId, { source: "cron", partner: { cfg: PCFG, fetch: p.fetch } })).state).toBe("connected");
+    // …and it is still a KiriminAja store: quoting follows `stores.shipping_provider`, not the account.
+    expect(await acct.storeShippingProvider(s.storeId)).toBe("kiriminaja");
   });
 });
 

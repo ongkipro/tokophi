@@ -7,7 +7,7 @@ import { Button } from "@tokophi/ui/button";
 import { useCan } from "@/components/admin/permissions";
 import { getKelolaOrderPanel, resendKelolaOrder, type KelolaOrderPanel as Panel } from "@/lib/actions/plugins";
 
-// Order detail → "Kelola CRM" (ADR 0019, KEL-001). Renders NOTHING unless the store has the Kelola
+// Order detail → "Kelola CRM" (ADR 0021, KEL-001). Renders NOTHING unless the store has the Kelola
 // plugin active and connected (dormant = zero effect, on this screen too). Read-only status plus
 // "Kirim ulang" (`orders:write`). Kelola never changes this order's status — it is a CRM mirror.
 

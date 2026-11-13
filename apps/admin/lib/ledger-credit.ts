@@ -90,6 +90,47 @@ export async function creditSaleForPayment(
 }
 
 /**
+ * PAY-RETRY — a collected prepaid payment the ledger did NOT credit is the BUYER's money: give it a
+ * `refunds` row (Task 8.31's table, settled by Super Admin) instead of a console line nobody reads.
+ *
+ * Two ways to get here, both ordinary once an order can carry more than one instruction:
+ *   · "Pembayaran ganda" — the order's sale is already booked against ANOTHER payment
+ *     (`ledger_one_sale_per_order` let exactly one credit in). Retry only ever issues a bill once the
+ *     previous one is dead, but "dead" is our reading of the vendor's clock, and a shopper with a
+ *     screenshot of the old QR can still try it.
+ *   · "Dibayar setelah pesanan ditutup" — PAID landed on a `batal`/`retur` order (the order-expiry
+ *     cron cancelled it, or the seller did). `creditSaleForPayment` rightly skips it, and
+ *     `applyOrderStatusChange` only writes a refund for money that was ALREADY in at cancel time.
+ *
+ * MUST run after `creditSaleForPayment` for the same callback: the ledger's one sale decides which
+ * payment is the order's, so of two payments exactly one is credited and every other is owed back —
+ * deterministic, whatever order the two callbacks arrive in. Idempotent: the open-per-payment unique
+ * index, plus `not exists` so a callback replayed after the refund was SETTLED cannot reopen the debt.
+ * `amount_idr` follows 0112: what the buyer paid to us, pre-gateway-fee.
+ */
+export async function refundUncreditedPayment(db: Db, paymentId: string): Promise<void> {
+  await db.execute(sql`
+    insert into refunds (store_id, order_id, payment_id, amount_idr, reason)
+    select p.store_id, p.order_id, p.id, p.amount_idr,
+           case when o.status in ('batal', 'retur') then 'Dibayar setelah pesanan ditutup' else 'Pembayaran ganda' end
+      from payments p
+      join orders o on o.id = p.order_id
+     where p.id = ${paymentId}
+       and p.status = 'berhasil'
+       and p.method <> 'cod'
+       and (
+         o.status in ('batal', 'retur')
+         or exists (
+           select 1 from ledger_entries l
+            where l.order_id = o.id and l.kind = 'sale' and l.payment_id is distinct from p.id
+         )
+       )
+       and not exists (select 1 from refunds r where r.payment_id = p.id)
+    on conflict do nothing
+  `);
+}
+
+/**
  * COD: the courier collected the cash at the door. Flip the order's pending COD payment(s) to
  * `berhasil` — the honest moment the money exists — and return their ids so the caller can book
  * them. Idempotent: a payment already `berhasil` is not touched (the `menunggu` guard), and the

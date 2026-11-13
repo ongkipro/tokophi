@@ -53,7 +53,7 @@ const CENSUS: Record<Capability, Holder> = {
   // Raw markup rendered with `set:html` on the shop's own origin, on the page carrying the COD order
   // form (name, WhatsApp, full address). No sanitizer, no CSP. 2026-07-30 decision.
   "landing:html": "owner-only",
-  // First-party plugins (ADR 0019): activating one ships every order's shopper PII to a third party.
+  // First-party plugins (ADR 0021): activating one ships every order's shopper PII to a third party.
   // NOT folded into integrations:write — `advertiser` holds that one.
   "plugins:manage": "owner-only",
 };

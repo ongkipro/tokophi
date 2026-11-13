@@ -6,7 +6,7 @@
 >
 > ⚠️ **This reverses a written product rule.** `specs/PRD.md` (§ positioning table) says
 > "❌ No Apps / plugins marketplace. The feature set is curated in-core." Before any code lands this
-> needs **ADR 0019** recording the reversal and its boundary (see §4.1 — the recommendation is
+> needs **ADR 0021** recording the reversal and its boundary (see §4.1 — the recommendation is
 > *first-party integrations only, still no third-party marketplace*), and the PRD line must be edited
 > in the same PR.
 
@@ -229,7 +229,7 @@ Phone is required by Kelola → sessions without a phone are not sent.
 ### 4.1 Scope — first-party "Plugin", not a marketplace
 
 - A plugin is **first-party product code**, compiled in, written by us. No third-party code, no upload,
-  no runtime for customer code. PRD's intent (curated, locked checkout) stands; ADR 0019 records the
+  no runtime for customer code. PRD's intent (curated, locked checkout) stands; ADR 0021 records the
   boundary and edits the PRD "No Apps / plugins" line in the same PR.
 - Seller UI name: **"Plugin"**, at **Pengaturan → Plugin**, owner only — the same name and place as
   AdsBookCMS, so the two products read the same. Never "Apps", never "marketplace".
@@ -515,7 +515,7 @@ Order of removal (each step its own PR, each leaves the build green):
 
 Defaults in force until answered (marked ✅ = matches AdsBookCMS, so it is the default):
 
-1. ✅ First-party plugins, no marketplace; menu name **"Plugin"** (AdsBookCMS) — ADR 0019.
+1. ✅ First-party plugins, no marketplace; menu name **"Plugin"** (AdsBookCMS) — ADR 0021.
 2. ✅ Option A — Kelola is a CRM/CS mirror; one-way push, no inbound webhook in v1.
 3. Prepaid orders pushed **only once paid**, COD at creation (§4.4) — default. Differs from AdsBookCMS
    (pushes every order at creation, so prepaid goes stale in Kelola): fix AdsBookCMS too, or accept?

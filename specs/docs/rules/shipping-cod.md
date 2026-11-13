@@ -8,15 +8,34 @@
 
 ## Mengantar (second shipping provider, Partner Business API — live in production since 2026-11-12)
 
-- **The switch is one row.** `shipping_provider_config.active_provider` (`kiriminaja` | `mengantar`, id = 1)
-  decides who quotes NEW checkouts; precedence row > env `SHIPPING_PROVIDER` > `kiriminaja`, and an
-  unrecognised value is ignored (`resolveShippingProvider`). Cached 60 s per process. The default provider
+- **The provider is a fact about the STORE (ADR 0019, owner 2026-11-13).** `stores.shipping_provider`
+  (`kiriminaja` default | `mengantar`) is set ONLY by Super Admin (store page → "Penyedia pengiriman",
+  `setStoreShippingProvider`) or by a signup code (`signup_codes`, `/daftar?kode=`). The seller never
+  chooses. A store is born on KiriminAja ("kalo Mengantar harus double register").
+- **The platform switch is the master kill-switch above it.** `shipping_provider_config.active_provider`
+  (`kiriminaja` | `mengantar`, id = 1): `kiriminaja` = Mengantar OFF for every store; `mengantar` = each store
+  follows its own column. Precedence row > env `SHIPPING_PROVIDER` > `kiriminaja`, an unrecognised value is
+  ignored (`resolveShippingProvider`), cached 60 s per process. The default provider
   (`DEFAULT_SHIPPING_PROVIDER`) is KiriminAja, and KiriminAja stays configured: it is every fallback below.
-- **Dispatch is per store, per quote (D11).** `quoteShipping` (`apps/admin/lib/shipping-quote.ts`) quotes
-  Mengantar ONLY when switch = mengantar ∧ the order is NOT COD ∧ `MENGANTAR_ENV` is named in this process ∧
-  the store's own account opens (`openStoreMengantar`). Anything else — unconnected store, rotating key,
-  Mengantar down, no origin area, zero rates on the full courier scope — falls back to KiriminAja. The
-  quote's `provider` field says who actually priced it. Never add a second dispatcher.
+- **Dispatch is per store, per quote (D11 as amended by ADR 0019).** `quoteShipping`
+  (`apps/admin/lib/shipping-quote.ts`) quotes Mengantar ONLY when switch = mengantar ∧ the order is NOT COD ∧
+  `MENGANTAR_ENV` is named in this process ∧ **the store is set to Mengantar** ∧ the store's own account opens
+  (`openStoreMengantar`). Anything else — a KiriminAja store (even one holding a connected account),
+  unconnected store, rotating key, Mengantar down, no origin area, zero rates on the full courier scope —
+  falls back to KiriminAja. The quote's `provider` field says who actually priced it. Never add a second
+  dispatcher. Truth table: `shipping-quote-mengantar.test.ts` / ADR 0019 §3.
+- **An account is registered ONLY for a store set to Mengantar — enforced at the sink.** `connectStoreMengantar`,
+  `enqueueMengantarConnect`, `requeueMengantar` (so `kickMengantarConnect`) and the retry sweep check
+  `stores.shipping_provider` first (`storeShippingProvider`), so no door can register a KiriminAja store. A
+  `registering` row of a store moved away is still reconciled. Moving a store TO Mengantar queues its account
+  only if it has none (`awaiting_consent` — the owner's "Hubungkan Mengantar" click); moving AWAY leaves the
+  row. Existing orders keep their stamp either way.
+- **Signup codes.** An unknown, inactive or malformed code is REFUSED (one sentence, `SignupCodeError`), never
+  ignored. The code is re-read inside the signup transaction (`FOR SHARE`). The Mengantar consent sentence is
+  on `/daftar` ONLY for a code that maps to Mengantar, and consent is recorded only when the posted
+  `mengantarConsentFor` equals the submitted code. KiriminAja sellers see no provider brand (ADR 0004).
+- **Rank.** Moving a store and managing codes share ONE constant, `SHIPPING_PROVIDER_MIN_RANK`
+  (`apps/super-admin/lib/store-shipping-provider.ts`, owner today; it is also the `/kode-daftar` floor).
 - 🔴 **COD NEVER travels Mengantar (O4/D9).** Every Mengantar rate is `cod: false`; a COD quote passes
   `cod: true`, which always lands on KiriminAja; `/api/public/order` refuses a COD order whose re-quote
   came back `mengantar` (403 `cod_not_allowed`); `bookMengantar` refuses a COD order again. Three locks on

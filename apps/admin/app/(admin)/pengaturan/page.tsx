@@ -67,7 +67,7 @@ const SECTIONS: {
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
-  // ADR 0019 (KEL-001): first-party plugins, deep link `/pengaturan?section=plugin`.
+  // ADR 0021 (KEL-001): first-party plugins, deep link `/pengaturan?section=plugin`.
   { id: "plugin", label: "Plugin", desc: "Kelola CRM & lainnya", icon: <Plug /> },
   {
     id: "notifikasi",

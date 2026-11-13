@@ -33,7 +33,7 @@ export type Capability =
   // one. Editing the REST of a landing (title, slug, product, funnel config) still needs only
   // `content:write`: the escalation is on the executable markup, not on the feature.
   | "landing:html"
-  // First-party plugins (ADR 0019, KEL-001) — activating one and pasting its credential. Owner-only
+  // First-party plugins (ADR 0021, KEL-001) — activating one and pasting its credential. Owner-only
   // and DELIBERATELY NOT `integrations:write`: that one is held by `advertiser` (pixels), while a
   // plugin like Kelola ships every order's shopper name, WhatsApp and address to a third party.
   | "plugins:manage";

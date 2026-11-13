@@ -15,7 +15,7 @@ import {
   setKelolaPushLeads,
 } from "@/lib/plugins/kelola/sync";
 
-// Pengaturan → Plugin (ADR 0019, KEL-001). Activating a plugin and pasting its credential is
+// Pengaturan → Plugin (ADR 0021, KEL-001). Activating a plugin and pasting its credential is
 // `plugins:manage` — OWNER ONLY (rbac-policy.ts): Kelola receives every order's shopper name, WhatsApp
 // and address. "Kirim ulang" on one order is `orders:write`, the capability that runs the order.
 // Every answer is `{ ok, message }` — Next masks a thrown Error in production, and a seller must be

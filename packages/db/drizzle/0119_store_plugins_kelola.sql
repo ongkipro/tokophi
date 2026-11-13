@@ -1,5 +1,5 @@
 -- KEL-001 (owner 2026-11-13): first-party plugin layer + the Kelola CRM plugin. Design:
--- specs/docs/KELOLA_PLUGIN_SPEC.md §4 · ADR 0019. Reference implementation: AdsBookCMS ADR-028
+-- specs/docs/KELOLA_PLUGIN_SPEC.md §4 · ADR 0021. Reference implementation: AdsBookCMS ADR-028
 -- (`plugins` + plugin-owned `plugin_kelola_orders`), ported to one multi-tenant Postgres:
 --
 --   1. `store_plugins` — AdsBookCMS `plugins`, plus `store_id`. A store with no row has the plugin
@@ -38,7 +38,7 @@ drop policy if exists "tenant_isolation" on "store_plugins";--> statement-breakp
 create policy "tenant_isolation" on "store_plugins" using (store_id = app_current_store_id()) with check (store_id = app_current_store_id());--> statement-breakpoint
 create index if not exists "store_plugins_active_idx" on "store_plugins" ("plugin") where "enabled" and "broken_at" is null;--> statement-breakpoint
 comment on table "store_plugins" is
-  'First-party plugins a store has activated (ADR 0019, AdsBookCMS ADR-028). No row = dormant: the core never calls the plugin for that store.';--> statement-breakpoint
+  'First-party plugins a store has activated (ADR 0021, AdsBookCMS ADR-028). No row = dormant: the core never calls the plugin for that store.';--> statement-breakpoint
 comment on column "store_plugins"."settings" is
   'Non-secret settings only (e.g. {"webhook_url_masked": …, "push_leads": false}). Never holds a credential.';--> statement-breakpoint
 comment on column "store_plugins"."secret_enc" is

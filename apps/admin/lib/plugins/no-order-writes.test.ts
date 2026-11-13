@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { codeOnly, textWithoutComments } from "../../../../test/source-code";
 
-// ADR 0019 §2.7 — a plugin NEVER writes an order. `applyOrderStatusChange` is the one writer of
+// ADR 0021 §2.7 — a plugin NEVER writes an order. `applyOrderStatusChange` is the one writer of
 // `orders.status`, with ledger and COD logic behind it; a plugin is a mirror, not a second writer.
 //
 // Two helpers, chosen PER ASSERTION (AGENTS.md "choose per assertion, not per file"):

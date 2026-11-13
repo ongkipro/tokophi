@@ -1,5 +1,5 @@
 /**
- * Kelola CRM plugin (ADR 0019; AdsBookCMS `src/plugins/kelola/index.ts`). Pushes orders to Kelola's
+ * Kelola CRM plugin (ADR 0021; AdsBookCMS `src/plugins/kelola/index.ts`). Pushes orders to Kelola's
  * Penjualan and — opt-in — abandoned checkouts to its lead inbox. The work lives in `./sync.ts`; this
  * file is what the registry sees.
  */

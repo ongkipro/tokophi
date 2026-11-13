@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { codeOnly } from "../../../../test/source-code";
 
-// KEL-001 / ADR 0019 — the public order route's ONLY plugin line must run strictly AFTER its order
+// KEL-001 / ADR 0021 — the public order route's ONLY plugin line must run strictly AFTER its order
 // transaction has returned. `after()` runs its callback even when the response fails, so a call
 // registered inside (or before) `db.transaction(…)` would push an order to a third party that then
 // rolled back. Nothing else can see this: tsc, lint and build are all green either way.

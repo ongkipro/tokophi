@@ -452,7 +452,7 @@ sync** run via `GET /api/cron/billing` **with `x-cron-secret: $CRON_SECRET` in a
 `cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` / `cron-plugins`
 (seven loops since KEL-001 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one).
 `cron-plugins` (every 900 s, `GET /api/cron/plugins`) is the retry + lead leg of first-party plugins
-(ADR 0019 — today only Kelola CRM). It is **idle until a merchant activates and connects a plugin**:
+(ADR 0021 — today only Kelola CRM). It is **idle until a merchant activates and connects a plugin**:
 the tick answers `{"ok":true,"stores":0,…}` and writes nothing. It makes outbound calls ONLY to the URL a
 merchant pasted at Pengaturan → Plugin → Kelola; a store whose credential Kelola refused (401/404) is
 skipped until the merchant saves it again. After a deploy that adds it, confirm the container comes up

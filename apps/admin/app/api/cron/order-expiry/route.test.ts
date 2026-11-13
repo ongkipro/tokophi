@@ -194,6 +194,27 @@ describe("GET /api/cron/order-expiry", () => {
     expect(cases.map((entry) => entry.locks)).toEqual([2, 2, 1, 1]);
   });
 
+  // PAY-RETRY: "Bayar ulang" can hand a shopper a fresh QR late in the order's life. Cancelling under
+  // a payable bill is how a buyer pays for an order that no longer exists, so the cron WAITS while an
+  // instruction is live or being minted — and only then. An expired one, or one whose expiry is
+  // unknown (pre-0118 rows: today's behaviour), does not hold the order open.
+  it("waits while a retried instruction is still payable or being minted, and only then", async () => {
+    const mins = (m: number) => new Date(NOW.getTime() + m * 60_000);
+    const cases: TxCase[] = [
+      { order: order("live"), payments: [{ method: "qris", status: "gagal" }, { method: "qris", status: "menunggu", expiresAt: mins(30) } as Payment] },
+      { order: order("minting"), payments: [{ method: "qris", status: "menunggu", requestState: "in_progress", requestUpdatedAt: mins(-1) } as Payment] },
+      { order: order("dead"), payments: [{ method: "qris", status: "menunggu", expiresAt: mins(-1) } as Payment] },
+      { order: order("crashed"), payments: [{ method: "qris", status: "menunggu", requestState: "in_progress", requestUpdatedAt: mins(-60) } as Payment] },
+    ];
+    h.state.candidates = cases.map((entry) => ({ id: entry.order!.id }));
+    h.state.txCases = [...cases];
+
+    const response = await GET(request());
+
+    expect(await response.json()).toEqual({ ok: true, scanned: 4, cancelled: 2, skipped: 2, errors: 0 });
+    expect(h.applyOrderStatusChange.mock.calls.map((c) => (c[1] as { order: { id: string } }).order.id)).toEqual(["dead", "crashed"]);
+  });
+
   it("continues after one order fails and records the run as unhealthy", async () => {
     h.state.candidates = [{ id: "broken" }, { id: "good" }];
     h.state.txCases = [

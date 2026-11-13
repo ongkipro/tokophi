@@ -146,6 +146,27 @@ sequenceDiagram
 `payments.total` (which adds the gateway's admin fee — the gateway's money, never the merchant's). This is what keeps
 Dashboard revenue, the Pesanan list and the Saldo ledger the same number.
 
+### 2.1 "Bayar ulang" — a new instruction for the same order (PAY-RETRY, 2026-11-13)
+
+Spec + case table: `specs/docs/tasks/2026-11-13-pay-retry.md`.
+
+1. **Checkout** (`/api/public/order`) mints a one-order secret for a prepaid order, stores its sha256 on
+   `orders.pay_token_hash`, returns it once (`payToken`); the checkout keeps it in `lastOrder`. The
+   provider's `payment_info.expired` (zoneless WIB) is parsed server-side and persisted on
+   `payments.expires_at`. A REFUSED first bill is marked `gagal`; a THROWN one stays `menunggu` (outcome unknown).
+2. **`/checkout/sukses`** — when the countdown ends, or the first bill never started, it shows
+   **Buat tagihan baru** (same device; another device → the Seller re-bills from the order screen).
+3. **`POST /api/public/pay/retry`** — under the ORDER's row lock: `retryDecision` (`lib/pay-retry.ts`)
+   allows a new bill only if every instruction is `failed` or provably `expired`, the order is `baru` +
+   `pending`, not COD, ≥15 min before the 24 h cancellation, < 5 attempts. Dead `menunggu` rows → `gagal`;
+   a new row is claimed `in_progress` with reference `<order number>-n` and the SAME amount/fee/total/channel;
+   the vendor call runs after commit. A still-live bill is returned instead (`reused`).
+4. **Callback** — unchanged matching (trx_id, then reff_id; each attempt has its own reference). New: on
+   PAID, the order's other `menunggu` rows become `gagal`, and a collected payment the ledger did not
+   credit gets a `refunds` row (`refundUncreditedPayment`: double payment, or PAID on a closed order).
+   The held Purchase is released once whichever payment lands (`event_id = purchase:{number}`, unique).
+5. **Cron `order-expiry`** — still cancels at 24 h, but waits while an instruction is live or being minted.
+
 ---
 
 ## 3. Order lifecycle — and what each transition does to inventory and to the ledger
@@ -323,14 +344,16 @@ sequenceDiagram
 Tracking: the storefront has **no** `/api/track`-style shipment lookup; `kaTrack()` exists in `packages/lib` and is
 reachable from the merchant admin only.
 
-### 5.1 Mengantar path (ADR 0018, live since 2026-11-12 for the demo store)
+### 5.1 Mengantar path (ADR 0018 + ADR 0019, live since 2026-11-12 for the demo store)
 
-The diagram above is the KiriminAja path. Since migration `0116` a second provider sits behind the platform
-switch `shipping_provider_config.active_provider`; which one serves an order is decided per order and stamped:
+The diagram above is the KiriminAja path. Since migration `0116` a second provider exists; since `0117`
+(ADR 0019) it is chosen PER STORE (`stores.shipping_provider`, set by Super Admin or a signup code; default
+KiriminAja), under the platform master switch `shipping_provider_config.active_provider`. Which one serves an
+order is decided per order and stamped:
 
 ```mermaid
 flowchart TD
-    Q["POST /api/public/ongkir — quoteShipping()<br/>(apps/admin/lib/shipping-quote.ts)"] --> C{"switch = mengantar<br/>∧ not COD<br/>∧ store account connected<br/>for MENGANTAR_ENV?"}
+    Q["POST /api/public/ongkir — quoteShipping()<br/>(apps/admin/lib/shipping-quote.ts)"] --> C{"switch = mengantar<br/>∧ not COD<br/>∧ store set to Mengantar<br/>∧ store account connected<br/>for MENGANTAR_ENV?"}
     C -- yes --> M["Mengantar estimate with THE STORE'S seller key<br/>origin = sender kecamatan → mengantar_areas bridge<br/>answer carries codRequote: true"]
     C -- no --> K["KiriminAja (the path above)"]
     M --> O["POST /api/public/order re-quotes;<br/>orders.shipping_provider = 'mengantar', mg_env, mg_seller_id"]
@@ -342,6 +365,11 @@ flowchart TD
 - Picking COD on a connected store re-quotes the same destination on the default provider (`codRequote`), so the
   rates on screen always match the payment method; Mengantar never carries COD (O4/O6).
 - Cancel goes through the provider that booked it (Mengantar cancels by its own `_id`; KiriminAja by AWB only).
+- **Who is on Mengantar (ADR 0019):** a store is born on KiriminAja. Super Admin moves it (store page →
+  "Penyedia pengiriman", owner rank, reason, audited), or a self-serve signup enters a Mengantar signup code
+  (`/daftar?kode=`, made at Super Admin → Kode Daftar). Only then is its Mengantar account queued — registered
+  after approval and with the owner's consent (shown on `/daftar` only for a Mengantar code, or the
+  "Hubungkan Mengantar" click). Moving a store back to KiriminAja leaves its account and its orders' stamps.
 - Rules and traps: `specs/docs/rules/shipping-cod.md` → Mengantar; secrets: `specs/docs/SECURITY.md`.
 
 ---

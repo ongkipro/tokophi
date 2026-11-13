@@ -21,6 +21,7 @@ const RECONCILE_REASON_MIN = 10;
 const when = (d: Date | null) => (d ? new Date(d).toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short" }) : "—");
 
 const STATE_LABEL: Record<string, string> = {
+  none: "Belum ada akun",
   pending: "Antre",
   registering: "Mendaftar",
   connected: "Terhubung",
@@ -56,13 +57,14 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
           <CardTitle>Akun Mengantar toko</CardTitle>
         </CardHeader>
         {accounts.length === 0 ? (
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">Belum ada toko yang didaftarkan ke Mengantar.</CardContent>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">Belum ada toko yang memakai Mengantar. Pindahkan toko di halaman tokonya, atau buat kode daftar Mengantar.</CardContent>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Toko</TableHead>
+                  <TableHead>Penyedia toko</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Seller · partner</TableHead>
                   <TableHead>Catatan</TableHead>
@@ -77,6 +79,10 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
                         {r.storeName}
                       </Link>
                       <div className="text-xs text-muted-foreground">{when(r.updatedAt)}</div>
+                    </TableCell>
+                    {/* ADR 0019: the store's provider. A KiriminAja store's row is history — it is not quoted. */}
+                    <TableCell data-store-provider={r.provider}>
+                      <Badge variant={r.provider === "mengantar" ? "default" : "outline"}>{r.provider === "mengantar" ? "Mengantar" : "KiriminAja"}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{STATE_LABEL[r.state] ?? r.state}</Badge>
@@ -96,9 +102,11 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
                           </Button>
                         )
                       ) : (
-                        <Button size="sm" variant="outline" disabled={pending || r.state === "registering" || r.state === "rotating"} onClick={() => run(() => retryStoreMengantar(r.storeId))}>
-                          Daftarkan ulang
-                        </Button>
+                        r.provider === "mengantar" && (
+                          <Button size="sm" variant="outline" disabled={pending || r.state === "registering" || r.state === "rotating"} onClick={() => run(() => retryStoreMengantar(r.storeId))}>
+                            {r.state === "none" ? "Daftarkan" : "Daftarkan ulang"}
+                          </Button>
+                        )
                       )}
                     </TableCell>
                   </TableRow>

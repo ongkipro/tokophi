@@ -117,7 +117,9 @@ const INDEX_CENSUS: Record<string, Census> = {
   sma_seller_uniq: "sql-only: unique parsial (env, seller_id) where seller_id is not null — satu seller Mengantar hanya untuk satu toko",
   sma_ext_uniq: "sql-only: unique (env, external_user_id) — idempotensi pendaftaran Partner per toko",
   sma_retry_idx: "sql-only: index parsial antrean pendaftaran (state pending/registering) untuk sweep cron",
-  store_plugins_active_idx: "sql-only: index parsial (plugin) where enabled and broken_at is null — daftar toko yang disapu cron plugin (0117, KEL-001)",
+  // 0117 (ADR 0019, penyedia pengiriman per toko).
+  stores_signup_code_idx: "sql-only: index parsial (signup_code is not null) — hitung pemakaian kode daftar di Super Admin",
+  store_plugins_active_idx: "sql-only: index parsial (plugin) where enabled and broken_at is null — daftar toko yang disapu cron plugin (0119, KEL-001)",
 };
 
 /** Nama index → tabel, DITURUNKAN dari berkas migrasi. Tidak pernah ditulis tangan. */

@@ -4,7 +4,7 @@ import { cronAuthorized } from "@/lib/cron-auth";
 import { runPluginCron } from "@/lib/plugins/registry";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 
-// FIRST-PARTY PLUGIN WORKER (ADR 0019, KEL-001) — the retry + lead leg of every active plugin. The
+// FIRST-PARTY PLUGIN WORKER (ADR 0021, KEL-001) — the retry + lead leg of every active plugin. The
 // order leg runs from the public order route's `after()`; whatever it skipped (an unpaid prepaid order
 // that has since been paid, a Kelola outage, a lost hook) is picked up here.
 //

@@ -1,5 +1,5 @@
 /**
- * First-party plugins (ADR 0019 — the AdsBookCMS ADR-028 contract, ported to one multi-tenant Postgres).
+ * First-party plugins (ADR 0021 — the AdsBookCMS ADR-028 contract, ported to one multi-tenant Postgres).
  *
  * A plugin is product code under `lib/plugins/<id>/`, compiled in and written by us — never uploaded,
  * never customer code (PRD: still no marketplace). A store "installs" one by activating it at

@@ -24,7 +24,7 @@ where the figure is stored and where it is shown — so a number on a screen can
 | Shipping | `shipping-quote.ts` (one price producer) → `createShipment` re-quotes; delta reconciled | booking | `shipment_bookings.{charged,actual,seller_debit,platform_margin}` + ledger `shipping-*-debit` (KiriminAja only — a Mengantar booking is paid from the seller's own Mengantar wallet, §2a) | order detail "Cek Ongkir" refusal, `/saldo` |
 | Seller entitlement | view `order_seller_entitlements` (0102/0104/0116) = goods + added PPN − shipping debit (+ buyer-paid shipping on a Mengantar order, §2a) | — | derived | `/keuangan`, `/keuangan/penghasilan` — **collected money only** (`financial_status='dibayar'`, 8.28) |
 | Ledger | `ledger-credit.ts` (`sale` on `payments.berhasil`; COD at `selesai`; release at `platform_payout.release_on`; `retur`/`batal` claw back the sale entry) | `applyOrderStatusChange` → `settleOrderLedger` | `ledger_entries` (balance = Σ by status; 3 partial unique indexes) | `/saldo`, Super Admin float |
-| Refund to the buyer (8.31) | `refund-transition.ts` (CAS `menunggu → diproses → selesai/gagal`, never the ledger) | `applyOrderStatusChange` on `batal`/`retur` writes one open row per `berhasil` non-COD payment, same txn as the claw-back | `refunds` (0112, partial unique `refunds_one_open_per_payment`) | order detail "Pengembalian dana", Super Admin `/pencairan` refund queue, dashboard "Refund ke pembeli" tile |
+| Refund to the buyer (8.31) | `refund-transition.ts` (CAS `menunggu → diproses → selesai/gagal`, never the ledger) | `applyOrderStatusChange` on `batal`/`retur` writes one open row per `berhasil` non-COD payment, same txn as the claw-back; the pay callback's `refundUncreditedPayment` writes one for a payment the ledger did not credit (double payment, PAID on a closed order — PAY-RETRY) | `refunds` (0112, partial unique `refunds_one_open_per_payment`) | order detail "Pengembalian dana", Super Admin `/pencairan` refund queue, dashboard "Refund ke pembeli" tile |
 | Payout | `payout.ts` (min from `platform_payout` — Rp200.000 on production, advisory lock, negative `payout` entry at request) → Super Admin `processPayout` → `markPayoutPaidInTxn` (CAS `diproses→selesai`) → `rejectPayout` (exact reversal) | Super Admin | `payouts`, `ledger_entries` | `/saldo`, `/pencairan` |
 | Subscription | `billing.ts` (`quote`, `computeBilling`, `subscriptionCharge`) | **ONE creator** `createSubscriptionInvoice` (`@tokophi/db/subscription-invoice`, 8.24) called by the billing cron · merchant `/akun/langganan` · Super Admin manual | `invoices.{amount,tax}_idr`, `stores.{trial_ends_at,current_period_end,first_invoice_paid,comped}` | `/akun/langganan`, `/faktur/[number]`, Super Admin `/`, `/toko/[id]` |
 | Comp ("Gratiskan N bulan") | `comp-invoice.ts` — a Rp0 `dibayar` invoice with `kind='comp'` (0113, 8.26) | Super Admin `compStore` | `invoices` (partial unique `invoices_one_comp_per_grant`) | `/akun/langganan` as "Gratis"; **excluded from MRR / "Pelanggan berbayar"** (`subscription-kpi.ts`) |
@@ -225,6 +225,17 @@ base). On VA BCA: flat Rp6.500 whatever the amounts.
   one compare-and-swap in `apps/super-admin/lib/refund-transition.ts`, the payout lesson applied
   first. The dashboard float card shows *Refund ke pembeli* as its OWN tile beside *Wajib
   ditransfer* — different creditor, never summed — and the seller's order detail shows the state.
+  **PAY-RETRY (2026-11-13) adds the second writer, `refundUncreditedPayment` (`lib/ledger-credit.ts`),
+  called only by the payment callback after `creditSaleForPayment`:** a collected prepaid payment the
+  ledger did NOT credit is owed back — "Pembayaran ganda" when the order's one sale
+  (`ledger_one_sale_per_order`) is booked on ANOTHER payment (a shopper paid an old instruction after
+  "Bayar ulang" issued a new one), "Dibayar setelah pesanan ditutup" when PAID lands on a `batal`/`retur`
+  order (it used to be a log line only). Same amount rule (`amount_idr`), same open-per-payment index,
+  plus `not exists` so a callback replayed after the refund was SETTLED cannot reopen it.
+- **"Bayar ulang" never re-prices (PAY-RETRY).** A new instruction for the same order copies
+  `amount_idr`, `admin_fee` and `total` from the previous attempt — the bill the shopper agreed to at
+  checkout — so `orders` money columns, `order_financials` and the ledger are untouched by a retry, and
+  a later fee-schedule change does not move an existing order's bill. Same channel only (v1).
 
 ## 5. Guards
 

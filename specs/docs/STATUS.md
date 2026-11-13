@@ -1,18 +1,21 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-13 09:31 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`68947858`** (deploy of PR #462 CSP-CONNECT,
-> on top of #460, #459, #458, #457), admin / super-admin / storefront / landing `(healthy)` on that image on two
-> consecutive polls. **Migrations: 117 on production (head `0116_mengantar_shipping`).** **Shipping provider
-> switch = Mengantar** (`MENGANTAR_ENV=production`, ADR 0018): exactly ONE store has a Mengantar account — the
-> demo store `batiknusantara`, owner-attached (`store_mengantar_accounts`: 1 `connected`, `partner_id` NULL) —
-> so its non-COD checkout quotes through Mengantar (`codRequote:true`); COD and every other store stay on
-> KiriminAja (D11). Area bridge 6 919 / 7 030 kecamatan, rebuilt on every deploy. `orders` stamped `mengantar`: 1
-> (the unpaid test order `PHI-555925447U5H`). Storefront CSP `connect-src` lists `https://app.tokophi.com`
-> (verified in a browser, 0 reports). `ops/tokophi-probe.sh` exit 0, disk 36 %. Merges do NOT deploy here —
-> trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's production Partner origin +
-> IP allow-list (O2) before any other store can register; the first real Mengantar booking + cancel; the
-> AutoLaris QRIS window is the vendor's 2 h default (`/submit` sends no `expired` — task PAY-QRIS-EXPIRY).
+> **Current state — 2026-11-13 13:40 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`ea675ef7`** (deploy of PR #465 PAY-RETRY, on
+> top of #466 store-level shipping provider, #464, #463, #462), admin / super-admin / storefront / landing `(healthy)`
+> on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`. **Migrations: 119 on production (head
+> `0118_pay_retry`, max stamp 1787545891751).** **Shipping (ADR 0018 + 0019):** the provider is per store
+> (`stores.shipping_provider`, default KiriminAja, set by Super Admin owner rank or a signup code); production = 1
+> `mengantar` (the demo store `batiknusantara`, owner-attached account) + 16 `kiriminaja`; platform switch = Mengantar
+> (master kill-switch); COD always KiriminAja. Quotes after both deploys identical to the pre-deploy baseline (demo
+> non-COD → Mengantar `codRequote:true` SPX Rp5.700; demo COD → KiriminAja; permata-store → KiriminAja). Signup codes:
+> 0. Area bridge 6 919 / 7 030 kecamatan, rebuilt on every deploy. **Payments:** "Bayar ulang" live —
+> `/api/public/pay/retry` answers JSON (`not_found` for an unknown order), `/checkout/sukses` ships the button; the
+> 227 pre-existing payment rows have `expires_at` NULL (read as unknown → bounded 24 h). `ops/tokophi-probe.sh` exit 0.
+> Merges do NOT deploy here — trigger by hand (DEPLOY.md checklist). Still open: no alert channel; Mengantar's
+> production Partner origin + IP allow-list (O2); the first real courier booking + cancel (none yet on either
+> provider); the first real "Bayar ulang" (the `-n` reff_id suffix is unproven on `/submit` production); the
+> AutoLaris QRIS window stays the vendor's 2 h default (PAY-QRIS-EXPIRY, mitigated by PAY-RETRY).
 
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
@@ -71,7 +74,7 @@
 >
 > **Release blockers — recounted 2026-08-24 against evidence, not against stale flags.** **Stage 4 is COMPLETE**: all 13 P0 tasks carry documented completion evidence (BUILD-LOG entries and/or `[x]` flags — reconciled 2026-08-24 after the flags were found under-reporting by 16 tasks). The active queue is now **14 P1 open** (5.1, 5.4–5.9, 5.12–5.15, 5.18–5.20 — of which 5.8/5.19/5.20 are owner-gated decisions/credentials and 5.12 is blocked on GitHub Actions billing) **and 7 P2 open** (6.1, 6.3, 6.4, 6.6–6.9 — 6.1 is blocked on 5.12–5.15). No production release sign-off until the Stage 7 executable gate passes; that gate has not been run.
 >
-> **Data/security status:** the 118-entry migration journal is healthy through `0117_store_plugins_kelola` (0117 on branch `feat/kelola-plugin` until it merges; production stays at 117 until then), and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
+> **Data/security status:** the 119-entry migration journal is healthy through `0118_pay_retry` (`0117_store_shipping_provider` before it), and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >

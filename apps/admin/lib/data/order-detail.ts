@@ -8,6 +8,7 @@ import {
   type ShipmentPaymentState,
 } from "@/lib/shipment-payment";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
+import { instructionState } from "@/lib/pay-retry";
 import { weightForOrder } from "@/lib/shipping-weight";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
@@ -172,6 +173,19 @@ export type OrderPaymentRecord = {
   total: number;
   virtualAccount: string | null;
   channelCode: string | null;
+  /** `menunggu` in the row but past its window (lib/pay-retry.ts) — not payable, re-billable. */
+  expired: boolean;
+  expiresAtLabel: string | null;
+};
+
+/** One bill in the order's history (PAY-RETRY). */
+export type OrderPaymentAttempt = {
+  reffId: string | null;
+  channelCode: string | null;
+  status: "menunggu" | "berhasil" | "gagal";
+  expired: boolean;
+  createdAtLabel: string;
+  total: number;
 };
 
 /**
@@ -207,6 +221,8 @@ export type OrderDetail = {
   buyer: OrderBuyer | null;
   address: OrderAddress | null;
   payment: OrderPaymentRecord | null;
+  /** Every bill this order was given, oldest first — empty unless there is more than one (PAY-RETRY). */
+  paymentAttempts: OrderPaymentAttempt[];
   refund: OrderRefundRecord | null;
   sender: OrderSender | null;
   financial: OrderFinancialBreakdown;
@@ -258,6 +274,7 @@ export async function getOrderDetail(
         total: schema.orders.totalIdr,
         status: schema.orders.status,
         financialStatus: schema.orders.financialStatus,
+        placedAt: schema.orders.placedAt,
         city: schema.orders.city,
         province: schema.orders.province,
         courier: schema.orders.courier,
@@ -424,7 +441,8 @@ export async function getOrderDetail(
       }
     }
 
-    const [p] = await db
+    // Every attempt, "the order's payment" first (PAY-RETRY: an order can carry several bills now).
+    const payRows = await db
       .select()
       .from(schema.payments)
       .where(eq(schema.payments.orderId, o.id))
@@ -436,8 +454,14 @@ export async function getOrderDetail(
       // above it claimed it matched the list. It did not: drizzle's `desc()` emits a BARE `desc`, and
       // bare DESC in Postgres is NULLS FIRST, so this page ranked UNPAID payments first while the list
       // ranked them last. Measured: list `cod`, detail `va`, same order.
-      .orderBy(latestPaymentFirst())
-      .limit(1);
+      .orderBy(latestPaymentFirst());
+    const p = payRows[0];
+    // PAY-RETRY: `menunggu` is the ROW; whether the bill can still be paid is `instructionState`, the
+    // same reading the shopper's retry, the Seller's re-bill and the cron use. Server-side `now` — a
+    // data-layer read, not a render path.
+    const now = new Date();
+    const expired = (r: typeof p) =>
+      r.method !== "cod" && r.status === "menunggu" && instructionState(r, o.placedAt, now) === "expired";
 
     const payment: OrderPaymentRecord | null = p
       ? {
@@ -450,8 +474,24 @@ export async function getOrderDetail(
           total: p.total && p.total > 0 ? p.total : p.amountIdr,
           virtualAccount: p.virtualAccount ?? null,
           channelCode: p.channelCode ?? null,
+          expired: expired(p),
+          expiresAtLabel: p.expiresAt ? FMT.format(p.expiresAt) : null,
         }
       : null;
+    // Read-only history, shown only when there is more than one bill (a retry happened).
+    const paymentAttempts: OrderPaymentAttempt[] =
+      payRows.length > 1
+        ? [...payRows]
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+            .map((r) => ({
+              reffId: r.reffId ?? null,
+              channelCode: r.channelCode ?? null,
+              status: r.status,
+              expired: expired(r),
+              createdAtLabel: FMT.format(r.createdAt),
+              total: r.total && r.total > 0 ? r.total : r.amountIdr,
+            }))
+        : [];
 
     // Task 8.31 — under RLS (`refunds` has a tenant policy), so a merchant sees only their own.
     const [rf] = await db
@@ -609,6 +649,7 @@ export async function getOrderDetail(
       buyer,
       address,
       payment,
+      paymentAttempts,
       refund,
       sender,
       financial: financialBreakdown,

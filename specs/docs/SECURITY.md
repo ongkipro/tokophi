@@ -24,7 +24,7 @@ Last measured **2026-08-05** against `origin/main` and production. Re-verificati
 | Storefront | `<slug>.tokophi.com`, `toko.` | the public | read one tenant's catalog, write `checkout_sessions` |
 | Seller (admin) | `app.tokophi.com` | a merchant's staff | everything inside ONE store |
 | Super Admin | `rich.tokophi.com` | us | **every tenant**, billing, impersonation |
-| Public API | `app.tokophi.com/api/public/**` | the public, no session | quote shipping, place orders, redeem vouchers, receive payment callbacks |
+| Public API | `app.tokophi.com/api/public/**` | the public, no session | quote shipping, place orders, redeem vouchers, renew an expired payment instruction (one-order token), receive payment callbacks |
 | Landing | `tokophi.com` | the public | static, no DB |
 
 **Observed:** the Public API is the only unauthenticated *write* surface in the product. It is served
@@ -44,7 +44,17 @@ nothing under `apps/storefront`, `apps/landing` or any client component imports 
   (`mg_env` + `mg_seller_id`; another env or seller is refused, never handed the current key).
 - **Decision (D16):** there is **no inbound Mengantar route.** The webhook route was removed (per-seller
   webhook secrets could only be set by the seller); tracking is polling from the `cron-tracking` sidecar.
-  The four public routes are still the only unauthenticated write surface.
+  The public routes under `app/api/public/**` are still the only unauthenticated write surface.
+- **`/api/public/pay/retry` ("Bayar ulang", PAY-RETRY, 2026-11-13) — the fifth shopper route.** It
+  creates a payment instruction for an EXISTING prepaid order, so it is authorised by a **one-order
+  secret**, never by the order number (printed on labels, quoted in chats): 256 random bits minted by
+  `/api/public/order`, returned once in that response, held in the checkout browser's `localStorage`;
+  only `sha256` is stored (`orders.pay_token_hash`). Wrong token, unknown order, another store, COD and
+  pre-0118 orders all get the SAME 404 (no existence oracle). Body through `readPublicBody`, 6/min per
+  IP, CORS, provider text never in the response (ADR 0004), at most 5 instructions per order, and the
+  decision is taken under the order's row lock so an order never holds two live bills. Worst case for
+  a leaked token: someone renews THAT order's bill for the same amount to the same shop — it cannot
+  move money, change the amount, or touch another order.
 
 ---
 
@@ -263,6 +273,21 @@ architecture decision before the PostgREST cutover.
     `settings:write`), and the button is **refused under impersonation** — an operator in "Buka Dashboard
     Seller" cannot agree to Mengantar's Terms for the merchant. Super Admin and the cron can queue a store,
     never register it without consent.
+  - **Only a store set to Mengantar is registered (ADR 0019, 2026-11-13).** `stores.shipping_provider` is
+    checked at the sink (`connectStoreMengantar`, enqueue, requeue, the retry sweep), so no caller can open a
+    Mengantar account — and hand an owner's email and phone to the partner — for a store the platform did not
+    put on Mengantar. Changing a store's provider and managing signup codes are Super Admin acts at ONE rank
+    (`SHIPPING_PROVIDER_MIN_RANK`, owner), audited in `platform_activity`; the seller cannot choose.
+  - **Signup codes are a selector on a public form, not a credential.** `/daftar` accepts an optional code
+    (`?kode=` or typed). What a valid code buys: a self-serve store created on that code's provider — still
+    locked until an operator approves it (0090), and no Mengantar account is registered before approval
+    (D15) nor without the consent shown for that exact code. We rely on: (1) the signup door's own limit
+    (`signup:admin:<ip>`, 5 / 10 min) for submissions; (2) `signup-code:admin:<ip>` (30 / 10 min) on the live
+    check, which is a code-existence oracle by design; (3) one refusal sentence for unknown / inactive /
+    malformed codes (no hint which); (4) codes being deactivatable at once (the signup transaction re-reads
+    the code `FOR SHARE`). `signup_codes` has RLS with no policy (owner pool only). Known gap, same as every
+    limit here: process-local decision, IP-keyed — the wall is Cloudflare. A code is not a secret and may
+    appear in a URL; never make one grant anything beyond the provider choice.
   - **Exception (owner O11, 2026-11-12):** `ops/mengantar-attach-own-key.ts` attaches an account the store
     owner already owns (production: the demo store only). The key comes from `secrets-env` at run time, is
     sealed exactly as a registered key, and is never printed; `partner_id` NULL marks the row so rotate /
@@ -350,6 +375,7 @@ architecture decision before the PostgREST cutover.
 | `login:admin:<ip>` | 15 | 1 min | merchant login, before the scrypt check |
 | `login:platform:<ip>` | 10 | 1 min | **control-plane** login |
 | `signup:admin:<ip>` | 5 | 10 min | store creation **and** the email-existence oracle |
+| `signup-code:admin:<ip>` | 30 | 10 min | the `/daftar` signup-code check (ADR 0019) — a code-existence oracle; over the limit the form shows "checked at signup" and the boundary decides |
 | `paycb:<ip>` | 60 | 1 min | payment callback |
 | `tracking-retry:<storeId>` | 5 | 1 min | provider quota |
 | `tracking-test:<storeId>:<channel>` | 10 | 1 min | provider quota |

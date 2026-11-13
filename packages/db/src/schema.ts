@@ -306,6 +306,14 @@ export const stores = pgTable("stores", {
   // the queue cannot re-fill with stores that have already been vetted. Stores that existed before
   // this column were backfilled to `created_at`: they were onboarded by an operator by hand.
   approvedAt: ts(),
+  // 0117 / ADR 0019: which provider quotes this store's NON-COD checkouts — 'kiriminaja' (default) |
+  // 'mengantar'. Written only by Super Admin (`setStoreShippingProvider`, owner rank) and by a signup
+  // code (`provisionStore`); the seller never chooses. Read by the ONE dispatch (`quoteShipping`) and by
+  // every Mengantar registration path (`mengantar-account.ts`): an account is registered only for a
+  // store set to 'mengantar'. text + CHECK, not an enum (see the migration header).
+  shippingProvider: text().notNull().default("kiriminaja"),
+  // 0117: the signup code this store registered with (FK → signup_codes.code). NULL = none.
+  signupCode: text().references((): AnyPgColumn => signupCodes.code, { onDelete: "restrict" }),
   // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
   // only pulls these tokens; NOT part of the drag-drop Store Builder).
   logoUrl: text(),
@@ -959,6 +967,9 @@ export const orders = pgTable("orders", {
   // session, and NULLs do not collide. TEXT, not uuid: this is `checkout_sessions.session_id`, the
   // string the storefront generates and the API receives — not that row's primary key.
   checkoutSessionId: text(),
+  // PAY-RETRY (0118) — sha256 hex of the shopper-held secret that authorises
+  // `/api/public/pay/retry` for THIS order. Never the token itself. NULL = COD or pre-0118.
+  payTokenHash: text(),
 
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
@@ -1146,6 +1157,10 @@ export const payments = pgTable("payments", {
   requestState: paymentRequestState(),
   requestError: text(),
   requestUpdatedAt: ts(),
+  // PAY-RETRY (0118). When the provider stops accepting this instruction; NULL = unknown, bounded
+  // conservatively by `lib/pay-retry.ts`. `createdAt` orders several attempts on one order.
+  expiresAt: ts(),
+  createdAt: createdAt(),
 }, (t) => [
   index("payments_trx_idx")
     .on(t.trxId)
@@ -1930,6 +1945,20 @@ export const shippingProviderConfig = pgTable("shipping_provider_config", {
   updatedAt: ts().notNull().defaultNow(),
 });
 
+// 0117 / ADR 0019: signup codes made in Super Admin; each maps a self-serve signup to a provider.
+// Platform table (no store_id), RLS on with NO policy — owner pool only (signup + Super Admin). Never
+// deleted (deactivated), so `stores.signup_code` always names a row. `code` is canonical upper-case
+// (`@tokophi/lib/signup-code` normalises; a CHECK pins the shape).
+export const signupCodes = pgTable("signup_codes", {
+  code: text().primaryKey(),
+  shippingProvider: text().notNull(),
+  active: boolean().notNull().default(true),
+  note: text(),
+  createdBy: uuid().references((): AnyPgColumn => platformAdmins.id, { onDelete: "set null" }),
+  createdAt: ts().notNull().defaultNow(),
+  updatedAt: ts().notNull().defaultNow(),
+});
+
 // 0116 (Mengantar PARTNER model): one Mengantar seller account per (store, env), registered by TokoΦ
 // with the owner's TokoΦ email. RLS (store_id). `apiKeyEnc` = AES-GCM under
 // `mengantarKeyScope(storeId, env, sellerId, keyVersion)` (packages/db/src/mengantar-account.ts).
@@ -1963,7 +1992,7 @@ export const storeMengantarAccounts = pgTable(
   (t) => [primaryKey({ columns: [t.storeId, t.env], name: "store_mengantar_accounts_pk" })],
 );
 
-// KEL-001 / ADR 0019 (migration 0117): first-party plugins a store has activated — AdsBookCMS
+// KEL-001 / ADR 0021 (migration 0119): first-party plugins a store has activated — AdsBookCMS
 // `plugins` + store_id. No row = dormant. `settings` is non-secret; credentials live sealed in
 // `secretEnc` (scope `<plugin>:<store_id>:v<secretV>`). Store-scoped → RLS.
 export const storePlugins = pgTable(
@@ -1983,7 +2012,7 @@ export const storePlugins = pgTable(
   (t) => [primaryKey({ columns: [t.storeId, t.plugin], name: "store_plugins_pk" })],
 );
 
-// The Kelola plugin's own push state (0117). NO foreign key to orders / checkout_sessions on purpose:
+// The Kelola plugin's own push state (0119). NO foreign key to orders / checkout_sessions on purpose:
 // a plugin never blocks the core from deleting a row. claimedAt = the 5-minute send lease.
 export const pluginKelolaOrders = pgTable(
   "plugin_kelola_orders",
