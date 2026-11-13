@@ -102,5 +102,5 @@ async function codePrefill(raw: string | undefined) {
   const code = normalizeSignupCode(typed);
   if (!code) return { initialCode: typed, initialCheck: null };
   const hit = await lookupSignupCode(code);
-  return { initialCode: code, initialCheck: { code, valid: !!hit, mengantar: hit?.provider === "mengantar" } };
+  return { initialCode: code, initialCheck: { code, valid: !!hit, mengantar: hit?.provider === "mengantar", discountIdr: hit?.discountIdr ?? 0 } };
 }

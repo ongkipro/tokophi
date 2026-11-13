@@ -117,7 +117,8 @@ export async function registerStore(_prev: RegisterState, formData: FormData): P
  * `valid: null` = not checked (the person hit the limiter): the form neither blocks nor shows the Mengantar
  * consent, and the signup boundary decides. A Mengantar store created that way waits for the owner's click.
  */
-export type SignupCodeCheck = { valid: boolean | null; mengantar: boolean };
+/** ADR 0020: `discountIdr` = what the code takes off the first subscription invoice (0 = none). */
+export type SignupCodeCheck = { valid: boolean | null; mengantar: boolean; discountIdr: number };
 
 /**
  * ADR 0019 — does the code the person is typing exist, and does it put the store on Mengantar (which is
@@ -126,14 +127,16 @@ export type SignupCodeCheck = { valid: boolean | null; mengantar: boolean };
  *
  * It IS a code oracle, so it is metered like the signup door beside it (a floor, not a wall — see the
  * note on `registerStore`). What a guessed code buys is small and bounded: a self-serve store on a
- * provider, still locked until an operator approves it (0090) — no account is registered before that.
+ * provider, still locked until an operator approves it (0090) — no account is registered before that —
+ * and, since ADR 0020, at most ONE first-invoice discount (bounded below the monthly price) on a store
+ * that must still be approved before it can trade.
  */
 export async function checkSignupCode(raw: string): Promise<SignupCodeCheck> {
   const code = normalizeSignupCode(raw);
-  if (!code) return { valid: false, mengantar: false };
+  if (!code) return { valid: false, mengantar: false, discountIdr: 0 };
   const h = await headers();
   const ip = h.get("cf-connecting-ip") || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (!rateLimit(`signup-code:admin:${ip}`, 30, 600_000).ok) return { valid: null, mengantar: false };
+  if (!rateLimit(`signup-code:admin:${ip}`, 30, 600_000).ok) return { valid: null, mengantar: false, discountIdr: 0 };
   const hit = await lookupSignupCode(code);
-  return { valid: !!hit, mengantar: hit?.provider === "mengantar" };
+  return { valid: !!hit, mengantar: hit?.provider === "mengantar", discountIdr: hit?.discountIdr ?? 0 };
 }

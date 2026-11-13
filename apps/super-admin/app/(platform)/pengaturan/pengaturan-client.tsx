@@ -8,6 +8,7 @@ import type { CourierRow, ProviderStatus } from "@/lib/data";
 import type { KaProbe, KaProbeState } from "@/lib/ka-probe";
 import type { KaBalanceView } from "@/lib/data";
 import { IDR } from "@tokophi/lib/format";
+import { BILLING, subscriptionCharge } from "@tokophi/lib/billing";
 import { AutolarisKey, KiriminajaKeys } from "./provider-keys";
 import { MengantarKeys, ShippingProviderSwitch } from "./mengantar-panel";
 
@@ -573,7 +574,7 @@ export function PengaturanClient({
                   <Switch id="fin-ppn" checked={ppnOn} disabled={ppnSaving} onCheckedChange={flipPpn} />
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  Harga langganan: Rp275.000/bln (DPP). {ppnOn ? "Dengan PPN: Rp305.250/bln." : "Saat ini seller membayar flat Rp275.000/bln."}
+                  Harga langganan: {IDR(BILLING.MONTHLY_IDR)}/bln (DPP). {ppnOn ? `Dengan PPN: ${IDR(subscriptionCharge(BILLING.MONTHLY_IDR, true).total)}/bln.` : `Saat ini seller membayar flat ${IDR(BILLING.MONTHLY_IDR)}/bln.`}
                 </p>
               </CardContent>
             </Card>

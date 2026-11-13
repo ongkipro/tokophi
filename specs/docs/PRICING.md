@@ -14,9 +14,9 @@ Satu paket, semua fitur. Harga adalah **DPP (belum termasuk PPN)**.
 | Fase | Harga |
 |---|---|
 | Trial | **3 hari** gratis |
-| Bulan pertama | **Rp50.000** |
-| Bulan berikutnya | **Rp275.000/bulan** |
-| Tahunan | **Rp2.700.000** (13 bulan sejak trial) |
+| Bulanan | **Rp178.500/bulan** sejak tagihan pertama (promo bulan pertama Rp50.000 DIHAPUS — ADR 0020) |
+| Tahunan | **Rp1.713.600** = bulanan × 12 − 20% (setara Rp142.800/bulan; 13 bulan bila dibayar langsung dari trial) |
+| Kode daftar / referral | potongan per kode (default Rp100.000) untuk tagihan langganan **pertama yang lunas**, sekali: bulanan Rp78.500, tahunan Rp1.613.600 |
 
 - **PPN 11% langganan = toggle GLOBAL** (Super Admin → Pengaturan → Keuangan), **default OFF** saat
   launch — seller membayar DPP flat tanpa baris pajak. Saat ON, berlaku mulai invoice BERIKUTNYA;

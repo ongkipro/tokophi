@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Check, Loader2, Search } from "lucide-react";
 import { checkSignupCode, registerStore, type SignupCodeCheck } from "@/lib/actions/register";
 import { slugify } from "@tokophi/lib/store-slug";
+import { IDR } from "@tokophi/lib/format";
 import { normalizeSignupCode, SIGNUP_CODE_UNKNOWN_MSG } from "@tokophi/lib/signup-code";
 import { STORE_NAME_EVENT } from "@/components/admin/front-door/address-plate";
 import { Button } from "@tokophi/ui/button";
@@ -240,7 +241,7 @@ export function DaftarForm({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="signupCode">
-              Kode daftar <span className="font-normal text-muted-foreground">(opsional)</span>
+              Kode <span className="font-normal text-muted-foreground">(opsional)</span>
             </Label>
             <Input
               ref={codeRef}
@@ -259,11 +260,14 @@ export function DaftarForm({
             />
             <p id="signupCode-hint" aria-live="polite" className={`text-xs ${codeBad ? "text-destructive" : "text-muted-foreground"}`}>
               {!norm && !codeBad
-                ? "Punya kode dari tim TokoΦ? Masukkan di sini. Kosongkan bila tidak ada."
+                ? "Punya kode referral atau kode dari tim TokoΦ? Masukkan di sini. Kosongkan bila tidak ada."
                 : codeBad
                   ? SIGNUP_CODE_UNKNOWN_MSG
                   : current?.valid
-                    ? "Kode diterima."
+                    ? current.discountIdr > 0
+                      // ADR 0020 — say what the code gives, in the same words the faktur will print.
+                      ? `Kode diterima — potongan ${IDR(current.discountIdr)} untuk tagihan langganan pertama.`
+                      : "Kode diterima."
                     : current
                       ? "Kode diperiksa saat toko dibuat."
                       : "Memeriksa kode…"}

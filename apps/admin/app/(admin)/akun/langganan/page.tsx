@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getBilling, getMyInvoices } from "@/lib/data/billing";
+import { getBilling, getMyInvoices, getOwedCodeDiscount } from "@/lib/data/billing";
 import { getPendingSubscription } from "@/lib/actions/billing";
 import { getPlatformChannels } from "@/lib/actions/payment-settings";
 import { IDR, NO_FIGURE } from "@tokophi/lib/format";
@@ -22,6 +22,8 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 export default async function LanggananPage() {
   const [bill, invoices, pending, channels] = await Promise.all([getBilling(), getMyInvoices(), getPendingSubscription(), getPlatformChannels()]);
   const ppnOn = await getSubscriptionPpnEnabled();
+  // ADR 0020 — which code the owed discount comes from (the amount itself is already in `bill`).
+  const owed = bill && bill.codeDiscountIdr > 0 ? await getOwedCodeDiscount() : { code: null, discountIdr: 0 };
   const paid = invoices.filter((i) => i.status === "dibayar");
   const paidTotal = paid.reduce((a, i) => a + i.amount, 0);
   // The caption reads the STORED tax, not the toggle: history may mix PPN-era and flat invoices,
@@ -35,9 +37,9 @@ export default async function LanggananPage() {
   };
   // A comp (Task 8.26, migration 0113) is a Rp0 invoice already `dibayar` — the STATUS badge says
   // "Lunas" truthfully (nothing is owed) but the kind is a gift, not a payment, so the Jenis column
-  // says so instead of guessing "Bln pertama" from the amount.
-  const jenis = (inv: { amount: number; kind: string | null }) =>
-    inv.kind === "comp" ? "Gratis" : inv.amount >= 2_000_000 ? "Tahunan" : inv.amount <= 100_000 ? "Bln pertama" : "Bulanan";
+  // says so. The cycle is READ from the row (ADR 0020): guessing it from the amount broke the moment
+  // prices moved — a Rp1.713.600 annual invoice is under the old "≥ Rp2jt = Tahunan" line.
+  const jenis = invoiceKindLabel;
   const fmtDue = bill?.dueDate ? new Date(bill.dueDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
   return (
@@ -62,7 +64,10 @@ export default async function LanggananPage() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Tagihan berikutnya</p>
-                  <p className="mt-0.5 font-medium tabular-nums">{IDR(subscriptionCharge(bill.nextAmount, ppnOn).total)}{bill.isPromo && <span className="ml-1 text-xs font-normal text-emerald-600">promo</span>}</p>
+                  <p className="mt-0.5 font-medium tabular-nums">{IDR(subscriptionCharge(bill.nextAmount, ppnOn).total)}</p>
+                  {bill.codeDiscountIdr > 0 && (
+                    <p className="text-[11px] text-emerald-600 tabular-nums dark:text-emerald-400">Potongan kode {owed.code} −{IDR(bill.codeDiscountIdr)} (tagihan pertama)</p>
+                  )}
                   {/* The line that shows the arithmetic behind the total above it: two amounts,
                       59,66px of ink movement at 1440px, under a total that was already tabular. */}
                   {/* OFF shows NOTHING here (owner 2026-08-24): with the toggle off the total IS the
@@ -78,12 +83,14 @@ export default async function LanggananPage() {
                 chosen by the billing status — so the paragraph is rewritten from underneath. 17,28px
                 at 1440px, 35,38px at 390px where it wraps to three lines. */}
             <p className="text-xs text-muted-foreground tabular-nums">
-              {bill?.status === "trial" && `Uji coba gratis berakhir ${fmtDue}. Lanjutkan hanya ${IDR(BILLING.FIRST_MONTH_IDR)} untuk bulan pertama.`}
-              {bill?.status === "active" && `Periode berjalan berakhir ${fmtDue}. Tagihan berikutnya ${IDR(BILLING.MONTHLY_IDR)}.`}
+              {bill?.status === "trial" && (bill.codeDiscountIdr > 0
+                ? `Uji coba gratis berakhir ${fmtDue}. Tagihan pertama ${IDR(bill.nextAmount)} — sudah dipotong ${IDR(bill.codeDiscountIdr)} dari kode ${owed.code}; selanjutnya ${IDR(BILLING.MONTHLY_IDR)}/bulan.`
+                : `Uji coba gratis berakhir ${fmtDue}. Lanjutkan ${IDR(bill.nextAmount)}/bulan, atau bayar tahunan dan hemat ${BILLING.ANNUAL_DISCOUNT_PCT}%.`)}
+              {bill?.status === "active" && `Periode berjalan berakhir ${fmtDue}. Tagihan berikutnya ${IDR(bill.nextAmount)}.`}
               {bill?.status === "past_due" && `Jatuh tempo ${fmtDue}. Bayar sebelum masa tenggang ${BILLING.GRACE_DAYS} hari habis agar toko tidak ditangguhkan.`}
               {bill?.status === "suspended" && `Toko ditangguhkan (mode baca-saja). Bayar ${IDR(bill.nextAmount)} untuk mengaktifkan kembali. Storefront tetap online.`}
             </p>
-            {bill && !bill.comped && <PaySubscription firstInvoicePaid={bill.firstInvoicePaid} pending={pending} channels={channels} ppnEnabled={ppnOn} />}
+            {bill && !bill.comped && <PaySubscription firstInvoicePaid={bill.firstInvoicePaid} codeDiscountIdr={bill.codeDiscountIdr} discountCode={owed.code} pending={pending} channels={channels} ppnEnabled={ppnOn} />}
           </CardContent>
         </Card>
 
@@ -91,9 +98,9 @@ export default async function LanggananPage() {
           <CardHeader><CardTitle>Rincian harga</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <Row label="Uji coba gratis" value={`${BILLING.TRIAL_DAYS} hari`} />
-            <Row label="Bulan pertama (promo)" value={IDR(BILLING.FIRST_MONTH_IDR)} accent />
             <Row label="Bulanan" value={`${IDR(BILLING.MONTHLY_IDR)}/bln`} />
-            <Row label="Tahunan (hemat)" value={`${IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln`} accent />
+            <Row label={`Tahunan (hemat ${BILLING.ANNUAL_DISCOUNT_PCT}%)`} value={`${IDR(BILLING.ANNUAL_MONTHLY_IDR)}/bln`} accent />
+            {bill && bill.codeDiscountIdr > 0 && <Row label={`Potongan kode ${owed.code} (tagihan pertama)`} value={`−${IDR(bill.codeDiscountIdr)}`} accent />}
             <div className="border-t pt-3">
               {ppnOn && <Row label="PPN" value="11%" />}
               <Row label={ppnOn ? "Total bulanan (termasuk PPN)" : "Total bulanan"} value={IDR(subscriptionCharge(BILLING.MONTHLY_IDR, ppnOn).total)} />
@@ -147,6 +154,15 @@ export default async function LanggananPage() {
       </Card>
     </div>
   );
+}
+
+// Jenis of one invoice row: the kind, then the STORED cycle. Only seeded legacy rows (cycle NULL) fall
+// back to the amount, against the prices those rows were written at.
+function invoiceKindLabel(inv: { amount: number; kind: string | null; cycle: string | null }): string {
+  if (inv.kind === "comp") return "Gratis";
+  if (inv.cycle === "annual") return "Tahunan";
+  if (inv.cycle === "monthly") return "Bulanan";
+  return inv.amount >= 1_000_000 ? "Tahunan" : "Bulanan";
 }
 
 function Row({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
