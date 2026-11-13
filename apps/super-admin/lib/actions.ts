@@ -886,10 +886,10 @@ const signupCodeDeps: SignupCodeDeps = {
   insert: async (row) => {
     const done = await db
       .insert(schema.signupCodes)
-      .values({ code: row.code, shippingProvider: row.provider, note: row.note, createdBy: row.createdBy })
+      .values({ code: row.code, shippingProvider: row.provider, discountFirstInvoiceIdr: row.discountIdr, note: row.note, createdBy: row.createdBy })
       .onConflictDoNothing()
-      .returning({ code: schema.signupCodes.code });
-    return done.length ? "ok" : "duplicate";
+      .returning({ discountIdr: schema.signupCodes.discountFirstInvoiceIdr });
+    return done.length ? { discountIdr: Number(done[0].discountIdr) } : "duplicate";
   },
   setActive: async (code, active) => {
     const [r] = await db.update(schema.signupCodes).set({ active, updatedAt: new Date() }).where(eq(schema.signupCodes.code, code)).returning({ active: schema.signupCodes.active });
@@ -898,11 +898,11 @@ const signupCodeDeps: SignupCodeDeps = {
   log: logPlatform,
 };
 
-/** Super Admin: create a signup code that puts a new store on `provider`. */
-export async function createSignupCode(code: string, provider: string, note: string): Promise<{ ok: boolean; message: string }> {
+/** Super Admin: create a signup code that puts a new store on `provider` and may carry a first-invoice discount (ADR 0020). */
+export async function createSignupCode(code: string, provider: string, note: string, discountIdr: string | number): Promise<{ ok: boolean; message: string }> {
   const gate = await platformGate(SHIPPING_PROVIDER_MIN_RANK);
   if (!gate.ok) return { ok: false, message: gate.error };
-  const r = await createSignupCodeWith(signupCodeDeps, { id: isUuid(gate.admin.adminId) ? gate.admin.adminId : null, email: gate.admin.email }, code, provider, note);
+  const r = await createSignupCodeWith(signupCodeDeps, { id: isUuid(gate.admin.adminId) ? gate.admin.adminId : null, email: gate.admin.email }, code, provider, note, discountIdr);
   if (r.ok) revalidatePath("/kode-daftar");
   return r;
 }
@@ -1091,7 +1091,8 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
   // Rp50rb first-month promo as a side effect of a goodwill gesture: comp a store still on its trial
   // and its first real invoice becomes Rp305.250 instead of Rp55.500 — Rp249.750 too much, charged to
   // the merchant we were trying to compensate. `computeBilling` reads `active` from
-  // `currentPeriodEnd` alone (billing.ts), so the comp works without it.
+  // `currentPeriodEnd` alone (billing.ts), so the comp works without it. (ADR 0020: the promo is gone, but
+  // the flag still guards the annual bonus month and an owed signup-code discount — still untouched.)
   //
   // THE PERIOD MOVE AND ITS RECORD LAND TOGETHER (Task 8.26 / 0113). A comp used to leave nothing a
   // KPI could read, so MRR counted every comped store as paying. The Rp0 `kind='comp'` invoice is

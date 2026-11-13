@@ -33,12 +33,20 @@ where the figure is stored and where it is shown — so a number on a screen can
 
 ## 1. Subscription (platform ← seller)
 
-- One plan. **Prices are the DPP (ex-tax)**: trial 3 days → Rp50rb first month → **Rp275rb/mo**
-  (annual Rp2.7jt, 13 months from trial).
+- One plan. **Prices are the DPP (ex-tax)** — ADR 0020 (2026-11-13): trial 3 days → **Rp178.500/mo** from the first invoice (the Rp50rb first-month promo is REMOVED)
+  (annual **Rp1.713.600** = 178.500 × 12 − 20% = Rp142.800/mo, 13 months when paid straight from trial).
+- **Signup-code discount (ADR 0020):** `signup_codes.discount_first_invoice_idr` (0119, per code, Super Admin form default
+  Rp100.000, 0 = none) comes off the store's **first PAID** subscription invoice, once: first monthly Rp78.500, first
+  annual Rp1.613.600. Decided ONLY inside `createSubscriptionInvoice` (`owedCodeDiscount` → `codeDiscountFor`), stored on the
+  row (`invoices.code_discount_idr` + `discount_code`), PPN (when on) on the DISCOUNTED DPP. List price of any invoice =
+  `amount_idr − tax_idr + code_discount_idr`. A cancelled/expired unpaid discounted invoice gives it back; at most one LIVE
+  discounted invoice per store (`invoices_one_live_code_discount`). Comped stores never; a deactivated code still honoured.
+- **Existing stores** move to the new price from their NEXT invoice; an issued invoice keeps its amount (a pending Rp50.000
+  promo invoice issued before the change is still payable at Rp50.000 and is reused, never re-priced).
 - **PPN 11% on the subscription is a GLOBAL toggle** — `platform_finance.subscription_ppn_enabled`
   (single row `id=1`, migration `0101`), switched in Super Admin → Pengaturan → **Keuangan**.
   Per-tenant PPN does **not** exist and must not be built.
-  - **DEFAULT OFF at launch** (owner ruling): sellers pay the flat DPP — Rp275.000, no tax line.
+  - **DEFAULT OFF at launch** (owner ruling): sellers pay the flat DPP — Rp178.500 (ADR 0020; was Rp275.000), no tax line.
   - Flipping it applies to the **next invoice** of every store, new or running. It never rewrites
     an issued invoice.
 - `subscriptionCharge(base, ppnEnabled)` (`@tokophi/lib/billing`) is the ONE charge function, and

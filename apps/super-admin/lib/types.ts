@@ -16,7 +16,7 @@ export type Store = {
   email: string;
   city: string;
   status: StoreStatus;
-  segment: StoreSegment; // billing lifecycle: trial | first_month | regular | vip
+  segment: StoreSegment; // billing lifecycle: trial | first_invoice | regular | vip
   comped: boolean; // VIP: billing bypassed
   isDemo: boolean; // seeded demo store (stores.is_demo, 8.27) — shown in the list, excluded from every money KPI
   // An OPERATOR suspended this store (stores.suspended_at), as opposed to `status === "ditangguhkan"`

@@ -71,7 +71,7 @@ type SegmentTab = "semua" | StoreSegment;
 const SEGMENT_TABS: { key: SegmentTab; label: string }[] = [
   { key: "semua", label: "Semua" },
   { key: "trial", label: "Trial" },
-  { key: "first_month", label: SEGMENT_META.first_month.short },
+  { key: "first_invoice", label: SEGMENT_META.first_invoice.short },
   { key: "regular", label: SEGMENT_META.regular.short },
   { key: "vip", label: "VIP" },
 ];

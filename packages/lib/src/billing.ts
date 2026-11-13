@@ -1,15 +1,22 @@
-// Single-plan subscription (all features). Shopify-style:
-//   monthly: 3-day free trial → Rp50rb first month (promo) → Rp275rb/month
-//   annual : Rp225rb/month billed yearly = Rp2.700.000; paying annually straight after the trial
-//            (first time) grants a bonus month → 13 months for the price of 12.
-// Recurring via VA invoice; 3-day grace past due → read-only.
+// Single-plan subscription (all features). Pricing per ADR 0020 (owner, 2026-11-13):
+//   monthly: 3-day free trial → Rp178.500/month. There is NO first-month promo any more (the Rp50rb
+//            promo was removed): without a code the first invoice is the normal price.
+//   annual : monthly × 12 with a 20% discount = Rp1.713.600 (Rp142.800/month effective); paying
+//            annually straight after the trial (first time) still grants a bonus month → 13 months.
+//   code   : a store that signed up with a signup code carrying `discount_first_invoice_idr` gets that
+//            much off its FIRST PAID subscription invoice (monthly or annual), once — `codeDiscountFor()`.
+// All prices are the DPP (ex-tax); `subscriptionCharge()` adds PPN on the DISCOUNTED DPP when the
+// global toggle is on. Recurring via VA invoice; 3-day grace past due → read-only.
 export const BILLING = {
   PLAN_NAME: "TokoΦ",
   TRIAL_DAYS: 3,
-  FIRST_MONTH_IDR: 50_000,
-  MONTHLY_IDR: 275_000,
-  ANNUAL_MONTHLY_IDR: 225_000, // effective per-month when paying yearly
-  ANNUAL_IDR: 2_700_000, // 225k × 12
+  MONTHLY_IDR: 178_500,
+  ANNUAL_DISCOUNT_PCT: 20, // annual = monthly × 12 × (1 − 20%)
+  ANNUAL_IDR: 1_713_600, // 178.500 × 12 × 0,8 — pinned to that formula in billing.test.ts
+  ANNUAL_MONTHLY_IDR: 142_800, // effective per-month when paying yearly (1.713.600 / 12)
+  // What the Super Admin "Kode Daftar" form pre-fills for a new code's first-invoice discount. The
+  // amount actually granted is stored PER CODE (`signup_codes.discount_first_invoice_idr`); 0 = none.
+  SIGNUP_CODE_DISCOUNT_DEFAULT_IDR: 100_000,
   GRACE_DAYS: 3,
   PPN_RATE: 0.11, // 11% VAT — plan prices above are the DPP (ex-tax); merchant pays base + PPN
 } as const;
@@ -27,16 +34,56 @@ export function baseFromTotal(total: number): PpnBreakdown {
 }
 
 export type Cycle = "monthly" | "annual";
-export type Quote = { cycle: Cycle; amount: number; months: number; perMonth: number; bonusMonth: boolean; label: string };
+export type Quote = {
+  cycle: Cycle;
+  /** The plan price for the cycle (DPP), before any code discount. */
+  listAmount: number;
+  /** The signup-code discount taken off THIS invoice (0 = none), already clamped to `listAmount`. */
+  codeDiscountIdr: number;
+  /** What is billed (DPP) = `listAmount − codeDiscountIdr`. PPN, when on, is added on THIS. */
+  amount: number;
+  months: number;
+  perMonth: number;
+  bonusMonth: boolean;
+  label: string;
+};
 
 // What a merchant pays + how long it covers, for a chosen cycle given their history.
-export function quote(cycle: Cycle, firstInvoicePaid: boolean): Quote {
+// `codeDiscountIdr` is the discount the store is OWED — resolve it with `codeDiscountFor()` first;
+// passing a code's raw amount here would discount a store that already used it.
+export function quote(cycle: Cycle, firstInvoicePaid: boolean, codeDiscountIdr = 0): Quote {
+  const listAmount = cycle === "annual" ? BILLING.ANNUAL_IDR : BILLING.MONTHLY_IDR;
+  const owed = Number.isFinite(codeDiscountIdr) ? Math.trunc(codeDiscountIdr) : 0;
+  const discount = Math.max(0, Math.min(owed, listAmount));
+  const amount = listAmount - discount;
   if (cycle === "annual") {
     const bonusMonth = !firstInvoicePaid; // first-time annual (from trial) → +1 free month
-    return { cycle, amount: BILLING.ANNUAL_IDR, months: bonusMonth ? 13 : 12, perMonth: BILLING.ANNUAL_MONTHLY_IDR, bonusMonth, label: "Tahunan" };
+    return { cycle, listAmount, codeDiscountIdr: discount, amount, months: bonusMonth ? 13 : 12, perMonth: BILLING.ANNUAL_MONTHLY_IDR, bonusMonth, label: "Tahunan" };
   }
-  const amount = firstInvoicePaid ? BILLING.MONTHLY_IDR : BILLING.FIRST_MONTH_IDR;
-  return { cycle, amount, months: 1, perMonth: amount, bonusMonth: false, label: "Bulanan" };
+  return { cycle, listAmount, codeDiscountIdr: discount, amount, months: 1, perMonth: BILLING.MONTHLY_IDR, bonusMonth: false, label: "Bulanan" };
+}
+
+/**
+ * The signup-code discount a store is OWED on its next subscription invoice (ADR 0020) — the ONE rule,
+ * read by the invoice creator (`@tokophi/db/subscription-invoice`) and by every screen that previews
+ * the next amount, so the preview and the bill cannot disagree.
+ *
+ * The discount belongs to the store's FIRST PAID subscription invoice:
+ *  - no code, or a code whose `discount_first_invoice_idr` is 0 → 0 (normal price);
+ *  - the store has ever paid a subscription invoice — `firstInvoicePaid` (set by the payment callback)
+ *    OR a `dibayar` subscription invoice on record (an operator's manual "Lunas" flip does not set the
+ *    flag, ruling 2026-08-20, and must still consume the discount) → 0, forever;
+ *  - VIP/comped stores are never billed → 0;
+ *  - otherwise → the code's amount. An invoice cancelled or expired UNPAID did not use it, so the
+ *    re-issued one carries it again (cancelling a monthly bill to pay annually must not forfeit it).
+ *    The DB allows at most ONE live (`menunggu`) discounted invoice per store (migration 0119), and the
+ *    creator reuses a live invoice instead of minting a second.
+ * A code deactivated after signup is still honoured: the discount was granted when the store signed up.
+ */
+export function codeDiscountFor(s: { codeDiscountIdr: number | null | undefined; firstInvoicePaid: boolean; hasPaidSubscription: boolean; comped?: boolean | null }): number {
+  if (s.comped || s.firstInvoicePaid || s.hasPaidSubscription) return 0;
+  const d = Math.trunc(Number(s.codeDiscountIdr ?? 0));
+  return Number.isFinite(d) && d > 0 ? d : 0;
 }
 
 // Add N calendar months to a base date (keeps day-of-month; safe for period extension).
@@ -64,11 +111,11 @@ export type BillingState = {
   suspendedReason: string | null; // why they did — shown to the merchant and in the audit line
   label: string;
   daysLeft: number; // days left in trial / current period / grace
-  nextAmount: number; // IDR the merchant pays next (monthly)
-  isPromo: boolean; // next payment is the Rp50rb first-month promo
+  nextAmount: number; // IDR (DPP) of the next MONTHLY invoice, code discount already taken off
+  codeDiscountIdr: number; // the signup-code discount inside `nextAmount` (0 = none) — ADR 0020
   dueDate: Date | null; // when the next payment is due
   readOnly: boolean; // grace exceeded OR operator-suspended → block writes (storefront stays up)
-  firstInvoicePaid: boolean; // false = still on promo / annual-bonus eligible
+  firstInvoicePaid: boolean; // false = never paid: annual-bonus eligible; a code discount may still be owed
   comped: boolean; // VIP: billing bypassed by the platform
 };
 
@@ -98,26 +145,35 @@ export type StoreBillingRow = {
   // a missed `select` is invisible at runtime and silently unlocks the store it was meant to lock.
   suspendedAt: Date | null;
   suspendedReason?: string | null;
+  // ADR 0020 — the signup-code discount the store is OWED on its next invoice, ALREADY resolved by
+  // `codeDiscountFor()` (absent = 0). Optional on purpose: only screens that show the next amount read
+  // it, and a read site that omits it shows the normal price — never a discount nobody is owed.
+  codeDiscountIdr?: number;
 };
 
-// The 4 lifecycle "sessions" the store list is split into (Trial → Bulan pertama → Reguler → VIP).
-export type StoreSegment = "trial" | "first_month" | "regular" | "vip";
+// The 4 lifecycle "sessions" the store list is split into (Trial → Tagihan pertama → Reguler → VIP).
+//
+// ADR 0020: `first_invoice` was `first_month` while the Rp50rb first-month promo existed. The promo is
+// gone but the STATE is still real and worth its own tab: the trial is over and the store has never
+// paid a subscription invoice (unpaid, or living on a comped month). Same predicate as before — only
+// the name and the price stopped claiming a promo — so the Super Admin segment counts do not move.
+export type StoreSegment = "trial" | "first_invoice" | "regular" | "vip";
 export const SEGMENT_META: Record<StoreSegment, { label: string; short: string; price: number; hint: string }> = {
-  trial: { label: "Uji coba (3 hari)", short: "Trial", price: 0, hint: "Masa coba gratis" },
-  first_month: { label: `Bulan pertama (${BILLING.FIRST_MONTH_IDR.toLocaleString("id-ID")})`, short: "Bulan 1", price: BILLING.FIRST_MONTH_IDR, hint: "Promo bulan pertama" },
+  trial: { label: `Uji coba (${BILLING.TRIAL_DAYS} hari)`, short: "Trial", price: 0, hint: "Masa coba gratis" },
+  first_invoice: { label: "Tagihan pertama (belum pernah bayar)", short: "Tagihan 1", price: BILLING.MONTHLY_IDR, hint: "Uji coba selesai, belum pernah membayar langganan — potongan kode daftar (bila ada) berlaku di tagihan ini" },
   regular: { label: `Reguler (${BILLING.MONTHLY_IDR.toLocaleString("id-ID")}/bln)`, short: "Reguler", price: BILLING.MONTHLY_IDR, hint: "Langganan berjalan" },
   vip: { label: "VIP (gratis)", short: "VIP", price: 0, hint: "Dibebaskan biaya oleh platform" },
 };
 
 // Which of the 4 lifecycle sessions a store belongs to (independent of active/past_due/suspended).
 // Reads `billingStatus`, NOT `status`: an operator suspension does not move a store out of its trial
-// or off the first-month promo — it locks the panel. Reading the effective status here would file
-// every suspended trial store under "Bulan 1" in the Toko catalog.
+// or off its first invoice — it locks the panel. Reading the effective status here would file
+// every suspended trial store under "Tagihan 1" in the Toko catalog.
 export function storeSegment(s: StoreBillingRow, now: Date = new Date()): StoreSegment {
   if (s.comped) return "vip";
   const b = computeBilling(s, now);
   if (b.billingStatus === "trial") return "trial";
-  return s.firstInvoicePaid ? "regular" : "first_month";
+  return s.firstInvoicePaid ? "regular" : "first_invoice";
 }
 
 const dayMs = 86_400_000;
@@ -150,7 +206,7 @@ export function computeBilling(s: StoreBillingRow, now: Date = new Date()): Bill
     label: pendingApproval ? "Menunggu persetujuan" : "Ditangguhkan oleh platform",
     daysLeft: 0,
     readOnly: true,
-    // `nextAmount`, `isPromo` and `dueDate` are deliberately carried over from `b`: the subscription
+    // `nextAmount`, `codeDiscountIdr` and `dueDate` are deliberately carried over from `b`: the subscription
     // keeps running underneath, so the merchant can still pay while locked and the cron can still
     // raise the invoice they owe.
   };
@@ -161,26 +217,29 @@ type SubscriptionState = Omit<BillingState, "billingStatus" | "operatorSuspended
 function subscriptionState(s: StoreBillingRow, now: Date): SubscriptionState {
   // 0) comped/VIP → billing bypassed: always active, nothing due, full access
   if (s.comped) {
-    return { status: "active", label: "VIP (gratis)", daysLeft: 0, nextAmount: 0, isPromo: false, dueDate: null, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: true };
+    return { status: "active", label: "VIP (gratis)", daysLeft: 0, nextAmount: 0, codeDiscountIdr: 0, dueDate: null, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: true };
   }
-  const isPromo = !s.firstInvoicePaid;
-  const nextAmount = isPromo ? BILLING.FIRST_MONTH_IDR : BILLING.MONTHLY_IDR;
+  // ADR 0020: one price whatever the history. The only first-invoice difference left is a signup-code
+  // discount, which the caller resolved with `codeDiscountFor()` — and which is 0 once anything is paid.
+  const next = quote("monthly", s.firstInvoicePaid, s.firstInvoicePaid ? 0 : (s.codeDiscountIdr ?? 0));
+  const nextAmount = next.amount;
+  const codeDiscountIdr = next.codeDiscountIdr;
 
   // 1) inside a paid period → active
   if (s.currentPeriodEnd && now < s.currentPeriodEnd) {
-    return { status: "active", label: "Aktif", daysLeft: ceilDays(s.currentPeriodEnd.getTime() - now.getTime()), nextAmount, isPromo, dueDate: s.currentPeriodEnd, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
+    return { status: "active", label: "Aktif", daysLeft: ceilDays(s.currentPeriodEnd.getTime() - now.getTime()), nextAmount, codeDiscountIdr, dueDate: s.currentPeriodEnd, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
   }
   // 2) inside the free trial (never paid) → trial
   if (!s.currentPeriodEnd && s.trialEndsAt && now < s.trialEndsAt) {
-    return { status: "trial", label: "Masa uji coba", daysLeft: ceilDays(s.trialEndsAt.getTime() - now.getTime()), nextAmount: BILLING.FIRST_MONTH_IDR, isPromo: true, dueDate: s.trialEndsAt, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
+    return { status: "trial", label: "Masa uji coba", daysLeft: ceilDays(s.trialEndsAt.getTime() - now.getTime()), nextAmount, codeDiscountIdr, dueDate: s.trialEndsAt, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
   }
   // 3) overdue — 3-day grace (still full access), then suspended (read-only)
   const dueBase = s.currentPeriodEnd ?? s.trialEndsAt ?? now;
   const graceEnd = new Date(dueBase.getTime() + BILLING.GRACE_DAYS * dayMs);
   if (now < graceEnd) {
-    return { status: "past_due", label: "Menunggu pembayaran", daysLeft: ceilDays(graceEnd.getTime() - now.getTime()), nextAmount, isPromo, dueDate: dueBase, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
+    return { status: "past_due", label: "Menunggu pembayaran", daysLeft: ceilDays(graceEnd.getTime() - now.getTime()), nextAmount, codeDiscountIdr, dueDate: dueBase, readOnly: false, firstInvoicePaid: s.firstInvoicePaid, comped: false };
   }
-  return { status: "suspended", label: "Ditangguhkan", daysLeft: 0, nextAmount, isPromo, dueDate: dueBase, readOnly: true, firstInvoicePaid: s.firstInvoicePaid, comped: false };
+  return { status: "suspended", label: "Ditangguhkan", daysLeft: 0, nextAmount, codeDiscountIdr, dueDate: dueBase, readOnly: true, firstInvoicePaid: s.firstInvoicePaid, comped: false };
 }
 
 /**

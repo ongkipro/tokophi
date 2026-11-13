@@ -17,8 +17,10 @@ export default async function KodeDaftarPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Kode Daftar</h1>
         <p className="text-sm text-muted-foreground">
-          Kode yang dimasukkan calon seller di halaman daftar menentukan penyedia pengiriman tokonya. Tanpa kode, toko baru memakai
-          KiriminAja. Kode tidak pernah dihapus — nonaktifkan bila tidak dipakai lagi; pendaftaran dengan kode nonaktif ditolak.
+          Kode yang dimasukkan calon seller di halaman daftar menentukan penyedia pengiriman tokonya dan, bila diisi, potongan
+          sekali untuk tagihan langganan pertamanya. Tanpa kode, toko baru memakai KiriminAja dan membayar harga normal. Kode
+          tidak pernah dihapus — nonaktifkan bila tidak dipakai lagi; pendaftaran dengan kode nonaktif ditolak, tetapi toko
+          yang sudah mendaftar dengannya tetap mendapat potongannya.
         </p>
       </div>
       {/* The Seller app's origin, for the shareable `/daftar?kode=` link (same source as impersonation's). */}

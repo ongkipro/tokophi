@@ -86,7 +86,7 @@ export default async function KeuanganPage() {
             <p className="mt-1 flex flex-wrap items-center gap-2">
               <span className="text-xl font-bold tabular-nums">{IDR(f.billing.nextAmount)}</span>
               <Badge variant="secondary">{f.billing.label}</Badge>
-              {f.billing.isPromo && <Badge className="bg-emerald-100 text-emerald-800">Promo bulan pertama</Badge>}
+              {f.billing.codeDiscountIdr > 0 && <Badge className="bg-emerald-100 text-emerald-800">Potongan kode tagihan pertama</Badge>}
             </p>
             {/* "Jatuh tempo dalam 1 hari." — a countdown, so it is re-rendered daily. */}
             <p className="mt-1 text-xs text-muted-foreground tabular-nums">

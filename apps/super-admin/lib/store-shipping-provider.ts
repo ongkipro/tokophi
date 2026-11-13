@@ -1,6 +1,7 @@
 import type { PlatformRole } from "./platform-rank";
 import { SHIPPING_PROVIDERS, type ShippingProvider } from "@tokophi/lib/provider-config";
 import { normalizeSignupCode } from "@tokophi/lib/signup-code";
+import { BILLING } from "@tokophi/lib/billing";
 
 // ADR 0019 — the per-store shipping provider and the signup codes that set it at signup. Owner, 2026-11-13:
 // "Super admin yang menentukan dan atau via code ketika register" · "default pakai KiriminAja" · "bentuk kode
@@ -89,9 +90,24 @@ export async function setStoreShippingProviderWith(deps: StoreProviderDeps, oper
 
 export const SIGNUP_CODE_NOTE_MAX = 200;
 
+/**
+ * ADR 0020 — a code may also carry a discount on the store's FIRST subscription invoice. Bounds: a whole
+ * rupiah amount, 0 (provider-only code) up to strictly BELOW the monthly price, so the cheapest first
+ * invoice a code can produce is still a real bill (a Rp0 invoice is refused by the provider and would be
+ * a free month nobody decided to give — that is what "Gratiskan 1 bulan" is for).
+ */
+export const SIGNUP_CODE_DISCOUNT_MAX_IDR = BILLING.MONTHLY_IDR - 1;
+export function parseSignupCodeDiscount(raw: unknown): number | null {
+  const s = String(raw ?? "").replace(/[.\s]/g, "").trim();
+  if (s === "") return 0;
+  if (!/^\d{1,9}$/.test(s)) return null;
+  const n = Number(s);
+  return n >= 0 && n <= SIGNUP_CODE_DISCOUNT_MAX_IDR ? n : null;
+}
+
 export type SignupCodeDeps = {
-  /** INSERT; "duplicate" when the code already exists (PK). */
-  insert: (row: { code: string; provider: ShippingProvider; note: string | null; createdBy: string | null }) => Promise<"ok" | "duplicate">;
+  /** INSERT … RETURNING the stored discount; "duplicate" when the code already exists (PK). */
+  insert: (row: { code: string; provider: ShippingProvider; discountIdr: number; note: string | null; createdBy: string | null }) => Promise<{ discountIdr: number } | "duplicate">;
   /** UPDATE … SET active RETURNING active (null = no such code). */
   setActive: (code: string, active: boolean) => Promise<boolean | null>;
   log: (text: string) => Promise<void>;
@@ -103,17 +119,26 @@ export async function createSignupCodeWith(
   rawCode: string,
   provider: string,
   rawNote: string,
+  rawDiscount: unknown = 0,
 ): Promise<Result> {
   const code = normalizeSignupCode(rawCode);
   if (!code) return { ok: false, message: "Kode 3–32 karakter: huruf, angka, dan tanda minus (tidak boleh diawali minus)." };
   if (!isShippingProvider(provider)) return { ok: false, message: "Pilih penyedia pengiriman untuk kode ini." };
   const note = String(rawNote ?? "").trim();
   if (note.length > SIGNUP_CODE_NOTE_MAX) return { ok: false, message: `Catatan maksimal ${SIGNUP_CODE_NOTE_MAX} karakter.` };
-  const r = await deps.insert({ code, provider, note: note || null, createdBy: operator.id });
+  const discountIdr = parseSignupCodeDiscount(rawDiscount);
+  if (discountIdr === null) {
+    return { ok: false, message: `Potongan tagihan pertama harus angka rupiah 0–${idr(SIGNUP_CODE_DISCOUNT_MAX_IDR)} (di bawah harga bulanan). Isi 0 bila kode ini tanpa potongan.` };
+  }
+  const r = await deps.insert({ code, provider, discountIdr, note: note || null, createdBy: operator.id });
   if (r === "duplicate") return { ok: false, message: `Kode ${code} sudah ada. Kode tidak pernah dihapus — aktifkan lagi yang lama, atau pakai kode lain.` };
-  await deps.log(`Kode daftar ${code} (pengiriman: ${PROVIDER_LABEL[provider]}) dibuat oleh ${operator.email}${note ? ` — catatan: ${note}` : ""}.`);
-  return { ok: true, message: `Kode ${code} aktif. Bagikan tautan /daftar?kode=${code}.` };
+  // Reported from the RE-READ row (`.returning()`), not from the request.
+  const stored = r.discountIdr > 0 ? `potongan tagihan pertama ${idr(r.discountIdr)}` : "tanpa potongan";
+  await deps.log(`Kode daftar ${code} (pengiriman: ${PROVIDER_LABEL[provider]}, ${stored}) dibuat oleh ${operator.email}${note ? ` — catatan: ${note}` : ""}.`);
+  return { ok: true, message: `Kode ${code} aktif (${stored}). Bagikan tautan /daftar?kode=${code}.` };
 }
+
+const idr = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
 export async function setSignupCodeActiveWith(deps: SignupCodeDeps, operatorEmail: string, rawCode: string, active: boolean): Promise<Result> {
   const code = normalizeSignupCode(rawCode);

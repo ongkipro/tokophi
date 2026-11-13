@@ -2,6 +2,20 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-13 — Harga langganan baru + potongan kode untuk tagihan pertama (ADR 0020, BILL-PRICE-2026-11) — PR terbuka, belum dirilis
+
+- **Harga langganan: Rp178.500/bulan** (DPP; PPN mengikuti saklar global seperti sebelumnya), **tahunan Rp1.713.600**
+  (= bulanan × 12 dikurangi 20%, setara Rp142.800/bulan). Uji coba tetap 3 hari. **Promo bulan pertama Rp50.000
+  dihapus** — tanpa kode, tagihan pertama berharga normal. Bayar tahunan langsung dari uji coba tetap 13 bulan.
+- **Satu kolom "Kode" di `/daftar`** (kode daftar ADR 0019 diperluas): Super Admin → Kode Daftar kini bisa memberi
+  kode **potongan tagihan pertama** (default Rp100.000; 0 = tanpa potongan). Toko yang mendaftar dengan kode itu
+  mendapat potongan **sekali**, di tagihan langganan pertama yang lunas: bulanan Rp78.500, tahunan Rp1.613.600.
+  Tautan `?kode=` adalah tautan referral. Kode lama tetap tanpa potongan.
+- **Faktur** mencetak "Potongan kode XXX −Rp100.000"; jenis tagihan (bulanan/tahunan) kini dibaca dari tagihannya,
+  bukan ditebak dari jumlahnya. Tagihan yang sudah terbit tidak pernah diubah harganya; toko lama pindah ke harga baru
+  di tagihan berikutnya.
+- Migrasi `0119` (hand-written, idempoten). Segmen Super Admin "Bulan 1" menjadi **"Tagihan 1"** (isi sama).
+
 ## 2026-11-13 — Penyedia pengiriman per toko + kode daftar (ADR 0019, PR #466)
 
 - **Penyedia pengiriman kini dipilih per toko** (`stores.shipping_provider`, migrasi `0117`): default KiriminAja;

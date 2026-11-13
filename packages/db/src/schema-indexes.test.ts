@@ -119,6 +119,9 @@ const INDEX_CENSUS: Record<string, Census> = {
   sma_retry_idx: "sql-only: index parsial antrean pendaftaran (state pending/registering) untuk sweep cron",
   // 0117 (ADR 0019, penyedia pengiriman per toko).
   stores_signup_code_idx: "sql-only: index parsial (signup_code is not null) — hitung pemakaian kode daftar di Super Admin",
+  // 0119 (ADR 0020, potongan kode di tagihan pertama). Saudara `invoices_one_comp_per_grant`: tabel yang sama,
+  // index parsial yang sama bentuknya.
+  invoices_one_live_code_discount: "sql-only: unique parsial (store_id) where code_discount_idr > 0 and status = 'menunggu' — paling banyak SATU tagihan berpotongan yang hidup per toko",
 };
 
 /** Nama index → tabel, DITURUNKAN dari berkas migrasi. Tidak pernah ditulis tangan. */

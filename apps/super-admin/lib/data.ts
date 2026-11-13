@@ -14,6 +14,7 @@ import { likeContains } from "@tokophi/lib/like";
 import { LOG_PAGE_SIZE, logPages, type LogQuery } from "./activity-log";
 import { type Store, type StoreStatus, type Invoice, type PActivity } from "./types";
 import { computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
+import { owedCodeDiscount } from "@tokophi/db/subscription-invoice";
 import { subscriptionKpiBucket } from "./subscription-kpi";
 
 // Task 8.27 — the seeded demo store (`stores.is_demo`) is flagged, not purged, and every platform
@@ -252,7 +253,7 @@ export async function getFinanceStats(): Promise<FinanceStats> {
  * `payoutObligation` is the slice already spoken for — a merchant clicked "Tarik saldo", the money
  * left their available pool, and we owe the bank transfer.
  *
- * This is emphatically NOT platform revenue. Platform revenue is `invoices` (Rp275rb/mo + PPN).
+ * This is emphatically NOT platform revenue. Platform revenue is `invoices` (subscription, ADR 0020 price + PPN when on).
  * Conflating the two is the single most expensive mistake an operator of a marketplace can make.
  */
 /**
@@ -709,14 +710,18 @@ export async function getStoreBilling(id: string): Promise<BillingState | null> 
     .from(schema.stores)
     .where(eq(schema.stores.id, id))
     .limit(1);
-  return s ? computeBilling(s) : null;
+  if (!s) return null;
+  // ADR 0020 — the next amount the creator WILL bill, signup-code discount included (same resolver).
+  const codeDiscountIdr = !s.firstInvoicePaid && !s.comped ? (await owedCodeDiscount(id)).discountIdr : 0;
+  return computeBilling({ ...s, codeDiscountIdr });
 }
 
 // ---- platform metrics ----
 //
 // MRR has exactly ONE definition now, and it lives in getSubscriptionStats(): the sum of what each
-// paying store is actually billed next month (Rp50rb while on the first-month promo, Rp275rb after,
-// VIP excluded). getPlatform() used to compute its own — active × Rp275rb — which ignored the promo
+// paying store is billed per month at list price (`BILLING.MONTHLY_IDR`, ADR 0020 — the first-month
+// promo is gone; a one-off code discount is not recurring revenue; VIP excluded). getPlatform() used to
+// compute its own — active × Rp275rb at the time — which ignored the then-promo
 // and produced Rp1.100.000 on the same dashboard where the subscription card said Rp875.000. Two
 // MRRs, one page. Now there is one.
 //

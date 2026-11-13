@@ -266,9 +266,10 @@ export const stores = pgTable("stores", {
   timezone: text().notNull().default("Asia/Jakarta"),
   plan: planKey().notNull().default("pemula"),
   status: storeStatus().notNull().default("trial"),
-  // Subscription lifecycle (single plan, all features): 3-day free trial → 50rb first month →
-  // 275rb/month. trialEndsAt = end of free trial; currentPeriodEnd = end of the paid period;
-  // firstInvoicePaid flips the recurring price from the 50rb promo to 275rb.
+  // Subscription lifecycle (single plan, all features; ADR 0020): 3-day free trial →
+  // Rp178.500/month (annual Rp1.713.600). trialEndsAt = end of free trial; currentPeriodEnd = end of the paid period;
+  // firstInvoicePaid: the store has paid a subscription invoice (set by pay/callback). Since ADR 0020 it no
+  // longer changes the price; it ends the annual bonus month and the signup-code discount.
   trialEndsAt: ts(),
   currentPeriodEnd: ts(),
   firstInvoicePaid: boolean().notNull().default(false),
@@ -1952,6 +1953,9 @@ export const shippingProviderConfig = pgTable("shipping_provider_config", {
 export const signupCodes = pgTable("signup_codes", {
   code: text().primaryKey(),
   shippingProvider: text().notNull(),
+  // 0119 / ADR 0020: IDR (DPP) off the FIRST PAID subscription invoice of a store that signed up with
+  // this code; 0 = provider-only code. Set at creation, never edited; honoured after deactivation.
+  discountFirstInvoiceIdr: money().notNull().default(0),
   active: boolean().notNull().default(true),
   note: text(),
   createdBy: uuid().references((): AnyPgColumn => platformAdmins.id, { onDelete: "set null" }),
@@ -2100,6 +2104,12 @@ export const invoices = pgTable("invoices", {
   // never a derivation: since the platform PPN toggle exists, "total / 1.11" would invent tax on a
   // toggle-off invoice. Backfilled for historical rows, which were all PPN-inclusive.
   taxIdr: money().notNull().default(0),
+  // 0119 / ADR 0020: the signup-code discount (DPP) THIS invoice carries and the code it came from,
+  // stored at creation so the faktur prints "Potongan kode XXX" from the row, never from today's code.
+  // `amountIdr` already has it taken off; list price = amountIdr − taxIdr + codeDiscountIdr.
+  // At most ONE live (menunggu) discounted invoice per store: `invoices_one_live_code_discount` (SQL-only).
+  codeDiscountIdr: money().notNull().default(0),
+  discountCode: text(),
   status: invoiceStatus().notNull().default("menunggu"),
   // subscription payment (AutoLaris VA) matching + kind
   // "subscription" = a bill the merchant pays · "comp" = a period the platform GRANTED (0113):

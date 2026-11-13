@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { codeOnly, textWithoutComments } from "../../../test/source-code";
 import {
   createSignupCodeWith,
+  parseSignupCodeDiscount,
+  SIGNUP_CODE_DISCOUNT_MAX_IDR,
   setSignupCodeActiveWith,
   setStoreShippingProviderWith,
   SHIPPING_PROVIDER_MIN_RANK,
@@ -10,6 +12,7 @@ import {
   type StoreProviderDeps,
 } from "./store-shipping-provider";
 import { minRoleForPath } from "./route-roles";
+import { BILLING } from "@tokophi/lib/billing";
 
 // ADR 0019 — the per-store shipping provider and the signup codes, owner 2026-11-13.
 //   A. the DECISIONS against fake deps (no DB): reason required, outcome RE-READ into the audit line,
@@ -88,18 +91,47 @@ describe("setStoreShippingProviderWith — Super Admin moves ONE store", () => {
 });
 
 function codeDeps(over: Partial<SignupCodeDeps> = {}) {
-  const d: SignupCodeDeps = { insert: vi.fn(async () => "ok" as const), setActive: vi.fn(async (_c: string, a: boolean) => a), log: vi.fn(async () => {}), ...over };
+  // The fake echoes what it was asked to store, like `.returning()` on a real insert.
+  const d: SignupCodeDeps = {
+    insert: vi.fn(async (row: { discountIdr: number }) => ({ discountIdr: row.discountIdr })),
+    setActive: vi.fn(async (_c: string, a: boolean) => a),
+    log: vi.fn(async () => {}),
+    ...over,
+  };
   return d;
 }
 
 describe("signup codes — created normalised, never deleted, audited", () => {
-  it("normalises the code, keeps the operator, audits the provider", async () => {
+  it("normalises the code, keeps the operator, audits the provider (a provider-only code: discount 0)", async () => {
     const d = codeDeps();
     const r = await createSignupCodeWith(d, { id: "op-1", email: OP }, "  mitra-sby ", "mengantar", " gudang Surabaya ");
     expect(r.ok).toBe(true);
-    expect(d.insert).toHaveBeenCalledWith({ code: "MITRA-SBY", provider: "mengantar", note: "gudang Surabaya", createdBy: "op-1" });
-    expect(lines(d)[0]).toMatch(/Kode daftar MITRA-SBY \(pengiriman: Mengantar\) dibuat oleh owner@tokophi\.id/);
+    expect(d.insert).toHaveBeenCalledWith({ code: "MITRA-SBY", provider: "mengantar", discountIdr: 0, note: "gudang Surabaya", createdBy: "op-1" });
+    expect(lines(d)[0]).toMatch(/Kode daftar MITRA-SBY \(pengiriman: Mengantar, tanpa potongan\) dibuat oleh owner@tokophi\.id/);
     expect(r.message).toContain("/daftar?kode=MITRA-SBY");
+  });
+
+  it("ADR 0020 — a code may carry a first-invoice discount; the audit line reports the STORED amount", async () => {
+    const d = codeDeps();
+    const r = await createSignupCodeWith(d, { id: "op-1", email: OP }, "promo-100", "kiriminaja", "", "100.000");
+    expect(r.ok).toBe(true);
+    expect(d.insert).toHaveBeenCalledWith(expect.objectContaining({ code: "PROMO-100", provider: "kiriminaja", discountIdr: 100_000 }));
+    expect(lines(d)[0]).toMatch(/PROMO-100 \(pengiriman: KiriminAja, potongan tagihan pertama Rp100\.000\)/);
+    // What the row says wins over what was asked: a DB that stored 0 is reported as "tanpa potongan".
+    const lied = codeDeps({ insert: vi.fn(async () => ({ discountIdr: 0 })) });
+    await createSignupCodeWith(lied, { id: null, email: OP }, "PROMO-X", "kiriminaja", "", 100_000);
+    expect(lines(lied)[0]).toMatch(/tanpa potongan/);
+  });
+
+  it("ADR 0020 — the discount must stay strictly below the monthly price (a code never mints a Rp0 bill)", async () => {
+    const d = codeDeps();
+    for (const bad of [-1, "abc", "1e5", BILLING.MONTHLY_IDR, BILLING.MONTHLY_IDR + 1, "9999999999"]) {
+      expect((await createSignupCodeWith(d, { id: null, email: OP }, "ABC", "kiriminaja", "", bad)).ok, String(bad)).toBe(false);
+    }
+    expect(d.insert).not.toHaveBeenCalled();
+    expect(parseSignupCodeDiscount("")).toBe(0);
+    expect(parseSignupCodeDiscount(0)).toBe(0);
+    expect(parseSignupCodeDiscount(SIGNUP_CODE_DISCOUNT_MAX_IDR)).toBe(BILLING.MONTHLY_IDR - 1);
   });
 
   it("refuses a malformed code, an unknown provider, an over-long note, and a duplicate", async () => {

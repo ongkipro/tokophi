@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import postgres, { type Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { codeOnly } from "../../../../../../test/source-code";
+import { holdPlatformFinance } from "../../../../../../test/platform-finance-lock";
 
 // Task 8.24 (finance audit 2026-09-16, F1) — the renewal invoice the cron creates.
 //
@@ -52,6 +53,7 @@ vi.mock("@tokophi/lib/autolaris", async (orig) => {
 });
 
 let client: Sql;
+let finance: Awaited<ReturnType<typeof holdPlatformFinance>> | undefined;
 let GET: (req: NextRequest) => Promise<Response>;
 let accountId = "";
 const stores: string[] = [];
@@ -81,13 +83,16 @@ beforeAll(async () => {
   ({ GET } = await import("./route"));
   const [acc] = await client<{ id: string }[]>`insert into accounts (name) values (${`Cron ${runId}`}) returning id`;
   accountId = acc.id;
-  // The global PPN toggle: OFF, like production (owner ruling 2026-08-24). Restored in afterAll.
-  await client`insert into platform_finance (id, subscription_ppn_enabled) values (1, false) on conflict (id) do update set subscription_ppn_enabled = false`;
+  // The global PPN toggle: OFF, like production (owner ruling 2026-08-24). Held under the shared lock
+  // (ADR 0020's pricing suite flips it ON in parallel) and restored in afterAll.
+  finance = await holdPlatformFinance(client);
+  await finance.setPpn(false);
 });
 
 afterAll(async () => {
   if (!client) return;
   try {
+    await finance?.release();
     for (const id of stores) {
       await client`delete from invoices where store_id = ${id}`;
       await client`delete from platform_activity where store_id = ${id}`;
@@ -126,13 +131,13 @@ suite("cron/billing — the renewal invoice (Task 8.24)", { timeout: 120_000 }, 
     const rows = await invoices(id);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ channel: "VABCA", status: "menunggu", cycle: "monthly" });
-    expect(Number(rows[0].amount_idr)).toBe(275_000); // first invoice already paid → the regular price
+    expect(Number(rows[0].amount_idr)).toBe(178_500); // ADR 0020 — the regular price (was 275.000)
     expect(Number(rows[0].tax_idr)).toBe(0); // toggle off → no PPN line
     // The slug is kept under 12 chars: the reference embeds `slug.slice(0, 12)`, so a longer one
     // would be cut and the call could never be matched (the first draft's `cron-<8>-0` was 13).
     const call = provider.mock.calls.find((c) => c[0].reffId.includes(`c${runId}-0`));
     expect(call?.[0].channelCode).toBe("VABCA");
-    expect(call?.[0].amount).toBe(275_000);
+    expect(call?.[0].amount).toBe(178_500);
   });
 
   it("a second tick reuses the pending invoice — never a duplicate bill", async () => {
@@ -155,12 +160,12 @@ suite("cron/billing — the renewal invoice (Task 8.24)", { timeout: 120_000 }, 
     expect(await invoices(id)).toHaveLength(0);
   });
 
-  it("the promo price applies to a store whose first invoice was never paid", async () => {
+  it("ADR 0020 — no first-month promo: a never-paid store without a code is billed the normal price", async () => {
     const id = await store({ periodEnd: new Date(Date.now() - 86_400_000), firstPaid: false });
     await tick();
     const rows = await invoices(id);
     expect(rows).toHaveLength(1);
-    expect(Number(rows[0].amount_idr)).toBe(50_000);
+    expect(Number(rows[0].amount_idr)).toBe(178_500); // was the Rp50.000 promo before ADR 0020
   });
 });
 

@@ -22,8 +22,8 @@ const start = [
 
 const billing = [
   { when: `Hari 1–${PRICE.trialDays}`, what: "Uji coba gratis", body: "Semua fitur terbuka. Tidak ada tagihan selama uji coba." },
-  { when: "Bulan pertama", what: PRICE.firstMonth, body: "Harga khusus untuk bulan pertama setelah uji coba, dibayar lewat Virtual Account." },
-  { when: "Bulan berikutnya", what: `${PRICE.monthly}/bulan`, body: `Atau bayar tahunan ${PRICE.annual} (setara ${PRICE.annualPerMonth}/bulan). Bayar tahunan langsung setelah uji coba berlaku 13 bulan.` },
+  { when: "Setelah uji coba", what: `${PRICE.monthly}/bulan`, body: `Dibayar lewat Virtual Account. Atau bayar tahunan ${PRICE.annual} (setara ${PRICE.annualPerMonth}/bulan, hemat ${PRICE.annualDiscountPct}). Bayar tahunan langsung setelah uji coba berlaku 13 bulan.` },
+  { when: "Dengan kode referral", what: "Potongan tagihan pertama", body: "Mendaftar dengan kode yang membawa potongan memotong tagihan langganan pertama Anda, sekali. Tagihan berikutnya harga normal." },
   { when: "Bila terlambat bayar", what: `${PRICE.graceDays} hari masa tenggang`, body: "Setelah itu Dashboard Seller menjadi baca-saja sampai tagihan dibayar. Toko Anda tetap tampil untuk pembeli." },
 ] as const;
 ---

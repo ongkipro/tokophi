@@ -29,9 +29,9 @@ describe("periodBackedBy — the newer of last paid / last comp wins", () => {
 });
 
 describe("subscriptionKpiBucket", () => {
-  it("a period backed by a PAID invoice is MRR — promo price first, regular after", () => {
+  it("a period backed by a PAID invoice is MRR — ADR 0020: one list price, first invoice or not", () => {
     const v = subscriptionKpiBucket({ ...base, lastPaidAt: new Date(NOW.getTime() - 5 * day) }, NOW);
-    expect(v).toEqual({ bucket: "paid", mrr: BILLING.FIRST_MONTH_IDR, trialEndingSoon: false });
+    expect(v).toEqual({ bucket: "paid", mrr: BILLING.MONTHLY_IDR, trialEndingSoon: false });
     const regular = subscriptionKpiBucket({ ...base, firstInvoicePaid: true, lastPaidAt: new Date(NOW.getTime() - 5 * day) }, NOW);
     expect(regular.mrr).toBe(BILLING.MONTHLY_IDR);
   });

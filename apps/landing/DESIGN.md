@@ -26,7 +26,7 @@ section.
 
 | Claim | Source of truth |
 |---|---|
-| Price: 3-day trial, Rp50.000 first month, Rp275.000/month, Rp2.700.000/year (= Rp225.000/month), first annual payment straight after trial = 13 months, 3-day grace then read-only, storefront stays up | `packages/lib/src/billing.ts` (`BILLING`, `quote`) |
+| Price (ADR 0020, 2026-11): 3-day trial, Rp178.500/month from the first invoice (no first-month promo), Rp1.713.600/year (= Rp142.800/month, monthly × 12 − 20%), first annual payment straight after trial = 13 months, a signup/referral code may discount the first invoice once, 3-day grace then read-only, storefront stays up | `packages/lib/src/billing.ts` (`BILLING`, `quote`) |
 | Buyer-paid fees: QRIS 0,7% of goods, VA Rp3.000 (BCA Rp6.500), COD 3% (min Rp2.500) + PPN 11% on the fee | `packages/lib/src/payment-fees.ts`, `specs/docs/FINANCE.md` |
 | Live channels: QRIS + VA BCA/BNI/BRI/Mandiri/Permata | BUILD-LOG 2026-09-23; e-wallet/minimarket exist in code but are OFF — never claimed |
 | COD: merchant opt-in, SPX only, 6 provinces, ≤ Rp2.000.000 | `apps/admin/lib/cod.ts` |
@@ -129,7 +129,7 @@ Chrome: opacity 0 below the fold → 0.91 entering → 1 once in view.
 | # | Section | Content | Layout (wide → narrow) |
 |---|---|---|---|
 | S1 | Header | Logo, Fitur, Harga, Cara kerja, Bayar dan kirim, Demo, Masuk, **Coba gratis** (FAQ link removed with the FAQ section; the old `/faq/` page still exists, unlinked from the menus) | Sticky, compact. Narrow: logo + CTA + menu button opening a native `<dialog>` (replaces the React Sheet) |
-| S2 | Hero (phone overlay removed in pass 5: it covered table columns; the buyer view lives in step 3 and the demo) | H1 + one-sentence promise naming the jobs (domain sendiri, QRIS/VA/COD, 10 kurir, tanpa akun PG/kurir sendiri); CTAs; price line "Rp50.000 bulan pertama, lalu Rp275.000/bulan · tanpa komisi penjualan" | Text left 5/12, Produk screenshot right bleeding off-canvas with the mobile PDP overlapping. Narrow: text, CTAs, price line, then the screenshot cropped |
+| S2 | Hero (phone overlay removed in pass 5: it covered table columns; the buyer view lives in step 3 and the demo) | H1 + one-sentence promise naming the jobs (domain sendiri, QRIS/VA/COD, 10 kurir, tanpa akun PG/kurir sendiri); CTAs; price line "Rp178.500/bulan setelah uji coba (hemat 20% tahunan) · tanpa komisi penjualan" (ADR 0020; was the Rp50.000 first-month line) | Text left 5/12, Produk screenshot right bleeding off-canvas with the mobile PDP overlapping. Narrow: text, CTAs, price line, then the screenshot cropped |
 | S3 | Fact row | 4 verified facts with an icon each: QRIS + VA 5 bank · 10 kurir, ongkir otomatis · COD lewat SPX · 0% komisi penjualan | One hairline-separated row; 2×2 on narrow. Text, not stat cards |
 | S4 | Alur kerja (5 steps) | Susun katalog → Rancang tampilan toko → Pembeli checkout tanpa akun → Kirim massal, resi otomatis → Saldo & pencairan | One row per step: copy 4/11 left, its real screenshot 7/11 right; stacked on narrow |
 | S5 | Untuk yang beriklan | Full-width Pemasaran screenshot (per-channel orders/revenue), then a 3-column list: pixel + server-side Meta/TikTok/Google, feed katalog, landing page form COD, voucher & flash sale, keranjang ditinggal via WhatsApp, chat | White band; screenshot full width, list 3 → 2 → 1 columns |
