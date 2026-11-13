@@ -464,7 +464,7 @@ export async function kelolaSyncSummary(q: Q, storeId: string) {
   const [last] = await rows<{ number: string; last_error: string; attempts: number }>(q, sql`
     select o.number, k.last_error, k.attempts
       from plugin_kelola_orders k join orders o on o.id = k.order_id and o.store_id = ${storeId}
-     where k.store_id = ${storeId} and k.synced_at is null and k.last_error is not null
+     where k.store_id = ${storeId} and k.synced_at is null and k.last_error is not null and k.attempts > 0  -- a skipped-while-off row is not an error
      order by k.claimed_at desc nulls last limit 1`);
   return { ...(r ?? { synced: 0, failing: 0, gave_up: 0, skipped_off: 0, last_synced_at: null }), lastError: last ?? null };
 }

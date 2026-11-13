@@ -125,15 +125,18 @@ export function PluginCard() {
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2">
+                    {/* The NAME is fixed ("<plugin> aktif") and the switch's checked state carries on/off;
+                        a label that read "Nonaktif" would announce "Nonaktif, switch, off" — two negatives. */}
                     <Switch
                       id={switchId}
+                      aria-label={`${p.name} aktif`}
                       checked={p.enabled}
                       disabled={busy}
                       onCheckedChange={(on) => run(() => setPluginActive(p.id, on))}
                     />
-                    <label htmlFor={switchId} className="text-sm font-medium">
+                    <span aria-hidden className="w-16 text-sm font-medium">
                       {p.enabled ? "Aktif" : "Nonaktif"}
-                    </label>
+                    </span>
                   </div>
                   {p.installed && (
                     <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmRemove(true)}>

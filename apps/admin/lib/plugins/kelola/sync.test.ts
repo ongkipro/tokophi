@@ -376,7 +376,10 @@ suite("Kelola plugin — Aktif / Nonaktif / Hapus koneksi", () => {
     expect(skipped.gave_up_at).not.toBeNull();
     expect(skipped.attempts).toBe(0);
     expect(skipped.last_error).toBe(sync.SKIPPED_WHILE_OFF);
-    expect((await sync.kelolaSyncSummary(db, storeId)).skipped_off).toBe(1);
+    const offSummary = await sync.kelolaSyncSummary(db, storeId);
+    expect(offSummary.skipped_off).toBe(1);
+    // A skipped order is not an error: "Galat terakhir" still names the real 503, not the skip.
+    expect(offSummary.lastError?.last_error).toMatch(/^HTTP 503/);
 
     // The cron resumes earlier work only: the prepaid order paid while OFF (placed while ON) + the 503 retry.
     await client`update plugin_kelola_orders set claimed_at = now() - interval '6 minutes' where order_id = ${retryBefore}`;
@@ -397,6 +400,17 @@ suite("Kelola plugin — Aktif / Nonaktif / Hapus koneksi", () => {
     const summary = await sync.kelolaSyncSummary(db, storeId);
     expect(summary.skipped_off).toBe(0);
     expect(summary.gave_up).toBe(0);
+  });
+
+  it("a skipped-while-off order is counted as skipped, never reported as the last error", async () => {
+    const { db } = await import("@tokophi/db");
+    const registry = await import("../registry");
+    const { storeId } = await newStore();
+    await registry.deactivatePlugin(db, storeId, "kelola");
+    await newOrder(storeId);
+    await registry.activatePlugin(db, storeId, "kelola");
+    const summary = await sync.kelolaSyncSummary(db, storeId);
+    expect(summary).toMatchObject({ skipped_off: 1, gave_up: 0, failing: 0, lastError: null });
   });
 
   it("Hapus koneksi: credential and this store's rows are deleted; another store is untouched", async () => {
