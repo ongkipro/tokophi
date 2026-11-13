@@ -58,7 +58,7 @@
 
 ## Log
 
-- 2026-11-13 — Main Session: PAUSED by owner direction (Kelola still in development). Last commit `4ce5782d` (SSRF host pin from review). Before resuming: `git fetch` + merge `origin/main`, re-check the migration number (0117 may be taken by then — renumber AND re-stamp), re-run `test:db`, then push/PR only with the owner's OK.
+- 2026-11-13 — Main Session: PAUSED by owner direction (Kelola still in development). Last commit `4ce5782d` (SSRF host pin from review). Before resuming: `git fetch` + merge `origin/main`, re-check the migration number (0117 may be taken by then — renumber AND re-stamp), **re-scan `specs/decisions/` and renumber ADR 0019 → next free** (branch `feat/store-shipping-provider` drafts its own ADR 0019 and will likely merge first; update every `ADR 0019` / `0019-first-party-plugins` reference: ADR file, DECISIONS.md row + next-free line, specs/README.md, PRD, AGENTS.md, spec, task, code comments in `lib/plugins/**`, `rbac-policy.ts`, order route, compose, DEPLOY.md), re-run `test:db`, then push/PR only with the owner's OK.
 - 2026-11-13 — Main Session: PR 1 built (8 commits on `feat/kelola-plugin`, 497118a3…). Gates: `test:db` 227 files / 2312 tests green before the last two guards (+ plugin suites 39/39 after), lint 0 errors, `build:admin` green, browser pass on `next start` at 390/1280 with 0 console errors. Details + mutation proofs in BUILD-LOG `KEL-001`.
 
 - 2026-11-13 — Main Session: Kelola API studied (`https://kelolatim.com/docs/api`), spec written, worktree created, `npm install` run. No code, no DB touched.
