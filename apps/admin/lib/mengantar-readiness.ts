@@ -7,6 +7,12 @@
 // Seller copy may say "Mengantar" (owner O5); the default provider is never named (ADR 0004).
 
 export type MengantarReadinessInput = {
+  /**
+   * ADR 0019: `stores.shipping_provider === "mengantar"` — Super Admin (or a signup code) put THIS store on
+   * Mengantar. False = the store is on the default provider by design: never active, nothing to fix, and
+   * (ADR 0004) no Mengantar banner or card is shown to it at all — callers return before rendering.
+   */
+  storeOnMengantar: boolean;
   /** `getProviderConfig().shipping === "mengantar"`. */
   switchOn: boolean;
   /** `MENGANTAR_ENV` explicitly named in this process (`envSource === "env"`). */
@@ -33,6 +39,7 @@ export type MengantarReadiness =
   | { active: false; reason: string; fix: "alamat" | "akun" | null };
 
 export function mengantarReadiness(i: MengantarReadinessInput): MengantarReadiness {
+  if (!i.storeOnMengantar) return { active: false, reason: `Toko ini memakai pengiriman standar TokoΦ — ${STANDARD}.`, fix: null };
   if (!i.switchOn || !i.envNamed) {
     return { active: false, reason: "TokoΦ belum mengaktifkan Mengantar untuk checkout. Ongkir memakai pengiriman standar TokoΦ.", fix: null };
   }

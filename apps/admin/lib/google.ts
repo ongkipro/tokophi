@@ -7,6 +7,12 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 // Read at call time (module-scope reads get baked at build time when the env is unset).
 
 export const OAUTH_STATE_COOKIE = "g_oauth_state";
+/**
+ * ADR 0019: the signup code (+ whether the Mengantar consent was on screen for it) between the Google start
+ * and callback routes, as `<CODE>.<0|1>`. httpOnly, 10 min, set only on `mode=daftar`. Not a secret and not
+ * an identity — `provisionStore` re-validates the code against `signup_codes` like the form path.
+ */
+export const OAUTH_SIGNUP_CODE_COOKIE = "g_oauth_signup";
 
 export type GoogleConfig = { clientId: string; clientSecret: string; redirectUri: string };
 

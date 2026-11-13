@@ -149,13 +149,13 @@ export function ShippingProviderSwitch({ shipping, mengantar, canEdit }: { shipp
     <Card className="mb-4" data-shipping-provider={current}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Truck className="size-4 text-muted-foreground" /> Provider pengiriman aktif
+          <Truck className="size-4 text-muted-foreground" /> Saklar utama Mengantar
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm">
-            <span>Checkout baru memakai</span>
+            <span>Saklar platform</span>
             <Badge variant="secondary" className="border-transparent bg-primary/12 text-primary" data-shipping-active>{PROVIDER_LABEL[current]}</Badge>
             <span className="text-xs text-muted-foreground">
               {shipping.source === "db" ? "· diatur dari sini" : shipping.source === "env" ? "· dari env SHIPPING_PROVIDER" : "· bawaan"}
@@ -178,9 +178,10 @@ export function ShippingProviderSwitch({ shipping, mengantar, canEdit }: { shipp
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Peralihan hanya berlaku untuk <b>checkout baru</b> dari toko yang <b>akun Mengantar-nya sudah terhubung</b>. Toko lain dan semua
-          pesanan COD tetap lewat KiriminAja. Pesanan yang sudah ada tetap memakai provider tempat pesanan itu dibuat — pelacakan,
-          pembatalan, dan label mengikuti pesanannya, bukan pengaturan ini.
+          Penyedia dipilih <b>per toko</b> (halaman toko → “Penyedia pengiriman”, atau kode daftar). Saklar ini di atasnya:{" "}
+          <b>KiriminAja</b> = Mengantar dimatikan untuk semua toko (saklar darurat); <b>Mengantar</b> = toko yang diatur ke Mengantar dan
+          akunnya terhubung memakai Mengantar untuk checkout baru. Semua COD tetap lewat KiriminAja. Pesanan yang sudah ada tetap memakai
+          provider tempat pesanan itu dibuat — pelacakan, pembatalan, dan label mengikuti pesanannya, bukan pengaturan ini.
         </p>
         {canEdit && blocked && (
           <p className="text-xs text-amber-700 dark:text-amber-400" data-shipping-blocked>
@@ -203,7 +204,7 @@ export function ShippingProviderSwitch({ shipping, mengantar, canEdit }: { shipp
               perlu memilih ulang layanan kurirnya.
             </p>
             {target === "mengantar" && (
-              <p className="text-muted-foreground">Hanya toko dengan akun Mengantar terhubung yang berpindah; toko lain dan COD tetap lewat KiriminAja.</p>
+              <p className="text-muted-foreground">Hanya toko yang diatur ke Mengantar dan akunnya terhubung yang berpindah; toko lain dan COD tetap lewat KiriminAja.</p>
             )}
             <div className="space-y-1 pt-1">
               <Label htmlFor="shipping-switch-reason">Alasan (wajib, minimal 5 karakter)</Label>

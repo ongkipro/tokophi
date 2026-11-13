@@ -2,6 +2,18 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-13 — Penyedia pengiriman per toko + kode daftar (ADR 0019, branch `feat/store-shipping-provider`, belum di-merge)
+
+- **Penyedia pengiriman kini dipilih per toko** (`stores.shipping_provider`, migrasi `0117`): default KiriminAja;
+  Super Admin memindahkan satu toko ke Mengantar (atau balik) dari halaman toko — peran owner, alasan wajib,
+  tercatat di log. Seller tidak memilih. Saklar platform tetap ada sebagai saklar darurat (KiriminAja = Mengantar
+  mati untuk semua toko). COD tetap KiriminAja.
+- **Kode daftar** (Super Admin → Kode Daftar): kode yang dimasukkan di `/daftar` (atau `?kode=`) menentukan
+  penyedia toko baru. Kode salah/nonaktif ditolak dengan satu kalimat jelas. Persetujuan Mengantar di halaman
+  daftar hanya muncul untuk kode Mengantar.
+- **Akun Mengantar hanya dibuat untuk toko yang diatur ke Mengantar** — tidak lagi untuk setiap toko yang
+  mendaftar. Seller KiriminAja tidak melihat kartu/banner Mengantar apa pun.
+
 ## 2026-11-13 — Mengantar live untuk toko demo; CSP checkout dibereskan
 
 - **Pengiriman lewat Mengantar (ADR 0018).** Tiap toko bisa punya akun seller Mengantar sendiri, didaftarkan

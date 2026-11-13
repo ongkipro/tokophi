@@ -116,14 +116,14 @@ export async function switchShippingProviderWith(deps: MengantarDeps, operatorEm
   const outcome = isShippingProvider(written) ? PROVIDER_LABEL[written] : written;
   await deps.log(
     `Provider pengiriman dialihkan ${PROVIDER_LABEL[current]} → ${PROVIDER_LABEL[target]} oleh ${operatorEmail} — alasan: ${why}. ` +
-      `Hasil tersimpan: ${outcome}${note}. Toko tanpa akun Mengantar terhubung dan semua pesanan COD tetap lewat KiriminAja; pesanan lama tetap di provider masing-masing.`,
+      `Hasil tersimpan: ${outcome}${note}. Hanya toko yang diatur ke Mengantar dengan akun terhubung yang memakai Mengantar; semua pesanan COD tetap lewat KiriminAja; pesanan lama tetap di provider masing-masing.`,
   );
   if (written !== target) return { ok: false, message: `Penulisan tidak berlaku — provider tersimpan masih ${outcome}.` };
   return {
     ok: true,
     message:
       target === "mengantar"
-        ? "Provider pengiriman kini Mengantar untuk toko yang akun Mengantar-nya terhubung. Toko lain dan semua COD tetap lewat KiriminAja."
+        ? "Saklar Mengantar menyala: toko yang diatur ke Mengantar dan akunnya terhubung memakai Mengantar. Toko lain dan semua COD tetap lewat KiriminAja."
         : "Provider pengiriman kini KiriminAja untuk semua checkout baru. Pesanan Mengantar yang sudah ada tetap dilacak lewat akun Mengantar tokonya.",
   };
 }

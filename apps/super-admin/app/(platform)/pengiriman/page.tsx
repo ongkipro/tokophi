@@ -21,8 +21,9 @@ export default async function PengirimanPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Pengiriman</h1>
         <p className="text-sm text-muted-foreground">
-          Mengantar Partner Business API ({env}): akun Mengantar milik setiap toko, dibuat otomatis dengan email pemilik toko. Ongkir toko
-          dibayar dari saldo Mengantar toko itu sendiri. Booking “belum diketahui” memblokir pesanannya sampai direkonsiliasi.
+          Mengantar Partner Business API ({env}): akun Mengantar milik toko yang diatur ke Mengantar (halaman toko atau kode daftar),
+          dibuat dengan email pemilik toko setelah pemiliknya setuju. Toko lain memakai KiriminAja. Ongkir toko dibayar dari saldo
+          Mengantar toko itu sendiri. Booking “belum diketahui” memblokir pesanannya sampai direkonsiliasi.
         </p>
       </div>
       <PengirimanClient accounts={accounts} unknown={unknown} stranded={stranded} isOwner={gate.admin.role === "owner"} />

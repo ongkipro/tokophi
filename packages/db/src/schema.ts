@@ -306,6 +306,14 @@ export const stores = pgTable("stores", {
   // the queue cannot re-fill with stores that have already been vetted. Stores that existed before
   // this column were backfilled to `created_at`: they were onboarded by an operator by hand.
   approvedAt: ts(),
+  // 0117 / ADR 0019: which provider quotes this store's NON-COD checkouts — 'kiriminaja' (default) |
+  // 'mengantar'. Written only by Super Admin (`setStoreShippingProvider`, owner rank) and by a signup
+  // code (`provisionStore`); the seller never chooses. Read by the ONE dispatch (`quoteShipping`) and by
+  // every Mengantar registration path (`mengantar-account.ts`): an account is registered only for a
+  // store set to 'mengantar'. text + CHECK, not an enum (see the migration header).
+  shippingProvider: text().notNull().default("kiriminaja"),
+  // 0117: the signup code this store registered with (FK → signup_codes.code). NULL = none.
+  signupCode: text().references((): AnyPgColumn => signupCodes.code, { onDelete: "restrict" }),
   // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
   // only pulls these tokens; NOT part of the drag-drop Store Builder).
   logoUrl: text(),
@@ -1927,6 +1935,20 @@ export const shippingProviderConfig = pgTable("shipping_provider_config", {
   mengantarSandboxPartnerSecretEnc: text(),
   mengantarProductionPartnerId: text(),
   mengantarProductionPartnerSecretEnc: text(),
+  updatedAt: ts().notNull().defaultNow(),
+});
+
+// 0117 / ADR 0019: signup codes made in Super Admin; each maps a self-serve signup to a provider.
+// Platform table (no store_id), RLS on with NO policy — owner pool only (signup + Super Admin). Never
+// deleted (deactivated), so `stores.signup_code` always names a row. `code` is canonical upper-case
+// (`@tokophi/lib/signup-code` normalises; a CHECK pins the shape).
+export const signupCodes = pgTable("signup_codes", {
+  code: text().primaryKey(),
+  shippingProvider: text().notNull(),
+  active: boolean().notNull().default(true),
+  note: text(),
+  createdBy: uuid().references((): AnyPgColumn => platformAdmins.id, { onDelete: "set null" }),
+  createdAt: ts().notNull().defaultNow(),
   updatedAt: ts().notNull().defaultNow(),
 });
 

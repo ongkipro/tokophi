@@ -14,6 +14,10 @@ import { MengantarConsent } from "@/components/admin/mengantar-consent";
 // account is created by TokoΦ with the owner's email — automatically at signup, or with one click here.
 // The seller never sees or pastes a key (owner O7/O10). Owner-only (`settings:write`); the action is the
 // boundary, this hides the card from roles that cannot use it. Seller copy may say "Mengantar" (O5).
+//
+// ADR 0019: ONLY for a store Super Admin (or a signup code) put on Mengantar. `getMengantarCard()` answers
+// `null` for every other store and the card renders NOTHING — not even while loading, so a KiriminAja
+// seller never sees a Mengantar title flash past (ADR 0004: no provider brand to KiriminAja sellers).
 
 const STATE: Record<MengantarCardState["state"], { label: string; tone: string }> = {
   none: { label: "Belum terhubung", tone: "bg-muted text-muted-foreground" },
@@ -29,7 +33,8 @@ const STATE: Record<MengantarCardState["state"], { label: string; tone: string }
 /** `onOpenAlamat` jumps to Pengaturan → Alamat (the page owns which section is open). */
 export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = {}) {
   const canOwn = useCan("settings:write");
-  const [card, setCard] = React.useState<MengantarCardState | null>(null);
+  // undefined = still loading · null = this store is not on Mengantar (or the read failed) → render nothing.
+  const [card, setCard] = React.useState<MengantarCardState | null | undefined>(undefined);
   const [busy, startBusy] = React.useTransition();
 
   const load = React.useCallback(() => {
@@ -39,7 +44,7 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
     if (canOwn) load();
   }, [canOwn, load]);
 
-  if (!canOwn) return null;
+  if (!canOwn || !card) return null;
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>) =>
     startBusy(async () => {
@@ -49,26 +54,26 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
       load();
     });
 
-  const state = card?.state ?? "none";
+  const state = card.state;
   // Created by TokoΦ (Super Admin) or approved without the owner's click: the account waits for THEIR
   // agreement (`connectStoreMengantar`, partner docs) — a first-time connect, not a failed one.
-  const awaitingConsent = state === "pending" && card?.lastErrorCode === "awaiting_consent";
+  const awaitingConsent = state === "pending" && card.lastErrorCode === "awaiting_consent";
   const meta = awaitingConsent ? { label: "Perlu persetujuan", tone: "bg-amber-100 text-amber-800" } : STATE[state];
   const firstConnect = state === "none" || awaitingConsent;
   // No button that cannot work: `blocked` is always refused (`sellerConnectRefusal`), and a store still
   // waiting for TokoΦ's approval is parked again by `connectStoreMengantar` whatever the owner clicks.
   // `partner_id` NULL on a connected row = the owner's OWN Mengantar account, attached by the owner-run
   // `ops/mengantar-attach-own-key.ts` (O11) — not one TokoΦ registered: no "Lupa Password" email story, no key rotation.
-  const ownAccount = state === "connected" && !!card && !card.partnerId;
-  const awaitingApproval = state === "pending" && card?.lastErrorCode === "awaiting_approval";
+  const ownAccount = state === "connected" && !card.partnerId;
+  const awaitingApproval = state === "pending" && card.lastErrorCode === "awaiting_approval";
   // …and none while the platform cannot register accounts in this env at all (no Partner origin yet).
-  const canConnect = !!card?.canRegister && state !== "connected" && state !== "rotating" && state !== "blocked" && !awaitingApproval;
+  const canConnect = card.canRegister && state !== "connected" && state !== "rotating" && state !== "blocked" && !awaitingApproval;
   return (
     <Card data-mengantar-card={state}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Truck className="size-4 text-muted-foreground" /> Akun Mengantar
-          {card && <Badge className={`border-transparent ${meta.tone}`}>{meta.label}</Badge>}
+          <Badge className={`border-transparent ${meta.tone}`}>{meta.label}</Badge>
         </CardTitle>
         <CardDescription>
           {ownAccount
@@ -78,12 +83,7 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        {!card ? (
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Memuat…
-          </p>
-        ) : (
-          <>
+        <>
             {/* Whether checkout ACTUALLY quotes through Mengantar. "Terhubung" alone misled: a broken
                 link below falls back silently (O6), right for the shopper, invisible to the seller.
                 Glyph + words, never colour alone. */}
@@ -165,8 +165,7 @@ export function MengantarCard({ onOpenAlamat }: { onOpenAlamat?: () => void } = 
                 Memakai webhook di aplikasi Mengantar? Setelah kunci diperbarui, perbarui juga secret webhook-mu di sana.
               </p>
             )}
-          </>
-        )}
+        </>
       </CardContent>
     </Card>
   );

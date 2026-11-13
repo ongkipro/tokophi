@@ -5050,3 +5050,55 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
 - **Side finding:** the main checkout (`~/Projects/tokophi`, branch `docs/split-agents-md`) carries an OLD
   `ops/tokophi-probe.sh` that still probes the retired host `45.77.33.112` (ssh FAIL); main's copy is correct.
   Run the probe from a checkout of `main`.
+
+### [2026-11-13 12:42 UTC] — SHIP-PROVIDER-PER-STORE · shipping provider per store, set by Super Admin or a signup code (ADR 0019)
+- **Executor:** sub-agent of the Main Session, isolated worktree, branch `feat/store-shipping-provider` from
+  `origin/main` `50679055`. Owner rulings 2026-11-13 (verbatim in ADR 0019 §1): two providers, Super Admin or a
+  signup code decides, default KiriminAja, codes made in Super Admin. Rank defaulted to OWNER in ONE constant
+  (`SHIPPING_PROVIDER_MIN_RANK`) — owner-confirmable.
+- **Files:** migration `packages/db/drizzle/0117_store_shipping_provider.sql` + journal; `packages/db/src/{schema,mengantar-account,seed-guard}.ts`;
+  `packages/lib/src/signup-code.ts` (+ export); `apps/admin/lib/{shipping-quote,provision,signup-code,mengantar-readiness,google}.ts`,
+  `apps/admin/lib/actions/{register,mengantar}.ts`, `apps/admin/app/daftar/{page,daftar-form,google-button}.tsx`,
+  `apps/admin/app/api/auth/google/{start,callback}/route.ts`, `apps/admin/components/admin/pengaturan/mengantar-card.tsx`;
+  `apps/super-admin/lib/{store-shipping-provider,shipping-data,actions,mengantar-ops,mengantar-credentials,route-roles,nav}.ts`,
+  `apps/super-admin/app/(platform)/kode-daftar/*`, `toko/[id]/{page,store-detail,shipping-provider-card}.tsx`,
+  `pengiriman/{page,pengiriman-client}.tsx`, `pengaturan/mengantar-panel.tsx`; `ops/mengantar-{attach-own-key,sandbox-e2e}.ts`;
+  tests (below); docs: ADR 0019 + note on 0018, `DECISIONS.md`, `specs/README.md`, `rules/shipping-cod.md`, `SECURITY.md`,
+  `FLOWS.md` §5.1, `SCHEMA.md`, `CODE_MAP.md`, `STATUS.md`, `AGENTS.md` (counts), `PAGE_MAP.md` (regen), decisions doc,
+  `TASKS.md`, `CHANGELOG.md`.
+- **Tests (new/changed):** `shipping-quote-mengantar.test.ts` (7-row dispatch truth table), `mengantar-account.test.ts`
+  (suite "ADR 0019 — only a store set to Mengantar gets an account": sink, sweep never registers, sweep budget slot,
+  `registering` still reconciled), `signup-code.test.ts` (NEW, real DB: no code / Mengantar code ± consent / KiriminAja
+  code / inactive+unknown+malformed refused and nothing created / derived usage / FK+CHECK / RLS invisible to
+  `tokophi_app`), `mengantar-consent.test.ts` (sentence only for a Mengantar code, bound to it), `mengantar-readiness.test.ts`,
+  `store-shipping-provider.test.ts` (NEW: decisions, one rank constant, call sites), `route-roles.test.ts` (`/kode-daftar`),
+  `packages/lib/src/signup-code.test.ts` (normaliser = migration CHECK), `schema-indexes.test.ts` (census).
+- **Verification (all against OWN databases in `tokophi-db`: `tokophi_shipprov` + `tokophi_shipprov_test`; the shared
+  `tokophi` DB was not migrated, seeded or written — still 17 stores):**
+  - `TEST_DATABASE_URL=…/tokophi_shipprov_test TEST_DB_REQUIRED=1 heavy-run --lock tokophi-env -- npm run test:db` →
+    **227 files / 2326 tests passed** (first run found 14 failures — doc counts, index census, PAGE_MAP, an unqualified
+    column in a correlated subquery, a brand literal in `provision.ts`, the signup limiter-order guard — all fixed).
+  - `npm run lint -w @tokophi/admin` → 0 errors (12 pre-existing warnings, none in touched files); super-admin lint clean.
+  - `npm run build:admin` + `build:super` → both exit 0 (`DATABASE_URL` = own DB). `tsc --noEmit` admin, super-admin, db clean.
+  - `verify-rls` (own DB) → all ✓, 55/56 store-scoped tables (exception `platform_activity`); `verify-migrations` →
+    "Journal: 118 entri, terakhir 0117_store_shipping_provider … Journal waras". 0117 re-applied by hand → exit 0
+    (idempotent). Backfill proven in a rolled-back txn: connected row → `mengantar`, pending row → stays `kiriminaja`.
+  - **Mutation proofs (13, each on the real file, restored byte-identical):** red for — dispatch ignores the store
+    column; connect sink gate removed; enqueue gate removed; sweep filter removed (after adding the budget-slot test —
+    the first attempt survived because the sink also refuses); signup ignores `active`; consent recorded without the
+    flag; normaliser drifts from the CHECK; audit reports the request not the write; re-queue of an existing account;
+    readiness ignores the store; `/kode-daftar` floor not the constant; plus the inline mutated-copy checks in
+    `mengantar-consent.test.ts` and `store-shipping-provider.test.ts`. Survived by design: `provision.ts`'s own
+    `if (shippingProvider === "mengantar")` (the enqueue sink refuses anyway — documented as a saved read).
+  - **Browser (Playwright, `next start` prod builds on :3410/:3411, own PIDs killed afterwards, 390 px + 1366 px,
+    0 console errors, 0 horizontal overflow, 0 requests to non-local origins):** `/daftar` no code → privacy line, no
+    provider brand; `?kode=mitra-sby` → "MITRA-SBY", "Kode diterima.", Mengantar consent, hidden field = code; typed
+    KiriminAja code → no consent; inactive code → hint + "Lanjut" blocked with focus on the field; full signup with the
+    Mengantar code → store `mengantar`, `signup_code` set, account `pending` + consent `signup`; without code →
+    `kiriminaja`, no row. Super Admin `/kode-daftar` create ×3, deactivate, duplicate refused; store card KiriminAja →
+    Mengantar (reason required; audit line "KiriminAja → Mengantar … Hasil tersimpan: Mengantar … menunggu persetujuan")
+    and back; `/pengiriman` provider column; an `admin`-rank operator → route denied + action refused ("perlu peran
+    owner"). Seller (switch on, `MENGANTAR_ENV=sandbox`, dummy partner id): Mengantar store → banner + card "Perlu
+    persetujuan" + connect button with consent (not clicked); KiriminAja store → no card, no banner, no "Mengantar" text.
+- **Not verified:** Google signup door in a browser (OAuth not configured locally); the "Hubungkan" click (Partner
+  API); a real checkout quote (no provider keys); production. Migration `0117` / ADR `0019` numbers to re-check at merge.

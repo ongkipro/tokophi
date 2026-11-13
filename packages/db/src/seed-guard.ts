@@ -73,6 +73,8 @@ export const IRREPLACEABLE: Loss[] = [
   { table: "platform_admins", what: "platform operator logins — replaced by ONE freshly seeded account" },
   { table: "shipping_aggregator", column: "api_key", what: "the courier aggregator API key — re-seeded NULL" },
   { table: "platform_payment_gateways", column: "credentials", what: "the payment gateway credentials — re-seeded NULL" },
+  // 0117 / ADR 0019: operator-made signup codes. The seed writes none, and `stores.signup_code` points at them.
+  { table: "signup_codes", what: "signup codes made in Super Admin — the seed writes none" },
 ];
 
 /** One `Loss` that this database actually holds rows for. */
