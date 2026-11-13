@@ -2,6 +2,22 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-13 — Mengantar live untuk toko demo; CSP checkout dibereskan
+
+- **Pengiriman lewat Mengantar (ADR 0018).** Tiap toko bisa punya akun seller Mengantar sendiri, didaftarkan
+  TokoΦ lewat Partner API (tanpa kolom API key, dengan persetujuan pemilik). Switch provider di Super Admin;
+  ongkir non-COD toko yang terhubung dihitung Mengantar, COD dan toko yang belum terhubung tetap KiriminAja.
+  Ongkir dibayar dari saldo Mengantar seller sendiri — tidak ada potongan di ledger TokoΦ. Live di production
+  sejak 2026-11-12 untuk toko demo `batiknusantara` (akun Mengantar milik owner, gudang Pakis Surabaya).
+  Toko lain menunggu origin Partner production + whitelist IP dari Mengantar. (#446, #457, #459)
+- **Bug deploy: jembatan area Mengantar terhapus tiap deploy** (seed area meng-truncate tabelnya) → dibangun
+  ulang otomatis setelah seed. (#458)
+- **`idempotencyKey` Mengantar terbukti di sandbox:** key sama dikirim dua kali = satu kiriman. (#460)
+- **CSP checkout:** `connect-src` toko kini memuat origin API Seller (`app.tokophi.com`) dari nilai env yang sama
+  dengan yang dipakai checkout — sebelumnya, begitu CSP dipaksakan, ongkir dan pesanan akan mati. (#462)
+- **Docs:** aturan Mengantar di `rules/shipping-cod.md`, SECURITY.md, ADR 0018 + catatan di ADR 0004/0015, PRD,
+  FLOWS §5.1, STATUS. (#461, PR ini)
+
 ## Unreleased — 2026-09-08 — Sweep: peta pengembangan 1:1 dengan kode, 14 task terbuka dieksekusi
 
 - **Dokumen jadi benar lagi.** Root `TASKS.md` punya baris Status di tiap task (19 sebelumnya tanpa) + 17 task

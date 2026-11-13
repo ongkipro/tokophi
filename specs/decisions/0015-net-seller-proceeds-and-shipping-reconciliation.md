@@ -75,3 +75,9 @@ semantics become active only for orders carrying an immutable `order_financials`
 Production rollout remains blocked until at least one KiriminAja sandbox settlement confirms the
 COD fee base and IDR rounding against the immutable snapshot. Running that external booking requires
 separate owner approval.
+
+## Note 2026-11-13 — Mengantar-booked orders (ADR 0018)
+
+For an order stamped `shipping_provider = 'mengantar'` the seller's own Mengantar wallet pays the courier, so no
+shipping debit or platform margin is written (`seller_debit_idr = 0`) and the buyer's shipping is passed through
+to the seller's balance (owner O3). Everything in this ADR still governs every order KiriminAja books, COD included.
