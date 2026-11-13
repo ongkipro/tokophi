@@ -52,9 +52,9 @@ Also 2026-11-12 (owner): the demo store `batiknusantara` (`toko.tokophi.com`) sh
 registered on the existing Mengantar seller account — Jl. Pakis Tirtosari X No. 5, Pakis, Sawahan, Surabaya
 60256 (Mengantar area `5fc6461cf8f44b34aa4cd7f8`); editable in Seller → Pengaturan → Alamat.
 
-Still open: O2 (production Partner origin + allow-listed IP), O8 (which Mengantar Terms/Privacy versions the
-consent line cites — the Seller card shows a plain consent sentence today), D12, and whether `idempotencyKey`
-replays in the sandbox (sent, not relied on).
+Still open (re-checked 2026-11-13): O2 (production Partner origin + allow-listed IP), and whether `idempotencyKey`
+replays (sent, not relied on). Closed: **O8** — the consent line links Mengantar's live Terms + Privacy pages,
+verified 2026-11-11 (§ Consent below; `components/admin/mengantar-consent.tsx`); **D12** — closed 2026-11-05 (table above).
 
 
 

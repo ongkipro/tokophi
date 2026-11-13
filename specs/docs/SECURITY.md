@@ -31,6 +31,21 @@ Last measured **2026-08-05** against `origin/main` and production. Re-verificati
 by the admin app rather than the storefront **(Decision)** so the platform's KiriminAja and AutoLaris
 credentials never enter the storefront container.
 
+**Observed (SHIP-MENGANTAR, 2026-11-12):** the second shipping provider adds two OUTBOUND trust
+boundaries, both crossed only from server code in `admin`, `super-admin` and the cron/ops processes —
+nothing under `apps/storefront`, `apps/landing` or any client component imports a Mengantar module:
+- **Partner API** (TokoΦ as Mengantar's partner, one credential per env) — opens and manages one Mengantar
+  *seller* account per store. Requests are signed (`partner-id` + `timestamp` + `signature`, a SHA-256 over
+  method, path, body, timestamp and the secret — `signPartnerRequest`, `packages/lib/src/mengantar-partner.ts`);
+  the secret itself is never sent.
+- **Public API, with the STORE'S OWN seller key** — quote, book, cancel, pay, track. There is no platform
+  key: every call takes the `cfg` that `openStoreMengantar` (`packages/db/src/mengantar-account.ts`)
+  decrypted for that store, and an existing shipment reopens only the account that booked it
+  (`mg_env` + `mg_seller_id`; another env or seller is refused, never handed the current key).
+- **Decision (D16):** there is **no inbound Mengantar route.** The webhook route was removed (per-seller
+  webhook secrets could only be set by the seller); tracking is polling from the `cron-tracking` sidecar.
+  The four public routes are still the only unauthenticated write surface.
+
 ---
 
 ## 2. Identity
@@ -223,6 +238,35 @@ architecture decision before the PostgREST cutover.
   move onto a proven key (N35: a sandbox booking is shaped like a production one, so a switch onto
   a dead key would look healthy). Pinned by `packages/lib/src/provider-config.test.ts` and
   `apps/super-admin/lib/provider-credentials.test.ts` (five mutations, five reds).
+- **Decision (SHIP-MENGANTAR, 0116) — Mengantar has two kinds of credential, and neither is a platform
+  shipping key.**
+  - **The Partner credential, one per environment** (owner O1: swappable, not hard-coded):
+    `shipping_provider_config.mengantar_{sandbox,production}_partner_secret_enc`, GCM scope
+    `provider:mengantar:partner:<env>`; env `MENGANTAR_PARTNER_ID` / `_SECRET` are the fallback, read as a
+    PAIR, and a slot of the other env is never read (`resolveMengantar`). Saving it and flipping the
+    shipping switch are **owner rank** (`saveMengantarPartner`, `setShippingProvider`), audited with the
+    masked tail. ⚠️ Unlike KiriminAja, a Partner credential for an env with NO known Partner origin
+    (production today) is stored **untested** and the audit line says so — there is nothing to probe it
+    against. A probe that runs and fails stores nothing.
+  - **A seller key per store** (`store_mengantar_accounts.api_key_enc`, RLS on `store_id`), fetched from
+    the Partner API at registration and **never shown to anyone** — the card shows `key_hint` only, and
+    there is no key field anywhere in the product (D13: no bring-your-own-key). Rotation = the system
+    regenerates once (store owner via `settings:write`, or Super Admin owner rank); a lost regenerate
+    answer is recovered with get-key, never a second regenerate.
+  - 🔴 **The seller key travels in the URL PATH** (`{base}/api/public/{key}/…`). So: origins are a FIXED
+    per-env table (`MENGANTAR_ORIGINS`, no host override — an arbitrary host would receive every store's
+    key); every message the client throws or returns passes through `redactKey()` (raw AND URL-encoded);
+    no original error is attached as `cause`; the estimate cache key carries a SHA-256 fingerprint of the
+    key, never the key; `packages/lib/src/mengantar.ts` is `server-only`. Never log a Mengantar URL.
+  - **Consent is the owner's own act.** Registration refuses without a recorded `consented_at`
+    (`awaiting_consent`): signup and the Seller "Hubungkan Mengantar" button record it (owner-only
+    `settings:write`), and the button is **refused under impersonation** — an operator in "Buka Dashboard
+    Seller" cannot agree to Mengantar's Terms for the merchant. Super Admin and the cron can queue a store,
+    never register it without consent.
+  - **Exception (owner O11, 2026-11-12):** `ops/mengantar-attach-own-key.ts` attaches an account the store
+    owner already owns (production: the demo store only). The key comes from `secrets-env` at run time, is
+    sealed exactly as a registered key, and is never printed; `partner_id` NULL marks the row so rotate /
+    refresh never call the Partner API for it. An ops step, not a product feature.
 - **Observed.** `packages/lib/src/no-published-credentials.test.ts` scans **every** app source for a
   credential printed on a shipped screen. It exists because both login pages once published a working
   account — and it was **four** sites, not the two visible `Dev:` lines: each email input's
@@ -259,6 +303,14 @@ architecture decision before the PostgREST cutover.
   `server-only` guard), used for **CAPI tokens** in `store_tracking_channels` and, since Task 8.33,
   for the platform's own **provider keys** (§6). Both bind the ciphertext to its row/column through
   the GCM scope.
+- **Observed (0116).** The same cipher seals the Mengantar **Partner secret** (scope
+  `provider:mengantar:partner:<env>`) and every store's Mengantar **seller key** under the scope
+  `mengantar:<store>:<env>:<seller>:v<n>` (`mengantarKeyScope`) — a blob replayed into another store, env,
+  seller or key version does not decrypt, and an undecryptable key fails CLOSED (`key_unreadable`: no
+  cfg, the quote falls back to the default provider and a booking is refused). Registration is held
+  (`configuration_blocked`) while `INTEGRATION_TOKEN_KEY` is unset rather than storing a key in clear.
+  ⚠️ An ops script that seals a key (`ops/mengantar-attach-own-key.ts`) must run with the TARGET
+  deployment's `INTEGRATION_TOKEN_KEY`, or it writes a blob the app cannot open.
 - **Decision.** Its key is derived with **scrypt**, not a bare SHA-256, because the env var is allowed
   to be a human-chosen string; scrypt makes offline GPU cracking expensive. Derived once and cached.
 - **Observed, and state it plainly:** everything else — orders, customer names, phone numbers,
@@ -345,6 +397,8 @@ recommendation this repository cannot implement (zone configuration).
 | ✅ **N1 — CLOSED 2026-08-21 (Task 4.11 / SEC-10).** The URL carried a 2-minute session-shaped JWT: verified, never spent, so REUSABLE for its whole life from history, `Referer`, proxy logs or a pasted ticket — and the session it minted lasted 7 days with no operator marker on it. | The URL now carries a 256-bit **opaque** handle backed by `impersonation_grants` (0098), spent by one atomic `update … where consumed_at is null and expires_at > now()`. Replay/tamper/expiry all match zero rows. The session is **30 minutes** and carries the signed operator identity, which `requireCapability` writes into `platform_activity` on every gated write; `/impersonate/exit` ends it on demand. | It is closed — do not reopen it by putting any signed token back in a URL. `apps/admin/lib/impersonation.test.ts` fails if `jwtVerify` returns to the route or `signImpersonation` comes back. |
 | **N16 — `tokophi_app` DML on platform tables.** | Enforced by app code today. | The PostgREST cutover. |
 | **No compliance document.** | Beta; deferred deliberately. | Leaving beta, or the first real DSAR. |
+| **Mengantar production Partner API not reachable (O2).** `MENGANTAR_ORIGINS.production.partner` is `null` and the host's egress IP is not yet confirmed on Mengantar's allow-list (DEPLOY.md § Mengantar), so no store can be registered in production; the stored production Partner credential (if any) is untested. | Every Partner call refuses before sending; stores without an account fall back to KiriminAja (D11). Production Mengantar today is one owner-attached account (O11). | Mengantar publishes the origin + allow-lists the IP → one-line code PR, then the DEPLOY.md runbook. |
+| **Mengantar `idempotencyKey` not relied on in production.** It is sent on every booking, but a retry after an unreadable answer could still be a second parcel and a second wallet debit. | Every unreadable `POST /order` is `unknown` and blocks re-booking until an operator reconciles it — no blind retry exists. | Replay behaviour confirmed against production. |
 
 ---
 
