@@ -192,7 +192,7 @@
 | `/blog/[handle]` | One article. | `apps/storefront/src/pages/blog/[handle].astro` | `Layout` | `catalog` `content` | `breadcrumb` | ✓ |  | — |
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
-| `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
+| `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
 | `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | — | ✓ |  | — |
 | `/halaman/[handle]` | Static page. | `apps/storefront/src/pages/halaman/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/` | Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction. | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
@@ -400,6 +400,7 @@
 | `chat.ts` | `CHAT_COOKIE` `LIMITS` `MAX_BODY` `MAX_NAME` `MAX_OPEN_CONVERSATIONS` `clientIp` `cursorOf` `ipHash` `json` `mintVisitorCookie` `parseCursor` `rateLimit` `readVisitorToken` |
 | `packages.ts` | `buildPackages` |
 | `product-feed.ts` | `PROFILES` `catalogSpecs` `colourSizeIndexes` `feedBrand` `feedDocument` `feedItems` `xml` |
+| `public-api.ts` | `CLIENT_API_URLS` `ONGKIR_API` `ORDER_API` `PROMO_API` `STOREFRONT_CSP` |
 | `recovery.ts` | — |
 | `safe-href.ts` | `safeHref` |
 | `text.ts` | `clamp` |

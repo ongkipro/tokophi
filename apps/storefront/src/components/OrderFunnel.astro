@@ -14,6 +14,7 @@ import { retailerId, type CatalogIdScheme } from "@tokophi/lib/tracking-ids";
 import { computeTax } from "@tokophi/lib/tax";
 import { resolveFormConfig } from "@tokophi/lib/form-config";
 import type { Pkg } from "../lib/packages";
+import { ONGKIR_API, ORDER_API } from "../lib/public-api"; // same values as checkout.astro; the storefront CSP lists their origin
 
 interface Props {
   packages: Pkg[];
@@ -49,9 +50,6 @@ const TAX = { enabled: !!tax?.enabled, ratePct: tax?.ratePct ?? 0, inclusive: !!
 // contradict one interaction later.
 const INITIAL_TOTAL = packages[0].price + computeTax(packages[0].price, TAX).addToTotal;
 const fc = resolveFormConfig(formConfig);
-
-const ONGKIR_API = process.env.PUBLIC_ONGKIR_API || "http://localhost:3000/api/public/ongkir";
-const ORDER_API = process.env.PUBLIC_ORDER_API || "http://localhost:3000/api/public/order";
 
 // ── ID KATALOG UNTUK PIXEL — halaman corong iklan ADALAH halaman produk ──────────────────────────
 //

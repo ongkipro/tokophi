@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ADMIN_CSP_REPORT_ONLY, MAX_REPORT_BYTES, readReportBody, STOREFRONT_CSP_REPORT_ONLY, summariseCspReport } from "./csp";
+import { ADMIN_CSP_REPORT_ONLY, cspOrigins, MAX_REPORT_BYTES, readReportBody, storefrontCspReportOnly, summariseCspReport } from "./csp";
+
+const STOREFRONT_CSP_REPORT_ONLY = storefrontCspReportOnly(["https://app.tokophi.com/api/public/ongkir"]);
 
 describe("CSP policies", () => {
   it("admin: first-party only, no framing, no object, reports to its own origin", () => {
@@ -30,6 +32,22 @@ describe("CSP policies", () => {
       expect(p).not.toContain("'unsafe-eval'");
       expect(p.split("; ").find((d) => d.startsWith("script-src"))).not.toMatch(/\s\*(\s|$)|https:(\s|$)/);
     }
+  });
+});
+
+describe("storefront connect-src carries the Seller API origin (CSP-CONNECT, 2026-11-13)", () => {
+  const connect = (p: string) => (p.split("; ").find((d) => d.startsWith("connect-src ")) ?? "").split(" ");
+  it("lists the ORIGIN of every URL it is given — prod and dev alike — once", () => {
+    const prod = storefrontCspReportOnly(["https://app.tokophi.com/api/public/ongkir", "https://app.tokophi.com/api/public/order"]);
+    expect(connect(prod)).toContain("https://app.tokophi.com");
+    expect(connect(prod).filter((s) => s === "https://app.tokophi.com")).toHaveLength(1);
+    expect(connect(storefrontCspReportOnly(["http://localhost:3000/api/public/ongkir"]))).toContain("http://localhost:3000");
+  });
+  it("a relative, garbage or non-http value adds nothing and cannot inject a directive", () => {
+    expect(cspOrigins(["/api/public/order", "", "not a url", "javascript:alert(1)", "data:text/plain,x"])).toEqual([]);
+    const p = storefrontCspReportOnly(["https://a.test/x; script-src *", "https://b.test 'unsafe-eval'"]);
+    expect(p).not.toContain("'unsafe-eval'");
+    expect(p.split("; ").filter((d) => d.startsWith("script-src"))).toHaveLength(1);
   });
 });
 
