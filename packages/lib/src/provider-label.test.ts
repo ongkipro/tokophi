@@ -35,6 +35,10 @@ const BRAND_MENGANTAR = /(?<![A-Za-z0-9_/@.])(Mengantar|MENGANTAR)(?![A-Za-z0-9_
 // see it: the Mengantar pattern keeps applying to the storefront, the landing site and the Seller app's
 // shopper-facing public API (`apps/admin/app/api/public/**`). KiriminAja / AutoLaris stay hidden everywhere.
 const SHOPPER_FACING = ["apps/storefront/", "apps/landing/", "apps/admin/app/api/public/"];
+// KEL-001 (ADR 0021): Kelola CRM is a SELLER-CHOSEN plugin — Seller screens name it (like Meta), shoppers
+// never see it. Only the unambiguous brand shapes are matched: bare "Kelola" is the everyday verb
+// ("Kelola pesanan Anda") and would be a false positive on any landing headline.
+const BRAND_KELOLA = /(?<![A-Za-z0-9_])(Kelola\s+CRM|kelolatim)(?![A-Za-z0-9_])/gi;
 
 const CLIENT_SURFACES = ["apps/admin/", "apps/storefront/", "apps/landing/"];
 
@@ -53,7 +57,7 @@ function clientFiles(): string[] {
 
 function hits(text: string, file = "apps/storefront/x.ts"): { index: number; around: string }[] {
   const out: { index: number; around: string }[] = [];
-  const patterns = SHOPPER_FACING.some((d) => file.startsWith(d)) ? [BRAND, BRAND_MENGANTAR] : [BRAND];
+  const patterns = SHOPPER_FACING.some((d) => file.startsWith(d)) ? [BRAND, BRAND_MENGANTAR, BRAND_KELOLA] : [BRAND];
   for (const re of patterns) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -115,6 +119,12 @@ describe("no provider brand in copy a merchant or shopper can read (ADR 0004)", 
     expect(hits(s, "apps/admin/lib/mengantar-shipping.ts").length).toBe(0);
     expect(hits(s, "apps/admin/app/api/public/order/route.ts").length).toBeGreaterThan(0);
     expect(hits(s, "apps/storefront/src/pages/checkout.astro").length).toBeGreaterThan(0);
+    // KEL-001: the Kelola plugin is named on Seller screens, never to a shopper; the verb is never a hit.
+    const k = "Pesanan dikirim ke Kelola CRM (https://kelolatim.com).";
+    expect(hits(k, "apps/admin/components/admin/pengaturan/plugin-card.tsx").length).toBe(0);
+    expect(hits(k, "apps/admin/app/api/public/order/route.ts").length).toBeGreaterThan(0);
+    expect(hits(k, "apps/storefront/src/pages/checkout/sukses.astro").length).toBeGreaterThan(0);
+    expect(hits("Kelola pesanan dan stok dari satu tempat.", "apps/landing/src/pages/index.astro").length).toBe(0);
     // KiriminAja stays hidden from the Seller too.
     expect(hits("Memuat layanan dari KiriminAja…", "apps/admin/lib/x.ts").length).toBeGreaterThan(0);
   });
