@@ -28,7 +28,7 @@ function fakeKelola(answer: number | ((call: Call, n: number) => number | Promis
 }
 
 const TOKEN = (n: number) => `twh_${runId}_${n}`;
-const kelolaUrl = (n: number) => `https://kelola.test/api/public/toko/order/${TOKEN(n)}`;
+const kelolaUrl = (n: number) => `https://kelolatim.com/api/public/toko/order/${TOKEN(n)}`;
 
 async function newStore(o: { connectedAt?: Date; pushLeads?: boolean; enabled?: boolean } = {}) {
   const n = storeIds.length;
@@ -249,7 +249,7 @@ suite("Kelola plugin — dormant, eligibility, claim, outcomes, isolation", () =
     expect(await sync.drainKelolaLeads(await store(off.storeId), off.storeId, k.fetch)).toBe(0);
     expect(await sync.drainKelolaLeads(await store(on.storeId), on.storeId, k.fetch)).toBe(1);
     expect(k.calls).toHaveLength(1);
-    expect(k.calls[0].url).toBe(`https://kelola.test/api/public/toko/lead/${TOKEN(on.n)}`);
+    expect(k.calls[0].url).toBe(`https://kelolatim.com/api/public/toko/lead/${TOKEN(on.n)}`);
     expect(k.calls[0].body).toMatchObject({ customerName: "Budi Santoso", produk: "Batik Kawung", nilai: 99000 });
     expect(await sync.drainKelolaLeads(await store(on.storeId), on.storeId, k.fetch)).toBe(0);
   });
@@ -278,7 +278,7 @@ suite("Kelola plugin — dormant, eligibility, claim, outcomes, isolation", () =
       insert into stores (account_id, name, slug, status) values (${accountId}, 'Save', ${`kel-${runId}-save`}, 'active') returning id`;
     storeIds.push(st.id);
     await client`insert into store_plugins (store_id, plugin, enabled, activated_at) values (${st.id}, 'kelola', true, now())`;
-    const url = `https://kelola.test/api/public/toko/order/twh_${runId}_save`;
+    const url = `https://kelolatim.com/api/public/toko/order/twh_${runId}_save`;
     const refused = await sync.saveKelolaConnection(db, st.id, { url, secret: "wrong" }, fakeKelola(401).fetch);
     expect(refused.ok).toBe(false);
     expect((await client`select secret_enc, connected_at from store_plugins where store_id = ${st.id}`)[0]).toEqual({ secret_enc: null, connected_at: null });

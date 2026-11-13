@@ -445,6 +445,15 @@ repo, do not silently diverge.
   already committed at that point — a throw must not become a 500. The cron covers anything it skips.
 - **`gratisOngkir` and `kelurahan` are sent** (Kelola accepts both, §1.3); AdsBookCMS does not send them yet —
   the same `ongkir: 0` re-pricing defect exists there (shared-fix rule: raise it on that repo).
+- **The webhook host is pinned to `kelolatim.com`** (exact: https, no port, no userinfo, no subdomain) —
+  a deliberate DEVIATION from the AdsBookCMS port, which accepts any https host with a matching path. The
+  server POSTs signed shopper PII from inside the admin container, so an open host is SSRF plus a PII egress
+  path (review by `tokophi-resume`). Kelola's docs name no other origin (read 2026-11-13); a new one is a
+  code change. AdsBookCMS has the same hole (shared-fix rule). "Tes koneksi" shows only the classified
+  message, never Kelola's response body.
+- **`connected_at` is set on the FIRST connect and kept on a re-save** (so orders placed while a credential
+  was broken still go out); **"Putuskan" clears it, and a later reconnect re-floors the window** at the new
+  connection — deliberate: orders taken while the store was disconnected are never sent.
 - `redactKey` moved to `@tokophi/lib/redact` (re-exported from `mengantar.ts`) — one sanitiser for every
   provider whose token rides in a URL.
 

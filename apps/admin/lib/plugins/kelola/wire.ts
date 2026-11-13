@@ -53,14 +53,35 @@ export type KelolaLeadRow = {
 };
 
 /**
+ * Kelola's ONLY documented origin for the partner endpoints (https://kelolatim.com/docs/api, read
+ * 2026-11-13: no custom, white-label, regional or subdomain hosts). A new host is a reviewed code
+ * change here, never something an owner types.
+ */
+export const KELOLA_HOST = "kelolatim.com";
+
+/**
  * A pasted webhook URL, or null when it cannot be one Kelola issued. HTTPS only: the body carries
  * buyer names, phones and addresses.
+ *
+ * ⚠️ DEVIATES FROM THE ADSBOOKCMS PORT, ON PURPOSE: the source accepted ANY https host whose path
+ * matched. Here the server — not the seller's browser — POSTs signed order PII to this URL from inside
+ * the admin container, so an open host is SSRF (an internal address, the deploy network) and an egress
+ * path for every shopper's name, WhatsApp and address to wherever a hijacked owner account points it.
+ * The host is pinned to `KELOLA_HOST`, exactly: no port, no userinfo, no subdomain. (AdsBookCMS has the
+ * same hole — shared-fix rule.)
  */
 export function normalizeKelolaWebhookUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   try {
     const url = new URL(raw.trim());
-    return url.protocol === "https:" && /^\/api\/public\/toko\/order\/[^/]+$/.test(url.pathname) && !url.search
+    return url.protocol === "https:" &&
+      url.hostname === KELOLA_HOST &&
+      url.port === "" &&
+      url.username === "" &&
+      url.password === "" &&
+      /^\/api\/public\/toko\/order\/[^/]+$/.test(url.pathname) &&
+      !url.search &&
+      !url.hash
       ? url.toString()
       : null;
   } catch {

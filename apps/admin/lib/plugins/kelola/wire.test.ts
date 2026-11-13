@@ -45,6 +45,33 @@ describe("Kelola wire format (ported from AdsBookCMS)", () => {
     );
   });
 
+  it("SSRF / PII egress: only Kelola's own origin is accepted (TokoΦ deviation from the port)", () => {
+    for (const bad of [
+      "https://kelola.test/api/public/toko/order/twh_x", // any other host
+      "https://10.0.0.5/api/public/toko/order/twh_x", // private IP literal
+      "https://127.0.0.1/api/public/toko/order/twh_x",
+      "https://localhost/api/public/toko/order/twh_x",
+      "https://[::1]/api/public/toko/order/twh_x",
+      "https://admin:3000/api/public/toko/order/twh_x", // the deploy network
+      "https://kelolatim.com.evil.tld/api/public/toko/order/twh_x", // suffix trick
+      "https://evil.kelolatim.com/api/public/toko/order/twh_x", // undocumented subdomain
+      "https://kelolatim.com@evil.tld/api/public/toko/order/twh_x", // userinfo trick
+      "https://user:pw@kelolatim.com/api/public/toko/order/twh_x", // credentials in the URL
+      "https://kelolatim.com:8443/api/public/toko/order/twh_x", // non-default port
+      "https://kelolatim.com/api/public/toko/order/twh_x#frag",
+    ]) expect(normalizeKelolaWebhookUrl(bad), bad).toBeNull();
+    // Host matching is case-insensitive by URL parsing, never by a looser rule of ours.
+    expect(normalizeKelolaWebhookUrl("https://KELOLATIM.com/api/public/toko/order/twh_x")).toBe(
+      "https://kelolatim.com/api/public/toko/order/twh_x",
+    );
+  });
+
+  it("the connection test's message never carries Kelola's response body", async () => {
+    const chatty = (async () => new Response("SECRET-BODY internal stack trace", { status: 500 })) as unknown as typeof fetch;
+    const r = await testKelolaConnection({ url: "https://kelolatim.com/api/public/toko/order/twh_x", secret: "s" }, chatty);
+    expect(r).toEqual({ ok: false, message: "Kelola membalas HTTP 500." });
+  });
+
   it("the lead URL sits beside the order URL", () => {
     expect(kelolaLeadUrl("https://kelolatim.com/api/public/toko/order/twh_abc")).toBe(
       "https://kelolatim.com/api/public/toko/lead/twh_abc",
