@@ -1,78 +1,83 @@
 ---
-// Ringkasan: totals across every store (ditahan / siap / dibayar), the hold rule in one line, and each
-// programme with its status, code and share link `<store>/?ref=CODE`.
+// Ringkasan: totals across every store (siap / ditahan / dibayar) with what each means, the commission
+// lifecycle, and each programme with its status, next step and — when active — its share kit
+// (code, link `<store>/?ref=CODE`, WhatsApp share).
 import Layout from "../layouts/Layout.astro";
 import CopyScript from "../components/CopyScript.astro";
+import Icon from "../components/Icon.astro";
+import ShareBlock from "../components/ShareBlock.astro";
+import MoneySummary from "../components/MoneySummary.astro";
+import HowItWorks from "../components/HowItWorks.astro";
 import { db } from "@tokophi/db";
-import { IDR } from "@tokophi/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 import { myAffiliateStores } from "../data/affiliate";
-import { signInUrl, storefrontOrigin } from "../lib/nav";
-import { STATUS_LABEL, holdLine, initials } from "../lib/view";
+import { signInUrl } from "../lib/nav";
+import { STATUS_LABEL, STATUS_NOTE, byStatus, firstName, initials } from "../lib/view";
 
 const account = Astro.locals.account;
 if (!account) return Astro.redirect(signInUrl(Astro.url));
-const stores = await myAffiliateStores(db, account.id);
+const stores = (await myAffiliateStores(db, account.id)).sort(byStatus);
 const sum = (k: "readyIdr" | "heldIdr" | "paidIdr") => stores.reduce((s, x) => s + x[k], 0);
-const tiles = [
-  { label: "Siap dibayar", value: sum("readyIdr"), state: "siap", hint: "Tunggu transfer dari toko" },
-  { label: "Ditahan", value: sum("heldIdr"), state: "ditahan", hint: "Termasuk pesanan belum selesai" },
-  { label: "Sudah dibayar", value: sum("paidIdr"), state: "dibayar", hint: "Dicatat oleh toko" },
-];
+const holdDays = [...new Set(stores.map((s) => s.holdDays))];
 ---
 <Layout title="Ringkasan" active="ringkasan">
-  <div class="stack">
-    <header>
-      <h1>Halo, {account.name}</h1>
-      <p class="lead">Semua toko yang Anda promosikan, dalam satu akun. Komisi dihitung oleh TokoΦ dan dibayar langsung oleh masing-masing toko.</p>
+  <div class="stack-lg">
+    <header class="page-head">
+      <h1>Halo, {firstName(account.name)}</h1>
+      <p class="lead">{stores.length ? "Komisi dan link dari semua toko yang Anda promosikan." : "Selamat datang di Affiliate TokoΦ."}</p>
     </header>
 
     {Astro.url.searchParams.get("daftar") && (
-      <p class="notice" role="status"><strong>Pendaftaran terkirim.</strong> Seller akan meninjaunya; statusnya tampil di bawah.</p>
+      <p class="notice" role="status"><Icon name="circle-check" /><span><strong>Pendaftaran terkirim.</strong> Seller akan meninjaunya — statusnya tampil di daftar toko di bawah.</span></p>
     )}
 
     {stores.length === 0 ? (
-      <section class="card">
-        <h2>Belum ada program</h2>
-        <p>Anda belum jadi affiliate toko mana pun. Daftar ke program affiliate sebuah toko dengan alamat tokonya; seller meninjau pendaftaran Anda, lalu kode dan link Anda muncul di sini.</p>
-        <p><a class="button primary" href="/gabung">Gabung program toko</a></p>
+      <section class="card empty" aria-labelledby="empty-h">
+        <h2 id="empty-h">Mulai dari satu toko</h2>
+        <p class="muted">Anda belum terdaftar di program affiliate toko mana pun. Begini caranya:</p>
+        <ol class="steps">
+          <li><div><strong>Cari toko yang ingin Anda promosikan</strong><span>Pakai alamat tokonya, misalnya <span class="code">namatoko.tokophi.id</span>.</span></div></li>
+          <li><div><strong>Kirim pendaftaran</strong><span>Seller meninjau dan menyetujui pendaftaran Anda.</span></div></li>
+          <li><div><strong>Bagikan link atau kode Anda</strong><span>Setiap pesanan lewat link atau kode Anda mendapat komisi.</span></div></li>
+        </ol>
+        <a class="button primary block" href="/gabung"><Icon name="store" />Cari toko untuk dipromosikan</a>
         <p class="help">Seller sudah mencatat Anda sebagai affiliate? Minta seller mengirim <strong>link undangan</strong>, lalu buka link itu saat masuk dengan akun ini.</p>
       </section>
     ) : (
       <>
-        <div class="grid3" role="group" aria-label="Total komisi semua toko">
-          {tiles.map((t) => (
-            <a class="card stat" href={`/komisi?state=${t.state}`} style="text-decoration:none;color:inherit">
-              <span class="label">{t.label}</span>
-              <strong class="value num">{IDR(t.value)}</strong>
-              <span class="hint">{t.hint}</span>
-            </a>
-          ))}
-        </div>
-        <p class="help">{holdLine(stores)}</p>
+        <MoneySummary readyIdr={sum("readyIdr")} heldIdr={sum("heldIdr")} paidIdr={sum("paidIdr")} holdDays={holdDays.length === 1 ? holdDays[0]! : null} label="Total komisi semua toko" />
+        <HowItWorks stores={stores} open={sum("paidIdr") === 0} />
 
         <section aria-labelledby="prog-h" class="stack">
-          <h2 id="prog-h">Program saya</h2>
+          <div class="section-title">
+            <h2 id="prog-h">Toko saya</h2>
+            <span class="tiny muted num">{num(stores.length)} toko</span>
+          </div>
           {stores.map((s) => {
             const st = STATUS_LABEL[s.status];
-            const link = `${storefrontOrigin(s.storeSlug)}/?ref=${encodeURIComponent(s.code)}`;
             return (
-              <article class="card store-row">
-                <span class="mark" aria-hidden="true">{initials(s.storeName)}</span>
-                <div>
-                  <a href={`/toko/${s.affiliateId}`}><strong>{s.storeName}</strong></a> <span class={`badge ${st.tone}`}>{st.text}</span>
-                  <div class="meta">Kode <span class="code">{s.code}</span> · <span class="num">{s.orders}</span> pesanan</div>
-                </div>
-                <div class="amount num"><strong>{IDR(s.readyIdr)}</strong><small>siap dibayar</small></div>
-                {s.status === "aktif" && (
-                  <div class="share">
-                    <span class="link" id={`link-${s.affiliateId}`}>{link}</span>
-                    <button class="button secondary" type="button" data-copy={`link-${s.affiliateId}`} data-copy-value={link} hidden>Salin link</button>
-                  </div>
+              <article class="card prog" aria-labelledby={`name-${s.affiliateId}`}>
+                <a class="prog-head" href={`/toko/${s.affiliateId}`}>
+                  <span class="mark" aria-hidden="true">{initials(s.storeName)}</span>
+                  <span>
+                    <span class="prog-name" id={`name-${s.affiliateId}`}>{s.storeName}</span>
+                    <span class="prog-sub"><span class={`badge ${st.tone}`}>{st.text}</span>{s.status !== "menunggu" && s.status !== "ditolak" && <span class="num">{num(s.orders)} pesanan</span>}</span>
+                  </span>
+                  <Icon name="chevron-right" class="chev" />
+                </a>
+                {s.status !== "aktif" && <p class="state-note"><Icon name={s.status === "menunggu" ? "hourglass" : "store"} />{STATUS_NOTE[s.status]}</p>}
+                {(s.readyIdr > 0 || s.heldIdr > 0 || s.paidIdr > 0) && (
+                  <p class="prog-money num">
+                    <span>Siap dibayar <strong>{IDR(s.readyIdr)}</strong></span>
+                    <span>Ditahan <strong>{IDR(s.heldIdr)}</strong></span>
+                    <span>Dibayar <strong>{IDR(s.paidIdr)}</strong></span>
+                  </p>
                 )}
+                {s.status === "aktif" && <ShareBlock affiliateId={s.affiliateId} storeName={s.storeName} storeSlug={s.storeSlug} code={s.code} />}
               </article>
             );
           })}
-          <p><a href="/gabung">+ Gabung program toko lain</a></p>
+          <a class="button secondary block" href="/gabung"><Icon name="store" />Gabung program toko lain</a>
         </section>
         <CopyScript />
       </>

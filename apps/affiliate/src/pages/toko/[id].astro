@@ -1,76 +1,82 @@
 ---
-// One programme (one of MY affiliate rows): status, code, share link, rate and hold, the three totals,
-// the payout account (masked, read-only — changed through the seller), and its commission history.
-// Another account's id answers exactly like an unknown one: 404.
+// One programme (one of MY affiliate rows): status and what it means, the share kit (active only), the
+// three totals, rate / hold / orders, the payout account (masked, read-only — changed through the
+// seller), and its commission history. Another account's id answers exactly like an unknown one: 404.
 import Layout from "../../layouts/Layout.astro";
 import Ledger from "../../components/Ledger.astro";
 import CopyScript from "../../components/CopyScript.astro";
+import Icon from "../../components/Icon.astro";
+import ShareBlock from "../../components/ShareBlock.astro";
+import MoneySummary from "../../components/MoneySummary.astro";
 import { db } from "@tokophi/db";
-import { IDR, waLink } from "@tokophi/lib/format";
+import { num, waLink } from "@tokophi/lib/format";
 import { myAffiliateDetail } from "../../data/affiliate";
-import { signInUrl, storefrontOrigin } from "../../lib/nav";
-import { STATUS_LABEL, ratePct } from "../../lib/view";
+import { signInUrl } from "../../lib/nav";
+import { STATUS_LABEL, STATUS_NOTE, initials, ratePct } from "../../lib/view";
 
 const account = Astro.locals.account;
 if (!account) return Astro.redirect(signInUrl(Astro.url));
 const d = await myAffiliateDetail(db, account.id, Astro.params.id ?? "");
 if (!d) return new Response(null, { status: 404, statusText: "Not Found" });
 const st = STATUS_LABEL[d.status];
-const link = `${storefrontOrigin(d.storeSlug)}/?ref=${encodeURIComponent(d.code)}`;
+const hasMoney = d.readyIdr > 0 || d.heldIdr > 0 || d.paidIdr > 0;
 ---
 <Layout title={d.storeName} active="ringkasan">
-  <div class="stack">
+  <div class="stack-lg">
     <header>
-      <p><a href="/">← Ringkasan</a></p>
-      <h1>{d.storeName} <span class={`badge ${st.tone}`}>{st.text}</span></h1>
-      <p class="lead">Kode Anda: <span class="code">{d.code}</span></p>
+      <a class="back" href="/"><Icon name="arrow-left" />Ringkasan</a>
+      <div class="title-row">
+        <span class="mark" aria-hidden="true">{initials(d.storeName)}</span>
+        <div>
+          <h1>{d.storeName}</h1>
+          <span class="prog-sub"><span class={`badge ${st.tone}`}>{st.text}</span><span>Kode <span class="code">{d.code}</span></span></span>
+        </div>
+      </div>
     </header>
 
     {d.status === "aktif" ? (
-      <section class="card">
-        <h2>Link affiliate</h2>
-        <div class="share" style="border:0;padding:0">
-          <span class="link" id="share-link">{link}</span>
-          <button class="button secondary" type="button" data-copy="share-link" data-copy-value={link} hidden>Salin link</button>
-        </div>
-        <p class="help">Pembeli juga bisa mengetik kode <span class="code">{d.code}</span> di checkout. Link berlaku 30 hari sejak diklik; klik terakhir yang dihitung.</p>
+      <section class="card" aria-labelledby="share-h">
+        <h2 id="share-h">Bagikan</h2>
+        <ShareBlock affiliateId={d.affiliateId} storeName={d.storeName} storeSlug={d.storeSlug} code={d.code} showRule />
       </section>
-    ) : d.status === "menunggu" ? (
-      <section class="card"><p>Pendaftaran Anda sedang ditinjau seller. Link dan kode aktif setelah disetujui.</p></section>
     ) : (
-      <section class="card"><p>Program ini tidak aktif untuk Anda. Pesanan baru tidak menghasilkan komisi; komisi yang sudah tercatat tetap tampil di bawah.</p></section>
+      <p class="state-note"><Icon name={d.status === "menunggu" ? "hourglass" : "store"} />{STATUS_NOTE[d.status]}</p>
     )}
 
-    <dl class="strip card" style="margin:0">
-      {d.rateBps !== null && <div><dt>Komisi dasar</dt><dd class="num">{ratePct(d.rateBps)}</dd></div>}
-      <div><dt>Masa tahan</dt><dd class="num">{d.holdDays} hari</dd></div>
-      <div><dt>Pesanan</dt><dd class="num">{d.orders}</dd></div>
-      <div><dt>Siap dibayar</dt><dd class="num">{IDR(d.readyIdr)}</dd></div>
-      <div><dt>Ditahan</dt><dd class="num">{IDR(d.heldIdr)}</dd></div>
-      <div><dt>Dibayar</dt><dd class="num">{IDR(d.paidIdr)}</dd></div>
-    </dl>
+    {(d.status === "aktif" || hasMoney) && (
+      <MoneySummary readyIdr={d.readyIdr} heldIdr={d.heldIdr} paidIdr={d.paidIdr} holdDays={d.holdDays} label={`Komisi di ${d.storeName}`} />
+    )}
 
-    <section class="card">
-      <h2>Rekening pembayaran</h2>
+    <ul class="facts" aria-label="Aturan program">
+      {d.rateBps !== null && <li>Komisi dasar <b class="num">{ratePct(d.rateBps)}</b> dari nilai barang</li>}
+      <li>Masa tahan <b class="num">{d.holdDays} hari</b></li>
+      <li><b class="num">{num(d.orders)}</b> pesanan</li>
+    </ul>
+    {d.rateBps !== null && <p class="help facts-note">Nilai barang = harga produk setelah diskon, tanpa ongkir dan biaya admin. Sebagian produk bisa punya persentase berbeda.</p>}
+
+    <section class="card" aria-labelledby="payout-h">
+      <h2 id="payout-h">Rekening pembayaran</h2>
       {d.payout.bankName || d.payout.account ? (
         <p class="num">{[d.payout.bankName, d.payout.account, d.payout.holder && `a.n. ${d.payout.holder}`].filter(Boolean).join(" · ")}</p>
       ) : (
-        <p>Belum ada rekening tercatat.</p>
+        <p>Belum ada rekening tercatat. Kirim nomor rekening Anda ke seller agar komisi bisa ditransfer.</p>
       )}
-      <p class="help">Komisi ditransfer langsung oleh {d.storeName}, di luar TokoΦ. Perubahan rekening lewat seller.</p>
+      <p class="help">Komisi ditransfer langsung oleh {d.storeName}, di luar TokoΦ. Rekening dicatat dan diubah oleh seller.</p>
       {d.storeWhatsapp && (
-        <p><a class="button secondary" href={waLink(d.storeWhatsapp, `Halo ${d.storeName}, saya affiliate dengan kode ${d.code}.`)} target="_blank" rel="noopener noreferrer">Hubungi toko via WhatsApp</a></p>
+        <div class="actions">
+          <a class="button secondary" href={waLink(d.storeWhatsapp, `Halo ${d.storeName}, saya affiliate dengan kode ${d.code}.`)} target="_blank" rel="noopener noreferrer"><Icon name="message" />Hubungi toko via WhatsApp<span class="sr-only"> (membuka WhatsApp)</span></a>
+        </div>
       )}
     </section>
 
-    <section class="stack">
-      <h2>Riwayat komisi</h2>
+    <section class="stack" aria-labelledby="hist-h">
+      <div class="section-title"><h2 id="hist-h">Riwayat komisi</h2>{d.commissionCount > 0 && <span class="tiny muted num">{num(d.commissionCount)} pesanan</span>}</div>
       {d.commissionCount === 0 ? (
-        <div class="card"><p>Belum ada pesanan dari kode atau link Anda di toko ini.</p></div>
+        <div class="card"><p class="muted">{d.status === "aktif" ? "Belum ada pesanan dari kode atau link Anda di toko ini. Bagikan link di atas untuk mulai." : "Belum ada pesanan dari kode atau link Anda di toko ini."}</p></div>
       ) : (
         <Ledger rows={d.commissions} caption={`Riwayat komisi di ${d.storeName}`} />
       )}
     </section>
-    <CopyScript />
+    {d.status === "aktif" && <CopyScript />}
   </div>
 </Layout>

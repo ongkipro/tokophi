@@ -1,0 +1,48 @@
+---
+// One programme's share kit (Ringkasan card + the programme page): the code, the link, and three one-tap
+// actions — Bagikan ke WhatsApp (a plain `wa.me/?text=` link: works without JS, no API, the affiliate
+// picks the chat), Salin link, Salin kode. The copy buttons are progressive (CopyScript): without JS
+// they stay hidden and the code and link remain on the page as selectable text.
+import Icon from "./Icon.astro";
+import { storefrontOrigin } from "../lib/nav";
+import { waShareUrl } from "../lib/view";
+
+interface Props {
+  affiliateId: string;
+  storeName: string;
+  storeSlug: string;
+  code: string;
+  /** The programme page shows the attribution rule under the buttons; the Ringkasan card does not. */
+  showRule?: boolean;
+}
+const { affiliateId, storeName, storeSlug, code, showRule = false } = Astro.props;
+const link = `${storefrontOrigin(storeSlug)}/?ref=${encodeURIComponent(code)}`;
+const codeId = `code-${affiliateId}`;
+const linkId = `link-${affiliateId}`;
+---
+<div class="share">
+  <div class="share-code">
+    <div>
+      <span class="label">Kode affiliate</span>
+      <span class="code-lg" id={codeId}>{code}</span>
+    </div>
+  </div>
+  <div class="share-link">
+    <span class="label">Link affiliate</span>
+    <span class="url" id={linkId}>{link}</span>
+  </div>
+  <div class="share-actions">
+    <a class="button wa" href={waShareUrl(storeName, link)} target="_blank" rel="noopener noreferrer">
+      <Icon name="message" />Bagikan ke WhatsApp<span class="sr-only"> (membuka WhatsApp)</span>
+    </a>
+    <button class="button secondary" type="button" data-copy={linkId} data-copy-value={link} data-copy-done="Link disalin." aria-label={`Salin link ${storeName}`} hidden>
+      <Icon name="link" /><span data-copy-text>Salin link</span>
+    </button>
+    <button class="button secondary" type="button" data-copy={codeId} data-copy-value={code} data-copy-done="Kode disalin." aria-label={`Salin kode ${code}`} hidden>
+      <Icon name="copy" /><span data-copy-text>Salin kode</span>
+    </button>
+  </div>
+  {showRule && (
+    <p class="hint">Pembeli bisa membuka link Anda, atau mengetik kode <span class="code">{code}</span> di kolom "Kode affiliate" saat checkout. Link berlaku 30 hari sejak diklik; klik terakhir yang dihitung, dan kode yang diketik menang atas link.</p>
+  )}
+</div>

@@ -1,9 +1,13 @@
 ---
 // Akun: who is signed in, change password (revokes every other session), sign out.
 import Layout from "../layouts/Layout.astro";
+import Icon from "../components/Icon.astro";
+import PasswordField from "../components/PasswordField.astro";
+import ForgotPassword from "../components/ForgotPassword.astro";
 import { db } from "@tokophi/db";
 import { changePassword, PASSWORD_MIN } from "../data/auth";
 import { signInUrl } from "../lib/nav";
+import { initials } from "../lib/view";
 
 const account = Astro.locals.account;
 const sessionId = Astro.locals.sessionId;
@@ -19,35 +23,35 @@ if (Astro.request.method === "POST") {
 ---
 <Layout title="Akun" active="akun">
   <div class="stack narrow">
-    <section class="card">
-      <h1>Akun</h1>
-      <p><strong>{account.name}</strong><br /><span class="lead">{account.email}</span></p>
-      <p class="help">WhatsApp: <span class="num">{account.phone}</span>. Nomor ini dipakai untuk pendaftaran ke toko baru.</p>
+    <header class="page-head"><h1>Akun</h1></header>
+    <section class="card stack" aria-label="Profil">
+      <div class="title-row">
+        <span class="mark" aria-hidden="true">{initials(account.name)}</span>
+        <div><span class="prog-name">{account.name}</span><span class="prog-sub">{account.email}</span></div>
+      </div>
+      <p class="help">WhatsApp <span class="num">{account.phone}</span> — dikirim ke seller setiap kali Anda mendaftar ke toko baru.</p>
     </section>
-    <section class="card">
-      <h2>Ganti kata sandi</h2>
+    <section class="card" aria-labelledby="pw-h">
+      <h2 id="pw-h">Ganti kata sandi</h2>
       {done !== null && (
-        <p class="notice" role="status">Kata sandi diganti.{done > 0 ? ` ${done} perangkat lain dikeluarkan.` : ""}</p>
+        <p class="notice" role="status"><Icon name="circle-check" /><span>Kata sandi diganti.{done > 0 ? ` ${done} perangkat lain dikeluarkan.` : ""}</span></p>
       )}
       <form method="post" novalidate>
+        <input type="text" name="username" value={account.email} autocomplete="username" hidden readonly />
         <div class="field">
-          <label for="current">Kata sandi saat ini</label>
-          <input id="current" name="current" type="password" autocomplete="current-password" required aria-invalid={error?.field === "current" ? "true" : undefined} aria-describedby={error?.field === "current" ? "current-err" : undefined} />
-          {error?.field === "current" && <p class="error" id="current-err">{error.text}</p>}
+          <PasswordField id="current" name="current" label="Kata sandi saat ini" autocomplete="current-password" error={error?.field === "current" ? error.text : null} autofocus={error?.field === "current"} />
         </div>
         <div class="field">
-          <label for="next">Kata sandi baru</label>
-          <input id="next" name="next" type="password" autocomplete="new-password" required minlength={PASSWORD_MIN} aria-invalid={error?.field === "next" ? "true" : undefined} aria-describedby={error?.field === "next" ? "next-err" : "next-help"} />
-          {error?.field === "next" ? <p class="error" id="next-err">{error.text}</p> : <p class="help" id="next-help">Minimal {PASSWORD_MIN} karakter. Perangkat lain akan dikeluarkan.</p>}
+          <PasswordField id="next" name="next" label="Kata sandi baru" autocomplete="new-password" minlength={PASSWORD_MIN} error={error?.field === "next" ? error.text : null} describedBy="next-help" autofocus={error?.field === "next"}>
+            <p class="help" id="next-help">Minimal {PASSWORD_MIN} karakter. Perangkat lain yang sedang masuk akan dikeluarkan.</p>
+          </PasswordField>
         </div>
-        <button class="button primary" type="submit">Simpan kata sandi</button>
+        <button class="button primary block" type="submit">Simpan kata sandi</button>
       </form>
-      <p class="help">Lupa kata sandi? Reset lewat email belum tersedia — hubungi seller toko yang Anda promosikan atau support TokoΦ.</p>
+      <ForgotPassword />
     </section>
-    <section class="card">
-      <form method="post" action="/keluar">
-        <button class="button secondary" type="submit">Keluar</button>
-      </form>
-    </section>
+    <form method="post" action="/keluar">
+      <button class="button secondary block" type="submit">Keluar dari akun</button>
+    </form>
   </div>
 </Layout>

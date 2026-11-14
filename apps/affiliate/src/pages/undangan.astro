@@ -3,6 +3,7 @@
 // The token lives in this URL, so the page loads no third-party script and sends no Referer
 // (middleware). Sign-in first, then a confirmation screen naming the store — never a silent bind.
 import Layout from "../layouts/Layout.astro";
+import Icon from "../components/Icon.astro";
 import { db } from "@tokophi/db";
 import { acceptInvite, previewInvite } from "../data/affiliate";
 import { signInUrl } from "../lib/nav";
@@ -27,31 +28,35 @@ const invite = error ? null : await previewInvite(db, token);
 <Layout title="Undangan affiliate" active="gabung">
   <div class="stack narrow">
     {invite ? (
-      <section class="card">
-        <h1>Hubungkan ke akun affiliate</h1>
-        <p class="lead">Seller mengundang Anda menghubungkan program affiliate tokonya ke akun ini.</p>
-        <div class="store-row" style="margin-bottom:12px">
-          <span class="mark" aria-hidden="true">{initials(invite.storeName)}</span>
-          <div><strong>{invite.storeName}</strong><div class="meta">Affiliate {invite.affiliateName} · kode <span class="code">{invite.code}</span></div></div>
-        </div>
-        <ul>
-          <li>Komisi kode ini di {invite.storeName} tampil di akun <strong>{account.email}</strong>.</li>
-          <li>Toko tidak mendapat akses ke akun Anda atau toko lain yang Anda promosikan.</li>
-          <li>Rekening pembayaran tetap dicatat dan diubah oleh seller.</li>
-        </ul>
-        <form method="post" class="actions">
-          <input type="hidden" name="t" value={token} />
-          <button class="button primary" type="submit">Hubungkan</button>
-          <a class="button secondary" href="/">Bukan saya, batal</a>
-        </form>
-      </section>
+      <>
+        <header class="page-head">
+          <h1>Hubungkan ke akun Anda</h1>
+          <p class="lead">Seller {invite.storeName} mengundang Anda menghubungkan kode affiliate Anda ke akun ini.</p>
+        </header>
+        <section class="card stack">
+          <div class="title-row">
+            <span class="mark" aria-hidden="true">{initials(invite.storeName)}</span>
+            <div><span class="prog-name">{invite.storeName}</span><span class="prog-sub">{invite.affiliateName} · kode <span class="code">{invite.code}</span></span></div>
+          </div>
+          <ul class="checks">
+            <li><Icon name="circle-check" /><div><strong>Komisi kode ini tampil di akun Anda</strong><span>Masuk sebagai <span class="num">{account.email}</span>.</span></div></li>
+            <li><Icon name="circle-check" /><div><strong>Toko tidak mendapat akses ke akun Anda</strong><span>Toko lain yang Anda promosikan tetap tidak terlihat oleh toko ini.</span></div></li>
+            <li><Icon name="circle-check" /><div><strong>Rekening tetap diatur seller</strong><span>Perubahan rekening pembayaran lewat seller.</span></div></li>
+          </ul>
+          <form method="post" class="actions stack-sm">
+            <input type="hidden" name="t" value={token} />
+            <button class="button primary" type="submit"><Icon name="check" />Hubungkan</button>
+            <a class="button secondary" href="/">Bukan saya, batal</a>
+          </form>
+        </section>
+      </>
     ) : (
       <section class="card" role={error ? "alert" : undefined}>
         <h1>{member ? "Sudah terhubung" : "Undangan tidak berlaku"}</h1>
-        <p>{error ?? "Link ini sudah dipakai, kedaluwarsa, atau dibatalkan. Minta seller mengirim undangan baru."}</p>
-        <div class="actions">
-          <a class="button primary" href="/gabung">Gabung program toko</a>
-          <a class="button secondary" href="/">Ke Ringkasan</a>
+        <p class="muted">{error ?? "Link ini sudah dipakai, kedaluwarsa, atau dibatalkan. Minta seller mengirim undangan baru."}</p>
+        <div class="actions stack-sm">
+          <a class="button primary" href="/">Ke Ringkasan</a>
+          <a class="button secondary" href="/gabung">Gabung program toko</a>
         </div>
       </section>
     )}

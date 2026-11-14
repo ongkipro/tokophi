@@ -2,6 +2,8 @@
 // Sign in: email + password (ADR 0022). Plain form POST to itself — works with JS off. No password reset
 // by email exists (there is no mail provider): the page says who to ask instead.
 import Layout from "../layouts/Layout.astro";
+import PasswordField from "../components/PasswordField.astro";
+import ForgotPassword from "../components/ForgotPassword.astro";
 import { db } from "@tokophi/db";
 import { signInWithPassword } from "../lib/signin";
 import { safeNext } from "../lib/nav";
@@ -29,23 +31,26 @@ if (Astro.request.method === "POST") {
 const signupHref = next === "/" ? "/daftar" : `/daftar?next=${encodeURIComponent(next)}`;
 ---
 <Layout title="Masuk">
-  <section class="card narrow">
-    <h1>Masuk ke Affiliate TokoΦ</h1>
-    <p class="lead">Satu akun untuk jadi affiliate di banyak toko TokoΦ. Akun ini terpisah dari akun belanja Anda.</p>
-    <form method="post" novalidate>
-      {error && <p class="alert" role="alert">{error}</p>}
-      <input type="hidden" name="next" value={next} />
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required value={email} />
-      </div>
-      <div class="field">
-        <label for="password">Kata sandi</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required />
-      </div>
-      <button class="button primary block" type="submit">Masuk</button>
-    </form>
-    <p class="help">Lupa kata sandi? Reset lewat email belum tersedia. Hubungi seller toko yang Anda promosikan atau support TokoΦ untuk bantuan.</p>
-    <p>Belum punya akun? <a href={signupHref}>Daftar jadi affiliate</a></p>
-  </section>
+  <div class="narrow stack">
+    <header class="page-head">
+      <h1>Masuk ke Affiliate TokoΦ</h1>
+      <p class="lead">Lihat komisi dan bagikan link dari semua toko yang Anda promosikan. Akun ini terpisah dari akun belanja TokoΦ.</p>
+    </header>
+    <section class="card">
+      <form method="post" novalidate>
+        {error && <p class="alert" role="alert" id="form-err">{error}</p>}
+        <input type="hidden" name="next" value={next} />
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required value={email} aria-describedby={error ? "form-err" : undefined} />
+        </div>
+        <div class="field">
+          <PasswordField id="password" name="password" label="Kata sandi" autocomplete="current-password" autofocus={!!error} describedBy={error ? "form-err" : undefined} />
+          <ForgotPassword />
+        </div>
+        <button class="button primary block" type="submit">Masuk</button>
+      </form>
+    </section>
+    <p class="auth-foot">Belum punya akun? <a href={signupHref}>Daftar jadi affiliate</a></p>
+  </div>
 </Layout>

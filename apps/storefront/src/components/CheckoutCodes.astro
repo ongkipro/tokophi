@@ -3,7 +3,9 @@
 // scripts/verify-source-size.mjs). The ids are a contract with checkout.astro's script, which reads them:
 //   · voucher (PROMO P0) — preview via /api/public/promo; the order API re-validates at submit;
 //   · affiliate code (0125, ADR 0022) — only while the seller's programme is on. A selector the order API
-//     resolves against this store's active affiliates; a wrong one never blocks the order.
+//     resolves against this store's active affiliates; a wrong one never blocks the order, and it never
+//     changes the price (no shopper discount is tied to it — AFFILIATE_SPEC), which the hint says.
+// Inputs are 16 px on phones (`text-base sm:text-sm`): below that iOS zooms the page on focus.
 interface Props {
   affiliate: boolean;
 }
@@ -12,17 +14,18 @@ const { affiliate } = Astro.props;
 <div class="mt-4 border-t border-[var(--co-line)] pt-4">
   <label for="voucher-input" class="mb-1.5 block text-sm text-[var(--co-muted)]">Punya kode voucher?</label>
   <div class="flex gap-2">
-    <input id="voucher-input" type="text" autocomplete="off" spellcheck="false" placeholder="mis. GAJIAN25"
-      class="min-w-0 flex-1 rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-sm uppercase text-ink outline-none placeholder:normal-case focus:border-[var(--co-accent)]" />
+    <input id="voucher-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="mis. GAJIAN25"
+      class="min-w-0 flex-1 rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-base uppercase text-ink outline-none placeholder:normal-case focus:border-[var(--co-accent)] sm:text-sm" />
     <button id="voucher-apply" type="button"
-      class="shrink-0 rounded-lg border border-[var(--co-accent)] px-4 py-2 text-sm font-medium text-[var(--co-accent)] transition-colors hover:bg-[var(--co-accent)]/10 disabled:opacity-50">Terapkan</button>
+      class="min-h-11 shrink-0 rounded-lg border border-[var(--co-accent)] px-4 py-2 text-sm font-medium text-[var(--co-accent)] transition-colors hover:bg-[var(--co-accent)]/10 disabled:opacity-50 sm:min-h-0">Terapkan</button>
   </div>
   <p id="voucher-msg" class="mt-1.5 text-xs" hidden></p>
 </div>
 {affiliate && (
-  <div class="mt-3">
-    <label for="affiliate-input" class="mb-1.5 block text-sm text-[var(--co-muted)]">Kode affiliate (opsional)</label>
-    <input id="affiliate-input" type="text" autocomplete="off" spellcheck="false" maxlength="20"
-      class="w-full rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-sm uppercase text-ink outline-none focus:border-[var(--co-accent)]" />
+  <div class="mt-4">
+    <label for="affiliate-input" class="mb-1.5 block text-sm text-[var(--co-muted)]">Kode affiliate <span class="text-xs">(opsional)</span></label>
+    <input id="affiliate-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" aria-describedby="affiliate-help"
+      class="w-full rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-base uppercase text-ink outline-none focus:border-[var(--co-accent)] sm:text-sm" />
+    <p id="affiliate-help" class="mt-1.5 text-xs text-[var(--co-muted)]">Isi jika ada yang merekomendasikan toko ini ke Anda. Tidak mengubah harga.</p>
   </div>
 )}

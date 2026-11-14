@@ -35,18 +35,24 @@ export function AffiliateCard() {
       <CardHeader>
         <CardTitle>Program affiliate</CardTitle>
         <CardDescription>
-          Ajak reseller dan kreator mempromosikan toko Anda dengan kode atau link. Komisi dicatat otomatis dari pesanan; Anda
-          mentransfer komisinya sendiri (di luar TokoΦ) lalu menandainya dibayar.
+          Reseller dan kreator mempromosikan toko Anda dengan kode atau link. Komisi dicatat otomatis dari pesanan; Anda
+          mentransfernya sendiri (di luar TokoΦ) lalu menandainya dibayar.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="grid gap-3">
         <ToggleRow
           title="Aktifkan program affiliate"
-          description="Saat aktif: kolom kode affiliate muncul di checkout, link ?ref= dihitung, dan halaman /affiliate di toko menerima pendaftaran. Saat mati: tidak ada komisi baru; komisi yang sudah tercatat tetap ada."
+          description="Saat aktif: kolom kode affiliate muncul di checkout, link affiliate dihitung, dan halaman /affiliate di toko menerima pendaftaran."
           checked={enabled === true}
           onCheckedChange={toggle}
           disabled={!canWrite || enabled === null || pending}
         />
+        {enabled === false && (
+          <p className="text-xs text-muted-foreground">
+            Sedang mati: tidak ada komisi baru. Komisi dan affiliate yang sudah tercatat tetap tersimpan.
+          </p>
+        )}
+        {!canWrite && <p className="text-xs text-muted-foreground">Peran Anda hanya bisa melihat pengaturan ini.</p>}
       </CardContent>
       <CardFooter className="justify-end">
         <Button variant="outline" nativeButton={false} render={<Link href="/affiliate" />}>
