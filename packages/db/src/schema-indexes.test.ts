@@ -101,6 +101,13 @@ const INDEX_CENSUS: Record<string, Census> = {
   buyer_sessions_buyer_idx: "drizzle",
   buyer_store_links_store_idx: "drizzle",
   buyer_order_claims_buyer_idx: "drizzle",
+  // 0125 / ADR 0022 — the store affiliate programme and its own accounts.
+  affiliate_sessions_account_idx: "drizzle",
+  affiliates_store_status_idx: "drizzle",
+  affiliates_account_idx: "drizzle",
+  affiliates_invite_hash_idx: "drizzle",
+  affiliate_commissions_store_idx: "drizzle",
+  affiliate_commissions_affiliate_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:

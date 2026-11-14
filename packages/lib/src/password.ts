@@ -19,7 +19,7 @@
 // ⚠️ WHY IT LIVES IN packages/lib AND NOT IN AN APP: there used to be two of these, and they had
 // already drifted — super-admin minted 3 random bytes (24 bits) while `apps/admin` minted 4 (32).
 // The weaker one was the one on the store-owner path. A copy is how the weaker number survives a fix.
-import { scryptSync, randomBytes } from "node:crypto";
+import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
 
 // 32 symbols, 5 bits each. Crockford's base32 alphabet: the ten digits plus the letters minus
 // `i`, `l`, `o` and `u` — the pairs a human confuses when reading a credential off a support screen
@@ -56,4 +56,18 @@ export const tempPassword = (): string => {
 export function hashPassword(pw: string): string {
   const salt = randomBytes(16).toString("hex");
   return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
+}
+
+/**
+ * The reader of what `hashPassword` writes (16-byte hex salt, 64-byte key), constant-time. Moved here
+ * from `apps/admin/lib/auth.ts` (which re-exports it, so `@/lib/auth` keeps resolving) when the affiliate
+ * app (ADR 0022) became a third password sign-in: the reader and the writer of one format stay together.
+ */
+export function verifyPassword(pw: string, stored: string | null): boolean {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(":");
+  if (!salt || !hash) return false;
+  const expected = Buffer.from(hash, "hex");
+  const actual = scryptSync(pw, salt, 64);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }

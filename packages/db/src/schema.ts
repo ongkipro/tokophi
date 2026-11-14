@@ -19,6 +19,7 @@ import {
   unique,
   index,
   uniqueIndex,
+  foreignKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -526,6 +527,9 @@ export const products = pgTable(
     // is retired forever, because handing it to the next variant re-points a live catalog item at a
     // different SKU — a silent mis-attribution, not an error.
     variantSeqNext: integer().notNull().default(1),
+    // Affiliate commission override in basis points (0125, ADR 0022). NULL = the store default
+    // (`store_settings.affiliate_rate_bps`); 0 is a real "no commission on this product". 0–10000 (check).
+    affiliateRateBps: integer(),
   },
   (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
 );
@@ -1813,6 +1817,124 @@ export const buyerOrderClaims = pgTable(
   (t) => [index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId)],
 );
 
+// ── Store affiliate programme (0125, ADR 0022, specs/AFFILIATE_SPEC.md) ──────────────────────────────
+// The merchant pays affiliates OUTSIDE TokoΦ: nothing here touches `ledger_entries` or `payouts`.
+// The affiliate's identity is its OWN account (email + password at affiliate.tokophi.com) — never a
+// buyer account. `affiliate_accounts` / `affiliate_sessions`: cross-tenant, no store_id, RLS on with NO
+// policy (tokophi_app sees nothing); apps/affiliate reads with an explicit account predicate.
+export const affiliateStatus = pgEnum("affiliate_status", ["menunggu", "aktif", "ditolak", "nonaktif"]);
+export const affiliateCommissionStatus = pgEnum("affiliate_commission_status", ["pending", "dibayar", "batal"]);
+
+export const affiliateAccounts = pgTable("affiliate_accounts", {
+  id: pk(),
+  /** Lower-cased (check constraint) and unique — the sign-in identifier. */
+  email: text().notNull().unique(),
+  name: text().notNull(),
+  /** Canonical `62…` (normalizePhone). Used for every store application this account makes. */
+  phone: text().notNull(),
+  /** scrypt `salt:hash` (@tokophi/lib/password). */
+  passwordHash: text().notNull(),
+  createdAt: createdAt(),
+  /** Set = cannot sign in (support action); live sessions are refused on the next request. */
+  disabledAt: ts(),
+});
+export const affiliateSessions = pgTable(
+  "affiliate_sessions",
+  {
+    id: pk(),
+    /** sha256 hex of the opaque cookie token. The token itself is never stored. */
+    tokenHash: text().notNull().unique(),
+    accountId: uuid()
+      .notNull()
+      .references(() => affiliateAccounts.id),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    lastSeenAt: createdAt(),
+    revokedAt: ts(),
+    userAgent: text(),
+  },
+  (t) => [index("affiliate_sessions_account_idx").on(t.accountId)],
+);
+export const affiliates = pgTable(
+  "affiliates",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    /** The affiliate account owning this per-store row — one account, many stores. Set by applying while
+     *  signed in or by accepting the seller's invitation; NEVER by email/phone match. */
+    accountId: uuid().references((): AnyPgColumn => affiliateAccounts.id),
+    /** Upper-case, `[A-Z0-9]{3,20}` — what the shopper types and what `?ref=` carries. Unique per store. */
+    code: text().notNull(),
+    name: text().notNull(),
+    /** Canonical `62…` (normalizePhone) — unique per store, and the self-referral check against the buyer. */
+    phone: text().notNull(),
+    email: text(),
+    bankName: text(),
+    bankAccount: text(),
+    bankHolder: text(),
+    status: affiliateStatus().notNull().default("menunggu"),
+    /** Applicant's pitch (where they promote) or the merchant's note. */
+    note: text(),
+    /** sha256 of the seller-issued invitation token (7 days, single use: cleared on accept). */
+    inviteHash: text(),
+    inviteExpiresAt: ts(),
+    createdAt: createdAt(),
+    approvedAt: ts(),
+  },
+  (t) => [
+    unique("affiliates_store_id_code_unique").on(t.storeId, t.code),
+    unique("affiliates_store_id_phone_unique").on(t.storeId, t.phone),
+    unique("affiliates_store_id_account_id_unique").on(t.storeId, t.accountId),
+    // Target of affiliate_commissions' composite FK: a commission names an affiliate of its OWN store.
+    unique("affiliates_id_store_id_unique").on(t.id, t.storeId),
+    index("affiliates_store_status_idx").on(t.storeId, t.status),
+    index("affiliates_account_idx").on(t.accountId),
+    uniqueIndex("affiliates_invite_hash_idx").on(t.inviteHash).where(sql`${t.inviteHash} is not null`),
+  ],
+);
+export const affiliateCommissions = pgTable(
+  "affiliate_commissions",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    /** FK is COMPOSITE (affiliate_id, store_id) → affiliates (id, store_id), declared below. */
+    affiliateId: uuid().notNull(),
+    /** One commission per order, ever — the database's guarantee, not a check-then-write. */
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    /** `kode` = typed at checkout · `link` = captured `?ref=` (check constraint). */
+    source: text().notNull(),
+    /** Goods value after discount that the rate applied to (frozen at order time). ≥ 0 (check). */
+    baseIdr: money().notNull().default(0),
+    /** ≥ 0 (check). */
+    commissionIdr: money().notNull().default(0),
+    /** Human-readable rate snapshot, e.g. "10%" or "10% / 20%" (per product). */
+    rateNote: text(),
+    status: affiliateCommissionStatus().notNull().default("pending"),
+    /** Set when the order reaches `selesai` (+ hold days). Pending AND eligible_at <= now() = payable. */
+    eligibleAt: ts(),
+    paidAt: ts(),
+    paidNote: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "affiliate_commissions_affiliate_store_fk",
+      columns: [t.affiliateId, t.storeId],
+      foreignColumns: [affiliates.id, affiliates.storeId],
+    }),
+    index("affiliate_commissions_store_idx").on(t.storeId, t.status),
+    // The affiliate's own ledger joins and filters on this pair; the store index cannot serve it.
+    index("affiliate_commissions_affiliate_idx").on(t.affiliateId, t.status),
+  ],
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),
@@ -1873,6 +1995,11 @@ export const storeSettings = pgTable("store_settings", {
   returnWindowDays: integer(),
   /** Working days within which the store commits to resolve a complaint (1–60, check in 0124; PP 80/2019 Pasal 27(2)(e)). NULL = not declared. */
   complaintResolutionDays: integer(),
+  // Store affiliate programme (0125, ADR 0022). The SELLER's own switch, OFF by default: an existing store
+  // never starts attributing commissions on deploy. Rate in basis points (0–10000), hold in days (0–90).
+  affiliateEnabled: boolean().notNull().default(false),
+  affiliateRateBps: integer().notNull().default(1000),
+  affiliateHoldDays: integer().notNull().default(3),
   // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),

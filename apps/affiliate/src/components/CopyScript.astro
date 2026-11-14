@@ -1,0 +1,26 @@
+---
+// Progressive copy-to-clipboard (same contract as apps/account/src/components/CopyScript.astro). Put
+// <CopyScript /> once on a page; each `<button data-copy="<id>" data-copy-value="…" hidden>` copies its
+// value. Without JS the link stays on the page as selectable text and the button stays hidden.
+---
+<p class="sr-only" role="status" id="copy-status"></p>
+<script>
+  const status = document.getElementById("copy-status");
+  for (const b of document.querySelectorAll<HTMLButtonElement>("button[data-copy]")) {
+    const target = document.getElementById(b.dataset.copy!);
+    if (!target) continue;
+    b.hidden = false;
+    const label = b.textContent;
+    b.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(b.dataset.copyValue ?? target.textContent?.trim() ?? "");
+        b.textContent = "Disalin";
+        if (status) status.textContent = "Link disalin.";
+      } catch {
+        getSelection()?.selectAllChildren(target);
+        if (status) status.textContent = "Link dipilih. Salin secara manual.";
+      }
+      setTimeout(() => (b.textContent = label), 2000);
+    });
+  }
+</script>

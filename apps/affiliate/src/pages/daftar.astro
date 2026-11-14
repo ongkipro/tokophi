@@ -1,0 +1,65 @@
+---
+// Sign up (ADR 0022): name, email, WhatsApp, password → an affiliate account, signed in. Applying to a
+// store is a separate, explicit step (`/gabung`), and the seller still approves it.
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { PASSWORD_MIN } from "../data/auth";
+import { signUpAndSignIn } from "../lib/signin";
+import { safeNext } from "../lib/nav";
+import { AFFILIATE_COOKIE, affiliateCookieOptions, clientIp } from "../lib/session";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+if (Astro.locals.account) return Astro.redirect(next);
+let errors: Partial<Record<"name" | "email" | "phone" | "password" | "form", string>> = {};
+let values = { name: "", email: "", phone: "" };
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  const r = await signUpAndSignIn(db, {
+    ip: clientIp(Astro.request, Astro.clientAddress),
+    input: { name: f.get("name") ?? "", email: f.get("email") ?? "", phone: f.get("phone") ?? "", password: f.get("password") ?? "" },
+    userAgent: Astro.request.headers.get("user-agent"),
+  });
+  if (r.ok) {
+    Astro.cookies.set(AFFILIATE_COOKIE, r.token, affiliateCookieOptions());
+    return Astro.redirect(safeNext(String(f.get("next") ?? "")), 303);
+  }
+  errors = r.errors;
+  values = { name: r.values.name ?? "", email: r.values.email ?? "", phone: r.values.phone ?? "" };
+}
+const err = (k: keyof typeof errors) => (errors[k] ? `${k}-err` : undefined);
+---
+<Layout title="Daftar">
+  <section class="card narrow">
+    <h1>Daftar jadi affiliate</h1>
+    <p class="lead">Buat akun, lalu gabung ke program affiliate toko-toko TokoΦ. Komisi dibayar langsung oleh masing-masing toko.</p>
+    <form method="post" novalidate>
+      {errors.form && <p class="alert" role="alert">{errors.form}</p>}
+      <input type="hidden" name="next" value={next} />
+      <div class="field">
+        <label for="name">Nama lengkap</label>
+        <input id="name" name="name" autocomplete="name" required maxlength="80" value={values.name} aria-invalid={errors.name ? "true" : undefined} aria-describedby={err("name")} />
+        {errors.name && <p class="error" id="name-err">{errors.name}</p>}
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required value={values.email} aria-invalid={errors.email ? "true" : undefined} aria-describedby={err("email")} />
+        {errors.email && <p class="error" id="email-err">{errors.email}</p>}
+      </div>
+      <div class="field">
+        <label for="phone">Nomor WhatsApp</label>
+        <input id="phone" name="phone" inputmode="tel" autocomplete="tel" required placeholder="mis. 0812 3456 7890" value={values.phone} aria-invalid={errors.phone ? "true" : undefined} aria-describedby={["phone-help", err("phone")].filter(Boolean).join(" ")} />
+        <p class="help" id="phone-help">Dipakai untuk setiap pendaftaran ke toko; seller menghubungi Anda lewat nomor ini.</p>
+        {errors.phone && <p class="error" id="phone-err">{errors.phone}</p>}
+      </div>
+      <div class="field">
+        <label for="password">Kata sandi</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" required minlength={PASSWORD_MIN} aria-invalid={errors.password ? "true" : undefined} aria-describedby={["pw-help", err("password")].filter(Boolean).join(" ")} />
+        <p class="help" id="pw-help">Minimal {PASSWORD_MIN} karakter. Simpan baik-baik: reset lewat email belum tersedia.</p>
+        {errors.password && <p class="error" id="password-err">{errors.password}</p>}
+      </div>
+      <button class="button primary block" type="submit">Buat akun</button>
+    </form>
+    <p class="help">Akun affiliate terpisah dari akun belanja TokoΦ.</p>
+    <p>Sudah punya akun? <a href={next === "/" ? "/masuk" : `/masuk?next=${encodeURIComponent(next)}`}>Masuk</a></p>
+  </section>
+</Layout>

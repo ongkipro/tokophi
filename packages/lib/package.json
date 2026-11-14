@@ -33,6 +33,8 @@
     "./integration-status": "./src/integration-status.ts",
     "./payment-fees": "./src/payment-fees.ts",
     "./order-finance": "./src/order-finance.ts",
+    "./affiliate": "./src/affiliate.ts",
+    "./affiliate-invite": "./src/affiliate-invite.ts",
     "./validate": "./src/validate.ts",
     "./colors": "./src/colors.ts",
     "./theme": "./src/theme.ts",

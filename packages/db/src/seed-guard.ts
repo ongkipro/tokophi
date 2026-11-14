@@ -82,6 +82,13 @@ export const IRREPLACEABLE: Loss[] = [
     what: "orders buyers saved to their account (`order_id` is UNIQUE — once a claim is gone, the claim link that made it is usually gone too)",
   },
   { table: "buyer_store_links", what: "each buyer's recorded consent per store" },
+  // 0125 / ADR 0022: the store affiliate programme. `affiliate_sessions` not listed — a sign-in re-creates it.
+  {
+    table: "affiliate_commissions",
+    what: "AFFILIATE COMMISSIONS — money a merchant owes an affiliate. Paid OUTSIDE TokoΦ, so the ledger holds no second copy and nothing can reconstruct it",
+  },
+  { table: "affiliates", what: "affiliate programme members — their codes, bank details and the merchant's approvals" },
+  { table: "affiliate_accounts", what: "affiliate sign-ins (affiliate.tokophi.com) — the affiliate must sign up again and be re-invited to every store" },
 ];
 
 /** One `Loss` that this database actually holds rows for. */

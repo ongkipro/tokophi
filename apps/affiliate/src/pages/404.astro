@@ -1,0 +1,13 @@
+---
+// Not found — also what every "not mine" record answers (another account's programme is
+// indistinguishable from an unknown one).
+import Layout from "../layouts/Layout.astro";
+const signedIn = !!Astro.locals.account;
+---
+<Layout title="Tidak ditemukan">
+  <section class="card narrow">
+    <h1>Halaman tidak ditemukan</h1>
+    <p class="lead">Alamatnya salah, atau data ini bukan milik akun yang sedang masuk.</p>
+    <p><a class="button primary" href={signedIn ? "/" : "/masuk"}>{signedIn ? "Kembali ke ringkasan" : "Masuk"}</a></p>
+  </section>
+</Layout>

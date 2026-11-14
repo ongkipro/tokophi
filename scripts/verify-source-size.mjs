@@ -36,8 +36,9 @@ const CEILINGS = {
   // RAISED 2864 → 2959 (2026-11-05, SHIP-MENGANTAR D12, PR #446): COD on a Mengantar-connected store
   // needs the checkout to re-quote on a payment switch (codRequote, COD_MODE, stale/coalesce guards,
   // COD memory across a destination change). +1 (2960) with the storefront redesign's cart-thumb line.
-  // The split is still Task 6.6.
-  "apps/storefront/src/pages/checkout.astro": 2960,
+  // The split is still Task 6.6. LOWERED 2960 → 2955 (2026-11-14, AFFILIATE-P2): the voucher markup moved
+  // to components/CheckoutCodes.astro together with the new affiliate-code field, instead of appending it.
+  "apps/storefront/src/pages/checkout.astro": 2955,
   "apps/admin/app/(admin)/produk/[id]/product-editor.tsx": 1580, // lowered 2026-11-05: catalogue auto-fill EXTRACTED to use-catalog-autofill.ts
 };
 

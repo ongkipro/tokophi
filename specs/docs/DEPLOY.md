@@ -165,6 +165,53 @@ note in `PRIVACY-COMPLIANCE.md` approved, a retention rule for revoked sessions)
    "present in env" proves nothing.
 5. Rollback = empty `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` + `ACCOUNT_GOOGLE_REDIRECT_URI` (Seller Google sign-in unaffected) and redeploy; data stays.
 
+## Affiliate — `affiliate.tokophi.com` (AFFILIATE-P2, ADR 0022, 2026-11-14)
+
+Store affiliates' OWN accounts (`apps/affiliate`, email + password — separate from the buyer account). Same
+shape as `account` above; nothing in Coolify or Cloudflare has to be created. **It ships dormant; turning it on
+is ONE env var on three services + redeploy.**
+
+| | |
+|---|---|
+| Image | `apps/affiliate/Dockerfile` — build → `npm ci --omit=dev --workspace @tokophi/affiliate` → runtime, `USER node`, built without DB or secret |
+| Port | **4330** (= its `astro dev` port). `expose` only. |
+| Routing | ``Host(`affiliate.tokophi.com`)``, **priority 100** over the store wildcard; slug `affiliate` is in `RESERVED_SLUGS` |
+| Healthcheck | `wget http://127.0.0.1:4330/healthz` — 200 while open **or** closed (`select 1`), `start_interval: 2s` |
+| Depends on | `postgres: service_healthy` only — no `migrate` gate. Migration `0125_affiliate_programme` runs with the normal `migrate` job. |
+| DB role | `${PLATFORM_DATABASE_URL}` + `DATABASE_RUNTIME_ROLE: owner` (every query filters on the signed-in affiliate account) |
+| Secrets | **None.** The session cookie carries an opaque random token; only its sha256 is stored (`affiliate_sessions`). |
+
+**The switch is `AFFILIATE_APP_URL`** (this app's own origin), forwarded EMPTY by default to `affiliate`, `admin`
+and `storefront`:
+
+| `AFFILIATE_APP_URL` | `affiliate.tokophi.com` | Seller → Affiliate | `<store>/affiliate` |
+|---|---|---|---|
+| empty (default) | every page **503 "Affiliate TokoΦ belum dibuka"**, `/healthz` 200, no row read | everything works except "Undang ke akun affiliate" (hidden; refused if called) | 404 while the store's programme is off; when on: explains the programme + "Pendaftaran affiliate belum dibuka" |
+| `https://affiliate.tokophi.com` | sign-up / sign-in / apply / invitations | invite button shown | "Daftar jadi affiliate" → `https://affiliate.tokophi.com/gabung?toko=<slug>` |
+
+The SELLER still switches the programme on per store (Pengaturan → Affiliate, `store_settings.affiliate_enabled`,
+default off) — the env var only opens the platform side. Checkout attribution (`?ref=` / typed code) works for
+a store whose programme is on whatever `AFFILIATE_APP_URL` says (affiliates the seller added by hand earn too).
+
+**Turning it on** (owner-gated):
+1. Coolify → environment: `AFFILIATE_APP_URL=https://affiliate.tokophi.com` (one variable; the compose forwards it
+   to `affiliate`, `admin` and `storefront`).
+2. Redeploy (a var reaches a container only when the service is recreated).
+3. Verify: `/healthz` → 200; `https://affiliate.tokophi.com/masuk` → 200 with the sign-in form (not "belum
+   dibuka"); sign up a test account; on a test store switch the programme on, open `<store>/affiliate` → the link
+   lands on `/gabung?toko=<slug>`; apply → Seller → Promo → Affiliate shows the applicant (sidebar badge).
+   `docker exec <affiliate> sh -c 'echo "$AFFILIATE_APP_URL"'` shows the value (it is not a secret).
+
+**Rollback:** set `AFFILIATE_APP_URL` empty and redeploy → the area is "belum dibuka" again, invites hidden,
+`/affiliate` stops linking. Nothing is deleted: accounts, applications and commissions stay in the database, and
+the seller's own switch keeps attribution on or off per store. To stop attribution for one store, the seller
+switches the programme off in Pengaturan. Reverting the code is NOT needed for either; migration `0125` is
+additive (new tables + columns with defaults that change nothing for an existing store).
+
+**Known limits:** no password reset by email (no mail provider — the UI says to ask the seller/support; a support
+reset needs an operator tool that does not exist yet, tracked in TASKS); sign-up answers "email sudah
+terdaftar" (same as Seller sign-up).
+
 ## ⚠️ Gotchas / errors hit → fixes (READ before re-deploying or migrating)
 
 1. **Nixpacks / base-directory FAILS on npm workspaces.** Building `apps/admin` alone can't resolve `@tokophi/*`. → **Docker Compose build pack**, each service `build.context: .` (repo root) + `dockerfile: apps/<app>/Dockerfile`.

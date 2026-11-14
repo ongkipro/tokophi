@@ -33,12 +33,15 @@ PAY-QRIS-EXPIRY (`specs/docs/TASKS.md`).
 
 - 🔴 **Migration clash:** `main` already shipped `0116_mengantar_shipping`; #424 and #426 both use `0116`.
   Each renumbers AND re-stamps before merge (`specs/docs/rules/migrations.md`). Merge #424 before #430/#431.
-- **Test gaps from the 2026-10-29 affiliate audit:** `/api/public/order` ↔ `attachAffiliateCommission`
-  (typed code beats `?ref=`, a bad code never costs the sale, self-referral, programme off); storefront
-  `applyAffiliate` / `/affiliate` form (honeypot, rate limit, dupe phone); a browser pass of both.
-- **Known, not fixed:** no unique `(store_id, phone)` on `affiliates`; "Nomor ini sudah terdaftar" is a
-  phone-enumeration oracle (5/h/IP); no CHECK `commission_idr >= 0`; no composite FK tying `affiliate_id`
-  to the same `store_id`; two media pickers still load the full library (`collection-editor.tsx`,
+- **Store affiliate programme → AFFILIATE-P2 (2026-11-14, ADR 0022, its own PR on `feat/affiliate-p2`).** The
+  affiliate half of #424/#430/#431/#455 is ported onto `main` with the owner's changed identity (affiliates get
+  their OWN accounts at `affiliate.tokophi.com`, not the buyer account), as migration `0125`. The 2026-10-29
+  audit gaps are closed there: order-route wiring tested end to end (typed beats `?ref=`, bad code never costs
+  the sale, self-referral, programme off); UNIQUE `(store_id, phone)`, CHECK `commission_idr >= 0` and a
+  composite FK `(affiliate_id, store_id)` in the schema; the anonymous `/affiliate` form and its "Nomor ini
+  sudah terdaftar" oracle are gone. Once it merges, #424/#430/#431/#455 can be closed unmerged (their buyer
+  half shipped as #471).
+- **Known, not fixed:** two media pickers still load the full library (`collection-editor.tsx`,
   `article-editor.tsx`).
 - **Owner decision:** 283 commits on `main` carry an AI `Co-authored-by` trailer (DEC-014: not rewritten);
   the repo is public now. A rewrite is a force-push and needs approval of the exact command.

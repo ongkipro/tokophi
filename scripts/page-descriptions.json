@@ -150,7 +150,21 @@
     "account:/orders/[number]/receipt": "Bukti pesanan — the printable page under the order's own URL.",
     "account:/stores": "'Toko' — stores this account is actively linked to, most recent purchase first.",
     "account:/stores/[slug]": "Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link.",
-    "account:/404": "Not found — also what every 'not mine' record answers (another account's order or store)."
+    "account:/404": "Not found — also what every 'not mine' record answers (another account's order or store).",
+    "admin:/affiliate": "'Affiliate' (Promo → Affiliate, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`.",
+    "storefront:/affiliate": "Store affiliate programme page (ADR 0022): 404 while the seller's switch is off; otherwise how it works + a link to `affiliate.tokophi.com/gabung?toko=<slug>`, or 'belum dibuka' when AFFILIATE_APP_URL is unset. No public form.",
+    "affiliate:/": "'Ringkasan' — the affiliate's totals across stores (siap / ditahan / dibayar), each programme with status, code and share link `<store>/?ref=CODE`.",
+    "affiliate:/404": "Not found — also what another account's programme answers.",
+    "affiliate:/akun": "'Akun' — who is signed in, change password (revokes every other session), sign out. No reset by email (no mail provider).",
+    "affiliate:/belum-dibuka": "The one page a CLOSED affiliate area answers (503) while AFFILIATE_APP_URL is unset. Reads no row.",
+    "affiliate:/daftar": "Sign-up: name, email, WhatsApp, password (scrypt). Rate-limited per IP (signup bucket, fails closed).",
+    "affiliate:/gabung": "'Gabung toko' — apply to ONE store's programme by slug (`?toko=`): a `menunggu` row with the account's own name + WhatsApp; 5 attempts/account/hour in the DB; a same-phone row the seller added is never taken over.",
+    "affiliate:/healthz": "Container healthcheck — 200 while open OR closed, proves the Postgres connection with `select 1`.",
+    "affiliate:/keluar": "POST — revokes this session row and deletes the cookie.",
+    "affiliate:/komisi": "'Komisi' — one commission ledger across MY programmes, filterable by state; order number and money only, no buyer data.",
+    "affiliate:/masuk": "Sign-in: email + password. IP cap + per-account failure streak (surface `affiliate`), opaque session token, sha256 stored.",
+    "affiliate:/toko/[id]": "One of MY programmes: status, code, share link, rate/hold, totals, masked payout account, commission history. Another account's id answers 404.",
+    "affiliate:/undangan": "Accept a seller's invitation (`?t=`, 7 days, single use, sha256 stored): ONE conditional UPDATE binds the row to this account after a confirmation screen."
   },
   "howto": [
     [

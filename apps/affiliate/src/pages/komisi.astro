@@ -1,0 +1,36 @@
+---
+// Komisi: one ledger across every programme of this account, filterable by state.
+import Layout from "../layouts/Layout.astro";
+import Ledger from "../components/Ledger.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { COMMISSION_STATES, LEDGER_LIMIT, myCommissions, type CommissionState } from "../data/affiliate";
+import { signInUrl } from "../lib/nav";
+import { STATE_LABEL } from "../lib/view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const raw = Astro.url.searchParams.get("state");
+const state = (COMMISSION_STATES as readonly string[]).includes(raw ?? "") ? (raw as CommissionState) : null;
+const ledger = await myCommissions(db, account.id, { state });
+---
+<Layout title="Komisi" active="komisi">
+  <div class="stack">
+    <header>
+      <h1>Komisi</h1>
+      <p class="lead">Setiap pesanan yang memakai kode atau link Anda. Data pembeli tidak ditampilkan.</p>
+    </header>
+    <nav class="filters" aria-label="Saring status">
+      <a href="/komisi" aria-current={state === null ? "true" : undefined}>Semua</a>
+      {COMMISSION_STATES.map((s) => <a href={`/komisi?state=${s}`} aria-current={state === s ? "true" : undefined}>{STATE_LABEL[s].text}</a>)}
+    </nav>
+    {ledger.count === 0 ? (
+      <section class="card"><p>Belum ada komisi{state ? " dengan status ini" : ""}.</p></section>
+    ) : (
+      <>
+        <p class="help num">{ledger.count} pesanan · total komisi {IDR(ledger.commissionIdr)}{ledger.count > LEDGER_LIMIT ? ` · menampilkan ${LEDGER_LIMIT} terbaru` : ""}</p>
+        <Ledger rows={ledger.rows} showStore caption="Riwayat komisi semua toko" />
+      </>
+    )}
+  </div>
+</Layout>

@@ -1,0 +1,53 @@
+---
+// Akun: who is signed in, change password (revokes every other session), sign out.
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { changePassword, PASSWORD_MIN } from "../data/auth";
+import { signInUrl } from "../lib/nav";
+
+const account = Astro.locals.account;
+const sessionId = Astro.locals.sessionId;
+if (!account || !sessionId) return Astro.redirect(signInUrl(Astro.url));
+let error: { field: "current" | "next"; text: string } | null = null;
+let done: number | null = null;
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  const r = await changePassword(db, account.id, sessionId, String(f.get("current") ?? ""), String(f.get("next") ?? ""));
+  if (r.ok) done = r.signedOutOthers;
+  else error = { field: r.field, text: r.error };
+}
+---
+<Layout title="Akun" active="akun">
+  <div class="stack narrow">
+    <section class="card">
+      <h1>Akun</h1>
+      <p><strong>{account.name}</strong><br /><span class="lead">{account.email}</span></p>
+      <p class="help">WhatsApp: <span class="num">{account.phone}</span>. Nomor ini dipakai untuk pendaftaran ke toko baru.</p>
+    </section>
+    <section class="card">
+      <h2>Ganti kata sandi</h2>
+      {done !== null && (
+        <p class="notice" role="status">Kata sandi diganti.{done > 0 ? ` ${done} perangkat lain dikeluarkan.` : ""}</p>
+      )}
+      <form method="post" novalidate>
+        <div class="field">
+          <label for="current">Kata sandi saat ini</label>
+          <input id="current" name="current" type="password" autocomplete="current-password" required aria-invalid={error?.field === "current" ? "true" : undefined} aria-describedby={error?.field === "current" ? "current-err" : undefined} />
+          {error?.field === "current" && <p class="error" id="current-err">{error.text}</p>}
+        </div>
+        <div class="field">
+          <label for="next">Kata sandi baru</label>
+          <input id="next" name="next" type="password" autocomplete="new-password" required minlength={PASSWORD_MIN} aria-invalid={error?.field === "next" ? "true" : undefined} aria-describedby={error?.field === "next" ? "next-err" : "next-help"} />
+          {error?.field === "next" ? <p class="error" id="next-err">{error.text}</p> : <p class="help" id="next-help">Minimal {PASSWORD_MIN} karakter. Perangkat lain akan dikeluarkan.</p>}
+        </div>
+        <button class="button primary" type="submit">Simpan kata sandi</button>
+      </form>
+      <p class="help">Lupa kata sandi? Reset lewat email belum tersedia — hubungi seller toko yang Anda promosikan atau support TokoΦ.</p>
+    </section>
+    <section class="card">
+      <form method="post" action="/keluar">
+        <button class="button secondary" type="submit">Keluar</button>
+      </form>
+    </section>
+  </div>
+</Layout>

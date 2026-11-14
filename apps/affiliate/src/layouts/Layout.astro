@@ -1,0 +1,47 @@
+---
+// One shell for every affiliate page (ADR 0022). Bahasa Indonesia, no third-party script (pages carry an
+// affiliate's earnings and, on the invitation link, a token in the URL).
+import "../styles/global.css";
+
+export type Section = "ringkasan" | "komisi" | "gabung" | "akun";
+interface Props {
+  title: string;
+  active?: Section;
+}
+const { title, active } = Astro.props;
+const account = Astro.locals.account;
+const NAV: { key: Section; href: string; label: string }[] = [
+  { key: "ringkasan", href: "/", label: "Ringkasan" },
+  { key: "komisi", href: "/komisi", label: "Komisi" },
+  { key: "gabung", href: "/gabung", label: "Gabung toko" },
+  { key: "akun", href: "/akun", label: "Akun" },
+];
+---
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Ctext x='16' y='23' font-family='Arial,sans-serif' font-size='20' font-weight='700' text-anchor='middle' fill='white'%3E%CE%A6%3C/text%3E%3C/svg%3E" />
+    <link rel="preload" href="/assets/geist-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <title>{`${title} · Affiliate TokoΦ`}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Langsung ke isi</a>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/">Toko<b>Φ</b><span>Affiliate</span></a>
+        {account && (
+          <nav class="nav" aria-label="Menu affiliate">
+            {NAV.map((n) => <a href={n.href} aria-current={active === n.key ? "page" : undefined}>{n.label}</a>)}
+          </nav>
+        )}
+      </div>
+    </header>
+    <main id="content">
+      <slot />
+    </main>
+  </body>
+</html>

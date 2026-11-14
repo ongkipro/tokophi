@@ -176,6 +176,7 @@ when the task depends on the provider's current roster.
 | [0018](decisions/0018-mengantar-per-store-seller-accounts.md) | **Accepted** — Mengantar shipping through a per-store seller account (Partner API) behind a provider switch; KiriminAja = fallback + COD (amends 0004, 0015); dispatch + auto-registration amended by 0019 |
 | [0019](decisions/0019-store-level-shipping-provider.md) | **Accepted** — shipping provider per store, set by Super Admin or a signup code (default KiriminAja); platform switch = master kill-switch; Mengantar accounts only for Mengantar stores (amends 0018) |
 | [0021](decisions/0021-first-party-plugins.md) | **Accepted (v1)** — First-party plugins, compiled in and activated per store (Pengaturan → Plugin, owner-only); still no marketplace. First plugin: Kelola CRM (amends the PRD positioning line) |
+| [0022](decisions/0022-affiliate-own-accounts.md) | **Accepted (2026-11-14)** — Store affiliates get their own accounts at `affiliate.tokophi.com` (`apps/affiliate`, email + password), separate from the buyer account; seller pays outside TokoΦ and enables the programme per store. Supersedes AFFILIATE_SPEC F-A15 v1.2; amends ADR 0016 |
 
 ---
 

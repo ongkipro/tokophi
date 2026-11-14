@@ -169,6 +169,14 @@ closure — no purge job exists).
 | 4 | `ACCOUNT_CLAIM_SECRET` (admin + account, same value) + `AUTH_SECRET` on account | ✅ **wired** — the compose forwards one `ACCOUNT_CLAIM_SECRET` to both services (equal by construction) and `AUTH_SECRET` (required) to account; `ACCOUNT_APP_URL` forwarded to the storefront. ⏳ owner sets the values in Coolify |
 | 5 | Retention rule for revoked session rows | ⏳ owner decision (listed as open in `PRIVACY-COMPLIANCE.md` §1.3) |
 
+## Note 2026-11-14 — the affiliate area is NOT part of this account (ADR 0022)
+
+The draft and the #424 implementation planned the store-affiliate workspace inside this account ("buyer akun
+dulu, affiliate menyusul", AFFILIATE_SPEC F-A15 v1.2). The owner reversed that the same day the buyer account
+was accepted: affiliates get their OWN accounts at `affiliate.tokophi.com` (`apps/affiliate`, email + password).
+`apps/account` carries no affiliate page and `buyer_accounts` is referenced by nothing affiliate-related. See
+`0022-affiliate-own-accounts.md`.
+
 ## Alternatives rejected
 
 - **One independent buyer account per store.** Duplicates sign-in, fragments order history, little value.
