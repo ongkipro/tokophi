@@ -1,6 +1,7 @@
 import "server-only";
 import { schema } from "@tokophi/db";
 import { withCurrentTenant, type Tx } from "@/lib/tenant";
+import { buyerAccountEnabled } from "@tokophi/lib/claim-token";
 import { and, desc, eq, getTableColumns, max, min, countDistinct, sql } from "drizzle-orm";
 import type { Customer, Order } from "@/lib/types/domain";
 
@@ -34,7 +35,9 @@ function toCustomer(r: {
   // "Terdaftar" = the person can sign in and see their orders here. Since ADR 0016 the real source of
   // that fact is a TokoΦ Account link; `registered_at` is the older column nothing in the app writes
   // (production holds 0 rows with it set — measured 2026-11-14), kept so seeded data still reads.
-  const since = r.accountLinkedAt ?? r.registeredAt ?? null;
+  // Dormant while the TokoΦ Account feature is OFF (ADR 0016): no badge, no "connected since".
+  const linkedAt = buyerAccountEnabled() ? (r.accountLinkedAt ?? null) : null;
+  const since = linkedAt ?? r.registeredAt ?? null;
   return {
     id: r.id,
     name: r.name,
@@ -49,7 +52,7 @@ function toCustomer(r: {
     notes: r.notes ?? undefined,
     registered: since != null,
     registeredDaysAgo: since ? Math.round((Date.now() - since.getTime()) / 86_400_000) : null,
-    accountLinked: r.accountLinkedAt != null,
+    accountLinked: linkedAt != null,
     lastOrderMinutesAgo: r.lastOrderAt
       ? Math.max(0, Math.round((Date.now() - r.lastOrderAt.getTime()) / 60_000))
       : null,
@@ -111,6 +114,7 @@ export async function getCustomerOrders(customerId: string): Promise<CustomerOrd
 
 /** The query behind `getCustomerOrders`, on a tenant transaction (exported for the RLS test). */
 export async function customerOrderRows(db: Tx, customerId: string): Promise<CustomerOrder[]> {
+  const enabled = buyerAccountEnabled(); // ADR 0016: no "Tersimpan di Akun TokoΦ" marker while OFF
   const rows = await db
     .select({
       number: schema.orders.number,
@@ -142,7 +146,7 @@ export async function customerOrderRows(db: Tx, customerId: string): Promise<Cus
       minutesAgo: Math.round((Date.now() - r.placedAt.getTime()) / 60_000),
       awb: r.awb,
       courierName: r.courier,
-      savedToAccount: r.savedToAccount === true,
+      savedToAccount: enabled && r.savedToAccount === true,
     }))
     .sort((a, b) => a.minutesAgo - b.minutesAgo);
 }

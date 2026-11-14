@@ -13,7 +13,7 @@ import {
   recentRows, resultAnnouncement, searchAllOrdersRow, splitHighlight, tokenize, GROUP_CAP,
   type GroupKey, type QuickAction, type Recent, type Row, type SearchItem,
 } from "@/lib/search-model";
-import { useStoreHref, useStoreSlug } from "@/components/admin/store-context";
+import { useBuyerAccountsEnabled, useStoreHref, useStoreSlug } from "@/components/admin/store-context";
 import { useRole } from "@/components/admin/permissions";
 import { OrderStatusBadge } from "@/components/admin/order-status";
 import type { OrderStatus } from "@/lib/types/domain";
@@ -101,7 +101,8 @@ export function CommandPalette({ index }: { index: SearchItem[] }) {
   const router = useRouter();
   const storeHref = useStoreHref();
   const slug = useStoreSlug();
-  const navRows = React.useMemo(() => buildNavRows(navGroupsFor(slug)), [slug]);
+  const buyerAccounts = useBuyerAccountsEnabled();
+  const navRows = React.useMemo(() => buildNavRows(navGroupsFor(slug, { buyerAccounts })), [slug, buyerAccounts]);
   const role = useRole();
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);

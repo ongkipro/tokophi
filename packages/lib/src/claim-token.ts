@@ -17,6 +17,14 @@ export function claimSecret(env: Record<string, string | undefined> = process.en
   return s && s.length >= MIN_SECRET_LEN ? s : null;
 }
 
+/**
+ * THE switch of the TokoΦ Account feature (ADR 0016) — the one server-side definition of "ON". It is the
+ * same predicate that decides whether `/api/public/order` issues a claim token, so the Seller screens
+ * (Pengaturan → Layanan Pembeli, Pelanggan → Akun Pembeli, the account badges) can never be visible
+ * while no buyer can actually save an order, and vice versa. Read at call time.
+ */
+export const buyerAccountEnabled = (env: Record<string, string | undefined> = process.env): boolean => claimSecret(env) !== null;
+
 const mac = (secret: string, payload: string) => createHmac("sha256", secret).update(`order-claim:${payload}`).digest();
 
 export function issueClaimToken(orderId: string, secret: string, nowMs = Date.now()): string {

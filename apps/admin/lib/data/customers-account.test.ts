@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Sql } from "postgres";
 import { sql, type SQL } from "drizzle-orm";
@@ -29,6 +29,10 @@ beforeAll(() => {
 afterAll(async () => {
   await client?.end();
 });
+// The Seller facts are dormant while the feature is OFF (lib/buyer-account-gate.test.ts); these cases
+// run with it ON, except the one that proves OFF hides an existing link.
+beforeEach(() => vi.stubEnv("ACCOUNT_CLAIM_SECRET", "c".repeat(40)));
+afterEach(() => vi.unstubAllEnvs());
 
 type Db = typeof db;
 const ROLLBACK = Symbol("rollback");
@@ -106,6 +110,10 @@ suite("Seller projection of the TokoΦ Account — two stores, one buyer (real P
       expect(linked).toEqual({ [a.customerId]: true, [aGuest.customerId]: false });
       expect((await customerOrderRows(T(tx), a.customerId)).map((o) => o.savedToAccount)).toEqual([true]);
       expect((await customerOrderRows(T(tx), aGuest.customerId)).map((o) => o.savedToAccount)).toEqual([false]);
+      // Feature OFF: the same saved order carries no marker (the claim row itself is untouched).
+      vi.stubEnv("ACCOUNT_CLAIM_SECRET", "");
+      expect((await customerOrderRows(T(tx), a.customerId)).map((o) => o.savedToAccount)).toEqual([false]);
+      vi.stubEnv("ACCOUNT_CLAIM_SECRET", "c".repeat(40));
       expect(await customerOrderRows(T(tx), b.customerId)).toEqual([]); // B's customer does not exist for A
       // A cannot plant a claim or a link in B's tenant.
       await expect(

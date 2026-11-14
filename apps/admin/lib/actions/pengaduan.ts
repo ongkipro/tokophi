@@ -3,6 +3,7 @@ import { schema } from "@tokophi/db";
 import { parseComplaintDays } from "@tokophi/lib/complaint-service";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { buyerAccountEnabled } from "@tokophi/lib/claim-token";
 import { requireCapability } from "@/lib/rbac";
 import { getSession } from "@/lib/auth";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
@@ -27,6 +28,9 @@ export async function getComplaintService(): Promise<{ days: number | null; hasW
 
 export async function saveComplaintService(input: { days: string | number | null }): Promise<{ ok: boolean; days: number | null; error?: string }> {
   const { storeId } = await requireCapability("settings:write");
+  // Dormant while the TokoΦ Account feature is OFF (ADR 0016): no screen offers it, and a direct call
+  // writes nothing. A value saved earlier stays exactly as it is.
+  if (!buyerAccountEnabled()) return { ok: false, days: null, error: "Fitur Akun TokoΦ belum aktif." };
   const parsed = parseComplaintDays(input.days);
   // Refused, never guessed: buyers read this number as the store's promise.
   if (!parsed.ok) return { ok: false, days: null, error: parsed.error };

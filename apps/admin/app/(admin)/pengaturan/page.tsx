@@ -24,7 +24,8 @@ import {
   CardContent,
   CardFooter,
 } from "@tokophi/ui/card"
-import { useStoreName } from "@/components/admin/store-context"
+import { useBuyerAccountsEnabled, useStoreName } from "@/components/admin/store-context"
+import { settingsSectionVisible } from "@/lib/nav"
 import { initials } from "@/components/admin/initials"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
@@ -102,7 +103,11 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
   // and client start on the same section — no effect, no hydration mismatch. An unknown value is
   // ignored, never trusted as a Section.
   const wanted = React.use(searchParams).section
-  const [section, setSection] = React.useState<Section>(() => SECTIONS.find((s) => s.id === wanted)?.id ?? "profil")
+  // Layanan Pembeli exists only while the TokoΦ Account feature is ON (ADR 0016) — a typed
+  // `?section=pembeli` falls back to Profil when it is off, and the section is not listed.
+  const buyerAccounts = useBuyerAccountsEnabled()
+  const sections = SECTIONS.filter((s) => settingsSectionVisible(s.id, buyerAccounts))
+  const [section, setSection] = React.useState<Section>(() => sections.find((s) => s.id === wanted)?.id ?? "profil")
   const storeName = useStoreName()
 
 
@@ -131,7 +136,7 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
         <div className="lg:sticky lg:top-6 h-fit space-y-4">
           <Card className="p-1.5">
             <nav className="flex flex-col gap-0.5">
-              {SECTIONS.map((s) => {
+              {sections.map((s) => {
                 const active = section === s.id
                 return (
                   <button
@@ -227,7 +232,7 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
           {/* LAYANAN PEMBELI (ADR 0016, BUYER-ACCOUNT-P1) — the two promises a buyer reads on an order
               in their Akun TokoΦ: the return window and the complaint-resolution period. Both NULL by
               default = the buyer is shown nothing; we never make a promise on the store's behalf. */}
-          {section === "pembeli" && (
+          {section === "pembeli" && buyerAccounts && (
             <div className="grid max-w-3xl gap-5">
               <ReturCard />
               <PengaduanCard />

@@ -55,7 +55,7 @@
 
 | Variable | App | Meaning |
 |---|---|---|
-| `ACCOUNT_CLAIM_SECRET` (≥ 32 chars) | admin **and** account (same value) | Signs/verifies claim tokens. Unset ⇒ feature off. |
+| `ACCOUNT_CLAIM_SECRET` (≥ 32 chars) | admin **and** account (same value) | Signs/verifies claim tokens. **It is THE feature switch** — `buyerAccountEnabled()` (`@tokophi/lib/claim-token`): unset ⇒ no token, AND the Seller surfaces stay dormant (no Pelanggan → Akun Pembeli row, no Pengaturan → Layanan Pembeli, `/pelanggan/akun` 404, the saves refuse, no Terdaftar/Tersimpan badge from an account link). Saved values are never touched by the switch. |
 | `ACCOUNT_APP_URL` | storefront | Account origin for the "Simpan" link (`https` only in a production build). Unset ⇒ no offer. |
 | `AUTH_SECRET` | account | Root of the account session key (derived, never used raw). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ACCOUNT_GOOGLE_REDIRECT_URI` | account | Google sign-in; unset ⇒ no button. |

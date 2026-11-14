@@ -150,7 +150,7 @@ redirect URI.
 
 ## Production enablement — still owner-gated after merge
 
-Merging ships **no behaviour change in production**: the claim token needs `ACCOUNT_CLAIM_SECRET` on the
+Merging ships **no behaviour change in production** — the Seller screens included: `buyerAccountEnabled()` (`ACCOUNT_CLAIM_SECRET` set, ≥ 32 chars, the same predicate that issues claim tokens) is the ONE switch, and while it is off Pelanggan → Akun Pembeli and Pengaturan → Layanan Pembeli are hidden and refuse a typed URL / direct save (owner review 2026-11-14): the claim token needs `ACCOUNT_CLAIM_SECRET` on the
 admin app, the offer needs `ACCOUNT_APP_URL` on the storefront, and `apps/account` has no Dockerfile or
 compose service yet. Before switching it on: (1) the UU PDP processing note for the storefront privacy page
 and `PRIVACY-COMPLIANCE.md` (TokoΦ as controller of the account data); (2) container + DNS for

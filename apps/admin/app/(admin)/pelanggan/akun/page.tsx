@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { buyerAccountEnabled } from "@tokophi/lib/claim-token";
 import { getAccountCustomers } from "@/lib/data/customers";
 import { PageHeader } from "@/components/admin/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tokophi/ui/card";
@@ -12,6 +14,8 @@ export const dynamic = "force-dynamic";
 // so the tenant role cannot see it even by mistake. Read-only: there is nothing for a Seller to change
 // about a buyer's account, so no capability gate beyond the session the (admin) layout already demands.
 export default async function AkunPembeliPage() {
+  // Dormant until the TokoΦ Account feature is ON — a typed URL answers 404, like the hidden nav row.
+  if (!buyerAccountEnabled()) notFound();
   const rows = await getAccountCustomers();
   const saved = rows.reduce((s, r) => s + r.savedOrders, 0);
   return (
