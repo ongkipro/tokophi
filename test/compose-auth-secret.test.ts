@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { serviceEnvKeys, sourceFiles } from "./compose-env";
@@ -23,21 +23,13 @@ describe("production compose forwards AUTH_SECRET to every surface that signs wi
   const consumers = apps.filter((a) => sourceFiles(path.join(ROOT, "apps", a)).some((f) => CONSUMER.test(readFileSync(f, "utf8"))));
 
   it("finds the consumers (a scan that matches nothing is green forever)", () => {
-    expect(consumers).toEqual(expect.arrayContaining(["admin", "super-admin", "storefront"]));
+    expect(consumers).toEqual(expect.arrayContaining(["admin", "super-admin", "storefront", "account"]));
   });
 
-  // NAMED exceptions: a surface that is in the repo but NOT deployed has no compose block to forward to.
-  // Each entry must stay true — the moment the app gets a Dockerfile (the step before a compose service)
-  // the exception goes red and forces the AUTH_SECRET line to be written in the same change.
-  const NOT_DEPLOYED: Record<string, string> = {
-    account: "TokoΦ Account (ADR 0016) — merged dark; production enablement (container, DNS, secrets) is owner-gated",
-  };
-  it.each(Object.keys(NOT_DEPLOYED))("%s is listed as not deployed and really has no Dockerfile", (app) => {
-    expect(existsSync(path.join(ROOT, "apps", app, "Dockerfile")), NOT_DEPLOYED[app]).toBe(false);
-    expect(serviceEnvKeys(compose, app)).toBeNull();
-  });
-
-  it.each(consumers.filter((a) => !(a in NOT_DEPLOYED)))("%s receives AUTH_SECRET", (app) => {
+  // `account` was a named "not deployed" exception here until BUYER-ACCOUNT-DEPLOY (2026-11-14) gave it a
+  // Dockerfile and a compose service; there are no exceptions now. A future app that ships source before
+  // its container needs its own named exception, asserted to really have no Dockerfile.
+  it.each(consumers)("%s receives AUTH_SECRET", (app) => {
     const keys = serviceEnvKeys(compose, app);
     expect(keys, `no top-level service "${app}" in docker-compose.coolify.yml`).not.toBeNull();
     expect([...keys!]).toContain("AUTH_SECRET");

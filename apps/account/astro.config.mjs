@@ -18,7 +18,11 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   // Form POSTs are the whole write surface; Astro refuses a cross-origin POST (default, stated).
-  security: { checkOrigin: true },
+  // `allowedDomains` (BUYER-ACCOUNT-DEPLOY): behind Traefik the node adapter trusts no Host / X-Forwarded-*
+  // header unless it is listed, so `Request.url` was `http://localhost:4329` and a form POST from a browser
+  // that sends no `Sec-Fetch-Site` failed the origin check (403) — measured against the container with
+  // Traefik's headers. Unlisted hosts (localhost in dev and in the UI sweep) keep the old fallback.
+  security: { checkOrigin: true, allowedDomains: [{ hostname: "account.tokophi.com", protocol: "https" }] },
   // The dev toolbar floats over the bottom tab bar on a phone; this app is reviewed on phones.
   devToolbar: { enabled: false },
   vite: { ssr: { external: ["postgres"] } },

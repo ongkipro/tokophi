@@ -254,6 +254,13 @@
 - **Follow-up — production enablement (owner):** Dockerfile + compose service + DNS for `account.tokophi.com`; Google redirect URI; `ACCOUNT_CLAIM_SECRET` (admin + account), `ACCOUNT_APP_URL` (storefront), `AUTH_SECRET` (account); `PRIVACY-COMPLIANCE.md` processing note; retention rule for revoked session rows (ADR 0016 list).
 - **Evidence:** `BUILD-LOG.md` 2026-11-14 (BuyerAccountAgent).
 
+#### BUYER-ACCOUNT-DEPLOY — make `apps/account` deployable at account.tokophi.com, dormant until the owner turns it on
+- **Status:** `[x]` **DONE 2026-11-14 in branch `feat/account-deploy` — PR open, NOT merged (owner-gated, manual deploy).**
+- **Shipped:** `apps/account/Dockerfile` (3-stage, non-root, :4329); compose service `account` (Traefik `Host` router priority 100 over the store wildcard, `/healthz` with `start_interval`, postgres-only dependency, env with Google/claim switches empty by default); `ACCOUNT_CLAIM_SECRET` forwarded to admin, `ACCOUNT_APP_URL` to storefront; `account` reserved as a store slug; closed state (no sign-in method ⇒ every page 503 "Akun TokoΦ belum dibuka"; no claim secret ⇒ `/klaim` 503 "Simpan pesanan belum tersedia"); `security.allowedDomains` so form POSTs pass the origin check behind Traefik; UU PDP drafts in `specs/docs/PRIVACY-COMPLIANCE.md` (DRAFT, not rendered).
+- **Done when:** image builds and the container is healthy with production-like env and no Google client; every page answers the closed page; compose guards (`test/compose-account.test.ts`, `test/compose-auth-secret.test.ts`) green and mutation-proven; `test:db`, `check:account`, builds and lint green.
+- **Still owner-gated:** Google redirect URI; the env values in Coolify; approval of the PDP drafts; session-retention rule (ADR 0016 checklist table).
+- **Evidence:** `BUILD-LOG.md` 2026-11-14 (AccountDeployAgent).
+
 ### Task 5.9: Make Multi-Store Selection Explicit and Deterministic
 - **Requirement:** `F-T10`
 - **Target Files:** `apps/admin/lib/auth.ts`, session/store-context actions, `apps/admin/components/admin/topbar.tsx`, auth and browser tests.

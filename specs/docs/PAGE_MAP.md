@@ -54,7 +54,7 @@
 | Super Admin (platform control plane) | 14 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
-| Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016) | 10 | — | 4 |
+| Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016) | 11 | — | 5 |
 
 ## Seller (merchant panel) — `apps/admin`
 
@@ -254,7 +254,7 @@
 
 ## Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016) — `apps/account`
 
-10 pages · 0 layouts · 0 API routes
+11 pages · 0 layouts · 0 API routes
 
 ### Pages
 
@@ -263,15 +263,17 @@
 | `/404` | Not found — also what every 'not mine' record answers (another account's order or store). | page | `apps/account/src/pages/404.astro` | — | — | — | — | — |  | — |
 | `/account` | 'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme. | page | `apps/account/src/pages/account/index.astro` | — | `account` `orders` | — | — | — |  | — |
 | `/auth/google/callback` | Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session. | endpoint | `apps/account/src/pages/auth/google/callback.ts` | — | — | — | — | — |  | — |
-| `/auth/google/start` | Google sign-in start — mints the 128-bit `state` cookie and the safe `next`. | endpoint | `apps/account/src/pages/auth/google/start.ts` | — | — | — | — | — |  | — |
+| `/auth/google/start` | Google sign-in start — mints the 128-bit `state` cookie and the safe `next`. | endpoint | `apps/account/src/pages/auth/google/start.ts` | — | — | — | — | — |  | `apps/account/src/lib/availability.test.ts` |
+| `/belum-dibuka` | The one page a CLOSED account answers (503): the middleware rewrites every path here while no sign-in method exists (`lib/availability.ts`). Reads no row. Redirects home once open. | page | `apps/account/src/pages/belum-dibuka.astro` | — | — | — | — | — |  | — |
+| `/healthz` | Container healthcheck — 200 while open OR closed (Traefik routes only to healthy), proves the Postgres connection with `select 1`. | endpoint | `apps/account/src/pages/healthz.ts` | — | — | — | — | — |  | — |
 | `/` | Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it. | page | `apps/account/src/pages/index.astro` | — | `orders` | — | — | — |  | `packages/lib/src/provider-label.test.ts` |
-| `/keluar` | Revokes this session row and deletes the cookie. | endpoint | `apps/account/src/pages/keluar.ts` | — | `account` | — | — | — |  | — |
-| `/klaim` | Saves an order to the account from the store's checkout-success link: claim token (HMAC, one order, 30 days) + sign-in + consent naming the store. A claim is keyed on a UNIQUE `order_id`. | page | `apps/account/src/pages/klaim.astro` | — | `orders` | — | — | — |  | `apps/account/src/lib/nav.test.ts` |
-| `/masuk` | Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle). | page | `apps/account/src/pages/masuk.astro` | — | — | — | — | — |  | — |
+| `/keluar` | Revokes this session row and deletes the cookie. | endpoint | `apps/account/src/pages/keluar.ts` | — | `account` | — | — | — |  | `apps/account/src/lib/availability.test.ts` |
+| `/klaim` | Saves an order to the account from the store's checkout-success link: claim token (HMAC, one order, 30 days) + sign-in + consent naming the store. A claim is keyed on a UNIQUE `order_id`. | page | `apps/account/src/pages/klaim.astro` | — | `orders` | — | — | — |  | `apps/account/src/lib/availability.test.ts` `apps/account/src/lib/nav.test.ts` |
+| `/masuk` | Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle). | page | `apps/account/src/pages/masuk.astro` | — | — | — | — | — |  | `apps/account/src/lib/availability.test.ts` |
 | `/masuk/dev` | LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden. | endpoint | `apps/account/src/pages/masuk/dev.ts` | — | `account` | — | — | — |  | — |
 | `/orders/[number]` | One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one. | page | `apps/account/src/pages/orders/[number]/index.astro` | — | — | — | — | — |  | — |
 | `/orders/[number]/receipt` | Bukti pesanan — the printable page under the order's own URL. | page | `apps/account/src/pages/orders/[number]/receipt.astro` | — | — | — | — | — |  | — |
-| `/orders` | 'Pesanan' — only orders saved to this account, from stores still linked. | page | `apps/account/src/pages/orders/index.astro` | — | `orders` | — | — | — |  | — |
+| `/orders` | 'Pesanan' — only orders saved to this account, from stores still linked. | page | `apps/account/src/pages/orders/index.astro` | — | `orders` | — | — | — |  | `apps/account/src/lib/availability.test.ts` |
 | `/stores/[slug]` | Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link. | page | `apps/account/src/pages/stores/[slug].astro` | — | `orders` | — | — | — |  | — |
 | `/stores` | 'Toko' — stores this account is actively linked to, most recent purchase first. | page | `apps/account/src/pages/stores/index.astro` | — | `orders` | — | — | — |  | — |
 

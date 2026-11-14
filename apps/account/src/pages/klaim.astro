@@ -8,23 +8,35 @@ import Layout from "../layouts/Layout.astro";
 import { db } from "@tokophi/db";
 import { claimOrder, previewClaim } from "../data/orders";
 import { signInUrl } from "../lib/nav";
+import { claimAvailable } from "../lib/availability";
 
+// No claim secret on this server ⇒ no token can verify: say the feature is not open (503) BEFORE
+// asking anyone to sign in, instead of "this link is invalid" about a link that may be fine.
+const open = claimAvailable();
 const account = Astro.locals.account;
-if (!account) return Astro.redirect(signInUrl(Astro.url));
+if (open && !account) return Astro.redirect(signInUrl(Astro.url));
 let token = Astro.url.searchParams.get("t") ?? "";
 let refused = false;
-if (Astro.request.method === "POST") {
+if (open && account && Astro.request.method === "POST") {
   const f = await Astro.request.formData();
   token = String(f.get("t") ?? "");
   const r = await claimOrder(db, account.id, token, f.get("consent"));
   if (r.ok) return Astro.redirect(`/orders/${encodeURIComponent(r.orderNumber)}?disimpan=1`, 303);
   refused = true;
 }
-const preview = await previewClaim(db, account.id, token);
+const preview = open && account ? await previewClaim(db, account.id, token) : null;
+if (!preview) Astro.response.status = 503;
 ---
 <Layout title="Simpan pesanan" back={{ href: "/orders", label: "Pesanan" }}>
   <div class="claim-wrap">
-    {preview.state === "invalid" && (
+    {!preview && (
+      <section class="section-card dialog-card" role="status" id="claim-closed">
+        <h1 class="claim-title">Simpan pesanan belum tersedia</h1>
+        <p class="dialog-lead">Fitur menyimpan pesanan ke Akun TokoΦ belum dibuka. Pesanan Anda tetap tercatat di toko — tautan ini tidak mengubah apa pun.</p>
+        <p class="field-help">Ada pertanyaan tentang pesanan? Hubungi toko tempat Anda berbelanja dan sebutkan nomor pesanannya.</p>
+      </section>
+    )}
+    {preview?.state === "invalid" && (
       <section class="section-card dialog-card" role="status">
         <h1 class="claim-title">Tautan ini tidak bisa dipakai</h1>
         <p class="dialog-lead">
@@ -37,7 +49,7 @@ const preview = await previewClaim(db, account.id, token);
         </div>
       </section>
     )}
-    {preview.state === "mine" && (
+    {preview?.state === "mine" && (
       <section class="section-card dialog-card" role="status">
         <h1 class="claim-title">Pesanan sudah tersimpan</h1>
         <p class="dialog-lead">Pesanan <span class="num">{preview.orderNumber}</span> dari {preview.storeName} sudah ada di akun ini.</p>
@@ -46,10 +58,10 @@ const preview = await previewClaim(db, account.id, token);
         </div>
       </section>
     )}
-    {preview.state === "ready" && (
+    {preview?.state === "ready" && (
       <form class="section-card dialog-card" method="post">
         <h1 class="claim-title">Simpan pesanan {preview.storeName}</h1>
-        <p class="dialog-lead">Nomor pesanan <span class="num">{preview.orderNumber}</span> akan disimpan ke akun <strong>{account.email}</strong>.</p>
+        <p class="dialog-lead">Nomor pesanan <span class="num">{preview.orderNumber}</span> akan disimpan ke akun <strong>{account?.email}</strong>.</p>
         <div class="consent-box">
           <strong>Yang akan terjadi</strong>
           <ul>

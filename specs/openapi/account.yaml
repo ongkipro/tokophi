@@ -17,6 +17,10 @@ info:
 paths: {}
 x-tokophi-route-exemptions:
   - app: apps/account
+    path: /healthz
+    methods: [GET]
+    reason: Container healthcheck for docker-compose.coolify.yml (BUYER-ACCOUNT-DEPLOY) — plain-text `ok` / 503 after `select 1`, answered while the account is open or closed. Read by Docker on 127.0.0.1 only; no data, not an API contract.
+  - app: apps/account
     path: /auth/google/start
     methods: [GET]
     reason: Browser redirect into Google OAuth, the same navigation as the Seller's `/api/auth/google/start`. Mints the `state` cookie and the safe `next`; not a JSON operation and not a third-party contract.

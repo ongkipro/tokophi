@@ -26,7 +26,7 @@ Last measured **2026-08-05** against `origin/main` and production. Re-verificati
 | Super Admin | `rich.tokophi.com` | us | **every tenant**, billing, impersonation |
 | Public API | `app.tokophi.com/api/public/**` | the public, no session | quote shipping, place orders, redeem vouchers, renew an expired payment instruction (one-order token), receive payment callbacks |
 | Landing | `tokophi.com` | the public | static, no DB |
-| Akun TokoΦ (buyer account, ADR 0016) | `account.tokophi.com` — **not deployed yet** | a buyer, signed in with Google | read ONLY the orders that buyer claimed (token + consent), unlink a store, close the account. Cross-tenant by design, owner connection, every statement keyed `buyer_id` |
+| Akun TokoΦ (buyer account, ADR 0016) | `account.tokophi.com` — **not deployed yet**; compose service ready (BUYER-ACCOUNT-DEPLOY) and CLOSED until a Google client is set: every path answers one 503 page before any cookie or DB read (`apps/account/src/lib/availability.ts`). Host trust = `security.allowedDomains` (account.tokophi.com, https) for Astro's origin check | a buyer, signed in with Google | read ONLY the orders that buyer claimed (token + consent), unlink a store, close the account. Cross-tenant by design, owner connection, every statement keyed `buyer_id` |
 
 **Observed:** the Public API is the only unauthenticated *write* surface in the product. It is served
 by the admin app rather than the storefront **(Decision)** so the platform's KiriminAja and AutoLaris

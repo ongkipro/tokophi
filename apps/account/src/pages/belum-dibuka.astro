@@ -1,0 +1,31 @@
+---
+// The one page a CLOSED account answers (BUYER-ACCOUNT-DEPLOY): the middleware rewrites every path here
+// while no sign-in method exists on this server (`lib/availability.ts`). 503 + Retry-After: the
+// service is deliberately not open yet — not a missing page, not an error in the app.
+// Once a sign-in method exists this URL has nothing to say, so it goes home.
+import Layout from "../layouts/Layout.astro";
+import { signInAvailable } from "../lib/availability";
+
+if (signInAvailable()) return Astro.redirect("/");
+Astro.response.status = 503;
+Astro.response.headers.set("Retry-After", "86400");
+---
+<Layout title="Belum dibuka">
+  <div class="login-shell" id="account-closed">
+    <div class="login-context">
+      <span class="login-wordmark" aria-label="TokoΦ">
+        <span style="font-weight:600;letter-spacing:-0.02em">Toko<span style="color:var(--primary)">Φ</span></span>
+      </span>
+      <h1 class="login-context-title">Akun TokoΦ belum dibuka</h1>
+      <p class="login-context-desc">Akun pembeli TokoΦ sedang disiapkan dan belum bisa dipakai untuk masuk atau menyimpan pesanan.</p>
+    </div>
+    <div class="login-card">
+      <p>Anda tetap bisa belanja di toko TokoΦ mana pun tanpa akun. Pesanan, pembayaran, dan pengiriman Anda tidak terpengaruh.</p>
+      <p class="field-help">Ada pertanyaan tentang pesanan? Hubungi toko tempat Anda berbelanja dan sebutkan nomor pesanannya.</p>
+      <div class="seller-escape">
+        <span>Punya toko?</span>
+        <a href="https://app.tokophi.com/login" class="link-button">Masuk ke Dashboard Seller</a>
+      </div>
+    </div>
+  </div>
+</Layout>

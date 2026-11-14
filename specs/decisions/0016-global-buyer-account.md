@@ -151,13 +151,23 @@ redirect URI.
 ## Production enablement — still owner-gated after merge
 
 Merging ships **no behaviour change in production** — the Seller screens included: `buyerAccountEnabled()` (`ACCOUNT_CLAIM_SECRET` set, ≥ 32 chars, the same predicate that issues claim tokens) is the ONE switch, and while it is off Pelanggan → Akun Pembeli and Pengaturan → Layanan Pembeli are hidden and refuse a typed URL / direct save (owner review 2026-11-14): the claim token needs `ACCOUNT_CLAIM_SECRET` on the
-admin app, the offer needs `ACCOUNT_APP_URL` on the storefront, and `apps/account` has no Dockerfile or
-compose service yet. Before switching it on: (1) the UU PDP processing note for the storefront privacy page
+admin app, the offer needs `ACCOUNT_APP_URL` on the storefront, and `apps/account` had no Dockerfile or
+compose service at merge (added by BUYER-ACCOUNT-DEPLOY — status table below). Before switching it on: (1) the UU PDP processing note for the storefront privacy page
 and `PRIVACY-COMPLIANCE.md` (TokoΦ as controller of the account data); (2) container + DNS for
 `account.tokophi.com` (Cloudflare-proxied like every `tokophi.com` record); (3) the account redirect URI
 added to the Google client; (4) `ACCOUNT_CLAIM_SECRET` (same value on admin and account) and `AUTH_SECRET`
 on the account app; (5) a retention rule for revoked session rows (kept, device string blanked on
 closure — no purge job exists).
+
+**Checklist status — 2026-11-14 (BUYER-ACCOUNT-DEPLOY):**
+
+| # | Gate | Status |
+|---|---|---|
+| 1 | UU PDP note + storefront privacy wording | 🟡 **DRAFTED, awaiting owner approval** — `specs/docs/PRIVACY-COMPLIANCE.md` §1 (account, TokoΦ as controller), §2 (Kelola as processor), §3 (storefront wording, NOT rendered anywhere) |
+| 2 | Container + DNS for `account.tokophi.com` | ✅ **in the repo** — `apps/account/Dockerfile`, compose service `account` (Traefik `Host` router priority 100 over the store wildcard, `/healthz`), `account` reserved as a store slug. DNS needs nothing (proxied wildcard). Ships dormant: no Google client ⇒ every page answers "Akun TokoΦ belum dibuka" (503). Live once the PR is merged and deployed — `DEPLOY.md` → "Akun TokoΦ" |
+| 3 | Account redirect URI on the Google client | ⏳ owner (Google Cloud console) |
+| 4 | `ACCOUNT_CLAIM_SECRET` (admin + account, same value) + `AUTH_SECRET` on account | ✅ **wired** — the compose forwards one `ACCOUNT_CLAIM_SECRET` to both services (equal by construction) and `AUTH_SECRET` (required) to account; `ACCOUNT_APP_URL` forwarded to the storefront. ⏳ owner sets the values in Coolify |
+| 5 | Retention rule for revoked session rows | ⏳ owner decision (listed as open in `PRIVACY-COMPLIANCE.md` §1.3) |
 
 ## Alternatives rejected
 
