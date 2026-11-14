@@ -11,6 +11,7 @@
 > `verify-rls-app` green. 🟢 real once merged: Seller `/affiliate` + Pengaturan switch, commissions from real orders,
 > `apps/affiliate`. Production unchanged until merge + deploy; ships dormant (`AFFILIATE_APP_URL` empty).
 
+> **2026-11-14 10:55 UTC — affiliate area OPEN (`AFFILIATE_APP_URL` set), demo store programme ON, #479 AFFILIATE-V11 deployed (`5efd052b`):** sign-up → apply verified on production (test rows deleted); `/lp` orders attribute `?ref=`, Seller CSV export + edit, Super Admin → Affiliate (reset password / disable). BUILD-LOG 2026-11-14 10:55.
 > **2026-11-14 09:15 UTC — PR #476 (AFFILIATE-P2) + #477 (AFFILIATE-UX) deployed (`7125fb14`):** new `affiliate` service `(healthy)`; `affiliate.tokophi.com` answers **503 "Belum dibuka · Affiliate TokoΦ"** until `AFFILIATE_APP_URL` is set; production at **126 migrations** (`0125_affiliate_programme`), programme off on every store. Probe exit 0, disk 51%. BUILD-LOG 2026-11-14 09:15.
 > **2026-11-14 05:06 UTC — PR #473 deployed (`f4998416`):** new `account` service `(healthy)`; `account.tokophi.com` answers **503 "Belum dibuka · Akun TokoΦ"** (dormant: no Google client, no `ACCOUNT_GOOGLE_REDIRECT_URI`), `/healthz` 200; store wildcard and every other host unchanged. Account sign-in has its own switch (`ACCOUNT_GOOGLE_REDIRECT_URI`, no compose default). Owner steps to turn it on: `~/Documents/work/notes/tokophi-panduan-owner-2026-11-14.md` (Google OAuth client, UU PDP text approval, session retention).
 
