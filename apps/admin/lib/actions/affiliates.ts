@@ -4,13 +4,16 @@ import { normalizeAffiliateCode, parseAffiliateHoldDays, parseAffiliateRatePct, 
 import { INVITE_TTL_DAYS, newInvite } from "@tokophi/lib/affiliate-invite";
 import { affiliateAppUrl } from "@/lib/affiliate-url";
 import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
-import { normalizePhone } from "@tokophi/lib/validate";
+import { emailError, nameError, normalizeEmail, normalizeName, normalizePhone } from "@tokophi/lib/validate";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { isUuid } from "@/lib/uuid";
 import { requireCapability } from "@/lib/rbac";
 import { withCurrentTenant, withTenant } from "@/lib/tenant";
 import { getSession } from "@/lib/auth";
+import { commissionCsv, parseExportRange } from "@/lib/affiliate-commission-csv";
+import { commissionState } from "@/lib/commission-state";
+import { STORE_TZ } from "@/lib/data/day-bucket";
 
 // Seller panel → Affiliate writes (AFFILIATE-P2, ADR 0022). Every action: capability first, tenant
 // transaction, explicit `store_id` predicate, and a returned `{ ok, error }` (a thrown Error is masked in
@@ -153,6 +156,66 @@ export async function createAffiliate(input: {
   return { ok: false, error: "Gagal membuat kode unik, coba lagi." };
 }
 
+export type AffiliateDetailsInput = {
+  name: string;
+  phone: string;
+  email?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankHolder?: string;
+  note?: string;
+};
+
+/**
+ * The seller corrects an affiliate's details for THIS store (a new WhatsApp number, a new bank account).
+ * Never touches `account_id`, the code, the status or any commission: a commission is frozen at order
+ * time, and the code is what is printed on the affiliate's shared links. The same validators as the
+ * affiliate's own sign-up (`@tokophi/lib/validate`); the phone is stored canonical `62…`.
+ * Like every other action in this file there is no store-side audit row — the Seller panel has no
+ * audit log for affiliates; an operator acting under impersonation is still logged by requireCapability.
+ */
+export async function updateAffiliate(id: string, input: AffiliateDetailsInput): Promise<Result> {
+  const { storeId } = await requireCapability("affiliates:write");
+  if (!isUuid(id)) return { ok: false, error: "Affiliate tidak ditemukan." };
+  const nameErr = nameError(input?.name);
+  if (nameErr) return { ok: false, error: nameErr };
+  const phone = normalizePhone(input.phone);
+  if (!phone) return { ok: false, error: "Nomor WhatsApp tidak valid. Contoh: 0812 3456 7890." };
+  const emailErr = emailError(input.email);
+  if (emailErr) return { ok: false, error: emailErr };
+  for (const [k, max] of Object.entries(LIMITS)) {
+    if (k !== "name" && tooLong(input[k as keyof AffiliateDetailsInput], max)) {
+      return { ok: false, error: `Isian terlalu panjang (maks ${max} karakter).` };
+    }
+  }
+  const opt = (v: string | undefined) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  try {
+    const rows = await withTenant(storeId, (db) =>
+      db
+        .update(schema.affiliates)
+        .set({
+          name: normalizeName(input.name),
+          phone,
+          email: normalizeEmail(input.email),
+          bankName: opt(input.bankName),
+          bankAccount: opt(input.bankAccount),
+          bankHolder: opt(input.bankHolder),
+          note: opt(input.note),
+        })
+        .where(and(eq(schema.affiliates.id, id), eq(schema.affiliates.storeId, storeId)))
+        .returning({ id: schema.affiliates.id }),
+    );
+    if (!rows.length) return { ok: false, error: "Affiliate tidak ditemukan." };
+  } catch (e) {
+    if (uniqueViolationConstraint(e) === "affiliates_store_id_phone_unique") {
+      return { ok: false, error: "Nomor WhatsApp ini sudah dipakai affiliate lain di toko ini." };
+    }
+    throw e;
+  }
+  revalidatePath(PATH);
+  return { ok: true };
+}
+
 /** F-A8: only a READY commission (pending, hold window over) can be marked paid — one statement decides. */
 export async function markCommissionPaid(id: string, note?: string): Promise<Result> {
   const { storeId } = await requireCapability("affiliates:write");
@@ -198,6 +261,60 @@ export async function setProductAffiliateRate(productId: string, ratePct: string
   if (!rows.length) return { ok: false, error: "Produk tidak ditemukan." };
   revalidatePath(PATH);
   return { ok: true };
+}
+
+/**
+ * F-A11: the store's commissions for a date range (by ORDER date, WIB, both ends inclusive) as a CSV — the
+ * merchant's bookkeeping and tax record (OD-A4: withholding is the merchant's duty; the screen says so).
+ * `affiliates:write` only: the file carries every affiliate's name and code and the seller's payment notes.
+ * A READ, so a suspended store may still take its own records out (`allowSuspended`).
+ * Every join repeats `store_id`; RLS (withTenant) is the net, the WHERE is the rule.
+ */
+export async function exportAffiliateCommissionsCsv(input: {
+  from: string;
+  to: string;
+}): Promise<{ ok: true; csv: string; filename: string; rows: number } | { ok: false; error: string }> {
+  const { storeId } = await requireCapability("affiliates:write", { allowSuspended: true });
+  const range = parseExportRange(input?.from, input?.to);
+  if (!range.ok) return range;
+  const c = schema.affiliateCommissions;
+  const o = schema.orders;
+  const a = schema.affiliates;
+  // The merchant's calendar: [from 00:00 WIB, to + 1 day 00:00 WIB) — compared on the raw column, so the
+  // (store_id, placed_at) index serves it.
+  const start = sql`timezone(${STORE_TZ}, ${range.from}::date::timestamp)`;
+  const end = sql`timezone(${STORE_TZ}, (${range.to}::date + 1)::timestamp)`;
+  const ready = sql<boolean>`${c.status} = 'pending' and ${c.eligibleAt} is not null and ${c.eligibleAt} <= now()`;
+  const rows = await withTenant(storeId, (db) =>
+    db
+      .select({
+        orderNumber: o.number,
+        placedAt: o.placedAt,
+        affiliateName: a.name,
+        affiliateCode: a.code,
+        source: c.source,
+        baseIdr: c.baseIdr,
+        rateNote: c.rateNote,
+        commissionIdr: c.commissionIdr,
+        status: c.status,
+        isReady: ready,
+        eligibleAt: c.eligibleAt,
+        paidAt: c.paidAt,
+        paidNote: c.paidNote,
+      })
+      .from(c)
+      .innerJoin(o, and(eq(o.id, c.orderId), eq(o.storeId, storeId)))
+      .innerJoin(a, and(eq(a.id, c.affiliateId), eq(a.storeId, storeId)))
+      .where(and(eq(c.storeId, storeId), sql`${o.placedAt} >= ${start}`, sql`${o.placedAt} < ${end}`))
+      .orderBy(o.placedAt, o.number),
+  );
+  const csv = commissionCsv(
+    rows.map((r) => ({
+      ...r,
+      state: commissionState({ status: r.status, isReady: r.isReady, hasEligibleAt: !!r.eligibleAt }),
+    })),
+  );
+  return { ok: true, csv, filename: `komisi-affiliate_${range.from}_${range.to}.csv`, rows: rows.length };
 }
 
 /**

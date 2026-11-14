@@ -82,6 +82,7 @@
     "admin:/impersonate/exit": "Ends an impersonation session and logs it.",
     "super-admin:/": "Platform dashboard (MRR, revenue, merchant float, latest invoices) — `admin` rank; support is forwarded to its landing.",
     "super-admin:/analitik": "Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice).",
+    "super-admin:/affiliate": "'Akun Affiliate' (ADR 0022, AFFILIATE-PW-RESET interim) — every affiliate account (email, name, stores joined), with reset password (minted once, sessions revoked) and disable / enable; floor admin.",
     "super-admin:/log-sistem": "'Log Sistem' — the whole `platform_activity` audit log, filtered and paged in the database.",
     "super-admin:/paket": "'Paket' — the single plan's prices/trial (legacy tiers unused).",
     "super-admin:/pencairan": "'Pencairan' — seller payout queue; complete = compare-and-swap `diproses → selesai`.",

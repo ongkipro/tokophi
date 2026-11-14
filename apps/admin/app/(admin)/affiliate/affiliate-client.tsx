@@ -7,7 +7,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Copy, MessageCircle, Plus, Settings, UserPlus, Users } from "lucide-react";
+import { Check, Copy, Download, MessageCircle, Pencil, Plus, Settings, UserPlus, Users } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { ToggleRow } from "@/components/admin/pengaturan/toggle-row";
@@ -18,11 +18,13 @@ import type { AffiliateProgram, AffiliateRow } from "@/lib/data/affiliates";
 import { COMMISSION_STATE as STATE } from "@/lib/commission-state";
 import {
   createAffiliate,
+  exportAffiliateCommissionsCsv,
   inviteAffiliateToAccount,
   markCommissionPaid,
   saveAffiliateSettings,
   setAffiliateStatus,
   setProductAffiliateRate,
+  updateAffiliate,
 } from "@/lib/actions/affiliates";
 
 import { Badge } from "@tokophi/ui/badge";
@@ -97,7 +99,8 @@ export function AffiliateClient({ program }: { program: AffiliateProgram }) {
           <TabsTrigger value="affiliate">Affiliate{waiting ? ` (${waiting} baru)` : ""}</TabsTrigger>
           <TabsTrigger value="pengaturan">Pengaturan</TabsTrigger>
         </TabsList>
-        <TabsContent value="komisi" className="mt-4">
+        <TabsContent value="komisi" className="mt-4 grid gap-4">
+          <ExportCommissions range={program.exportRange} />
           <CommissionList program={program} />
         </TabsContent>
         <TabsContent value="affiliate" className="mt-4">
@@ -232,6 +235,52 @@ function MarkPaid({ c, pending, onConfirm, className }: { c: Commission; pending
       className={className}
       onConfirm={onConfirm}
     />
+  );
+}
+
+/** F-A11: the CSV is built on the server (capability + tenant there); this only hands the text to the browser as a file. */
+function ExportCommissions({ range }: { range: AffiliateProgram["exportRange"] }) {
+  const canWrite = useCan("affiliates:write");
+  const [from, setFrom] = React.useState(range.from);
+  const [to, setTo] = React.useState(range.to);
+  const [pending, start] = React.useTransition();
+  if (!canWrite) return null;
+  const download = () =>
+    start(async () => {
+      const r = await exportAffiliateCommissionsCsv({ from, to });
+      if (!r.ok) return void toast.error(r.error);
+      const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = r.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(r.rows ? `${num(r.rows)} komisi diunduh.` : "Tidak ada komisi pada rentang ini — file berisi judul kolom saja.");
+    });
+  return (
+    <Card className="gap-3 py-4">
+      <CardContent className="grid gap-3 px-4 sm:flex sm:flex-wrap sm:items-end">
+        <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="aff-exp-from">Dari tanggal</Label>
+            <Input id="aff-exp-from" type="date" className="h-10 sm:h-9" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="aff-exp-to">Sampai tanggal</Label>
+            <Input id="aff-exp-to" type="date" className="h-10 sm:h-9" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        </div>
+        <Button variant="outline" className="h-10 sm:h-9" disabled={pending || !from || !to} onClick={download}>
+          <Download />
+          {pending ? "Menyiapkan…" : "Unduh CSV komisi"}
+        </Button>
+        <p className="text-xs text-muted-foreground sm:basis-full">
+          Semua komisi toko ini menurut tanggal pesanan (WIB). Pemotongan pajak atas komisi (PPh) menjadi tanggung jawab toko.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -466,6 +515,7 @@ function AffiliateList({ program }: { program: AffiliateProgram }) {
                 {a.bank && <p className="text-xs text-muted-foreground">Rekening: {a.bank}</p>}
                 <div className="flex flex-wrap gap-2">
                   {canWrite && <StatusActions a={a} pending={pending} run={run} wide />}
+                  {canWrite && a.bankParts && <EditAffiliateDialog a={a} wide />}
                   {!a.contactMasked && (
                     <Button size="sm" variant="outline" className="h-10 flex-1" nativeButton={false} render={<a href={waHref(a)} target="_blank" rel="noreferrer" />}>
                       <MessageCircle />
@@ -543,6 +593,7 @@ function AffiliateList({ program }: { program: AffiliateProgram }) {
                         <UserPlus />
                       </Button>
                     )}
+                    {canWrite && a.bankParts && <EditAffiliateDialog a={a} />}
                     {canWrite && <StatusActions a={a} pending={pending} run={run} />}
                   </div>
                 </TableCell>
@@ -731,7 +782,82 @@ function AddAffiliateDialog() {
   );
 }
 
-function Field(props: { id: string; label: string } & React.ComponentProps<typeof Input>) {
+/** The seller corrects an affiliate's contact / bank details. Code, status and account link are not here on purpose. */
+function EditAffiliateDialog({ a, wide }: { a: AffiliateRow; wide?: boolean }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [pending, start] = React.useTransition();
+  const initial = () => ({
+    name: a.name,
+    phone: a.phone,
+    email: a.email ?? "",
+    bankName: a.bankParts?.name ?? "",
+    bankAccount: a.bankParts?.account ?? "",
+    bankHolder: a.bankParts?.holder ?? "",
+    note: a.note ?? "",
+  });
+  const [f, setF] = React.useState(initial);
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const save = () =>
+    start(async () => {
+      const r = await updateAffiliate(a.id, f);
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(`Data ${f.name.trim()} disimpan.`);
+      setOpen(false);
+      router.refresh();
+    });
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setF(initial()); // always start from what the list shows now
+        setOpen(next);
+      }}
+    >
+      <DialogTrigger
+        render={
+          wide ? (
+            <Button size="sm" variant="outline" className="h-10 flex-1">
+              <Pencil />
+              Ubah data
+            </Button>
+          ) : (
+            <Button size="icon-sm" variant="ghost" aria-label={`Ubah data ${a.name}`} title="Ubah data affiliate">
+              <Pencil />
+            </Button>
+          )
+        }
+      />
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Ubah data affiliate</DialogTitle>
+          <DialogDescription>
+            Kode <b className="font-mono">{a.code}</b> dan link-nya tidak berubah. Komisi yang sudah tercatat juga tidak berubah.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <Field id={`ae-name-${a.id}`} label="Nama" value={f.name} onChange={set("name")} autoComplete="off" />
+          <Field id={`ae-phone-${a.id}`} label="Nomor WhatsApp" value={f.phone} onChange={set("phone")} type="tel" inputMode="tel" autoComplete="off" />
+          <Field id={`ae-email-${a.id}`} label="Email (opsional)" value={f.email} onChange={set("email")} type="email" inputMode="email" autoComplete="off" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field id={`ae-bank-${a.id}`} label="Bank / e-wallet" value={f.bankName} onChange={set("bankName")} />
+            <Field id={`ae-acct-${a.id}`} label="No. rekening" value={f.bankAccount} onChange={set("bankAccount")} inputMode="numeric" />
+          </div>
+          <Field id={`ae-holder-${a.id}`} label="Atas nama" value={f.bankHolder} onChange={set("bankHolder")} />
+          <Field id={`ae-note-${a.id}`} label="Catatan (opsional)" value={f.note} onChange={set("note")} maxLength={200} />
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline">Batal</Button>} />
+          <Button disabled={pending || !f.name.trim() || !f.phone.trim()} onClick={save}>
+            {pending ? "Menyimpan…" : "Simpan"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field(props:{ id: string; label: string } & React.ComponentProps<typeof Input>) {
   const { id, label, ...rest } = props;
   return (
     <div className="grid gap-1.5">

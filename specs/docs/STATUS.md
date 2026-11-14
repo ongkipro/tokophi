@@ -1,5 +1,10 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **2026-11-14 10:30 UTC — AFFILIATE-V11 on `feat/affiliate-v11` (PR open, NOT merged, NOT deployed):** `/lp` + `/promo`
+> orders attribute `?ref=` (F-A13), Seller commission CSV (F-A11) + affiliate edit, Super Admin → Affiliate (reset
+> password / disable — interim AFFILIATE-PW-RESET), storefront `/affiliate` shows rate + hold days. **No migration**
+> (still 126 · head `0125`). `npm run test:db` on a scratch `_test` DB: **267 files / 2672 tests passed**.
+
 > **2026-11-14 — AFFILIATE-P2 on `feat/affiliate-p2` (PR open, NOT merged, NOT deployed):** store affiliate programme with
 > affiliates' own accounts (ADR 0022). Repo schema **99 tables · 126 migrations (head `0125_affiliate_programme`)**; on a
 > scratch DB migrated to `0125`: `verify-rls` 62/63 store-scoped tables with RLS (exception `platform_activity`),

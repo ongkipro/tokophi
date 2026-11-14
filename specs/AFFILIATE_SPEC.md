@@ -5,7 +5,8 @@
 > account** at `affiliate.tokophi.com` (`apps/affiliate`, email + password), **not** the buyer TokoΦ Account
 > ("jangan jadikan satu dengan user belanja"). `F-A15` is **changed** accordingly (§8); `F-A18` stays
 > **superseded**. The public storefront form (`F-A2` v1) is **replaced** by applying while signed in.
-> v1 (`F-A1`–`F-A10`), `F-A12` and `F-A15` are built; `F-A11`, `F-A13`, `F-A14`, `F-A16`, `F-A17` are open.
+> v1 (`F-A1`–`F-A10`), `F-A12` and `F-A15` are built; `F-A11` and `F-A13` are built by AFFILIATE-V11 (2026-11-14,
+> branch `feat/affiliate-v11`); `F-A14`, `F-A16`, `F-A17` are open.
 > History: v1.2 (2026-10-15, owner: "akun affiliate itu buat seperti akun user") made the buyer account the
 > affiliate identity on the never-merged `feat/accounts-consolidated` (#424/#431/#455); that is reversed.
 > This is the feature PRD — the only one: requirements are `F-A*`, tasks are `specs/docs/TASKS.md`
@@ -171,6 +172,9 @@ PRD). TokoΦ therefore never computes or withholds tax; it gives the merchant a 
   source, base, rate, commission, state, `paid_at`, `paid_note`) and nothing from another store.
   - Acceptance: Given store A with 3 commissions and store B with 1, When A's owner exports, Then the
     file has 3 data rows and every row is A's; a `staff` user gets no export.
+  - **Built 2026-11-14 (AFFILIATE-V11):** `exportAffiliateCommissionsCsv` (lib/actions/affiliates.ts) + pure
+    `lib/affiliate-commission-csv.ts`; proven by `affiliates.test.ts` (3 vs 1 rows) and
+    `affiliates-capability.test.ts` (staff / cs / gudang refused before any read).
 - **F-A12** (Should, state) While the signed-in user lacks `affiliates:write`, the Seller panel shall
   show an affiliate's bank account and phone masked to the last 4 digits, the email as `x•••@domain`,
   and no `wa.me` link. Masking happens in the data layer (`apps/admin/lib/affiliate-mask.ts`, called
@@ -183,6 +187,9 @@ PRD). TokoΦ therefore never computes or withholds tax; it gives the merchant a 
   unchanged.
   - Acceptance: Given `/lp/<slug>?ref=CODE` opened on an enabled store with `CODE` active, When the
     funnel order is placed, Then one commission row with `source='link'` exists for that order.
+  - **Built 2026-11-14 (AFFILIATE-V11), ref only:** `components/OrderFunnel.astro` sends `refCode`; no typed-code
+    field in the funnel. Proven by `order-forms-affiliate-ref.test.ts`, the funnel-shaped case in
+    `api/public/order/route.test.ts`, and a browser `/lp/<slug>?ref=CODE` order.
 - **F-A14** (Should, unwanted) If an order whose commission is `dibayar` moves to `retur`, then the
   system shall keep the commission `dibayar` and mark it "retur setelah dibayar" for the merchant.
   **Blocked on OD-A1** (claw-back policy); v1 leaves the paid row untouched, pinned by
@@ -318,8 +325,15 @@ finance owner and changes nothing here.
   of `/affiliate`, the rate limit, `?ref=` capture and the checkout field (BUILD-LOG 2026-10-15).
   Seller `/affiliate` driven in Chrome 2026-10-15 as owner and staff (Task 9.4). **Not yet driven:**
   a real order POST carrying `refCode`/`affiliateCode`.
-- [ ] **v1.1:** `F-A13` landing funnel (9.6), ~~`F-A12` masking (9.7)~~ done 2026-10-15, `F-A11` export (9.8), `F-A17`
-  erasure (9.9), `F-A14` after OD-A1 (9.10).
+- [ ] **v1.1:** ~~`F-A13` landing funnel (9.6)~~ built 2026-11-14, ~~`F-A12` masking (9.7)~~ done 2026-10-15, ~~`F-A11`
+  export (9.8)~~ built 2026-11-14, `F-A17` erasure (9.9) open, `F-A14` after OD-A1 (9.10) open.
+- [x] **AFFILIATE-V11 (2026-11-14):** `F-A13` — OrderFunnel (`/promo`, `/lp`) sends the captured `?ref=` as `refCode`
+  (ref-only: the funnel has no typed-code field, like it has no voucher field); a `/lp?ref=` COD order in a browser
+  produced one `source='link'` commission. `F-A11` — CSV export in Seller → Affiliate → Komisi (order date WIB, both
+  ends inclusive, ≤ 366 days, `affiliates:write`, CSV-injection safe, BOM); the OD-A4 withholding note is on the
+  screen, not in the file. Also: the seller can edit an affiliate's details; Super Admin → Affiliate resets an
+  account's password (interim for AFFILIATE-PW-RESET) and disables / enables it; storefront `/affiliate` shows the
+  default rate and hold days. Evidence: BUILD-LOG 2026-11-14 (AFFILIATE-V11).
 - [x] **AFFILIATE-P2 (2026-11-14, ADR 0022):** ported to `main` with the changed identity: migration `0125`, new
   app `apps/affiliate` (affiliate.tokophi.com, dormant), Seller `/affiliate` + Pengaturan switch + sidebar badge +
   commission on every order (#430), storefront `/affiliate` link page, attribution in `/api/public/order`.

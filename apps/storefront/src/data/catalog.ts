@@ -916,6 +916,21 @@ export async function storeAffiliateEnabled(storeId: string): Promise<boolean> {
   return !!ss?.enabled;
 }
 
+/** `/affiliate`'s terms: the switch plus the store DEFAULT rate and hold days (per-product overrides are not
+ *  shown — the page says "standar"). Same uncached single-row read; null when the programme is off. */
+export async function storeAffiliateTerms(storeId: string): Promise<{ rateBps: number; holdDays: number } | null> {
+  const [ss] = await db
+    .select({
+      enabled: schema.storeSettings.affiliateEnabled,
+      rateBps: schema.storeSettings.affiliateRateBps,
+      holdDays: schema.storeSettings.affiliateHoldDays,
+    })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return ss?.enabled ? { rateBps: ss.rateBps, holdDays: ss.holdDays } : null;
+}
+
 export async function promoHub(storeId: string): Promise<PromoHub> {
   const [ss] = await db
     .select({ title: schema.storeSettings.promoHubTitle, subtitle: schema.storeSettings.promoHubSubtitle, bannerUrl: schema.storeSettings.promoHubBannerUrl })

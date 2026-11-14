@@ -299,3 +299,134 @@ suite("inviteAffiliateToAccount", () => {
     });
   });
 });
+
+/** Today ± n days as WIB `YYYY-MM-DD` — the fixture orders are placed `now()`, the export filters on WIB days. */
+const wibDay = (offsetDays: number) =>
+  new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Jakarta" }).format(new Date(Date.now() + offsetDays * 86_400_000));
+/** Data rows of an exported CSV (BOM + header stripped). */
+const dataRows = (csv: string) => csv.replace(/^﻿/, "").trimEnd().split("\r\n").slice(1);
+
+suite("exportAffiliateCommissionsCsv (F-A11) — this store's rows only", () => {
+  it("store A with 3 commissions and store B with 1: A's file has exactly A's 3 rows, with the derived state", async () => {
+    await inTxn(async (tx) => {
+      const a = await store(tx);
+      const b = await store(tx);
+      await a.commission({ eligible: "past" }); // siap
+      await a.commission({ eligible: "future" }); // masa retur
+      const paid = await a.commission({ status: "dibayar", eligible: "past" });
+      await tx.execute(sql`update affiliate_commissions set paid_at = now(), paid_note = 'transfer BCA' where id = ${paid}`);
+      await b.commission({ eligible: "past" });
+      h.storeId = a.storeId;
+      const r = await act.exportAffiliateCommissionsCsv({ from: wibDay(-1), to: wibDay(1) });
+      if (!r.ok) throw new Error(r.error);
+      expect(r.csv.startsWith("﻿Nomor pesanan,")).toBe(true);
+      const lines = dataRows(r.csv);
+      expect(r.rows).toBe(3);
+      expect(lines).toHaveLength(3);
+      const mine = (await rows(tx, sql`select number from orders where store_id = ${a.storeId}`)).map((o) => String(o.number));
+      const [theirs] = await rows(tx, sql`select number from orders where store_id = ${b.storeId}`);
+      for (const l of lines) expect(mine).toContain(l.split(",")[0]);
+      expect(r.csv).not.toContain(String(theirs.number));
+      expect(lines.some((l) => l.includes(",Siap dibayar,"))).toBe(true);
+      expect(lines.some((l) => l.includes(",Masa retur,"))).toBe(true);
+      expect(lines.find((l) => l.includes(",Dibayar,"))).toMatch(/,transfer BCA$/);
+    });
+  });
+
+  it("a range that misses the orders yields the header only; a reversed or junk range is refused", async () => {
+    await inTxn(async (tx) => {
+      const a = await store(tx);
+      await a.commission({ eligible: "past" });
+      h.storeId = a.storeId;
+      const old = await act.exportAffiliateCommissionsCsv({ from: "2020-01-01", to: "2020-01-31" });
+      expect(old.ok && dataRows(old.csv)).toEqual([]);
+      expect((await act.exportAffiliateCommissionsCsv({ from: wibDay(1), to: wibDay(-1) })).ok).toBe(false);
+      expect((await act.exportAffiliateCommissionsCsv({ from: "2026-02-30", to: "2026-03-01" })).ok).toBe(false);
+      expect((await act.exportAffiliateCommissionsCsv({ from: "'; drop table x; --", to: wibDay(0) })).ok).toBe(false);
+    });
+  });
+
+  it("a formula typed as an affiliate name reaches the file inert", async () => {
+    await inTxn(async (tx) => {
+      const a = await store(tx);
+      await a.commission({ eligible: "past" });
+      await tx.execute(sql`update affiliates set name = '=HYPERLINK("http://x","klik")' where id = ${a.affiliateId}`);
+      h.storeId = a.storeId;
+      const r = await act.exportAffiliateCommissionsCsv({ from: wibDay(-1), to: wibDay(1) });
+      if (!r.ok) throw new Error(r.error);
+      expect(dataRows(r.csv)[0]).toContain(`,"'=HYPERLINK(""http://x"",""klik"")",`);
+    });
+  });
+});
+
+suite("updateAffiliate — the seller corrects an affiliate's details", () => {
+  const read = async (tx: Db, id: string) =>
+    (
+      await rows(
+        tx,
+        sql`select name, phone, email, bank_name, bank_account, bank_holder, note, code, status::text as status, account_id from affiliates where id = ${id}`,
+      )
+    )[0];
+
+  it("writes the details (phone canonical 62…, blanks → null) and leaves code, status and account link alone", async () => {
+    await inTxn(async (tx) => {
+      const a = await store(tx);
+      h.storeId = a.storeId;
+      const before = await read(tx, a.affiliateId);
+      const r = await act.updateAffiliate(a.affiliateId, {
+        name: "  Sari   Dewi ",
+        phone: "0812-9999-0000",
+        email: " Sari@Contoh.ID ",
+        bankName: "BCA",
+        bankAccount: "1234567890",
+        bankHolder: "Sari Dewi",
+        note: "   ",
+      });
+      expect(r).toEqual({ ok: true });
+      const after = await read(tx, a.affiliateId);
+      expect(after).toMatchObject({
+        name: "Sari Dewi",
+        phone: "6281299990000",
+        email: "sari@contoh.id",
+        bank_name: "BCA",
+        bank_account: "1234567890",
+        bank_holder: "Sari Dewi",
+        note: null,
+      });
+      expect([after.code, after.status, after.account_id]).toEqual([before.code, before.status, before.account_id]);
+    });
+  });
+
+  it("another store's affiliate is not found and unchanged; a phone already used in this store gets a plain message", async () => {
+    await inTxn(async (tx) => {
+      const mine = await store(tx);
+      const theirs = await store(tx);
+      h.storeId = mine.storeId;
+      const foreign = await read(tx, theirs.affiliateId);
+      expect(await act.updateAffiliate(theirs.affiliateId, { name: "Penyusup", phone: "081200000001" })).toEqual({ ok: false, error: "Affiliate tidak ditemukan." });
+      expect(await read(tx, theirs.affiliateId)).toEqual(foreign);
+
+      expect((await act.createAffiliate({ name: "Budi", phone: "081277776666" })).ok).toBe(true);
+      const dup = await act.updateAffiliate(mine.affiliateId, { name: "Aff", phone: "0812 7777 6666" });
+      expect(dup).toEqual({ ok: false, error: "Nomor WhatsApp ini sudah dipakai affiliate lain di toko ini." });
+    });
+  });
+
+  it("refuses a bad phone, a bad email, a name with digits, an over-long bank account and a non-UUID id", async () => {
+    await inTxn(async (tx) => {
+      const a = await store(tx);
+      h.storeId = a.storeId;
+      const before = await read(tx, a.affiliateId);
+      for (const input of [
+        { name: "Sari", phone: "021 555 1234" },
+        { name: "Sari", phone: "081234567890", email: "bukan-email" },
+        { name: "Sari 2", phone: "081234567890" },
+        { name: "Sari", phone: "081234567890", bankAccount: "9".repeat(41) },
+      ]) {
+        expect((await act.updateAffiliate(a.affiliateId, input)).ok).toBe(false);
+      }
+      expect((await act.updateAffiliate("not-a-uuid", { name: "Sari", phone: "081234567890" })).ok).toBe(false);
+      expect(await read(tx, a.affiliateId)).toEqual(before);
+    });
+  });
+});

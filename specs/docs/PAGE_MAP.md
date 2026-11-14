@@ -51,7 +51,7 @@
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
 | Seller (merchant panel) | 58 | 4 | 22 |
-| Super Admin (platform control plane) | 14 | 2 | 2 |
+| Super Admin (platform control plane) | 15 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 19 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
 | Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016) | 11 | — | 5 |
@@ -147,7 +147,7 @@
 | `/api/health/env` | Reports which integrations are configured (header-gated), used by the deploy probe. | GET | `apps/admin/app/api/health/env/route.ts` | `cron` |  | `apps/admin/lib/cron-auth.test.ts` `apps/admin/lib/env-census.test.ts` |
 | `/api/public/kiriminaja/webhook` | Courier webhook receiver — hint only; fails closed on the Bearer; the tracking pull is the truth. A `processed_packages` row's sorting code is kept only when its awb equals the verified waybill. | POST | `apps/admin/app/api/public/kiriminaja/webhook/route.ts` | `public-body` |  | `apps/admin/lib/ka-sorting-code.test.ts` `apps/admin/lib/ka-webhook.test.ts` |
 | `/api/public/ongkir` | Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate. | OPTIONS POST | `apps/admin/app/api/public/ongkir/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/ongkir/route.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` |
-| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/plugins/order-hook-position.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `packages/lib/src/provider-label.test.ts` |
+| `/api/public/order` | THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment. | OPTIONS POST | `apps/admin/app/api/public/order/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/destination-kelurahan.test.ts` `apps/admin/lib/fee-truth.test.ts` `apps/admin/lib/inventory-location.test.ts` `apps/admin/lib/plugins/order-hook-position.test.ts` `apps/admin/lib/public-guard.test.ts` `apps/admin/lib/shipping-quote-mengantar.test.ts` `apps/storefront/src/lib/order-forms-affiliate-ref.test.ts` `packages/lib/src/provider-label.test.ts` |
 | `/api/public/pay/callback` | PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`. | POST | `apps/admin/app/api/public/pay/callback/route.ts` | `callback-auth` `public-body` `rate-limit` | ✓ | `apps/admin/app/api/public/pay/retry/route.test.ts` `apps/admin/lib/commerce-lifecycle.test.ts` `apps/admin/lib/fee-truth.test.ts` |
 | `/api/public/pay/retry` | "Bayar ulang" (PAY-RETRY) — a NEW bill for the SAME order once the last one expired or failed; one-order token, row-locked, never two live bills. | OPTIONS POST | `apps/admin/app/api/public/pay/retry/route.ts` | `public-body` `rate-limit` | ✓ | `apps/admin/lib/pay-retry.test.ts` |
 | `/api/public/promo` | Voucher check for the checkout (deliberately specific error copy). | OPTIONS POST | `apps/admin/app/api/public/promo/route.ts` | `public-body` `rate-limit` | ✓ | — |
@@ -157,12 +157,13 @@
 
 ## Super Admin (platform control plane) — `apps/super-admin`
 
-14 pages · 2 layouts · 2 API routes
+15 pages · 2 layouts · 2 API routes
 
 ### Pages
 
 | URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `/affiliate` | 'Akun Affiliate' (ADR 0022, AFFILIATE-PW-RESET interim) — every affiliate account (email, name, stores joined), with reset password (minted once, sessions revoked) and disable / enable; floor admin. | page | `apps/super-admin/app/(platform)/affiliate/page.tsx` | `affiliate-accounts-client.tsx` | — | `affiliate-accounts` | `route:/affiliate` | — | ✓ | — |
 | `/analitik` | Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice). | page | `apps/super-admin/app/(platform)/analitik/page.tsx` | — | `data` | — | — | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` |
 | `/kode-daftar` | 'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) and may carry a first-invoice discount (ADR 0020) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner). | page | `apps/super-admin/app/(platform)/kode-daftar/page.tsx` | `kode-daftar-client.tsx` | — | `actions` | `route:/kode-daftar` | — | ✓ | `apps/super-admin/lib/route-roles.test.ts` `apps/super-admin/lib/store-shipping-provider.test.ts` |
 | `/` | layout | layout | `apps/super-admin/app/(platform)/layout.tsx` | `platform-shell.tsx` `revenue-chart.tsx` | `data` | `auth` | `platform-session` | — | ✓ | — |
@@ -212,7 +213,7 @@
 | `/produk/[handle]` | Product page — gallery, variant picker, buy box, reviews; `product` template renders the tail. | `apps/storefront/src/pages/produk/[handle].astro` | `Layout` | `catalog` | `breadcrumb` `product-feed` | ✓ |  | `apps/storefront/src/components/product-ratio-locked.test.ts` |
 | `/produk` | Catalogue with server-side sort + pagination ('Daftar Produk'). | `apps/storefront/src/pages/produk/index.astro` | `Layout` | — | `breadcrumb` | ✓ |  | `apps/storefront/src/components/product-ratio-locked.test.ts` |
 | `/promo/[handle]` | One promo/flash sale. | `apps/storefront/src/pages/promo/[handle].astro` | `LandingLayout` | `catalog` `promo` | `packages` | ✓ |  | — |
-| `/promo` | Promo hub — live vouchers and flash sales (`nonaktif` + date window). | `apps/storefront/src/pages/promo/index.astro` | `Layout` | `catalog` | — | ✓ |  | `apps/storefront/src/lib/order-forms-post-kodepos.test.ts` `apps/storefront/src/lib/safe-href.test.ts` |
+| `/promo` | Promo hub — live vouchers and flash sales (`nonaktif` + date window). | `apps/storefront/src/pages/promo/index.astro` | `Layout` | `catalog` | — | ✓ |  | `apps/storefront/src/lib/order-forms-affiliate-ref.test.ts` `apps/storefront/src/lib/order-forms-post-kodepos.test.ts` `apps/storefront/src/lib/safe-href.test.ts` |
 | `/thanks` | Post-payment thank-you. | `apps/storefront/src/pages/thanks.astro` | `LandingLayout` | `catalog` | — | ✓ |  | — |
 
 ### Endpoints
@@ -366,7 +367,7 @@
 
 | module | exports |
 |---|---|
-| `affiliates.ts` | `createAffiliate` `getAffiliateProgramEnabled` `inviteAffiliateToAccount` `markCommissionPaid` `saveAffiliateSettings` `setAffiliateProgramEnabled` `setAffiliateStatus` `setProductAffiliateRate` |
+| `affiliates.ts` | `createAffiliate` `exportAffiliateCommissionsCsv` `getAffiliateProgramEnabled` `inviteAffiliateToAccount` `markCommissionPaid` `saveAffiliateSettings` `setAffiliateProgramEnabled` `setAffiliateStatus` `setProductAffiliateRate` `updateAffiliate` |
 | `articles.ts` | `createArticle` `deleteArticle` `updateArticle` |
 | `auth.ts` | `signIn` `signOut` |
 | `billing.ts` | `cancelSubscriptionInvoice` `createSubscriptionPayment` `getInvoicePayment` `getPendingSubscription` |
@@ -419,6 +420,7 @@
 |---|---|
 | `actions.ts` | `addStoreUser` `approveStore` `compStore` `createManualInvoice` `createSignupCode` `createStore` `extendTrial` `impersonateStore` `invitePlatformAdmin` `liftSuspension` `markPayoutPaid` `markRefundPaid` `processPayout` `processRefund` `reconcileMengantarBooking` `rejectPayout` `rejectRefund` `removeStoreUser` `replyTicketAdmin` `resetOwnerPassword` `resetPlatformAdminPassword` `resetStoreUserPassword` `retryStoreMengantar` `rotateStoreMengantar` `saveCodAllowed` `saveCouriers` `saveGateways` `saveMengantarPartner` `savePaymentChannels` `savePayoutPolicy` `saveProviderCredentials` `saveProviderOrderPrefix` `sendPaymentReminder` `setInvoiceStatus` `setProviderEnv` `setShippingProvider` `setSignupCodeActive` `setStoreComped` `setStoreShippingProvider` `setStoreUserRole` `setSubscriptionPpn` `setTicketStatus` `suspendStore` `syncCouriersFromKiriminaja` `syncPaymentChannels` `testAutolarisConnection` `testKiriminajaConnection` `testProviderKey` |
 | `activity-log.ts` | `ACTIVITY_KINDS` `ACTIVITY_KIND_LABEL` `LOG_PAGE_SIZE` `logHref` `logPages` `parseLogQuery` |
+| `affiliate-accounts.ts` | `AFFILIATE_LIST_LIMIT` `listAffiliateAccounts` `resetAffiliatePassword` `setAffiliateDisabled` |
 | `comp-invoice.ts` | `buildCompInvoice` |
 | `data.ts` | `MOVEMENTS_PER_PAGE` `PAYOUT_POLICY_DEFAULT` `getActivity` `getActivityLog` `getAggregator` `getAllTickets` `getConversion` `getCourierCostAbsorbed` `getCouriers` `getFinanceStats` `getGmvByCity` `getInvoices` `getKiriminajaBalance` `getKiriminajaProbe` `getOpenTicketCount` `getPaymentChannels` `getPaymentGateways` `getPayoutPolicy` `getPayoutSummary` `getPayouts` `getPendingApprovals` `getPlatform` `getPlatformAdmins` `getPlatformFinance` `getPlatformFloat` `getProviderStatus` `getRefundSummary` `getRefunds` `getRevenueSeries` `getRiskQueue` `getServerMetrics` `getStatusDistribution` `getStoreActivity` `getStoreBalance` `getStoreBilling` `getStoreById` `getStoreComp` `getStoreInvoices` `getStoreMoneySignals` `getStoreMovements` `getStoreOptions` `getStorePayouts` `getStoreUsers` `getStores` `getSubscriptionStats` `getSystemStatus` `getTicketAdmin` `kaEnvName` |
 | `health-types.ts` | `VERDICT_RANK` `checkToneClass` `verdictMeta` |
@@ -436,7 +438,7 @@
 | `provider-credentials.ts` | `keyError` `kiriminajaConfigFor` `saveCredentials` `saveOrderPrefix` `switchKiriminajaEnv` `testStoredKey` |
 | `refund-transition.ts` | `markRefundPaidInTxn` `processRefundInTxn` `rejectRefundInTxn` |
 | `refused.ts` | `refused` |
-| `route-roles.ts` | `ROUTE_RULES` `canOpenPath` `landingForRole` `minRoleForPath` `reasonForPath` |
+| `route-roles.ts` | `AFFILIATE_ACCOUNT_MIN_RANK` `ROUTE_RULES` `canOpenPath` `landingForRole` `minRoleForPath` `reasonForPath` |
 | `session.ts` | `SESSION_COOKIE` `signSession` |
 | `shipping-data.ts` | `getStoreShipping` `listSignupCodes` |
 | `store-shipping-provider.ts` | `PROVIDER_LABEL` `SHIPPING_PROVIDER_MIN_RANK` `SIGNUP_CODE_DISCOUNT_MAX_IDR` `SIGNUP_CODE_NOTE_MAX` `STORE_PROVIDER_REASON_MIN` `createSignupCodeWith` `isShippingProvider` `parseSignupCodeDiscount` `setSignupCodeActiveWith` `setStoreShippingProviderWith` |
@@ -448,7 +450,7 @@
 | module | exports |
 |---|---|
 | `cache.ts` | `cacheClear` `cached` `ttlMs` |
-| `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeAffiliateEnabled` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
+| `catalog.ts` | `ADMIN_BASE` `UPLOAD_WIDTHS` `VIRTUAL_COLLECTION_HANDLES` `activeVouchers` `enabledPaymentChannels` `getCatalog` `imageSrcSet` `inStock` `mediaUrl` `paymentKindWords` `productImages` `promoHub` `randomProducts` `recentProducts` `storeAffiliateEnabled` `storeAffiliateTerms` `storeCodEnabled` `storeCodPolicy` `storeFreeShip` `storeTaxSettings` |
 | `checkout.ts` | `getRecoveredCheckout` |
 | `content.ts` | `formatDate` `getArticle` `getArticles` `getPage` `getPages` `parseBody` `readMinutes` |
 | `host-fallback.ts` | `PLATFORM_ZONES` `isNamelessHost` `isReservedStoreLabel` |

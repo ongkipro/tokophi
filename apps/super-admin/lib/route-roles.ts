@@ -30,6 +30,9 @@ import { SHIPPING_PROVIDER_MIN_RANK } from "./store-shipping-provider";
  * itself, above its first data read.
  */
 
+/** ONE floor for the Affiliate screen and both of its actions (lib/actions/affiliate-accounts.ts). */
+export const AFFILIATE_ACCOUNT_MIN_RANK: PlatformRole = "admin";
+
 export type RouteRule = {
   /** Path prefix, matched as `p === prefix || p.startsWith(prefix + "/")`. `/` is exact-only. */
   prefix: string;
@@ -70,6 +73,10 @@ export const ROUTE_RULES: RouteRule[] = [
   // ADR 0019: a signup code decides which shipping provider a new store is created on — the same power as
   // moving one store, so the same ONE rank constant (store-shipping-provider.ts) sets this floor.
   { prefix: "/kode-daftar", min: SHIPPING_PROVIDER_MIN_RANK, why: "Kode daftar menentukan penyedia pengiriman (KiriminAja / Mengantar) setiap toko baru yang memakainya." },
+  // ADR 0022 / AFFILIATE-PW-RESET: platform-wide personal data (every affiliate account's email and phone) and
+  // the credential hand-over — support "cannot touch credentials". Not `owner`: an affiliate account is not a
+  // merchant's shop and moves no money (bank details live on each store's row, written by the seller).
+  { prefix: "/affiliate", min: AFFILIATE_ACCOUNT_MIN_RANK, why: "Akun affiliate di semua toko (email, nomor WhatsApp) serta reset kata sandi dan menonaktifkan akun." },
   { prefix: "/log-sistem", min: "admin", why: "Jejak tindakan operator di SEMUA toko — reset password, suspend, VIP, konfigurasi platform. Bukan konteks satu toko: itu ada di halaman toko." },
 ];
 

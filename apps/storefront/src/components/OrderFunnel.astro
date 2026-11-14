@@ -289,6 +289,17 @@ const funnelCatalogId = funnelProduct
         return { utmSource: String(raw.s || "").slice(0, 64), utmMedium: String(raw.m || "").slice(0, 64) };
       } catch (e) { return {}; }
     }
+    // F-A13 (AFFILIATE_SPEC): the affiliate `?ref=` MarketingPixels captured (LandingLayout renders it),
+    // sent within the SAME 30 days as checkout.astro's `refCode`. A selector only — /api/public/order
+    // resolves it against this store's active affiliates; a stale or foreign code never costs the sale.
+    // No typed-code field here on purpose: this is the paid-traffic COD form (it has no voucher field
+    // either), and an affiliate's buyer arrives through the link.
+    function refCode() {
+      try {
+        var r = JSON.parse(localStorage.getItem("tphi:ref") || "null");
+        return r && Date.now() - Number(r.t || 0) <= 30 * 86400000 ? String(r.v).slice(0, 20) : undefined;
+      } catch (e) { return undefined; }
+    }
 
     function normalizePhone(raw) {
       var d = String(raw == null ? "" : raw).replace(/\D+/g, "");
@@ -566,6 +577,7 @@ const funnelCatalogId = funnelProduct
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeSlug: STORE_SLUG,
+          refCode: refCode(),
           trackingCookies: Object.assign(
             { fbp: trackingCookie("_fbp"), fbc: trackingCookie("_fbc"), ga: trackingCookie("_ga"),
               gcl: trackingCookie("_gcl_aw") || trackingCookie("_gcl_gb") || trackingCookie("_gcl_gs"),
