@@ -12,6 +12,7 @@ import { getTopbarData } from "@/lib/data/topbar";
 import { getPerluDikirimCount } from "@/lib/data/orders";
 import { listMemberships } from "@/lib/store-selection";
 import { IDR } from "@tokophi/lib/format";
+import { buyerAccountEnabled } from "@tokophi/lib/claim-token";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -101,7 +102,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
   return (
     <PermissionsProvider role={session?.role}>
-      <StoreProvider name={storeName ?? "Toko"} slug={storeSlug ?? ""}>
+      <StoreProvider name={storeName ?? "Toko"} slug={storeSlug ?? ""} buyerAccounts={buyerAccountEnabled()}>
         <AdminChrome
           sidebar={<Sidebar navCounts={navCounts} />}
           topbar={

@@ -251,6 +251,10 @@ jobs:
   #     `npm run check -w @tokophi/docs`  (routes ⊂ page-map, astro build, SEO, internal links —
   #      the Dockerfile runs the same script, so a red docs page is caught here and not as a
   #      failed Coolify image build of the whole compose stack after merge)
+  #   apps/account (BUYER-ACCOUNT-P1, ADR 0016) — NO Dockerfile yet (merged dark, enablement is
+  #     owner-gated), so this is the ONLY build it gets: `npm run build -w @tokophi/account`
+  #     (Astro SSR, Node adapter; the dummy DATABASE_URL below is never connected to, like the Next
+  #      builds). Its `astro check` runs in the `test` job through `npm test` → `check:account`.
   #
   # ⚠️ THE DUMMY DATABASE_URL IS NOT OPTIONAL FOR THE TWO NEXT BUILDS. Route collection imports
   # `@tokophi/db`, whose `client.ts` throws AT MODULE LOAD when `planPools()` cannot resolve a
@@ -277,7 +281,7 @@ jobs:
       # Every surface's verdict is evidence; a red admin must not hide a red landing.
       fail-fast: false
       matrix:
-        app: [admin, super-admin, landing, docs]
+        app: [admin, super-admin, landing, docs, account]
 
     env:
       NEXT_TELEMETRY_DISABLED: "1"
@@ -316,7 +320,7 @@ jobs:
       # so today it saves the TypeScript pass and little else; it is cheap and becomes worth more
       # if Turbopack's persistent build cache is ever switched on. Do not expect it to hide a slow
       # build.
-      - if: matrix.app != 'landing' && matrix.app != 'docs'
+      - if: matrix.app != 'landing' && matrix.app != 'docs' && matrix.app != 'account'
         uses: actions/cache@v4
         with:
           path: apps/${{ matrix.app }}/.next/cache

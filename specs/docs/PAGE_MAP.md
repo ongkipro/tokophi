@@ -50,14 +50,15 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 56 | 4 | 22 |
+| Seller (merchant panel) | 57 | 4 | 22 |
 | Super Admin (platform control plane) | 14 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 18 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
+| Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016) | 10 | — | 4 |
 
 ## Seller (merchant panel) — `apps/admin`
 
-56 pages · 4 layouts · 22 API routes
+57 pages · 4 layouts · 22 API routes
 
 ### Pages
 
@@ -95,12 +96,13 @@
 | `/obrolan` | 'Obrolan' — the storefront chat inbox (WhatsApp-style, per store). | page | `apps/admin/app/(admin)/obrolan/page.tsx` | `obrolan-client.tsx` | `chat` | `chat` | — | — | ✓ | — |
 | `/` | Dashboard Seller — today's sales, orders, KPIs and the 7/30-day chart, all derived live from `orders` (never `analytics_daily`). | page | `apps/admin/app/(admin)/page.tsx` | `dashboard-client.tsx` `error.tsx` | `activity` `analytics` `funnel` `orders` `products` `returns` `reviews` `store` `support` | `mengantar` | `session` | — | ✓ | — |
 | `/pelanggan/[id]` | Customer detail: orders, tags, notes. | page | `apps/admin/app/(admin)/pelanggan/[id]/page.tsx` | `customer-detail.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/pelanggan/akun` | 'Akun Pembeli' (ADR 0016) — this store's customers who saved an order to a TokoΦ Account: count, since when. Merchant projection only, never the account itself. | page | `apps/admin/app/(admin)/pelanggan/akun/page.tsx` | — | `customers` | — | — | — | ✓ | `apps/admin/lib/buyer-account-gate.test.ts` |
 | `/pelanggan/keranjang` | 'Keranjang ditinggal' — abandoned checkouts; recovery over WhatsApp ('WA dibuka', never 'terkirim'); rate = rescued/abandoned only. | page | `apps/admin/app/(admin)/pelanggan/keranjang/page.tsx` | `keranjang-client.tsx` | `checkout` | `checkout` | — | — | ✓ | — |
-| `/pelanggan` | 'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case. | page | `apps/admin/app/(admin)/pelanggan/page.tsx` | `pelanggan-client.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/pelanggan` | 'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case. | page | `apps/admin/app/(admin)/pelanggan/page.tsx` | `pelanggan-client.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/buyer-account-gate.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/pelanggan/segmen` | 'Segmen' — customer segments (create/delete). | page | `apps/admin/app/(admin)/pelanggan/segmen/page.tsx` | `segmen-client.tsx` | `segments` | `segments` | — | — | ✓ | — |
 | `/pelanggan/ulasan` | 'Ulasan' — product reviews moderation. | page | `apps/admin/app/(admin)/pelanggan/ulasan/page.tsx` | `ulasan-client.tsx` | `reviews` | `reviews` | — | — | ✓ | — |
 | `/pemasaran` | 'Pemasaran' — ad channels (Meta/Google/TikTok) connection, catalog id scheme, conversion queue health; 'dari pesanan toko Anda', never 'menurut Meta'. | page | `apps/admin/app/(admin)/pemasaran/page.tsx` | `feed-card.tsx` `pemasaran-client.tsx` | `feed` `marketing` `tracking` | `tracking` | `session` | — | ✓ | — |
-| `/pengaturan` | 'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision). | page | `apps/admin/app/(admin)/pengaturan/page.tsx` | — | — | — | — | — |  | `apps/admin/lib/actions/users.test.ts` `apps/admin/lib/mengantar-readiness.test.ts` |
+| `/pengaturan` | 'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), 'Layanan Pembeli' (return window + complaint-resolution days a buyer reads in the Akun TokoΦ, ADR 0016), domains, users/roles. Payment channels are NOT here (platform decision). | page | `apps/admin/app/(admin)/pengaturan/page.tsx` | — | — | — | — | — |  | `apps/admin/lib/actions/users.test.ts` `apps/admin/lib/mengantar-readiness.test.ts` |
 | `/pesanan/[id]` | Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking. | page | `apps/admin/app/(admin)/pesanan/[id]/page.tsx` | `order-detail.tsx` | `order-detail` `orders` | `mengantar` `orders` `payments` `shipping` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
 | `/pesanan/massal` | 'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'. | page | `apps/admin/app/(admin)/pesanan/massal/page.tsx` | `massal-client.tsx` | `bulk-shipping` | `bulk-shipping` | — | — | ✓ | `apps/admin/lib/search-model.test.ts` |
 | `/pesanan` | 'Pesanan' — orders list with status tabs; URL params validated before any enum cast. | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/search-model.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` `test/pagination-keyboard.test.ts` |
@@ -196,7 +198,7 @@
 | `/blog` | Blog index. | `apps/storefront/src/pages/blog/index.astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/cari` | Search results page (the ⌘K palette uses `/api/search`). | `apps/storefront/src/pages/cari.astro` | `Layout` | — | `breadcrumb` | ✓ |  | — |
 | `/checkout` | Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`. | `apps/storefront/src/pages/checkout.astro` | `CheckoutLayout` | `catalog` `checkout` | `cart-variant` `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
-| `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
+| `/checkout/sukses` | Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only. | `apps/storefront/src/pages/checkout/sukses.astro` | `CheckoutLayout` | `catalog` | `account-link` `public-api` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
 | `/halaman/[handle]` | Static page. | `apps/storefront/src/pages/halaman/[handle].astro` | `Layout` | `content` | `breadcrumb` | ✓ |  | — |
 | `/` | Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction. | `apps/storefront/src/pages/index.astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | `packages/lib/src/provider-label.test.ts` |
 | `/kategori/[handle]` | One collection: CategoryHero always, then the `category` template body. | `apps/storefront/src/pages/kategori/[handle].astro` | `Layout` | `catalog` | `breadcrumb` | ✓ |  | — |
@@ -250,6 +252,34 @@
 |---|---|---|---|---|---|---|---|---|
 | `/sitemap.xml` | Sitemap for the apex. | GET | `apps/landing/src/pages/sitemap.xml.ts` | — | — |  | — | — |
 
+## Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016) — `apps/account`
+
+10 pages · 0 layouts · 0 API routes
+
+### Pages
+
+| URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `/404` | Not found — also what every 'not mine' record answers (another account's order or store). | page | `apps/account/src/pages/404.astro` | — | — | — | — | — |  | — |
+| `/account` | 'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme. | page | `apps/account/src/pages/account/index.astro` | — | `account` `orders` | — | — | — |  | — |
+| `/auth/google/callback` | Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session. | endpoint | `apps/account/src/pages/auth/google/callback.ts` | — | — | — | — | — |  | — |
+| `/auth/google/start` | Google sign-in start — mints the 128-bit `state` cookie and the safe `next`. | endpoint | `apps/account/src/pages/auth/google/start.ts` | — | — | — | — | — |  | — |
+| `/` | Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it. | page | `apps/account/src/pages/index.astro` | — | `orders` | — | — | — |  | `packages/lib/src/provider-label.test.ts` |
+| `/keluar` | Revokes this session row and deletes the cookie. | endpoint | `apps/account/src/pages/keluar.ts` | — | `account` | — | — | — |  | — |
+| `/klaim` | Saves an order to the account from the store's checkout-success link: claim token (HMAC, one order, 30 days) + sign-in + consent naming the store. A claim is keyed on a UNIQUE `order_id`. | page | `apps/account/src/pages/klaim.astro` | — | `orders` | — | — | — |  | `apps/account/src/lib/nav.test.ts` |
+| `/masuk` | Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle). | page | `apps/account/src/pages/masuk.astro` | — | — | — | — | — |  | — |
+| `/masuk/dev` | LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden. | endpoint | `apps/account/src/pages/masuk/dev.ts` | — | `account` | — | — | — |  | — |
+| `/orders/[number]` | One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one. | page | `apps/account/src/pages/orders/[number]/index.astro` | — | — | — | — | — |  | — |
+| `/orders/[number]/receipt` | Bukti pesanan — the printable page under the order's own URL. | page | `apps/account/src/pages/orders/[number]/receipt.astro` | — | — | — | — | — |  | — |
+| `/orders` | 'Pesanan' — only orders saved to this account, from stores still linked. | page | `apps/account/src/pages/orders/index.astro` | — | `orders` | — | — | — |  | — |
+| `/stores/[slug]` | Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link. | page | `apps/account/src/pages/stores/[slug].astro` | — | `orders` | — | — | — |  | — |
+| `/stores` | 'Toko' — stores this account is actively linked to, most recent purchase first. | page | `apps/account/src/pages/stores/index.astro` | — | `orders` | — | — | — |  | — |
+
+### API routes
+
+| URL | what it is | methods | file | gate | owner `db` | tests |
+|---|---|---|---|---|---|---|
+
 ## Module index (what the pages above import)
 
 ### Seller reads — `apps/admin/lib/data`
@@ -267,7 +297,7 @@
 | `checkout.ts` | `digits` `getAbandonedCarts` `getCheckoutMetrics` |
 | `collections.ts` | `getCollectionDetail` `getCollections` |
 | `crm.ts` | `getFollowups` `getLeads` `getWaTemplates` |
-| `customers.ts` | `getCustomer` `getCustomerOrders` `getCustomers` |
+| `customers.ts` | `accountCustomerRows` `customerCols` `customerOrderRows` `getAccountCustomers` `getCustomer` `getCustomerOrders` `getCustomers` |
 | `dashboard.ts` | `LOW_STOCK` `RANGE_OPTIONS` `SALES_TILE_NOTE` `getActionQueue` `getActivities` `getChannels` `getConversionKpi` `getDeviceSplit` `getFunnel` `getMoneyTiles` `getRecentOrders` `getReturnSummary` `getSeries` `getStatusCounts` `getStuckMoney` `getSummary` `getTopProducts` `getVisitsKpi` `rangeDates` `rangeLabel` `shiftMonth` |
 | `day-bucket.ts` | `STORE_TZ` `dayKey` `dayOf` `hourOf` `midnightDaysAgo` `today` |
 | `discounts.ts` | `discountSavingsFor` `getDiscount` `getDiscountSavings` `getDiscounts` |
@@ -282,7 +312,7 @@
 | `marketing.ts` | `getAdChannels` |
 | `menus.ts` | `getMenus` |
 | `order-detail.ts` | `getOrderDetail` |
-| `order-payment.ts` | `latestPaymentFirst` |
+| `order-payment.ts` | — |
 | `orders.ts` | `getOrder` `getOrderList` `getOrders` `getPerluDikirimCount` |
 | `pages.ts` | `getPage` `getPages` |
 | `platform-finance.ts` | `getSubscriptionPpnEnabled` |
@@ -326,6 +356,7 @@
 | `pages.ts` | `createPage` `deletePage` `updatePage` |
 | `payment-settings.ts` | `getPlatformChannels` |
 | `payments.ts` | `createOrderPayment` |
+| `pengaduan.ts` | `getComplaintService` `saveComplaintService` |
 | `picker.ts` | `pickerCategoryImages` `pickerCategoryLinks` `pickerPageLinks` `pickerProductLinks` `pickerProducts` |
 | `plugins.ts` | `getKelolaOrderPanel` `getPluginCard` `removePluginData` `resendKelolaOrder` `saveKelola` `setKelolaLeads` `setPluginActive` |
 | `products.ts` | `bulkDeleteProducts` `bulkSetProductStatus` `createProduct` `deleteProduct` `duplicateProduct` `updateProduct` |
@@ -335,6 +366,7 @@
 | `purchases.ts` | `cancelPurchaseOrder` `createPurchaseOrder` `receivePurchaseOrder` `unreceivePurchaseOrder` |
 | `register.ts` | `checkSignupCode` `registerStore` |
 | `rekening.ts` | `getBankAccount` |
+| `retur.ts` | `getReturnWindow` `saveReturnWindow` |
 | `reviews.ts` | `deleteReview` `replyToReview` `setReviewStatus` |
 | `security.ts` | `changePassword` `disable2FA` `enable2FA` `getSecurity` `setup2FA` |
 | `segments.ts` | `createSegment` `deleteSegment` `updateSegment` |
@@ -401,6 +433,7 @@
 
 | module | exports |
 |---|---|
+| `account-link.ts` | `accountClaimUrl` |
 | `breadcrumb.ts` | `breadcrumbLd` `ldScript` |
 | `cart-variant.ts` | `noVariantChoice` |
 | `chat.ts` | `CHAT_COOKIE` `LIMITS` `MAX_BODY` `MAX_NAME` `MAX_OPEN_CONVERSATIONS` `clientIp` `cursorOf` `ipHash` `json` `mintVisitorCookie` `parseCursor` `rateLimit` `readVisitorToken` |

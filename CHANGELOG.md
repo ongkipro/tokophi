@@ -2,6 +2,19 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-14 — Akun TokoΦ untuk pembeli, fase 1 (ADR 0016, BUYER-ACCOUNT-P1) — PR pending, belum di-merge
+
+- **Belanja tetap tanpa akun.** Setelah pesanan dibuat, halaman sukses boleh menawarkan **"Simpan ke Akun
+  TokoΦ"**: pembeli masuk dengan Google di `account.tokophi.com`, menyetujui toko itu ditampilkan, lalu bisa
+  memantau status, resi dan rincian pesanan dari banyak toko di satu tempat. Bisa memutus toko atau menutup
+  akun kapan saja. Tanpa kata sandi.
+- **Seller:** Pengaturan → **Layanan Pembeli** (jendela retur 2–90 hari kerja, jangka waktu penyelesaian komplain
+  1–60 hari kerja — kosong = pembeli tidak melihat apa pun); Pelanggan → **Akun Pembeli** (pelanggan yang
+  menyimpan pesanan ke akun); lencana "Terdaftar" dan tanda "Tersimpan di Akun TokoΦ" di riwayat pesanan
+  pelanggan. Toko tidak pernah melihat email, perangkat, atau pesanan pembeli di toko lain.
+- Migrasi `0121`–`0124` (hand-written, idempoten). App baru `apps/account` — **belum di-deploy** (belum ada
+  Dockerfile/compose); fitur mati sampai `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` diisi. Affiliate toko = fase 2.
+
 ## 2026-11-13 — Plugin toko: Kelola CRM, Aktif / Nonaktif (KEL-001, ADR 0021) — PR #469
 
 - **Pengaturan → Plugin** (khusus Pemilik toko): daftar plugin buatan TokoΦ, masing-masing dengan saklar

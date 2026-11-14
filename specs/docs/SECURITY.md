@@ -26,6 +26,7 @@ Last measured **2026-08-05** against `origin/main` and production. Re-verificati
 | Super Admin | `rich.tokophi.com` | us | **every tenant**, billing, impersonation |
 | Public API | `app.tokophi.com/api/public/**` | the public, no session | quote shipping, place orders, redeem vouchers, renew an expired payment instruction (one-order token), receive payment callbacks |
 | Landing | `tokophi.com` | the public | static, no DB |
+| Akun TokoΦ (buyer account, ADR 0016) | `account.tokophi.com` — **not deployed yet** | a buyer, signed in with Google | read ONLY the orders that buyer claimed (token + consent), unlink a store, close the account. Cross-tenant by design, owner connection, every statement keyed `buyer_id` |
 
 **Observed:** the Public API is the only unauthenticated *write* surface in the product. It is served
 by the admin app rather than the storefront **(Decision)** so the platform's KiriminAja and AutoLaris
@@ -92,6 +93,11 @@ phone to Kelola, from server code in `admin` only (the post-commit `after()` in 
 - **Decision.** Generated passwords are **60 bits** over a 32-symbol Crockford alphabet, one
   implementation in `@tokophi/lib/password`. `password.test.ts` measures the generator's real
   min-entropy and fails under 48 bits.
+- **Decision (ADR 0016).** Buyers have **no password** — Google sign-in only (a dev-only email sign-in is
+  404 in a production build). Their session is a host-only `tphi_account` cookie on the account origin
+  carrying a `buyer_sessions` id; the row decides every request. It is signed with a key **derived** from
+  `AUTH_SECRET` (HMAC, fixed label) and requires audience `tokophi-account`, so a Seller/Super Admin token
+  never verifies as a buyer session and vice versa (`apps/account/src/lib/account-lib.test.ts`).
 - **Observed.** A password change **revokes every other session** (`@tokophi/lib/session-revocation`,
   migrations 0087/0088) — one implementation shared by merchant and platform sides.
 
@@ -124,6 +130,18 @@ the mint's entropy is load-bearing rather than a nice-to-have.
 ---
 
 ## 4. Tenant isolation
+
+- **Decision (ADR 0016, BUYER-ACCOUNT-P1, 2026-11-14).** The buyer account is the first surface that
+  holds ONE person's relationship with SEVERAL tenants. Isolation is layered: `buyer_accounts` and
+  `buyer_sessions` have RLS enabled with **no policy** (every Seller path, as `tokophi_app`, reads zero
+  rows — no email, name or device can reach a merchant even through a deliberate join);
+  `buyer_order_claims` and `buyer_store_links` carry `store_id` + `tenant_isolation`, so a Seller sees
+  only "connected / saved" facts of ITS customers and cannot write into another store. The account app
+  reads on the owner connection with `buyer_id = <me>` on the claim AND an active link of the same buyer
+  and store. **Observed:** `apps/admin/lib/data/customers-account.test.ts` (one buyer, two stores, under
+  RLS; red when the claims policy is opened or `buyer_accounts` gets a permissive policy) and
+  `apps/account/src/data/buyer-data.test.ts` (red when the buyer predicate is dropped). **Decision:**
+  nothing is matched by phone or email — possession of the order's claim token is the proof.
 
 - **Observed, re-verified on production 2026-08-05 (`npm run verify-rls`):** RLS is enabled on
   **51 of 52** store-scoped tables. The one exception is `platform_activity` — the platform's own

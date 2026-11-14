@@ -11,6 +11,7 @@ import {
   Users,
   Store,
   Plug,
+  ShieldCheck,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -23,7 +24,8 @@ import {
   CardContent,
   CardFooter,
 } from "@tokophi/ui/card"
-import { useStoreName } from "@/components/admin/store-context"
+import { useBuyerAccountsEnabled, useStoreName } from "@/components/admin/store-context"
+import { settingsSectionVisible } from "@/lib/nav"
 import { initials } from "@/components/admin/initials"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
@@ -37,6 +39,8 @@ import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
+import { ReturCard } from "@/components/admin/pengaturan/retur-card"
+import { PengaduanCard } from "@/components/admin/pengaturan/pengaduan-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -46,6 +50,7 @@ import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
 type Section =
   | "profil"
   | "pengiriman"
+  | "pembeli"
   | "alamat"
   | "domain"
   | "rekening"
@@ -62,6 +67,7 @@ const SECTIONS: {
 }[] = [
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
   { id: "pengiriman", label: "Pengiriman", desc: "Jasa kirim & COD", icon: <Truck /> },
+  { id: "pembeli", label: "Layanan Pembeli", desc: "Retur & komplain", icon: <ShieldCheck /> },
   { id: "alamat", label: "Alamat", desc: "Alamat pengambilan", icon: <MapPin /> },
   { id: "domain", label: "Domain", desc: "Domain kustom storefront", icon: <Globe /> },
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
@@ -97,7 +103,11 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
   // and client start on the same section — no effect, no hydration mismatch. An unknown value is
   // ignored, never trusted as a Section.
   const wanted = React.use(searchParams).section
-  const [section, setSection] = React.useState<Section>(() => SECTIONS.find((s) => s.id === wanted)?.id ?? "profil")
+  // Layanan Pembeli exists only while the TokoΦ Account feature is ON (ADR 0016) — a typed
+  // `?section=pembeli` falls back to Profil when it is off, and the section is not listed.
+  const buyerAccounts = useBuyerAccountsEnabled()
+  const sections = SECTIONS.filter((s) => settingsSectionVisible(s.id, buyerAccounts))
+  const [section, setSection] = React.useState<Section>(() => sections.find((s) => s.id === wanted)?.id ?? "profil")
   const storeName = useStoreName()
 
 
@@ -126,7 +136,7 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
         <div className="lg:sticky lg:top-6 h-fit space-y-4">
           <Card className="p-1.5">
             <nav className="flex flex-col gap-0.5">
-              {SECTIONS.map((s) => {
+              {sections.map((s) => {
                 const active = section === s.id
                 return (
                   <button
@@ -216,6 +226,16 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
             <div className="max-w-3xl space-y-5">
               <MengantarCard onOpenAlamat={() => setSection("alamat")} />
               <JasaKirimCard />
+            </div>
+          )}
+
+          {/* LAYANAN PEMBELI (ADR 0016, BUYER-ACCOUNT-P1) — the two promises a buyer reads on an order
+              in their Akun TokoΦ: the return window and the complaint-resolution period. Both NULL by
+              default = the buyer is shown nothing; we never make a promise on the store's behalf. */}
+          {section === "pembeli" && buyerAccounts && (
+            <div className="grid max-w-3xl gap-5">
+              <ReturCard />
+              <PengaduanCard />
             </div>
           )}
 

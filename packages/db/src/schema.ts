@@ -1740,6 +1740,79 @@ export const refunds = pgTable(
   }),
 );
 
+// ── TokoΦ Account (0121–0122, ADR 0016, BUYER-ACCOUNT-P1) ─────────────────────────────────────────
+// One platform identity per person (apps/account). Cross-tenant: no store_id; RLS on with NO policy,
+// so `tokophi_app` (every Seller path) sees zero rows. apps/account reads with an explicit buyer_id.
+export const buyerAccounts = pgTable("buyer_accounts", {
+  id: pk(),
+  /** Google `sub`. `dev:<email>` only from the local dev sign-in (refused in production builds);
+   *  `closed:<id>` once the account is closed, so the same Google account starts a new one. */
+  googleSub: text().notNull().unique(),
+  email: text(),
+  name: text(),
+  /** active | suspended | closed (check constraint in 0121). */
+  status: text().notNull().default("active"),
+  createdAt: createdAt(),
+});
+export const buyerSessions = pgTable(
+  "buyer_sessions",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    createdAt: createdAt(),
+    lastSeenAt: createdAt(),
+    revokedAt: ts(),
+    userAgent: text(),
+  },
+  (t) => [index("buyer_sessions_buyer_idx").on(t.buyerId)],
+);
+// A claim (one claimant per order) + the store link it consents to are the ONLY bridge from an account
+// to a store's orders — never an email/phone match. Both carry store_id ⇒ standard tenant policy: the
+// Seller sees its own rows (the merchant projection ADR 0016 allows) and never the account behind them.
+export const buyerStoreLinks = pgTable(
+  "buyer_store_links",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    customerId: uuid().references(() => customers.id),
+    /** active | revoked (check constraint in 0122). */
+    status: text().notNull().default("active"),
+    consentVersion: text().notNull(),
+    consentedAt: createdAt(),
+    revokedAt: ts(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("buyer_store_links_buyer_id_store_id_unique").on(t.buyerId, t.storeId),
+    index("buyer_store_links_store_idx").on(t.storeId),
+  ],
+);
+export const buyerOrderClaims = pgTable(
+  "buyer_order_claims",
+  {
+    id: pk(),
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    claimedAt: createdAt(),
+  },
+  (t) => [index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId)],
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),
@@ -1796,6 +1869,10 @@ export const storeSettings = pgTable("store_settings", {
   // Which SERVICES may carry it is not a merchant choice — KiriminAja reports a per-service `cod`
   // flag (see kaServices()), and the platform narrows that further. See ADR/BACKLOG.
   codEnabled: boolean().notNull().default(false),
+  /** Working days after receipt the store accepts a return request (2–90, check in 0123; floor = PP 80/2019 Pasal 69(1)). NULL = not declared. */
+  returnWindowDays: integer(),
+  /** Working days within which the store commits to resolve a complaint (1–60, check in 0124; PP 80/2019 Pasal 27(2)(e)). NULL = not declared. */
+  complaintResolutionDays: integer(),
   // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),

@@ -83,7 +83,7 @@ Both surfaced by the incident in `BUILD-LOG.md` 2026-09-07 11:53 UTC. Neither is
   decision, CI on a private repo, written KiriminAja confirmation, real Google OAuth credentials.)
 - The epic-level map [`../TASKS.md`](../TASKS.md) was re-verified 1:1 against the code on
   2026-09-07 (22 items flipped, Epic 8 added for work shipped since 2026-08-24).
-- TokoΦ Account is accepted as a product direction, not as deployed behavior (Task 5.8).
+- TokoΦ Account: ADR 0016 **accepted 2026-11-14** (Task 5.8 done); phase 1 = BUYER-ACCOUNT-P1 (buyer account, merged dark when its PR lands — production enablement is owner-gated, see ADR 0016). Store affiliate = phase 2.
 - Production mutation, deployment, credential rotation, and infrastructure changes remain owner-gated.
 - **CI is inert**: `.github/workflows/ci.yml` exists and caught a real bug on 2026-08-27, but the
   repo went PRIVATE again on 2026-08-28 by owner order (`gh api` → `private`, 2026-09-07). Task 5.12.

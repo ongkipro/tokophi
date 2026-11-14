@@ -98,6 +98,9 @@ const INDEX_CENSUS: Record<string, Census> = {
   refunds_one_open_per_payment: "sql-only: partial unique index (one OPEN row per payment), not expressible in schema.ts",
   refunds_store_idx: "drizzle",
   refunds_order_idx: "drizzle",
+  buyer_sessions_buyer_idx: "drizzle",
+  buyer_store_links_store_idx: "drizzle",
+  buyer_order_claims_buyer_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:

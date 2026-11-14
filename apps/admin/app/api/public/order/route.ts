@@ -35,6 +35,7 @@ import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { IDR } from "@tokophi/lib/format";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { claimSecret, issueClaimToken } from "@tokophi/lib/claim-token";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import {
@@ -1332,12 +1333,26 @@ async function handle(req: Request) {
     console.error("[order] tracking enqueue failed", err);
   }
 
+  // TokoΦ Account claim token (ADR 0016, BUYER-ACCOUNT-P1): one extra field on the two SUCCESS answers
+  // only — never on the 409 duplicate (reachable by replaying a session id) nor on a 502/503 partial
+  // failure. Bound by HMAC to THIS order id; grants a claim ATTEMPT only (the buyer must still sign in
+  // and consent; one claimant per order is a DB unique). Absent when ACCOUNT_CLAIM_SECRET is unset —
+  // the feature is off and the response is byte-identical to before. It must never fail a written order.
+  let claimToken: string | undefined;
+  try {
+    const secret = claimSecret();
+    if (secret) claimToken = issueClaimToken(order.id, secret);
+  } catch (err) {
+    console.error("[order] claim token not issued for", order.number, err);
+  }
+
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
     return NextResponse.json(
       {
         ok: true,
         orderNumber: order.number,
+        claimToken,
         cod: true,
         subtotal,
         lines,
@@ -1516,6 +1531,7 @@ async function handle(req: Request) {
     {
       ok: true,
       orderNumber: order.number,
+      claimToken,
       // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
       // the shopper believing a number the order does not contain.
       subtotal,

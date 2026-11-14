@@ -848,6 +848,34 @@
       "when": 1787546011751,
       "tag": "0120_store_plugins_kelola",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0121_tokophi_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1787600001000,
+      "tag": "0122_buyer_order_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1787600002000,
+      "tag": "0123_store_return_window",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1787600003000,
+      "tag": "0124_store_complaint_resolution",
+      "breakpoints": true
     }
   ]
 }

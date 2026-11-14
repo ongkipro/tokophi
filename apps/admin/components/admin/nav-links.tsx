@@ -7,7 +7,7 @@ import { navGroupsFor, type NavItem, type NavChild, type NavBadgeKey } from "@/l
 import { num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Badge } from "@tokophi/ui/badge";
-import { useStoreHref, useStoreSlug } from "@/components/admin/store-context";
+import { useBuyerAccountsEnabled, useStoreHref, useStoreSlug } from "@/components/admin/store-context";
 
 
 /**
@@ -150,7 +150,7 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
 export type NavCounts = Partial<Record<NavBadgeKey, number>>;
 
 export function NavLinks({ onNavigate, counts }: { onNavigate?: () => void; counts?: NavCounts }) {
-  const groups = navGroupsFor(useStoreSlug());
+  const groups = navGroupsFor(useStoreSlug(), { buyerAccounts: useBuyerAccountsEnabled() });
   return (
     <nav className="flex flex-col gap-4 px-3">
       {groups.map((group, gi) => (

@@ -10,6 +10,7 @@ import {
   vi,
 } from "vitest";
 import type * as ShippingQuote from "@/lib/shipping-quote";
+import { verifyClaimToken } from "@tokophi/lib/claim-token";
 import { SHIPPING_QUOTE_UNAVAILABLE } from "@/lib/public-guard";
 
 const h = vi.hoisted(() => {
@@ -576,6 +577,54 @@ suite("POST /api/public/order — public store availability", () => {
     expect(after.orders.length).toBe(1);
     expect(secondBody.code).toBe("order_already_created");
     expect(secondBody.orderNumber).toBe(firstBody.orderNumber);
+  }, 60_000);
+
+  // BUYER-ACCOUNT-P1 (ADR 0016) — "buying never requires an account". With the account feature switched
+  // ON (claim secret set), a guest order with NO account, NO session and NO buyer field in the body is
+  // still created, exactly as before; the only addition is a claim token bound to THAT order, on the
+  // success answer only. Nothing in the order path writes a buyer row — linking happens later, in
+  // apps/account, only if the shopper chooses to.
+  it("guest checkout with the account feature ON: order created, no account touched, claim token for this order only", async () => {
+    const secret = "t".repeat(40);
+    vi.stubEnv("ACCOUNT_CLAIM_SECRET", secret);
+    try {
+      const key = "claim";
+      await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+      const fixture = fixtures[key]!;
+      const accountsBefore = await client`select count(*)::int n from buyer_accounts`;
+
+      const first = await POST(orderRequest(key, { ip: "203.0.113.77" }));
+      const firstBody = (await first.json()) as { ok?: boolean; orderNumber?: string; claimToken?: string };
+      const [created] = (await mutationState(fixture.id)).orders as { id: string; number: string }[];
+      expect(first.status).toBe(200);
+      expect(firstBody).toMatchObject({ ok: true, orderNumber: created.number });
+      expect(verifyClaimToken(firstBody.claimToken!, secret, Date.now(), created.id)).not.toBeNull();
+
+      const [claims] = await client`select count(*)::int n from buyer_order_claims where store_id = ${fixture.id}`;
+      const [links] = await client`select count(*)::int n from buyer_store_links where store_id = ${fixture.id}`;
+      const [accountsAfter] = await client`select count(*)::int n from buyer_accounts`;
+      expect([claims.n, links.n, accountsAfter.n]).toEqual([0, 0, accountsBefore[0].n]);
+
+      // The duplicate answer (reachable by replaying a session id) never carries a token.
+      const replay = (await (await POST(orderRequest(key, { ip: "203.0.113.77" }))).json()) as Record<string, unknown>;
+      expect(replay.code).toBe("order_already_created");
+      expect(replay).not.toHaveProperty("claimToken");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 60_000);
+
+  it("with the account feature OFF the success answer carries no claim token", async () => {
+    vi.stubEnv("ACCOUNT_CLAIM_SECRET", "");
+    try {
+      const key = "noclaim";
+      await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+      const body = (await (await POST(orderRequest(key, { ip: "203.0.113.78" }))).json()) as Record<string, unknown>;
+      expect(body).toMatchObject({ ok: true });
+      expect(body.claimToken).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 60_000);
 
   it("re-checks the store lock inside the transaction before the customer upsert", async () => {
