@@ -140,18 +140,17 @@ created for it. **It ships dormant and turning it on is Coolify env + redeploy o
 | Google set, `ACCOUNT_CLAIM_SECRET` empty | 200 | normal app (`/masuk` shows "Masuk dengan Google") | **503 "Simpan pesanan belum tersedia"** — before any sign-in prompt |
 | Google set + claim secret (≥ 32 chars) | 200 | normal app | sign-in → consent → save |
 
-⚠️ **Setting `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` opens account sign-in too** — for example if the owner
-turns on Google sign-in for the Seller panel first. `ACCOUNT_GOOGLE_REDIRECT_URI` defaults to
-`https://account.tokophi.com/auth/google/callback` (`${…:-default}` also replaces an EMPTY value, so it cannot
-be blanked from Coolify). Nobody is led there while `ACCOUNT_APP_URL` and `ACCOUNT_CLAIM_SECRET` are unset (no
-offer on the success page, no Seller menus, `/klaim` closed), but `account.tokophi.com` itself would show a
-working Google button. If the two must be switched on separately, change that default in the compose.
+**Account sign-in has its OWN switch: `ACCOUNT_GOOGLE_REDIRECT_URI` has NO default in the compose** (owner review
+2026-11-14). Setting `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` turns on Google sign-in for the Seller panel only;
+`account.tokophi.com` stays "belum dibuka" until `ACCOUNT_GOOGLE_REDIRECT_URI=https://account.tokophi.com/auth/google/callback`
+is set in Coolify as well (that exact URI must also be registered on the Google client).
 
 **Turning it on** (owner-gated — ADR 0016 "Production enablement" lists the non-technical gates first: the UU PDP
 note in `PRIVACY-COMPLIANCE.md` approved, a retention rule for revoked sessions):
 1. Google Cloud console → the existing OAuth client → add the authorised redirect URI
    `https://account.tokophi.com/auth/google/callback` (exact match; Seller keeps its own).
 2. Coolify → environment: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (shared with admin);
+   `ACCOUNT_GOOGLE_REDIRECT_URI=https://account.tokophi.com/auth/google/callback` (the account app's own switch — no default);
    `ACCOUNT_CLAIM_SECRET` = one random value **≥ 32 chars** — the compose forwards the SAME variable to `admin`
    and `account`, so it is equal by construction; `ACCOUNT_APP_URL=https://account.tokophi.com` (storefront).
    `AUTH_SECRET` is already set (the account derives its own session key from it).
@@ -164,7 +163,7 @@ note in `PRIVACY-COMPLIANCE.md` approved, a retention rule for revoked sessions)
    `docker exec <account> sh -c '[ "${#ACCOUNT_CLAIM_SECRET}" -ge 32 ] && echo set || echo MISSING'` (and the same
    on `admin`) proves the value arrived without printing it — the compose forwards it EMPTY by default, so
    "present in env" proves nothing.
-5. Rollback = empty `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` (+ Google if needed) and redeploy; data stays.
+5. Rollback = empty `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` + `ACCOUNT_GOOGLE_REDIRECT_URI` (Seller Google sign-in unaffected) and redeploy; data stays.
 
 ## ⚠️ Gotchas / errors hit → fixes (READ before re-deploying or migrating)
 

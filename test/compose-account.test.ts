@@ -68,10 +68,11 @@ describe("docker-compose.coolify.yml — the account service", () => {
   it("requires AUTH_SECRET and keeps the switches EMPTY by default (dormant until the owner sets them)", () => {
     const block = lines.join("\n");
     expect(block).toMatch(/AUTH_SECRET: \$\{AUTH_SECRET:\?/);
-    for (const v of ["ACCOUNT_CLAIM_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]) {
+    // ACCOUNT_GOOGLE_REDIRECT_URI has NO default (owner review 2026-11-14): it is the account app's OWN
+    // switch, so setting GOOGLE_* for the Seller panel does not also open account sign-in.
+    for (const v of ["ACCOUNT_CLAIM_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "ACCOUNT_GOOGLE_REDIRECT_URI"]) {
       expect(block, v).toMatch(new RegExp(`${v}: \\$\\{${v}:-\\}`));
     }
-    expect(block).toMatch(/ACCOUNT_GOOGLE_REDIRECT_URI: \$\{ACCOUNT_GOOGLE_REDIRECT_URI:-https:\/\/account\.tokophi\.com\/auth\/google\/callback\}/);
   });
 
   it("is routed on account.tokophi.com ABOVE the store wildcard, to the port the image listens on", () => {

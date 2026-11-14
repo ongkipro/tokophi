@@ -461,7 +461,7 @@ services:
       # sign-in too, because the redirect URI has a default — see DEPLOY.md "Akun TokoΦ".
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      ACCOUNT_GOOGLE_REDIRECT_URI: ${ACCOUNT_GOOGLE_REDIRECT_URI:-https://account.tokophi.com/auth/google/callback}
+      ACCOUNT_GOOGLE_REDIRECT_URI: ${ACCOUNT_GOOGLE_REDIRECT_URI:-}
       # Merchant upload thumbnails (`/api/uploads/…`) are served by the Seller origin; empty = neutral icon.
       ADMIN_URL: ${ADMIN_URL:-}
       # "Kembali ke toko" links: `<slug>.<this>` (empty = tokophi.id, the code default).
