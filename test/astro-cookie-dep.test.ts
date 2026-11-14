@@ -10,7 +10,7 @@ import { REPO_ROOT } from "./source-code";
 // 'parseCookie' not found" — a green `astro check` and a green `tsc` say nothing about it (found
 // 2026-11-02 moving Astro 5 → 7). The fix is a direct `cookie@^2` in every Astro app, so it lands in
 // `apps/<app>/node_modules`. This guard keeps the next dependency refresh from deleting it.
-const ASTRO_APPS = ["storefront", "landing", "docs", "account"];
+const ASTRO_APPS = ["storefront", "landing", "docs", "account", "affiliate"];
 
 describe("every Astro app declares its own cookie@2", () => {
   for (const app of ASTRO_APPS) {

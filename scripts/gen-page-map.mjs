@@ -323,6 +323,7 @@ const surfaces = [
   astroSurface("storefront", "Storefront (multi-tenant shopper site)"),
   astroSurface("landing", "Landing (tokophi.com, static, no DB)"),
   astroSurface("account", "Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016)"),
+  astroSurface("affiliate", "Affiliate TokoΦ (store affiliates' own accounts, affiliate.tokophi.com, email + password — ADR 0022)"),
 ];
 
 let md = `# TokoΦ — PAGE MAP (generated — do not edit by hand)

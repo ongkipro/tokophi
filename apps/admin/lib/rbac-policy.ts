@@ -9,6 +9,9 @@ export type Capability =
   | "products:write"
   | "products:delete"
   | "discounts:write"
+  // Store affiliate programme (0125, ADR 0022): switch it on, approve affiliates, set rates, invite, mark
+  // commissions paid. The money itself moves outside TokoΦ, so this is record-keeping, not a payout.
+  | "affiliates:write"
   | "content:write" // pages, blog/articles, collections, menus
   | "orders:write"
   | "inventory:write"
@@ -46,6 +49,7 @@ export const ALL_CAPABILITIES: Capability[] = [
   "products:write",
   "products:delete",
   "discounts:write",
+  "affiliates:write",
   "content:write",
   "orders:write",
   "inventory:write",
@@ -98,6 +102,8 @@ export const ROLE_CAPS: Record<Role, readonly Capability[]> = {
   // escalation stays owner-only), no product writes — campaigns, not catalog.
   advertiser: [
     "discounts:write",
+    // Running the affiliate programme is marketing work — the role hired for campaigns.
+    "affiliates:write",
     "content:write",
     "media:write",
     "integrations:write",

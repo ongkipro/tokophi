@@ -6,6 +6,27 @@
       "label": "Seller (merchant panel)",
       "routes": [
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/affiliate/page.tsx",
+          "clients": [
+            "affiliate-client.tsx"
+          ],
+          "data": [
+            "affiliates"
+          ],
+          "actions": [
+            "affiliates"
+          ],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "'Affiliate' (Promo → Affiliate, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`."
+        },
+        {
           "url": "/akun/keamanan",
           "kind": "page",
           "methods": [],
@@ -577,6 +598,7 @@
             "error.tsx"
           ],
           "data": [
+            "affiliates",
             "billing",
             "domain",
             "orders",
@@ -2278,6 +2300,27 @@
           "whatItIs": "Not found (also what a wrong Host resolves to)."
         },
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/storefront/src/pages/affiliate.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "catalog"
+          ],
+          "lib": [
+            "affiliate-link"
+          ],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Store affiliate programme page (ADR 0022): 404 while the seller's switch is off; otherwise how it works + a link to `affiliate.tokophi.com/gabung?toko=<slug>`, or 'belum dibuka' when AFFILIATE_APP_URL is unset. No public form."
+        },
+        {
           "url": "/api/chat/poll",
           "kind": "endpoint",
           "methods": [
@@ -3394,6 +3437,265 @@
           "whatItIs": "'Toko' — stores this account is actively linked to, most recent purchase first."
         }
       ]
+    },
+    {
+      "app": "apps/affiliate",
+      "label": "Affiliate TokoΦ (store affiliates' own accounts, affiliate.tokophi.com, email + password — ADR 0022)",
+      "routes": [
+        {
+          "url": "/404",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/404.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Not found — also what another account's programme answers."
+        },
+        {
+          "url": "/akun",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/akun.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "auth"
+          ],
+          "lib": [
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Akun' — who is signed in, change password (revokes every other session), sign out. No reset by email (no mail provider)."
+        },
+        {
+          "url": "/belum-dibuka",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/belum-dibuka.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "availability"
+          ],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "The one page a CLOSED affiliate area answers (503) while AFFILIATE_APP_URL is unset. Reads no row."
+        },
+        {
+          "url": "/daftar",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/daftar.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "auth"
+          ],
+          "lib": [
+            "nav",
+            "session",
+            "signin"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Sign-up: name, email, WhatsApp, password (scrypt). Rate-limited per IP (signup bucket, fails closed)."
+        },
+        {
+          "url": "/gabung",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/gabung.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Gabung toko' — apply to ONE store's programme by slug (`?toko=`): a `menunggu` row with the account's own name + WhatsApp; 5 attempts/account/hour in the DB; a same-phone row the seller added is never taken over."
+        },
+        {
+          "url": "/healthz",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/affiliate/src/pages/healthz.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Container healthcheck — 200 while open OR closed, proves the Postgres connection with `select 1`."
+        },
+        {
+          "url": "/",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
+          "whatItIs": "'Ringkasan' — the affiliate's totals across stores (siap / ditahan / dibayar), each programme with status, code and share link `<store>/?ref=CODE`."
+        },
+        {
+          "url": "/keluar",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/affiliate/src/pages/keluar.ts",
+          "layout": [],
+          "data": [
+            "auth"
+          ],
+          "lib": [
+            "session"
+          ],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "POST — revokes this session row and deletes the cookie."
+        },
+        {
+          "url": "/komisi",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/komisi.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Komisi' — one commission ledger across MY programmes, filterable by state; order number and money only, no buyer data."
+        },
+        {
+          "url": "/masuk",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/masuk.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "nav",
+            "session",
+            "signin"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/affiliate/src/lib/availability.test.ts"
+          ],
+          "whatItIs": "Sign-in: email + password. IP cap + per-account failure streak (surface `affiliate`), opaque session token, sha256 stored."
+        },
+        {
+          "url": "/toko/[id]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/toko/[id].astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "One of MY programmes: status, code, share link, rate/hold, totals, masked payout account, commission history. Another account's id answers 404."
+        },
+        {
+          "url": "/undangan",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/undangan.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Accept a seller's invitation (`?t=`, 7 days, single use, sha256 stored): ONE conditional UPDATE binds the row to this account after a confirmation screen."
+        }
+      ]
     }
   ],
   "modules": {
@@ -3402,6 +3704,13 @@
         "module": "activity.ts",
         "exports": [
           "getActivityFeed"
+        ]
+      },
+      {
+        "module": "affiliates.ts",
+        "exports": [
+          "getAffiliateProgram",
+          "getPendingAffiliateCount"
         ]
       },
       {
@@ -3780,6 +4089,19 @@
       }
     ],
     "apps/admin/lib/actions": [
+      {
+        "module": "affiliates.ts",
+        "exports": [
+          "createAffiliate",
+          "getAffiliateProgramEnabled",
+          "inviteAffiliateToAccount",
+          "markCommissionPaid",
+          "saveAffiliateSettings",
+          "setAffiliateProgramEnabled",
+          "setAffiliateStatus",
+          "setProductAffiliateRate"
+        ]
+      },
       {
         "module": "articles.ts",
         "exports": [
@@ -4495,6 +4817,7 @@
           "promoHub",
           "randomProducts",
           "recentProducts",
+          "storeAffiliateEnabled",
           "storeCodEnabled",
           "storeCodPolicy",
           "storeFreeShip",
@@ -4598,6 +4921,12 @@
         "module": "account-link.ts",
         "exports": [
           "accountClaimUrl"
+        ]
+      },
+      {
+        "module": "affiliate-link.ts",
+        "exports": [
+          "affiliateJoinUrl"
         ]
       },
       {

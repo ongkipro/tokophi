@@ -44,6 +44,8 @@ import {
 } from "@/lib/tracking-events";
 import { adChannel } from "@/lib/ad-channel";
 import { defaultInventoryLevelId } from "@/lib/inventory-location";
+import { attachAffiliateCommission } from "@/lib/affiliate-attribution";
+import type { Db } from "@/lib/ledger-credit";
 import { hashPayToken, mintPayToken } from "@/lib/pay-retry";
 import { qrImageDataUrl } from "@/lib/pay-instruction";
 
@@ -223,6 +225,10 @@ async function handle(req: Request) {
     destId?: number; // KiriminAja district id the ongkir quote was issued for
     channelCode?: string;
     discountCode?: string; // PROMO P0 — a voucher; validated + priced by lib/promo (never trusted from the body)
+    // Store affiliate programme (0125, ADR 0022): the code the shopper TYPED, and the `?ref=` the
+    // storefront captured. Selectors only — resolved against this store's ACTIVE affiliates, never trusted.
+    affiliateCode?: string;
+    refCode?: string;
     // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
     // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
@@ -418,6 +424,7 @@ async function handle(req: Request) {
     price: number;
     qty: number;
     handle: string;
+    productId: string;
   }[] = [];
   // Flash sale (PROMO P3): productId → promo price for sales live RIGHT NOW. Applied below per line,
   // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
@@ -553,6 +560,7 @@ async function handle(req: Request) {
       price: unitPrice,
       qty,
       handle: i.handle!,
+      productId: prod.id, // per-product affiliate rate (F-A9)
     });
   }
   // ── REFUSE A CART WHOSE PRICE MOVED ──────────────────────────────────────────────────────────
@@ -1174,6 +1182,27 @@ async function handle(req: Request) {
           )
           .returning({ id: schema.discounts.id });
         if (!bumped.length) throw new VoucherExhausted(appliedDiscountCode);
+      }
+
+      // Affiliate commission (F-A4/F-A6), frozen in THIS transaction so it exists iff the order does.
+      // A bad or unknown code returns null and the order proceeds — a code must never cost the sale. It
+      // runs in a SAVEPOINT for the same reason: an unexpected database error here rolls back only the
+      // commission (logged), never the order the shopper just placed.
+      try {
+        await tx.transaction((sp) =>
+          attachAffiliateCommission(sp as unknown as Db, {
+            storeId: store.id,
+            orderId: ord.id,
+            buyerPhone: phone,
+            typedCode: body.affiliateCode,
+            refCode: body.refCode,
+            lines: resolved.map((r) => ({ productId: r.productId, totalIdr: r.price * r.qty })),
+            subtotalIdr: subtotal,
+            goodsProceedsIdr: finance.goodsProceedsIdr,
+          }),
+        );
+      } catch (err) {
+        console.error("[order] affiliate commission not recorded for", ord.number, err);
       }
 
       return { customerId: cid, order: ord };

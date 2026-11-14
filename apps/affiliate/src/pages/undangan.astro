@@ -1,0 +1,59 @@
+---
+// Accept a seller's invitation: the ONLY way an existing store affiliate row is bound to an account.
+// The token lives in this URL, so the page loads no third-party script and sends no Referer
+// (middleware). Sign-in first, then a confirmation screen naming the store — never a silent bind.
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { acceptInvite, previewInvite } from "../data/affiliate";
+import { signInUrl } from "../lib/nav";
+import { initials } from "../lib/view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+let token = Astro.url.searchParams.get("t") ?? "";
+let error: string | null = null;
+let member = false;
+if (Astro.request.method === "POST") {
+  token = String((await Astro.request.formData()).get("t") ?? "");
+  const r = await acceptInvite(db, account.id, token);
+  if (r.ok) return Astro.redirect(`/toko/${r.affiliateId}`, 303);
+  member = r.reason === "member";
+  error = member
+    ? "Akun ini sudah terhubung dengan affiliate lain di toko ini."
+    : "Undangan ini tidak berlaku lagi (sudah dipakai, kedaluwarsa, atau dibatalkan). Minta seller mengirim undangan baru.";
+}
+const invite = error ? null : await previewInvite(db, token);
+---
+<Layout title="Undangan affiliate" active="gabung">
+  <div class="stack narrow">
+    {invite ? (
+      <section class="card">
+        <h1>Hubungkan ke akun affiliate</h1>
+        <p class="lead">Seller mengundang Anda menghubungkan program affiliate tokonya ke akun ini.</p>
+        <div class="store-row" style="margin-bottom:12px">
+          <span class="mark" aria-hidden="true">{initials(invite.storeName)}</span>
+          <div><strong>{invite.storeName}</strong><div class="meta">Affiliate {invite.affiliateName} · kode <span class="code">{invite.code}</span></div></div>
+        </div>
+        <ul>
+          <li>Komisi kode ini di {invite.storeName} tampil di akun <strong>{account.email}</strong>.</li>
+          <li>Toko tidak mendapat akses ke akun Anda atau toko lain yang Anda promosikan.</li>
+          <li>Rekening pembayaran tetap dicatat dan diubah oleh seller.</li>
+        </ul>
+        <form method="post" class="actions">
+          <input type="hidden" name="t" value={token} />
+          <button class="button primary" type="submit">Hubungkan</button>
+          <a class="button secondary" href="/">Bukan saya, batal</a>
+        </form>
+      </section>
+    ) : (
+      <section class="card" role={error ? "alert" : undefined}>
+        <h1>{member ? "Sudah terhubung" : "Undangan tidak berlaku"}</h1>
+        <p>{error ?? "Link ini sudah dipakai, kedaluwarsa, atau dibatalkan. Minta seller mengirim undangan baru."}</p>
+        <div class="actions">
+          <a class="button primary" href="/gabung">Gabung program toko</a>
+          <a class="button secondary" href="/">Ke Ringkasan</a>
+        </div>
+      </section>
+    )}
+  </div>
+</Layout>

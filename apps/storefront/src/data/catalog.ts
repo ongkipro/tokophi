@@ -905,6 +905,17 @@ export async function activeVouchers(storeId: string): Promise<VoucherPromo[]> {
 // Promo hub (/promo) banner config (PROMO P4b). Null columns fall back to defaults in the page, so the
 // hub always renders. Cheap single-row read at SSR, like storeFreeShip.
 export type PromoHub = { title: string | null; subtitle: string | null; bannerUrl: string | null };
+// Store affiliate programme (0125, ADR 0022) — gates `/affiliate` and the checkout code field. NOT
+// cached: the seller switching the programme off must take both down on the next request.
+export async function storeAffiliateEnabled(storeId: string): Promise<boolean> {
+  const [ss] = await db
+    .select({ enabled: schema.storeSettings.affiliateEnabled })
+    .from(schema.storeSettings)
+    .where(eq(schema.storeSettings.storeId, storeId))
+    .limit(1);
+  return !!ss?.enabled;
+}
+
 export async function promoHub(storeId: string): Promise<PromoHub> {
   const [ss] = await db
     .select({ title: schema.storeSettings.promoHubTitle, subtitle: schema.storeSettings.promoHubSubtitle, bannerUrl: schema.storeSettings.promoHubBannerUrl })

@@ -2,6 +2,13 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-14 — Program affiliate toko, akun affiliate sendiri di affiliate.tokophi.com (ADR 0022, AFFILIATE-P2) — PR pending, belum di-merge
+
+- **Seller:** Pengaturan → **Affiliate** menyalakan program per toko (default mati). Promo → **Affiliate**: setujui/tolak pendaftar (badge di sidebar), tambah affiliate, undang ke akun affiliate (link 7 hari, sekali pakai), komisi per pesanan + **Tandai dibayar** (seller mentransfer sendiri, di luar TokoΦ), komisi standar, masa tahan, komisi per produk. Komisi tampil di daftar dan detail Pesanan.
+- **Affiliate:** akun **sendiri** (email + kata sandi, terpisah dari akun belanja) di `affiliate.tokophi.com`: daftar ke toko, kode + link `?ref=`, total ditahan/siap/dibayar, riwayat komisi tanpa data pembeli. Reset kata sandi lewat email belum ada.
+- **Pembeli:** link `?ref=` (30 hari) atau kode di checkout; kode salah tidak pernah menggagalkan pesanan.
+- **Dormant:** tanpa `AFFILIATE_APP_URL` area affiliate menjawab "belum dibuka" (503). Migrasi `0125_affiliate_programme`.
+
 ## 2026-11-14 — Akun TokoΦ untuk pembeli, fase 1 (ADR 0016, BUYER-ACCOUNT-P1) — PR pending, belum di-merge
 
 - **Belanja tetap tanpa akun.** Setelah pesanan dibuat, halaman sukses boleh menawarkan **"Simpan ke Akun

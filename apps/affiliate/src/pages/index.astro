@@ -1,0 +1,81 @@
+---
+// Ringkasan: totals across every store (ditahan / siap / dibayar), the hold rule in one line, and each
+// programme with its status, code and share link `<store>/?ref=CODE`.
+import Layout from "../layouts/Layout.astro";
+import CopyScript from "../components/CopyScript.astro";
+import { db } from "@tokophi/db";
+import { IDR } from "@tokophi/lib/format";
+import { myAffiliateStores } from "../data/affiliate";
+import { signInUrl, storefrontOrigin } from "../lib/nav";
+import { STATUS_LABEL, holdLine, initials } from "../lib/view";
+
+const account = Astro.locals.account;
+if (!account) return Astro.redirect(signInUrl(Astro.url));
+const stores = await myAffiliateStores(db, account.id);
+const sum = (k: "readyIdr" | "heldIdr" | "paidIdr") => stores.reduce((s, x) => s + x[k], 0);
+const tiles = [
+  { label: "Siap dibayar", value: sum("readyIdr"), state: "siap", hint: "Tunggu transfer dari toko" },
+  { label: "Ditahan", value: sum("heldIdr"), state: "ditahan", hint: "Termasuk pesanan belum selesai" },
+  { label: "Sudah dibayar", value: sum("paidIdr"), state: "dibayar", hint: "Dicatat oleh toko" },
+];
+---
+<Layout title="Ringkasan" active="ringkasan">
+  <div class="stack">
+    <header>
+      <h1>Halo, {account.name}</h1>
+      <p class="lead">Semua toko yang Anda promosikan, dalam satu akun. Komisi dihitung oleh TokoΦ dan dibayar langsung oleh masing-masing toko.</p>
+    </header>
+
+    {Astro.url.searchParams.get("daftar") && (
+      <p class="notice" role="status"><strong>Pendaftaran terkirim.</strong> Seller akan meninjaunya; statusnya tampil di bawah.</p>
+    )}
+
+    {stores.length === 0 ? (
+      <section class="card">
+        <h2>Belum ada program</h2>
+        <p>Anda belum jadi affiliate toko mana pun. Daftar ke program affiliate sebuah toko dengan alamat tokonya; seller meninjau pendaftaran Anda, lalu kode dan link Anda muncul di sini.</p>
+        <p><a class="button primary" href="/gabung">Gabung program toko</a></p>
+        <p class="help">Seller sudah mencatat Anda sebagai affiliate? Minta seller mengirim <strong>link undangan</strong>, lalu buka link itu saat masuk dengan akun ini.</p>
+      </section>
+    ) : (
+      <>
+        <div class="grid3" role="group" aria-label="Total komisi semua toko">
+          {tiles.map((t) => (
+            <a class="card stat" href={`/komisi?state=${t.state}`} style="text-decoration:none;color:inherit">
+              <span class="label">{t.label}</span>
+              <strong class="value num">{IDR(t.value)}</strong>
+              <span class="hint">{t.hint}</span>
+            </a>
+          ))}
+        </div>
+        <p class="help">{holdLine(stores)}</p>
+
+        <section aria-labelledby="prog-h" class="stack">
+          <h2 id="prog-h">Program saya</h2>
+          {stores.map((s) => {
+            const st = STATUS_LABEL[s.status];
+            const link = `${storefrontOrigin(s.storeSlug)}/?ref=${encodeURIComponent(s.code)}`;
+            return (
+              <article class="card store-row">
+                <span class="mark" aria-hidden="true">{initials(s.storeName)}</span>
+                <div>
+                  <a href={`/toko/${s.affiliateId}`}><strong>{s.storeName}</strong></a> <span class={`badge ${st.tone}`}>{st.text}</span>
+                  <div class="meta">Kode <span class="code">{s.code}</span> · <span class="num">{s.orders}</span> pesanan</div>
+                </div>
+                <div class="amount num"><strong>{IDR(s.readyIdr)}</strong><small>siap dibayar</small></div>
+                {s.status === "aktif" && (
+                  <div class="share">
+                    <span class="link" id={`link-${s.affiliateId}`}>{link}</span>
+                    <button class="button secondary" type="button" data-copy={`link-${s.affiliateId}`} data-copy-value={link} hidden>Salin link</button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+          <p><a href="/gabung">+ Gabung program toko lain</a></p>
+        </section>
+        <CopyScript />
+      </>
+    )}
+  </div>
+</Layout>

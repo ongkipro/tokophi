@@ -194,6 +194,9 @@ services:
       # issues claim tokens and the Seller screens Pelanggan → Akun Pembeli / Pengaturan → Layanan Pembeli
       # appear. MUST equal the `account` service's value. Empty = OFF, the honest default.
       ACCOUNT_CLAIM_SECRET: ${ACCOUNT_CLAIM_SECRET:-}
+      # Affiliate TokoΦ (ADR 0022) — origin of apps/affiliate; the Affiliate screen's "Undang ke akun
+      # affiliate" links point there. MUST equal the `affiliate` service's value. Empty = button hidden.
+      AFFILIATE_APP_URL: ${AFFILIATE_APP_URL:-}
       # T-9 / UX-1 — same holder id the storefront reads (see the storefront service's note). The
       # admin uses it for ONE thing: prefilling an empty /tema canvas from the holder's template of
       # the same type, so a new merchant starts from the platform default instead of a blank page.
@@ -311,6 +314,9 @@ services:
       # Akun TokoΦ (ADR 0016) — "Simpan ke Akun TokoΦ" on /checkout/sukses links to `<this>/klaim`
       # (src/lib/account-link.ts; https only). Empty = the offer is not rendered.
       ACCOUNT_APP_URL: ${ACCOUNT_APP_URL:-}
+      # Affiliate TokoΦ (ADR 0022) — `/affiliate` links to `<this>/gabung?toko=<slug>` (src/lib/affiliate-link.ts;
+      # https only). Empty = the page says applications are not open yet. MUST equal the `affiliate` service's.
+      AFFILIATE_APP_URL: ${AFFILIATE_APP_URL:-}
       # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
       # (www/app/rich/admin/api/cname/toko/…) never resolve as a slug. STORE_SLUG stays the
       # fallback for hosts that name no store (bare IP, toko.tokophi.com, localhost).
@@ -480,6 +486,54 @@ services:
       # /healthz answers while the account is closed too (else Traefik has no server for the host) and
       # proves the Postgres connection; 127.0.0.1, not localhost (busybox wget tries ::1 first).
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4329/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+      # See the admin service's start_interval note — same 503-window fix.
+      start_interval: 2s
+
+  # Affiliate TokoΦ — the store affiliate programme's OWN accounts (apps/affiliate, ADR 0022, AFFILIATE-P2)
+  # on affiliate.tokophi.com. Astro SSR, ONE origin for every store's affiliates (not tenant-resolved),
+  # email + password sign-in, separate from the buyer account. DORMANT BY DEFAULT: with AFFILIATE_APP_URL
+  # empty EVERY page answers "Affiliate TokoΦ belum dibuka" (503) and reads no row. The SAME variable on
+  # admin (invite links) and storefront (`/affiliate` join link) turns those halves on. Turning it on =
+  # Coolify env only — DEPLOY.md "Affiliate". The Host router outranks the store wildcard (priority=1),
+  # which would otherwise 301 affiliate.tokophi.com to affiliate.tokophi.id; "affiliate" is in
+  # RESERVED_SLUGS for the same reason as "account". DNS = the proxied wildcard; TLS = the Origin CA cert.
+  affiliate:
+    build:
+      context: .
+      dockerfile: apps/affiliate/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      # Same as the storefront/account: postgres only, NO `migrate` gate (ADR 0017 §2.4).
+      postgres: { condition: service_healthy }
+    environment:
+      # `owner`, the account app's reasoning: ZERO `withTenant()` call sites — affiliate data is keyed by
+      # the affiliate account across stores, and every query filters on the signed-in account explicitly.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
+      DATABASE_RUNTIME_ROLE: owner
+      NODE_ENV: production
+      # THE switch: this app's own public origin (https://affiliate.tokophi.com). Empty = closed (503).
+      # Set the SAME value on admin and storefront.
+      AFFILIATE_APP_URL: ${AFFILIATE_APP_URL:-}
+      # Share links: `<slug>.<this>/?ref=CODE` (empty = tokophi.id, the code default).
+      STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
+    expose:
+      - "4330"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tokophi-affiliate.rule=Host(`affiliate.tokophi.com`)
+      - traefik.http.routers.tokophi-affiliate.entryPoints=https
+      - traefik.http.routers.tokophi-affiliate.tls=true
+      - traefik.http.routers.tokophi-affiliate.priority=100
+      - traefik.http.routers.tokophi-affiliate.service=tokophi-affiliate
+      - traefik.http.services.tokophi-affiliate.loadbalancer.server.port=4330
+    healthcheck:
+      # /healthz answers while the area is closed too (else Traefik has no server for the host) and proves
+      # the Postgres connection; 127.0.0.1, not localhost (busybox wget tries ::1 first).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4330/healthz >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

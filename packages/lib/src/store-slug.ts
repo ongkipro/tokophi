@@ -79,6 +79,10 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // lose its `.tokophi.com` alias to the buyer account, and `account.tokophi.id` would read as TokoΦ's
   // own sign-in page while serving a merchant's shop — on the origin buyers are taught to trust.
   "account",
+  // Affiliate TokoΦ (`apps/affiliate`, ADR 0022) on `affiliate.tokophi.com` — the same arrangement and the
+  // same risk as `account`: a store with this slug would lose its alias to the affiliate sign-in page, and
+  // `affiliate.tokophi.id` would read as TokoΦ's own page while serving a merchant's shop.
+  "affiliate",
 ]);
 
 export const isReservedSlug = (slug: string): boolean => RESERVED_SLUGS.has(slug);

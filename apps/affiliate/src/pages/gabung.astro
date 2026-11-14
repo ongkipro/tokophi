@@ -1,0 +1,112 @@
+---
+// Apply to ONE store's programme as a signed-in account (ADR 0022). The storefront's `/affiliate` page
+// links here as `/gabung?toko=<slug>`. Two steps on one URL, both plain forms: store (GET ?toko=) →
+// application (POST). The application uses the ACCOUNT's own name and WhatsApp; the merchant approves.
+import Layout from "../layouts/Layout.astro";
+import { db } from "@tokophi/db";
+import { joinProgramme, joinableStore, myAffiliateStores, type JoinResult } from "../data/affiliate";
+import { signInUrl, slugFromInput, storefrontOrigin } from "../lib/nav";
+import { initials } from "../lib/view";
+
+const account = Astro.locals.account;
+if (!account) {
+  // Not signed in: sign-up is the likelier next step for someone arriving from a store's page.
+  return Astro.redirect(signInUrl(Astro.url).replace(/^\/masuk/, "/daftar"));
+}
+const raw = (Astro.url.searchParams.get("toko") ?? "").trim();
+const slug = slugFromInput(raw);
+const store = slug ? await joinableStore(db, slug) : null;
+const mine = store ? (await myAffiliateStores(db, account.id)).find((s) => s.storeSlug === store.slug) ?? null : null;
+const lookupError = !raw
+  ? Astro.url.searchParams.has("toko") ? "Isi alamat toko dulu." : null
+  : store ? null : "Tidak ada toko dengan alamat itu yang sedang membuka program affiliate. Periksa ejaannya, atau tanyakan ke seller.";
+
+const MESSAGES: Record<Exclude<JoinResult, "created">, string> = {
+  member: "Akun ini sudah terdaftar di program toko ini.",
+  // One answer for "this store already has a row with your WhatsApp number" and "no code could be made":
+  // it does not tell anyone whether a number is somebody's affiliate row.
+  not_available:
+    "Pendaftaran ke toko ini belum bisa diproses. Jika seller sudah mencatat Anda sebagai affiliate, minta seller mengirim link undangan ke akun ini.",
+  closed: "Program affiliate toko ini tidak sedang dibuka.",
+  rate_limited: "Terlalu banyak pendaftaran dalam satu jam. Coba lagi nanti.",
+  failed: "Pendaftaran gagal. Coba lagi.",
+};
+let formError: string | null = null;
+const v = { bankName: "", bankAccount: "", bankHolder: "", note: "" };
+if (Astro.request.method === "POST" && store && !mine) {
+  const f = await Astro.request.formData();
+  v.bankName = String(f.get("bankName") ?? "").trim().slice(0, 60);
+  v.bankAccount = String(f.get("bankAccount") ?? "").trim().slice(0, 40);
+  v.bankHolder = String(f.get("bankHolder") ?? "").trim().slice(0, 80);
+  v.note = String(f.get("note") ?? "").trim().slice(0, 200);
+  const r = await joinProgramme(db, account.id, store.slug, {
+    bankName: v.bankName || null,
+    bankAccount: v.bankAccount || null,
+    bankHolder: v.bankHolder || null,
+    note: v.note || null,
+  });
+  if (r === "created") return Astro.redirect("/?daftar=1", 303);
+  formError = MESSAGES[r];
+}
+---
+<Layout title="Gabung program toko" active="gabung">
+  <div class="stack narrow">
+    {!store ? (
+      <>
+        <header>
+          <h1>Gabung program toko</h1>
+          <p class="lead">Daftar ke program affiliate sebuah toko TokoΦ. Seller meninjau pendaftaran Anda; setelah disetujui, kode dan link Anda muncul di Ringkasan.</p>
+        </header>
+        <form class="card" method="get" novalidate>
+          <div class="field">
+            <label for="toko">Alamat toko</label>
+            <input id="toko" name="toko" value={raw} placeholder="mis. batiknusantara atau batiknusantara.tokophi.id" aria-invalid={lookupError ? "true" : undefined} aria-describedby={lookupError ? "toko-err" : undefined} />
+            {lookupError && <p class="error" id="toko-err">{lookupError}</p>}
+          </div>
+          <button class="button primary" type="submit">Cari toko</button>
+        </form>
+        <section class="card">
+          <h2>Diundang seller?</h2>
+          <p>Jika seller mengirim <strong>link undangan</strong>, cukup buka link itu saat masuk dengan akun ini. Tidak perlu mendaftar lagi di sini.</p>
+        </section>
+      </>
+    ) : (
+      <>
+        <header>
+          <h1>Gabung affiliate {store.name}</h1>
+          <p class="lead">Seller akan meninjau pendaftaran Anda.</p>
+        </header>
+        <section class="card store-row">
+          <span class="mark" aria-hidden="true">{initials(store.name)}</span>
+          <div><strong>{store.name}</strong><div class="meta">{storefrontOrigin(store.slug).replace(/^https:\/\//, "")}</div></div>
+          <a href="/gabung">Ganti toko</a>
+        </section>
+        {mine ? (
+          <section class="card">
+            <h2>Anda sudah terdaftar di program ini</h2>
+            <p>Kode Anda di {store.name}: <span class="code">{mine.code}</span>.</p>
+            <a class="button primary" href={`/toko/${mine.affiliateId}`}>Buka program</a>
+          </section>
+        ) : (
+          <form class="card" method="post" novalidate>
+            <h2>Data pendaftaran</h2>
+            {formError && <p class="alert" role="alert">{formError}</p>}
+            <p class="help">Nama <strong>{account.name}</strong> dan WhatsApp <span class="num">{account.phone}</span> dari akun Anda dikirim ke seller.</p>
+            <div class="field">
+              <label for="note">Di mana Anda akan promosi? <span class="help">(opsional)</span></label>
+              <input id="note" name="note" maxlength="200" value={v.note} placeholder="mis. TikTok @nama, grup WhatsApp reseller" />
+            </div>
+            <fieldset>
+              <legend>Rekening untuk komisi (opsional)</legend>
+              <p class="help">Komisi dibayar langsung oleh toko. Setelah terdaftar, perubahan rekening lewat seller.</p>
+              <div class="field"><label for="bankName">Bank / e-wallet</label><input id="bankName" name="bankName" maxlength="60" value={v.bankName} /></div>
+              <div class="field"><label for="bankAccount">Nomor rekening</label><input id="bankAccount" name="bankAccount" inputmode="numeric" maxlength="40" autocomplete="off" value={v.bankAccount} /></div>
+              <div class="field"><label for="bankHolder">Atas nama</label><input id="bankHolder" name="bankHolder" maxlength="80" value={v.bankHolder} /></div>
+            </fieldset>
+            <button class="button primary" type="submit">Kirim pendaftaran</button>
+          </form>
+        )}
+      </>
+    )}
+  </div>
+</Layout>

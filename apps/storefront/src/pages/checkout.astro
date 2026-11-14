@@ -1,8 +1,9 @@
 ---
 import { ShoppingCart, Banknote, MapPin, Truck, ChevronDown, Info } from "@lucide/astro";
 import PayIcon from "../components/PayIcon.astro";
+import CheckoutCodes from "../components/CheckoutCodes.astro";
 import CheckoutLayout from "../layouts/CheckoutLayout.astro";
-import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip, UPLOAD_WIDTHS } from "../data/catalog";
+import { enabledPaymentChannels, storeCodPolicy, storeTaxSettings, storeFreeShip, storeAffiliateEnabled, UPLOAD_WIDTHS } from "../data/catalog";
 import { noVariantChoice } from "../lib/cart-variant";
 import { ONGKIR_API, ORDER_API, PROMO_API } from "../lib/public-api";
 import { getRecoveredCheckout } from "../data/checkout";
@@ -96,6 +97,7 @@ const TAX_INCLUSIVE = TAX.inclusive;
 // Automatic free shipping (PROMO P1). The order API is authoritative; this only makes the summary show
 // ongkir GRATIS the moment the threshold is met, matching what will be charged.
 const FS = await storeFreeShip(store.id);
+const AFFILIATE_ON = await storeAffiliateEnabled(store.id); // 0125: the optional code field below
 const FREE_SHIP_ENABLED = FS.enabled;
 const FREE_SHIP_MIN = FS.minIdr;
 const COD_MAX = COD.maxAmountIdr; // 0 = no cap
@@ -225,17 +227,8 @@ const RECOVER = recovered && {
         </div>
       </div>
 
-      {/* Voucher (PROMO P0) — preview via /api/public/promo; the order API re-validates at submit. */}
-      <div class="mt-4 border-t border-[var(--co-line)] pt-4">
-        <label for="voucher-input" class="mb-1.5 block text-sm text-[var(--co-muted)]">Punya kode voucher?</label>
-        <div class="flex gap-2">
-          <input id="voucher-input" type="text" autocomplete="off" spellcheck="false" placeholder="mis. GAJIAN25"
-            class="min-w-0 flex-1 rounded-lg border border-[var(--co-line)] bg-white px-3 py-2 text-sm uppercase text-ink outline-none placeholder:normal-case focus:border-[var(--co-accent)]" />
-          <button id="voucher-apply" type="button"
-            class="shrink-0 rounded-lg border border-[var(--co-accent)] px-4 py-2 text-sm font-medium text-[var(--co-accent)] transition-colors hover:bg-[var(--co-accent)]/10 disabled:opacity-50">Terapkan</button>
-        </div>
-        <p id="voucher-msg" class="mt-1.5 text-xs" hidden></p>
-      </div>
+      {/* Voucher (PROMO P0) + affiliate code (0125) — markup in CheckoutCodes.astro, ids read by the script below. */}
+      <CheckoutCodes affiliate={AFFILIATE_ON} />
 
       <div class="mt-4 flex items-center justify-between border-t border-[var(--co-line)] pt-4">
         <span class="text-base font-medium text-ink">Total</span>
@@ -2805,6 +2798,9 @@ const RECOVER = recovered && {
           // PROMO P0 — the voucher CODE (a choice); the order API re-validates + re-prices it (lib/promo),
           // never trusting the client's discount amount. Empty when no voucher applied.
           discountCode: voucherCode || undefined,
+          // Affiliate (0125): the typed code, and the `?ref=` MarketingPixels captured — only within 30 days.
+          affiliateCode: (document.getElementById("affiliate-input") || {}).value || undefined,
+          refCode: (function () { try { var r = JSON.parse(localStorage.getItem("tphi:ref") || "null"); return r && Date.now() - Number(r.t || 0) <= 30 * 86400000 ? String(r.v).slice(0, 20) : undefined; } catch (e) { return undefined; } })(),
           // The checkout session this order came from → /api/public/order marks it `pulih` with
           // recovered_order_id. "Recovered" = THIS session became THAT order; anything else is a guess.
           sessionId: SESSION_ID,

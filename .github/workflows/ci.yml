@@ -255,6 +255,9 @@ jobs:
   #     `npm run build -w @tokophi/account`  (Astro SSR, Node adapter; the Dockerfile builds with no
   #      DATABASE_URL at all and the dummy one below is never connected to, like the Next builds).
   #      Its `astro check` runs in the `test` job through `npm test` → `check:account`.
+  #   apps/affiliate/Dockerfile (AFFILIATE-P2, ADR 0022)
+  #     `npm run build -w @tokophi/affiliate`  (same shape as account: Astro SSR, Node adapter, no
+  #      DATABASE_URL needed at build). Its `astro check` runs through `npm test` → `check:affiliate`.
   #
   # ⚠️ THE DUMMY DATABASE_URL IS NOT OPTIONAL FOR THE TWO NEXT BUILDS. Route collection imports
   # `@tokophi/db`, whose `client.ts` throws AT MODULE LOAD when `planPools()` cannot resolve a
@@ -281,7 +284,7 @@ jobs:
       # Every surface's verdict is evidence; a red admin must not hide a red landing.
       fail-fast: false
       matrix:
-        app: [admin, super-admin, landing, docs, account]
+        app: [admin, super-admin, landing, docs, account, affiliate]
 
     env:
       NEXT_TELEMETRY_DISABLED: "1"
@@ -320,7 +323,7 @@ jobs:
       # so today it saves the TypeScript pass and little else; it is cheap and becomes worth more
       # if Turbopack's persistent build cache is ever switched on. Do not expect it to hide a slow
       # build.
-      - if: matrix.app != 'landing' && matrix.app != 'docs' && matrix.app != 'account'
+      - if: matrix.app != 'landing' && matrix.app != 'docs' && matrix.app != 'account' && matrix.app != 'affiliate'
         uses: actions/cache@v4
         with:
           path: apps/${{ matrix.app }}/.next/cache

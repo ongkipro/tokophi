@@ -59,6 +59,10 @@ TokoΦ is an enterprise-grade multi-tenant commerce SaaS monorepo built for high
 - **Status:** **PASSED**
 - **Highlights:** Disk-authoritative specifications verified in `specs/docs/`, OpenAPI 3.1 contracts (`specs/openapi/`) validated against live route implementations.
 
+### 2026-11-14 — AFFILIATE-P2 (ADR 0022): store affiliate programme, affiliates' own accounts
+- **Decision:** affiliates sign in at `affiliate.tokophi.com` (`apps/affiliate`, email + password), not with the buyer account; seller pays outside TokoΦ; seller enables per store. Task record: `specs/docs/tasks/2026-11-14-affiliate-p2.md`.
+- **Audit gaps closed in the schema (0125):** UNIQUE `(store_id, phone)`, CHECK `commission_idr >= 0`, composite FK `(affiliate_id, store_id)`; the anonymous form's phone oracle removed with the form.
+
 ---
 
 ## 3. System Verification & Regression Test Matrix

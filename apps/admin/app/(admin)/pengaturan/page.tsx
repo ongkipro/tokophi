@@ -12,6 +12,7 @@ import {
   Store,
   Plug,
   ShieldCheck,
+  Handshake,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -41,6 +42,7 @@ import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
 import { ReturCard } from "@/components/admin/pengaturan/retur-card"
 import { PengaduanCard } from "@/components/admin/pengaturan/pengaduan-card"
+import { AffiliateCard } from "@/components/admin/pengaturan/affiliate-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -57,6 +59,7 @@ type Section =
   | "pajak"
   | "pengguna"
   | "plugin"
+  | "affiliate"
   | "notifikasi"
 
 const SECTIONS: {
@@ -75,6 +78,8 @@ const SECTIONS: {
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
   // ADR 0021 (KEL-001): first-party plugins, deep link `/pengaturan?section=plugin`.
   { id: "plugin", label: "Plugin", desc: "Kelola CRM & lainnya", icon: <Plug /> },
+  // ADR 0022: the store affiliate programme switch, deep link `/pengaturan?section=affiliate`.
+  { id: "affiliate", label: "Affiliate", desc: "Program affiliate toko", icon: <Handshake /> },
   {
     id: "notifikasi",
     label: "Notifikasi",
@@ -270,6 +275,9 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
           {section === "pengguna" && <PenggunaCard />}
 
           {section === "plugin" && <PluginCard />}
+
+          {/* AFFILIATE — the seller's own switch (ADR 0022); the programme itself lives on /affiliate */}
+          {section === "affiliate" && <AffiliateCard />}
 
           {/* NOTIFIKASI */}
           {section === "notifikasi" && (

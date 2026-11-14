@@ -1,0 +1,24 @@
+# Affiliate TokoΦ (apps/affiliate, affiliate.tokophi.com) — ADR 0022, accepted 2026-11-14 (AFFILIATE-P2).
+#
+# NO JSON API, on purpose — the same shape as account.yaml. Every screen is a server-rendered page whose
+# writes are same-origin HTML form POSTs to that page itself (Astro `security.checkOrigin`), so there is no
+# operation any other caller codes against. The cross-app contracts are browser navigations, recorded in
+# ADR 0022: the storefront's `/affiliate` links to `/gabung?toko=<slug>`, and the Seller's invitation link is
+# `/undangan?t=<token>`.
+#
+# The two non-page endpoints are exempted below. A NEW affiliate endpoint fails `verify:openapi` until
+# someone documents it here or says why it is not a contract.
+openapi: 3.1.0
+info:
+  title: Affiliate TokoΦ (no JSON operations; exemptions only)
+  version: 1.0.0
+paths: {}
+x-tokophi-route-exemptions:
+  - app: apps/affiliate
+    path: /healthz
+    methods: [GET]
+    reason: Container healthcheck for docker-compose.coolify.yml (AFFILIATE-P2) — plain-text `ok` / 503 after `select 1`, answered while the area is open or closed. Read by Docker on 127.0.0.1 only; no data, not an API contract.
+  - app: apps/affiliate
+    path: /keluar
+    methods: [POST]
+    reason: Revokes this session row and deletes the cookie, then redirects. Reached only from the affiliate shell's own sign-out form (same-origin, Astro checkOrigin); internal to the surface.

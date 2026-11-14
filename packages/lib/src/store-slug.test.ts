@@ -38,6 +38,7 @@ describe("RESERVED_SLUGS", () => {
       [
         "account",
         "admin",
+        "affiliate",
         "api",
         "app",
         "batik-nusantara",

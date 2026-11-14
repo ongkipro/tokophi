@@ -1,0 +1,43 @@
+---
+// `<store>/affiliate` (ADR 0022). Programme OFF (the seller's switch, store_settings.affiliate_enabled) ⇒ 404.
+// Programme ON ⇒ what the programme is, and ONE way in: the affiliate's own account at the platform's
+// affiliate origin (`/gabung?toko=<slug>`). There is no public form here any more — affiliates sign up
+// with email + password there and the seller approves them. If that origin is not configured on this
+// server (AFFILIATE_APP_URL unset) the page says plainly that applications are not open yet.
+import PageHeader from "../components/PageHeader.astro";
+import Layout from "../layouts/Layout.astro";
+import { storeAffiliateEnabled } from "../data/catalog";
+import { affiliateJoinUrl } from "../lib/affiliate-link";
+
+const store = Astro.locals.store;
+if (!(await storeAffiliateEnabled(store.id))) return new Response(null, { status: 404, statusText: "Not Found" });
+const join = affiliateJoinUrl(store.slug);
+---
+
+<Layout title="Program Affiliate" description={`Gabung jadi affiliate ${store.name} dan dapatkan komisi dari setiap penjualan.`}>
+  <PageHeader
+    crumbs={[{ name: "Beranda", href: "/" }, { name: "Affiliate" }]}
+    title={`Jadi affiliate ${store.name}`}
+    dek="Bagikan link atau kode Anda. Setiap pesanan yang selesai memberi Anda komisi."
+  />
+  <section class="mx-auto max-w-xl px-4 py-10 sm:px-6">
+    <div class="rounded-xl border border-line bg-white p-6">
+      <h2 class="font-display text-xl font-semibold text-ink">Cara kerjanya</h2>
+      <ol class="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted">
+        <li>Daftar akun affiliate TokoΦ, lalu ajukan diri ke program {store.name}.</li>
+        <li>Setelah disetujui, Anda mendapat kode dan link khusus.</li>
+        <li>Pesanan yang memakai kode atau link Anda (berlaku 30 hari) dicatat sebagai komisi Anda.</li>
+        <li>Komisi dibayarkan langsung oleh {store.name} setelah pesanan selesai dan lewat masa retur.</li>
+      </ol>
+      {join ? (
+        <a href={join} class="mt-6 inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:w-auto">
+          Daftar jadi affiliate
+        </a>
+      ) : (
+        <p role="status" class="mt-6 rounded-lg border border-line px-4 py-3 text-sm text-ink">
+          Pendaftaran affiliate belum dibuka. Silakan cek kembali nanti, atau hubungi {store.name} lewat halaman <a class="underline" href="/kontak">Kontak</a>.
+        </p>
+      )}
+    </div>
+  </section>
+</Layout>
