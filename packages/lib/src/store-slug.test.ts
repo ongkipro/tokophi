@@ -36,6 +36,7 @@ describe("RESERVED_SLUGS", () => {
     // deploy seed inserts the holder row. See the note beside it in store-slug.ts.
     expect([...RESERVED_SLUGS].sort()).toEqual(
       [
+        "account",
         "admin",
         "api",
         "app",

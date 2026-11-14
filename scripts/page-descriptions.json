@@ -136,6 +136,8 @@
     "landing:/404": "Not found.",
     "landing:/sitemap.xml": "Sitemap for the apex.",
     "account:/": "Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it.",
+    "account:/belum-dibuka": "The one page a CLOSED account answers (503): the middleware rewrites every path here while no sign-in method exists (`lib/availability.ts`). Reads no row. Redirects home once open.",
+    "account:/healthz": "Container healthcheck — 200 while open OR closed (Traefik routes only to healthy), proves the Postgres connection with `select 1`.",
     "account:/masuk": "Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle).",
     "account:/masuk/dev": "LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden.",
     "account:/keluar": "Revokes this session row and deletes the cookie.",

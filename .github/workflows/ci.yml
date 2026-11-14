@@ -251,10 +251,10 @@ jobs:
   #     `npm run check -w @tokophi/docs`  (routes ⊂ page-map, astro build, SEO, internal links —
   #      the Dockerfile runs the same script, so a red docs page is caught here and not as a
   #      failed Coolify image build of the whole compose stack after merge)
-  #   apps/account (BUYER-ACCOUNT-P1, ADR 0016) — NO Dockerfile yet (merged dark, enablement is
-  #     owner-gated), so this is the ONLY build it gets: `npm run build -w @tokophi/account`
-  #     (Astro SSR, Node adapter; the dummy DATABASE_URL below is never connected to, like the Next
-  #      builds). Its `astro check` runs in the `test` job through `npm test` → `check:account`.
+  #   apps/account/Dockerfile (BUYER-ACCOUNT-DEPLOY, ADR 0016)
+  #     `npm run build -w @tokophi/account`  (Astro SSR, Node adapter; the Dockerfile builds with no
+  #      DATABASE_URL at all and the dummy one below is never connected to, like the Next builds).
+  #      Its `astro check` runs in the `test` job through `npm test` → `check:account`.
   #
   # ⚠️ THE DUMMY DATABASE_URL IS NOT OPTIONAL FOR THE TWO NEXT BUILDS. Route collection imports
   # `@tokophi/db`, whose `client.ts` throws AT MODULE LOAD when `planPools()` cannot resolve a

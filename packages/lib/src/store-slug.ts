@@ -74,6 +74,11 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // `.tokophi.com` alias to the docs site, and `panduan.tokophi.id` would read as TokoΦ's official
   // guide while serving a merchant's shop.
   "panduan",
+  // Akun TokoΦ (`apps/account`, ADR 0016, BUYER-ACCOUNT-DEPLOY) on `account.tokophi.com` — the same
+  // explicit-Host-router-over-the-wildcard arrangement as `panduan`: a store allocated this slug would
+  // lose its `.tokophi.com` alias to the buyer account, and `account.tokophi.id` would read as TokoΦ's
+  // own sign-in page while serving a merchant's shop — on the origin buyers are taught to trust.
+  "account",
 ]);
 
 export const isReservedSlug = (slug: string): boolean => RESERVED_SLUGS.has(slug);

@@ -8,8 +8,8 @@
 > max stamp 1787600003000)**. **Buyer account (ADR 0016, accepted 2026-11-14): merged and DORMANT** — `ACCOUNT_CLAIM_SECRET` /
 > `ACCOUNT_APP_URL` unset on production, so the order API answers byte-identically, `/checkout/sukses` renders no
 > "Simpan ke Akun" offer, the Seller menus (Pelanggan → Akun Pembeli, Pengaturan → Layanan Pembeli) are hidden and
-> their routes 404; `apps/account` (account.tokophi.com) is NOT deployed (no compose service/DNS yet); `buyer_accounts` = 0.
-> Turning it on needs: DNS + compose service + Google redirect URI + the three env secrets + the UU PDP note (ADR 0016). **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
+> their routes 404; `apps/account` (account.tokophi.com) is NOT deployed on production yet; `buyer_accounts` = 0.
+> 🟡 **Pending (BUYER-ACCOUNT-DEPLOY, branch `feat/account-deploy`, PR open, not merged):** Dockerfile + compose service `account` (dormant: no Google client ⇒ every page "Akun TokoΦ belum dibuka", 503) and the env forwards; UU PDP notes DRAFTED in `PRIVACY-COMPLIANCE.md` for owner approval. After it deploys, turning it on = Google redirect URI + `GOOGLE_*`, `ACCOUNT_CLAIM_SECRET`, `ACCOUNT_APP_URL` in Coolify + redeploy (`DEPLOY.md` → "Akun TokoΦ"). **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
 > Rp50rb promo; a signup code may carry a first-paid-invoice discount (default Rp100.000) — landing `/harga` shows the
 > new prices; the 12 `menunggu` invoices issued before the deploy kept their amounts (Rp1.116.000 total, unchanged);
 > signup codes: 0. **Plugins (ADR 0021):** Pengaturan → Plugin, Kelola CRM with Aktif / Nonaktif; `store_plugins` = 0,

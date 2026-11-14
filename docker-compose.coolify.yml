@@ -190,6 +190,10 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      # Akun TokoΦ (ADR 0016) — THE switch (`buyerAccountEnabled()`): set (≥ 32 chars) ⇒ /api/public/order
+      # issues claim tokens and the Seller screens Pelanggan → Akun Pembeli / Pengaturan → Layanan Pembeli
+      # appear. MUST equal the `account` service's value. Empty = OFF, the honest default.
+      ACCOUNT_CLAIM_SECRET: ${ACCOUNT_CLAIM_SECRET:-}
       # T-9 / UX-1 — same holder id the storefront reads (see the storefront service's note). The
       # admin uses it for ONE thing: prefilling an empty /tema canvas from the holder's template of
       # the same type, so a new merchant starts from the platform default instead of a blank page.
@@ -304,6 +308,9 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
+      # Akun TokoΦ (ADR 0016) — "Simpan ke Akun TokoΦ" on /checkout/sukses links to `<this>/klaim`
+      # (src/lib/account-link.ts; https only). Empty = the offer is not rendered.
+      ACCOUNT_APP_URL: ${ACCOUNT_APP_URL:-}
       # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
       # (www/app/rich/admin/api/cname/toko/…) never resolve as a slug. STORE_SLUG stays the
       # fallback for hosts that name no store (bare IP, toko.tokophi.com, localhost).
@@ -420,6 +427,64 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+      start_interval: 2s
+
+  # Akun TokoΦ — the buyer account (apps/account, ADR 0016, BUYER-ACCOUNT-DEPLOY) on account.tokophi.com.
+  # Astro SSR, ONE origin for every shop's buyers (not tenant-resolved). DORMANT BY DEFAULT: with no
+  # Google client (GOOGLE_CLIENT_ID/SECRET empty) a production build has no sign-in method, so EVERY page
+  # answers "Akun TokoΦ belum dibuka" (503) and reads no row; /klaim says "belum tersedia" until
+  # ACCOUNT_CLAIM_SECRET is set (same value as admin). Turning it on = Coolify env only — DEPLOY.md.
+  # The Host router outranks the store wildcard (`tokophi-stores`, priority=1), which would otherwise 301
+  # account.tokophi.com to account.tokophi.id; "account" is in RESERVED_SLUGS for the same reason as
+  # "panduan". DNS = the existing proxied wildcard; TLS = the Cloudflare Origin CA default cert.
+  account:
+    build:
+      context: .
+      dockerfile: apps/account/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      # Same as the storefront: postgres only, NO `migrate` gate (ADR 0017 §2.4).
+      postgres: { condition: service_healthy }
+    environment:
+      # `owner`, the storefront's reasoning: ZERO `withTenant()` call sites — buyer data is keyed by the
+      # account, across stores, and every query filters on the signed-in buyer explicitly. Under the
+      # restricted role with no tenant GUC every store-scoped read returns zero rows.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
+      DATABASE_RUNTIME_ROLE: owner
+      NODE_ENV: production
+      # Signs the buyer session (HMAC-derived key, never the raw secret — src/lib/session.ts).
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
+      # Empty = /klaim answers "belum tersedia". MUST equal the admin service's value.
+      ACCOUNT_CLAIM_SECRET: ${ACCOUNT_CLAIM_SECRET:-}
+      # The SAME Google client as Seller sign-in, its own redirect URI (registered on that client).
+      # ⚠️ Setting GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET (e.g. for Seller Google sign-in) OPENS account
+      # sign-in too, because the redirect URI has a default — see DEPLOY.md "Akun TokoΦ".
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ACCOUNT_GOOGLE_REDIRECT_URI: ${ACCOUNT_GOOGLE_REDIRECT_URI:-}
+      # Merchant upload thumbnails (`/api/uploads/…`) are served by the Seller origin; empty = neutral icon.
+      ADMIN_URL: ${ADMIN_URL:-}
+      # "Kembali ke toko" links: `<slug>.<this>` (empty = tokophi.id, the code default).
+      STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
+    expose:
+      - "4329"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tokophi-account.rule=Host(`account.tokophi.com`)
+      - traefik.http.routers.tokophi-account.entryPoints=https
+      - traefik.http.routers.tokophi-account.tls=true
+      - traefik.http.routers.tokophi-account.priority=100
+      - traefik.http.routers.tokophi-account.service=tokophi-account
+      - traefik.http.services.tokophi-account.loadbalancer.server.port=4329
+    healthcheck:
+      # /healthz answers while the account is closed too (else Traefik has no server for the host) and
+      # proves the Postgres connection; 127.0.0.1, not localhost (busybox wget tries ::1 first).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4329/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+      # See the admin service's start_interval note — same 503-window fix.
       start_interval: 2s
 
   # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).

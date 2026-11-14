@@ -114,6 +114,56 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
 - Services: `postgres` + one-off `migrate` (Drizzle migrate + seed) + `admin` (:3000) + `super-admin` (:3001) + `storefront` (:4327). Ports are `expose` only → Coolify assigns a domain per service.
 - Per-app Dockerfiles (`apps/*/Dockerfile`) build with **context = repo root** (workspaces resolve).
 - After first deploy: assign domains per service in Coolify, then set the cross-surface env (below) + redeploy.
+- **`account`** (`apps/account`, :4329, `account.tokophi.com`) — added 2026-11-14 (BUYER-ACCOUNT-DEPLOY), ships **dormant**. See "Akun TokoΦ" below.
+
+## Akun TokoΦ — `account.tokophi.com` (BUYER-ACCOUNT-DEPLOY, 2026-11-14)
+
+The buyer account (ADR 0016) is a compose service like the others; nothing in Coolify or Cloudflare has to be
+created for it. **It ships dormant and turning it on is Coolify env + redeploy only.**
+
+| | |
+|---|---|
+| Image | `apps/account/Dockerfile` — 3 stages (build the monorepo → `npm ci --omit=dev --workspace @tokophi/account` → runtime with only `dist/` + those deps), runs as **`node`** (uid 1000), no source or build tooling in the final image. Local measure: 588 MB image, 267 MB `node_modules` (astro runtime + `@astrojs/check`/`typescript`, which the workspace lists as dependencies). |
+| Port | **4329** (= its `astro dev` port, like storefront 4327 / landing 4328 / docs 4339). `expose` only. |
+| Routing | Traefik labels in the compose: ``Host(`account.tokophi.com`)``, **priority 100** — above the store wildcard `tokophi-stores` (priority 1), which would otherwise answer 301 → `account.tokophi.id`. `account` is in `RESERVED_SLUGS`, so no store can be allocated that subdomain (same arrangement as `panduan`). |
+| DNS / TLS | Nothing to add: the proxied `*.tokophi.com` wildcard already resolves it; TLS = the Cloudflare Origin CA default cert (no certresolver). |
+| Healthcheck | `wget http://127.0.0.1:4329/healthz` — 200 while open **or** closed (`select 1` against Postgres, no row read), `start_interval: 2s` (ADR 0017). Without a health path that answers while closed, Traefik would have no server for the host. |
+| Depends on | `postgres: service_healthy` only — no `migrate` gate (ADR 0017 §2.4). |
+| Host trust | `apps/account/astro.config.mjs` `security.allowedDomains = account.tokophi.com (https)`. Without it the node adapter ignores Host / X-Forwarded-* and builds every request URL as `http://localhost:4329`, so a form POST from a browser that sends no `Sec-Fetch-Site` failed Astro's origin check with 403 (measured with Traefik's headers). **Serving it on another hostname (staging) needs that list edited.** |
+| DB role | `DATABASE_URL = ${PLATFORM_DATABASE_URL}` + `DATABASE_RUNTIME_ROLE: owner` — the storefront's reasoning: zero `withTenant()` call sites; every query filters on the signed-in buyer explicitly. |
+
+**What a visitor sees while it is dormant** (measured against the container, 2026-11-14):
+
+| Env on the `account` container | `/healthz` | every page (`/`, `/masuk`, `/klaim`, `/orders`, `/auth/google/*`, a POST to `/keluar`, unknown paths) | `/klaim` |
+|---|---|---|---|
+| no `GOOGLE_CLIENT_ID`/`SECRET` (production today) | 200 | **503 "Akun TokoΦ belum dibuka"**, `Retry-After: 86400`, no cookie or DB read | same 503 page |
+| Google set, `ACCOUNT_CLAIM_SECRET` empty | 200 | normal app (`/masuk` shows "Masuk dengan Google") | **503 "Simpan pesanan belum tersedia"** — before any sign-in prompt |
+| Google set + claim secret (≥ 32 chars) | 200 | normal app | sign-in → consent → save |
+
+**Account sign-in has its OWN switch: `ACCOUNT_GOOGLE_REDIRECT_URI` has NO default in the compose** (owner review
+2026-11-14). Setting `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` turns on Google sign-in for the Seller panel only;
+`account.tokophi.com` stays "belum dibuka" until `ACCOUNT_GOOGLE_REDIRECT_URI=https://account.tokophi.com/auth/google/callback`
+is set in Coolify as well (that exact URI must also be registered on the Google client).
+
+**Turning it on** (owner-gated — ADR 0016 "Production enablement" lists the non-technical gates first: the UU PDP
+note in `PRIVACY-COMPLIANCE.md` approved, a retention rule for revoked sessions):
+1. Google Cloud console → the existing OAuth client → add the authorised redirect URI
+   `https://account.tokophi.com/auth/google/callback` (exact match; Seller keeps its own).
+2. Coolify → environment: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (shared with admin);
+   `ACCOUNT_GOOGLE_REDIRECT_URI=https://account.tokophi.com/auth/google/callback` (the account app's own switch — no default);
+   `ACCOUNT_CLAIM_SECRET` = one random value **≥ 32 chars** — the compose forwards the SAME variable to `admin`
+   and `account`, so it is equal by construction; `ACCOUNT_APP_URL=https://account.tokophi.com` (storefront).
+   `AUTH_SECRET` is already set (the account derives its own session key from it).
+3. Redeploy (a var reaches a container only when the service is recreated — "the image tag does not prove the
+   environment arrived", below).
+4. Verify: `curl -s -o /dev/null -w '%{http_code}' https://account.tokophi.com/healthz` → 200;
+   `https://account.tokophi.com/masuk` → 200 with "Masuk dengan Google" (not "belum dibuka"); place a test order on
+   a store → `/checkout/sukses` shows "Simpan ke Akun TokoΦ" → the link opens `/klaim` → sign in → consent →
+   the order is listed; Seller → Pelanggan → Akun Pembeli lists the save. On the host,
+   `docker exec <account> sh -c '[ "${#ACCOUNT_CLAIM_SECRET}" -ge 32 ] && echo set || echo MISSING'` (and the same
+   on `admin`) proves the value arrived without printing it — the compose forwards it EMPTY by default, so
+   "present in env" proves nothing.
+5. Rollback = empty `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` + `ACCOUNT_GOOGLE_REDIRECT_URI` (Seller Google sign-in unaffected) and redeploy; data stays.
 
 ## ⚠️ Gotchas / errors hit → fixes (READ before re-deploying or migrating)
 

@@ -3133,8 +3133,46 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
           "whatItIs": "Google sign-in start — mints the 128-bit `state` cookie and the safe `next`."
+        },
+        {
+          "url": "/belum-dibuka",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/belum-dibuka.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "availability"
+          ],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "The one page a CLOSED account answers (503): the middleware rewrites every path here while no sign-in method exists (`lib/availability.ts`). Reads no row. Redirects home once open."
+        },
+        {
+          "url": "/healthz",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/healthz.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Container healthcheck — 200 while open OR closed (Traefik routes only to healthy), proves the Postgres connection with `select 1`."
         },
         {
           "url": "/",
@@ -3178,7 +3216,9 @@
           "db": true,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
           "whatItIs": "Revokes this session row and deletes the cookie."
         },
         {
@@ -3193,6 +3233,7 @@
             "orders"
           ],
           "lib": [
+            "availability",
             "nav"
           ],
           "locals": true,
@@ -3200,6 +3241,7 @@
           "gate": [],
           "setHtml": false,
           "tests": [
+            "apps/account/src/lib/availability.test.ts",
             "apps/account/src/lib/nav.test.ts"
           ],
           "whatItIs": "Saves an order to the account from the store's checkout-success link: claim token (HMAC, one order, 30 days) + sign-in + consent naming the store. A claim is keyed on a UNIQUE `order_id`."
@@ -3221,7 +3263,9 @@
           "db": false,
           "gate": [],
           "setHtml": true,
-          "tests": [],
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
           "whatItIs": "Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle)."
         },
         {
@@ -3300,7 +3344,9 @@
           "db": true,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
           "whatItIs": "'Pesanan' — only orders saved to this account, from stores still linked."
         },
         {
