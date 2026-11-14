@@ -249,7 +249,7 @@ else
       record disk fail "could not read df output from the box"
     fi
 
-    if [ -n "${hb_age:-}" ] && [ "$hb_age" -gt 0 ] && [ "$hb_age" -le "$HEARTBEAT_MAX_AGE_S" ]; then
+    if [ -n "${hb_age:-}" ] && [ "$hb_age" -ge 0 ] && [ "$hb_age" -le "$HEARTBEAT_MAX_AGE_S" ]; then  # -ge: a heartbeat written THIS second is 0 s old and healthy
       record watchdog ok "L1 heartbeat ${hb_age}s old"
     else
       record watchdog fail "L1 heartbeat is ${hb_age:-?}s old (max ${HEARTBEAT_MAX_AGE_S}s) — /etc/cron.d/tokophi-watchdog may be gone; self-healing is OFF"

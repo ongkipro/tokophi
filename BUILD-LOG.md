@@ -5266,3 +5266,21 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
 - **Not done (owner decisions, ADR 0016):** `account.tokophi.com` DNS + compose service, Google OAuth redirect URI,
   `ACCOUNT_CLAIM_SECRET` (admin + account), `ACCOUNT_APP_URL` (storefront), `AUTH_SECRET` (account), the UU PDP processing
   note, retention of revoked buyer sessions.
+
+### [2026-11-14 05:10 UTC] — DEPLOY · #473 account.tokophi.com container (dormant) + probe heartbeat false-alarm fix
+- **Executor:** Main Session. Owner: "yang bisa kau kerjakan jalankan … yang belum buat guidenya".
+- **Review fix before merge (`092ba1fd`):** `ACCOUNT_GOOGLE_REDIRECT_URI` lost its compose default, so setting
+  `GOOGLE_CLIENT_ID/SECRET` for the Seller panel no longer opens account sign-in; `test/compose-account.test.ts`
+  pins it EMPTY (proved red on a copy with the default restored); DEPLOY.md enable/rollback steps updated.
+- **Merge hiccup:** the first `gh pr merge 473` hit GitHub GraphQL 502 and did NOT merge, but the deploy trigger
+  went out and built main `962d8c68` (docs only) — that deploy FAILED after 39 s with no log (GitHub outage window);
+  production stayed on `6592fbae` `(healthy)`. Re-merged (`f4998416`), waited for the failed deploy to settle,
+  redeployed (`64o6rq3jl1plpfrpfavylq5a`). Lesson: confirm `gh pr view --json state` = MERGED before triggering a deploy.
+- **After:** four surfaces `(healthy)` on `…:f4998416…` twice; NEW `account` `(healthy)`; `seed` Exited 0. Before → after
+  `account.tokophi.com`: 301 (store wildcard) → 503 "Belum dibuka · Akun TokoΦ" (`/`, `/masuk`); `/healthz` 200.
+  `toko.tokophi.com` 200, `batiknusantara.tokophi.id` 200, `permata-store.tokophi.com` 301 → `.tokophi.id`,
+  `app.` 307, apex 200. Admin/storefront/account logs clean. Disk 49 %.
+- **Probe false alarm fixed:** `ops/tokophi-probe.sh` failed `watchdog (1/3) — L1 heartbeat is 0s old` — the heartbeat
+  had been written in the same second and the check demanded `-gt 0`. Now `-ge 0` (a stat failure still reads as a
+  huge age and fails the upper bound). Re-run: exit 0. No probe copy is installed on this machine (`/usr/local/bin`,
+  crontab) — the off-box schedule in the script header is still not installed anywhere (no alert channel, STATUS).

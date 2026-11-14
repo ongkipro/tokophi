@@ -1,5 +1,7 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **2026-11-14 05:06 UTC — PR #473 deployed (`f4998416`):** new `account` service `(healthy)`; `account.tokophi.com` answers **503 "Belum dibuka · Akun TokoΦ"** (dormant: no Google client, no `ACCOUNT_GOOGLE_REDIRECT_URI`), `/healthz` 200; store wildcard and every other host unchanged. Account sign-in has its own switch (`ACCOUNT_GOOGLE_REDIRECT_URI`, no compose default). Owner steps to turn it on: `~/Documents/work/notes/tokophi-panduan-owner-2026-11-14.md` (Google OAuth client, UU PDP text approval, session retention).
+
 > **Current state — 2026-11-14 UTC (deploy of PR #471).** Production runs on the **dedicated host** (since 2026-11-01;
 > `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`6592fbae`** (deploy of PR #471 BUYER-ACCOUNT-P1, on top of #469 KEL-001 plugins,
 > #468 pricing, #465 PAY-RETRY, #466 store-level shipping provider), admin / super-admin / storefront / landing
