@@ -9,7 +9,7 @@ This file is a navigation handoff. It is not a second task board.
 
 ## ▶ Resume here — 2026-11-13
 
-Production: dedicated host since 2026-11-01, release `41717f51` (#469 plugins on top of #468 pricing, #465 PAY-RETRY, #466 store-level provider), probe green — `STATUS.md`. Deploys are
+Production: dedicated host since 2026-11-01, release `6592fbae` (#471 buyer account, dormant, on top of #469 plugins, #468 pricing, #465 PAY-RETRY, #466 store-level provider), probe green — `STATUS.md`. Deploys are
 MANUAL on this host (`DEPLOY.md` step 2). **Mengantar (ADR 0018) is live for the demo store only** (owner-attached
 account, non-COD); every other store waits for Mengantar's production Partner origin + IP allow-list (O2).
 Next on that path: the first real Mengantar booking + cancel (test order `PHI-555925447U5H`, unpaid), then

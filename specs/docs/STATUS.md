@@ -1,11 +1,15 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
-> **Current state — 2026-11-13 16:35 UTC.** Production runs on the **dedicated host** (since 2026-11-01;
-> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`41717f51`** (deploy of PR #469 KEL-001 plugins, on
-> top of #468 pricing, #465 PAY-RETRY, #466 store-level shipping provider), admin / super-admin / storefront / landing
+> **Current state — 2026-11-14 UTC (deploy of PR #471).** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`6592fbae`** (deploy of PR #471 BUYER-ACCOUNT-P1, on top of #469 KEL-001 plugins,
+> #468 pricing, #465 PAY-RETRY, #466 store-level shipping provider), admin / super-admin / storefront / landing
 > `(healthy)` on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`; NEW sidecar **`cron-plugins`**
-> `(healthy)`, first tick `{"ok":true,"stores":0}`. **Schema: 91 tables · 121 migrations on production (head `0120_store_plugins_kelola`,
-> max stamp 1787546011751)**. **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
+> `(healthy)`, first tick `{"ok":true,"stores":0}`. **Schema: 95 tables · 125 migrations on production (head `0124_store_complaint_resolution`,
+> max stamp 1787600003000)**. **Buyer account (ADR 0016, accepted 2026-11-14): merged and DORMANT** — `ACCOUNT_CLAIM_SECRET` /
+> `ACCOUNT_APP_URL` unset on production, so the order API answers byte-identically, `/checkout/sukses` renders no
+> "Simpan ke Akun" offer, the Seller menus (Pelanggan → Akun Pembeli, Pengaturan → Layanan Pembeli) are hidden and
+> their routes 404; `apps/account` (account.tokophi.com) is NOT deployed (no compose service/DNS yet); `buyer_accounts` = 0.
+> Turning it on needs: DNS + compose service + Google redirect URI + the three env secrets + the UU PDP note (ADR 0016). **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
 > Rp50rb promo; a signup code may carry a first-paid-invoice discount (default Rp100.000) — landing `/harga` shows the
 > new prices; the 12 `menunggu` invoices issued before the deploy kept their amounts (Rp1.116.000 total, unchanged);
 > signup codes: 0. **Plugins (ADR 0021):** Pengaturan → Plugin, Kelola CRM with Aktif / Nonaktif; `store_plugins` = 0,
