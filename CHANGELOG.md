@@ -2,7 +2,13 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
-## 2026-11-14 — Program affiliate toko, akun affiliate sendiri di affiliate.tokophi.com (ADR 0022, AFFILIATE-P2) — PR pending, belum di-merge
+## 2026-11-14 — Tampilan program affiliate dirapikan (AFFILIATE-UX) — PR pending, belum di-merge
+
+- **Affiliate (affiliate.tokophi.com):** ringkasan komisi dengan arti tiap status (Siap dibayar / Ditahan / Sudah dibayar) dan "Kapan komisi bisa dicairkan?"; tiap toko aktif punya tombol **Bagikan ke WhatsApp**, **Salin link**, **Salin kode**; status menunggu/ditolak/nonaktif dijelaskan dengan kata; riwayat komisi terbaca di HP; tombol tampilkan kata sandi; "Lupa kata sandi?" menjelaskan jujur bahwa reset belum ada. Menu jadi tab bawah di HP.
+- **Seller:** banner "pendaftar menunggu persetujuan", ringkasan ringkas, daftar affiliate dan komisi berbentuk kartu di HP, konfirmasi sebelum Tolak / Nonaktifkan / Tandai dibayar.
+- **Pembeli:** kolom "Kode affiliate" di checkout diberi keterangan (tidak mengubah harga). Tidak ada perubahan perhitungan komisi.
+
+## 2026-11-14 — Program affiliate toko, akun affiliate sendiri di affiliate.tokophi.com (ADR 0022, AFFILIATE-P2) — PR #476, merged (630f1345)
 
 - **Seller:** Pengaturan → **Affiliate** menyalakan program per toko (default mati). Promo → **Affiliate**: setujui/tolak pendaftar (badge di sidebar), tambah affiliate, undang ke akun affiliate (link 7 hari, sekali pakai), komisi per pesanan + **Tandai dibayar** (seller mentransfer sendiri, di luar TokoΦ), komisi standar, masa tahan, komisi per produk. Komisi tampil di daftar dan detail Pesanan.
 - **Affiliate:** akun **sendiri** (email + kata sandi, terpisah dari akun belanja) di `affiliate.tokophi.com`: daftar ke toko, kode + link `?ref=`, total ditahan/siap/dibayar, riwayat komisi tanpa data pembeli. Reset kata sandi lewat email belum ada.

@@ -2,6 +2,7 @@
 // Sign up (ADR 0022): name, email, WhatsApp, password → an affiliate account, signed in. Applying to a
 // store is a separate, explicit step (`/gabung`), and the seller still approves it.
 import Layout from "../layouts/Layout.astro";
+import PasswordField from "../components/PasswordField.astro";
 import { db } from "@tokophi/db";
 import { PASSWORD_MIN } from "../data/auth";
 import { signUpAndSignIn } from "../lib/signin";
@@ -27,39 +28,48 @@ if (Astro.request.method === "POST") {
   values = { name: r.values.name ?? "", email: r.values.email ?? "", phone: r.values.phone ?? "" };
 }
 const err = (k: keyof typeof errors) => (errors[k] ? `${k}-err` : undefined);
+const desc = (...ids: (string | undefined)[]) => ids.filter(Boolean).join(" ") || undefined;
+// Focus lands on the first field that needs fixing (the inputs keep what was typed, except the password).
+const firstInvalid = (["name", "email", "phone", "password"] as const).find((k) => errors[k]);
+const signinHref = next === "/" ? "/masuk" : `/masuk?next=${encodeURIComponent(next)}`;
 ---
 <Layout title="Daftar">
-  <section class="card narrow">
-    <h1>Daftar jadi affiliate</h1>
-    <p class="lead">Buat akun, lalu gabung ke program affiliate toko-toko TokoΦ. Komisi dibayar langsung oleh masing-masing toko.</p>
-    <form method="post" novalidate>
-      {errors.form && <p class="alert" role="alert">{errors.form}</p>}
-      <input type="hidden" name="next" value={next} />
-      <div class="field">
-        <label for="name">Nama lengkap</label>
-        <input id="name" name="name" autocomplete="name" required maxlength="80" value={values.name} aria-invalid={errors.name ? "true" : undefined} aria-describedby={err("name")} />
-        {errors.name && <p class="error" id="name-err">{errors.name}</p>}
-      </div>
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required value={values.email} aria-invalid={errors.email ? "true" : undefined} aria-describedby={err("email")} />
-        {errors.email && <p class="error" id="email-err">{errors.email}</p>}
-      </div>
-      <div class="field">
-        <label for="phone">Nomor WhatsApp</label>
-        <input id="phone" name="phone" inputmode="tel" autocomplete="tel" required placeholder="mis. 0812 3456 7890" value={values.phone} aria-invalid={errors.phone ? "true" : undefined} aria-describedby={["phone-help", err("phone")].filter(Boolean).join(" ")} />
-        <p class="help" id="phone-help">Dipakai untuk setiap pendaftaran ke toko; seller menghubungi Anda lewat nomor ini.</p>
-        {errors.phone && <p class="error" id="phone-err">{errors.phone}</p>}
-      </div>
-      <div class="field">
-        <label for="password">Kata sandi</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" required minlength={PASSWORD_MIN} aria-invalid={errors.password ? "true" : undefined} aria-describedby={["pw-help", err("password")].filter(Boolean).join(" ")} />
-        <p class="help" id="pw-help">Minimal {PASSWORD_MIN} karakter. Simpan baik-baik: reset lewat email belum tersedia.</p>
-        {errors.password && <p class="error" id="password-err">{errors.password}</p>}
-      </div>
-      <button class="button primary block" type="submit">Buat akun</button>
-    </form>
-    <p class="help">Akun affiliate terpisah dari akun belanja TokoΦ.</p>
-    <p>Sudah punya akun? <a href={next === "/" ? "/masuk" : `/masuk?next=${encodeURIComponent(next)}`}>Masuk</a></p>
-  </section>
+  <div class="narrow stack">
+    <header class="page-head">
+      <h1>Daftar jadi affiliate</h1>
+      <p class="lead">Satu akun untuk mempromosikan toko-toko TokoΦ dan mendapat komisi dari setiap pesanan. Komisi dibayar langsung oleh masing-masing toko.</p>
+    </header>
+    <section class="card">
+      <form method="post" novalidate>
+        {errors.form && <p class="alert" role="alert">{errors.form}</p>}
+        {firstInvalid && !errors.form && <p class="alert" role="alert">Periksa lagi isian yang ditandai di bawah.</p>}
+        <input type="hidden" name="next" value={next} />
+        <div class="field">
+          <label for="name">Nama lengkap</label>
+          <input id="name" name="name" autocomplete="name" autocapitalize="words" required maxlength="80" value={values.name} autofocus={firstInvalid === "name"} aria-invalid={errors.name ? "true" : undefined} aria-describedby={err("name")} />
+          {errors.name && <p class="error" id="name-err">{errors.name}</p>}
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" required value={values.email} autofocus={firstInvalid === "email"} aria-invalid={errors.email ? "true" : undefined} aria-describedby={desc(err("email"), "email-help")} />
+          {errors.email && <p class="error" id="email-err">{errors.email}</p>}
+          <p class="help" id="email-help">Dipakai untuk masuk ke akun ini.</p>
+        </div>
+        <div class="field">
+          <label for="phone">Nomor WhatsApp</label>
+          <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="0812 3456 7890" value={values.phone} autofocus={firstInvalid === "phone"} aria-invalid={errors.phone ? "true" : undefined} aria-describedby={desc(err("phone"), "phone-help")} />
+          {errors.phone && <p class="error" id="phone-err">{errors.phone}</p>}
+          <p class="help" id="phone-help">Dikirim ke seller saat Anda mendaftar ke tokonya, supaya seller bisa menghubungi Anda.</p>
+        </div>
+        <div class="field">
+          <PasswordField id="password" name="password" label="Kata sandi" autocomplete="new-password" minlength={PASSWORD_MIN} error={errors.password} describedBy="pw-help" autofocus={firstInvalid === "password"}>
+            <p class="help" id="pw-help">Minimal {PASSWORD_MIN} karakter. Simpan baik-baik — reset lewat email belum tersedia.</p>
+          </PasswordField>
+        </div>
+        <button class="button primary block" type="submit">Buat akun</button>
+        <p class="help center">Akun affiliate terpisah dari akun belanja TokoΦ.</p>
+      </form>
+    </section>
+    <p class="auth-foot">Sudah punya akun? <a href={signinHref}>Masuk</a></p>
+  </div>
 </Layout>

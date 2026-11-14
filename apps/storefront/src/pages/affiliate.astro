@@ -12,27 +12,45 @@ import { affiliateJoinUrl } from "../lib/affiliate-link";
 const store = Astro.locals.store;
 if (!(await storeAffiliateEnabled(store.id))) return new Response(null, { status: 404, statusText: "Not Found" });
 const join = affiliateJoinUrl(store.slug);
+// Someone who already has an affiliate account signs in and lands on the same application step.
+const signIn = join ? (() => { const u = new URL(join); return `${u.origin}/masuk?next=${encodeURIComponent(u.pathname + u.search)}`; })() : null;
 ---
 
 <Layout title="Program Affiliate" description={`Gabung jadi affiliate ${store.name} dan dapatkan komisi dari setiap penjualan.`}>
   <PageHeader
     crumbs={[{ name: "Beranda", href: "/" }, { name: "Affiliate" }]}
     title={`Jadi affiliate ${store.name}`}
-    dek="Bagikan link atau kode Anda. Setiap pesanan yang selesai memberi Anda komisi."
+    dek="Rekomendasikan produk kami dengan link atau kode Anda sendiri, dan dapatkan komisi dari setiap pesanan yang selesai."
   />
-  <section class="mx-auto max-w-xl px-4 py-10 sm:px-6">
-    <div class="rounded-xl border border-line bg-white p-6">
+  <section class="mx-auto max-w-xl px-4 py-8 sm:px-6 sm:py-10">
+    <div class="rounded-xl border border-line bg-white p-5 sm:p-6">
       <h2 class="font-display text-xl font-semibold text-ink">Cara kerjanya</h2>
-      <ol class="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted">
-        <li>Daftar akun affiliate TokoΦ, lalu ajukan diri ke program {store.name}.</li>
-        <li>Setelah disetujui, Anda mendapat kode dan link khusus.</li>
-        <li>Pesanan yang memakai kode atau link Anda (berlaku 30 hari) dicatat sebagai komisi Anda.</li>
-        <li>Komisi dibayarkan langsung oleh {store.name} setelah pesanan selesai dan lewat masa retur.</li>
+      <ol class="mt-4 space-y-4">
+        {[
+          ["Daftar akun affiliate TokoΦ", `Lalu ajukan diri ke program ${store.name}. Gratis.`],
+          ["Tunggu persetujuan", `${store.name} meninjau pendaftaran Anda, lalu Anda mendapat kode dan link khusus.`],
+          ["Bagikan link atau kode", "Pesanan yang memakai link Anda (berlaku 30 hari sejak diklik) atau kode Anda tercatat sebagai komisi."],
+          ["Terima komisi", `Dibayar langsung oleh ${store.name} setelah pesanan selesai dan lewat masa retur.`],
+        ].map(([title, body], i) => (
+          <li class="flex gap-3">
+            <span aria-hidden="true" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">{i + 1}</span>
+            <div>
+              <p class="text-sm font-semibold text-ink">{title}</p>
+              <p class="mt-0.5 text-sm text-muted">{body}</p>
+            </div>
+          </li>
+        ))}
       </ol>
       {join ? (
-        <a href={join} class="mt-6 inline-flex w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:w-auto">
-          Daftar jadi affiliate
-        </a>
+        <div class="mt-6">
+          <a href={join} class="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 sm:w-auto">
+            Daftar jadi affiliate
+          </a>
+          <p class="mt-3 text-sm text-muted">
+            Sudah punya akun affiliate? <a class="font-medium text-ink underline underline-offset-2" href={signIn}>Masuk</a>
+          </p>
+          <p class="mt-1 text-xs text-muted">Akun affiliate terpisah dari akun belanja Anda.</p>
+        </div>
       ) : (
         <p role="status" class="mt-6 rounded-lg border border-line px-4 py-3 text-sm text-ink">
           Pendaftaran affiliate belum dibuka. Silakan cek kembali nanti, atau hubungi {store.name} lewat halaman <a class="underline" href="/kontak">Kontak</a>.

@@ -1,5 +1,7 @@
 ---
 // The commission ledger. No buyer data: the order is named by its NUMBER only, as text.
+// Wide screens: a table. Phones: each row becomes a labelled card (order + status, date · store,
+// "Nilai barang" vs "Komisi") — the two money columns are never shown unlabelled side by side.
 import { IDR } from "@tokophi/lib/format";
 import type { Commission } from "../data/affiliate";
 import { STATE_LABEL, dateId, stateText } from "../lib/view";
@@ -12,14 +14,14 @@ interface Props {
 }
 const { rows, showStore = false, caption } = Astro.props;
 ---
-<div class="card">
+<div class="card ledger-wrap">
   <table class="ledger">
     <caption class="sr-only">{caption}</caption>
     <thead>
       <tr>
+        <th scope="col">Pesanan</th>
         <th scope="col">Tanggal</th>
         {showStore && <th scope="col">Toko</th>}
-        <th scope="col">Pesanan</th>
         <th scope="col" class="r">Nilai barang</th>
         <th scope="col" class="r">Komisi</th>
         <th scope="col">Status</th>
@@ -28,12 +30,12 @@ const { rows, showStore = false, caption } = Astro.props;
     <tbody>
       {rows.map((r) => (
         <tr>
-          <td class="num">{dateId(r.placedAt)}</td>
-          {showStore && <td><a href={`/toko/${r.affiliateId}`}>{r.storeName}</a></td>}
-          <td><span class="code">{r.orderNumber}</span></td>
-          <td class="r num">{IDR(r.baseIdr)}</td>
-          <td class="r num"><strong>{IDR(r.commissionIdr)}</strong>{r.rateNote && <span class="rate">{r.rateNote}</span>}</td>
-          <td><span class={`badge ${STATE_LABEL[r.state].tone}`}>{stateText(r)}</span></td>
+          <td class="c-order"><span class="code">{r.orderNumber}</span></td>
+          <td class="c-date num">{dateId(r.placedAt)}{showStore && <span class="store-inline"> · {r.storeName}</span>}</td>
+          {showStore && <td class="c-store"><a href={`/toko/${r.affiliateId}`}>{r.storeName}</a></td>}
+          <td class="r num c-base" data-label="Nilai barang">{IDR(r.baseIdr)}</td>
+          <td class="r num c-comm" data-label="Komisi"><strong>{IDR(r.commissionIdr)}</strong>{r.rateNote && <span class="rate">{r.rateNote}</span>}</td>
+          <td class="c-state"><span class={`badge ${STATE_LABEL[r.state].tone}`}>{stateText(r)}</span></td>
         </tr>
       ))}
     </tbody>

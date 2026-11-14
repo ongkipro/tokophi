@@ -1,7 +1,9 @@
 ---
 // Progressive copy-to-clipboard (same contract as apps/account/src/components/CopyScript.astro). Put
 // <CopyScript /> once on a page; each `<button data-copy="<id>" data-copy-value="…" hidden>` copies its
-// value. Without JS the link stays on the page as selectable text and the button stays hidden.
+// value and announces `data-copy-done` (default "Disalin."). The visible label lives in a
+// `[data-copy-text]` child when the button also carries an icon. Without JS the value stays on the page
+// as selectable text and the button stays hidden.
 ---
 <p class="sr-only" role="status" id="copy-status"></p>
 <script>
@@ -10,17 +12,28 @@
     const target = document.getElementById(b.dataset.copy!);
     if (!target) continue;
     b.hidden = false;
-    const label = b.textContent;
+    const text = b.querySelector<HTMLElement>("[data-copy-text]") ?? b;
+    const label = text.textContent;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     b.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(b.dataset.copyValue ?? target.textContent?.trim() ?? "");
-        b.textContent = "Disalin";
-        if (status) status.textContent = "Link disalin.";
+        text.textContent = "Disalin";
+        b.dataset.copied = "";
+        // Cleared first so a second copy of the same thing is announced again.
+        if (status) {
+          status.textContent = "";
+          requestAnimationFrame(() => (status.textContent = b.dataset.copyDone ?? "Disalin."));
+        }
       } catch {
         getSelection()?.selectAllChildren(target);
-        if (status) status.textContent = "Link dipilih. Salin secara manual.";
+        if (status) status.textContent = "Teks dipilih. Salin secara manual.";
       }
-      setTimeout(() => (b.textContent = label), 2000);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        text.textContent = label;
+        delete b.dataset.copied;
+      }, 2000);
     });
   }
 </script>

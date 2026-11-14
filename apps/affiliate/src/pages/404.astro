@@ -7,7 +7,19 @@ const signedIn = !!Astro.locals.account;
 <Layout title="Tidak ditemukan">
   <section class="card narrow">
     <h1>Halaman tidak ditemukan</h1>
-    <p class="lead">Alamatnya salah, atau data ini bukan milik akun yang sedang masuk.</p>
-    <p><a class="button primary" href={signedIn ? "/" : "/masuk"}>{signedIn ? "Kembali ke ringkasan" : "Masuk"}</a></p>
+    <p class="muted">Alamatnya salah, atau data ini bukan milik akun yang sedang masuk.</p>
+    <div class="actions stack-sm">
+      {signedIn ? (
+        <>
+          <a class="button primary" href="/">Kembali ke Ringkasan</a>
+          <a class="button secondary" href="/komisi">Lihat komisi</a>
+        </>
+      ) : (
+        <>
+          <a class="button primary" href="/masuk">Masuk</a>
+          <a class="button secondary" href="/daftar">Daftar jadi affiliate</a>
+        </>
+      )}
+    </div>
   </section>
 </Layout>

@@ -1,12 +1,13 @@
 ---
-// Komisi: one ledger across every programme of this account, filterable by state.
+// Komisi: one ledger across every programme of this account, filterable by state. The chosen state's
+// meaning is spelled out under the filter; each empty case says what would make rows appear.
 import Layout from "../layouts/Layout.astro";
 import Ledger from "../components/Ledger.astro";
 import { db } from "@tokophi/db";
-import { IDR } from "@tokophi/lib/format";
+import { IDR, num } from "@tokophi/lib/format";
 import { COMMISSION_STATES, LEDGER_LIMIT, myCommissions, type CommissionState } from "../data/affiliate";
 import { signInUrl } from "../lib/nav";
-import { STATE_LABEL } from "../lib/view";
+import { STATE_LABEL, STATE_MEANING } from "../lib/view";
 
 const account = Astro.locals.account;
 if (!account) return Astro.redirect(signInUrl(Astro.url));
@@ -16,20 +17,41 @@ const ledger = await myCommissions(db, account.id, { state });
 ---
 <Layout title="Komisi" active="komisi">
   <div class="stack">
-    <header>
+    <header class="page-head">
       <h1>Komisi</h1>
-      <p class="lead">Setiap pesanan yang memakai kode atau link Anda. Data pembeli tidak ditampilkan.</p>
+      <p class="lead">Setiap pesanan yang memakai kode atau link Anda, dari semua toko. Data pembeli tidak ditampilkan.</p>
     </header>
-    <nav class="filters" aria-label="Saring status">
+    <nav class="filters" aria-label="Saring status komisi">
       <a href="/komisi" aria-current={state === null ? "true" : undefined}>Semua</a>
       {COMMISSION_STATES.map((s) => <a href={`/komisi?state=${s}`} aria-current={state === s ? "true" : undefined}>{STATE_LABEL[s].text}</a>)}
     </nav>
+    <script>
+      // Phones scroll the chip row sideways: bring the selected chip into view (no page scroll).
+      const row = document.querySelector<HTMLElement>(".filters");
+      const cur = row?.querySelector<HTMLElement>('[aria-current="true"]');
+      if (row && cur) row.scrollLeft = cur.offsetLeft - row.offsetLeft - 16;
+    </script>
+    {state && <p class="filter-note"><span class={`badge ${STATE_LABEL[state].tone}`}>{STATE_LABEL[state].text}</span> {STATE_MEANING[state]}</p>}
     {ledger.count === 0 ? (
-      <section class="card"><p>Belum ada komisi{state ? " dengan status ini" : ""}.</p></section>
+      <section class="card">
+        {state ? (
+          <>
+            <h2>Belum ada komisi berstatus "{STATE_LABEL[state].text}"</h2>
+            <p class="muted">Komisi berpindah status sendiri mengikuti pesanannya.</p>
+            <a class="button secondary" href="/komisi">Lihat semua komisi</a>
+          </>
+        ) : (
+          <>
+            <h2>Belum ada komisi</h2>
+            <p class="muted">Komisi muncul di sini begitu ada pembeli yang memesan lewat link atau kode Anda. Bagikan link toko Anda dari Ringkasan.</p>
+            <a class="button primary" href="/">Ke Ringkasan</a>
+          </>
+        )}
+      </section>
     ) : (
       <>
-        <p class="help num">{ledger.count} pesanan · total komisi {IDR(ledger.commissionIdr)}{ledger.count > LEDGER_LIMIT ? ` · menampilkan ${LEDGER_LIMIT} terbaru` : ""}</p>
-        <Ledger rows={ledger.rows} showStore caption="Riwayat komisi semua toko" />
+        <p class="small muted num"><strong>{num(ledger.count)} pesanan</strong> · total komisi <strong>{IDR(ledger.commissionIdr)}</strong>{ledger.count > LEDGER_LIMIT ? ` · menampilkan ${LEDGER_LIMIT} terbaru` : ""}</p>
+        <Ledger rows={ledger.rows} showStore caption={state ? `Komisi berstatus ${STATE_LABEL[state].text}` : "Riwayat komisi semua toko"} />
       </>
     )}
   </div>

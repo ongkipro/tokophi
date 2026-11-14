@@ -3471,7 +3471,8 @@
             "auth"
           ],
           "lib": [
-            "nav"
+            "nav",
+            "view"
           ],
           "locals": true,
           "db": true,
