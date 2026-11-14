@@ -1,12 +1,34 @@
-# NOT WRITTEN — Task 5.8 owner decision.
-# Placeholder so that the link in specs/README.md resolves. A 934-line draft of this contract exists
-# on the unmerged branch `feature/buyer-account-local` (commit 8dc12d7); it has NOT been accepted and
-# describes no deployed route. `npm run verify:openapi` skips a file carrying the status below: it
-# documents nothing and exempts nothing. Replace the whole file with the accepted contract, or delete
-# it and its links, when Task 5.8 is decided.
-x-tokophi-status: not-written
+# TokoΦ Account (apps/account, account.tokophi.com) — ADR 0016, accepted 2026-11-14 (BUYER-ACCOUNT-P1).
+#
+# Phase 1 has NO JSON API, on purpose. Every account screen is a server-rendered page whose writes are
+# same-origin HTML form POSTs to that page itself (Astro `security.checkOrigin`), so there is no
+# operation any other caller codes against. The 934-line draft contract on `feature/buyer-account-local`
+# (8dc12d7) described an API for a design that was not built (OTP, PKCE handoff to storefronts,
+# addresses); it is NOT adopted. The one cross-app contract — the storefront's success page linking to
+# `/klaim?t=<claim token>` — is a browser navigation, recorded in ADR 0016 and `specs/docs/FLOWS.md`.
+#
+# The four non-page endpoints are browser navigations and are exempted below with the same reasoning
+# admin-api.yaml applies to the identical Seller routes. A NEW account endpoint fails `verify:openapi`
+# until someone documents it here or says why it is not a contract — which is the point.
 openapi: 3.1.0
 info:
-  title: TokoΦ Account API (not written)
-  version: 0.0.0
+  title: TokoΦ Account (phase 1 — no JSON operations; exemptions only)
+  version: 1.0.0
 paths: {}
+x-tokophi-route-exemptions:
+  - app: apps/account
+    path: /auth/google/start
+    methods: [GET]
+    reason: Browser redirect into Google OAuth, the same navigation as the Seller's `/api/auth/google/start`. Mints the `state` cookie and the safe `next`; not a JSON operation and not a third-party contract.
+  - app: apps/account
+    path: /auth/google/callback
+    methods: [GET]
+    reason: Google's OAuth redirect target. The contract is Google's authorization-code flow; the response is a redirect that opens the session cookie. Same reason as the Seller's callback.
+  - app: apps/account
+    path: /keluar
+    methods: [POST]
+    reason: Revokes this session row and deletes the cookie, then redirects. Reached only from the account shell's own sign-out form (same-origin, Astro checkOrigin); internal to the surface.
+  - app: apps/account
+    path: /masuk/dev
+    methods: [POST]
+    reason: LOCAL DEVELOPMENT sign-in. `devSignInAllowed()` refuses it outright (404) in any production build (Vite bakes `import.meta.env.PROD`), so it exists in no deployed contract.

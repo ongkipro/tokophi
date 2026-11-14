@@ -376,6 +376,10 @@ flowchart TD
 
 ## 6. Auth, session, and how RLS actually enforces tenancy
 
+> **Buyers are NOT in this section's model.** The TokoΦ Account (ADR 0016) has its own origin, cookie and
+> key — see §9. Nothing below applies to a buyer, and no buyer token is ever accepted here.
+
+
 Three separate identities. They do not overlap.
 
 | Identity | Table | Cookie | Guard |
@@ -612,3 +616,38 @@ CRON  api/cron/tracking-events, every 60 s
   fail an order. Which is exactly why the cron's back-fill sweep has to exist.
 - **Ops:** sidecar `cron-tracking-events` (`sleep 60`) in `docker-compose.coolify.yml`. Needs
   `CRON_SECRET` (fail-closed in production) **and** `INTEGRATION_TOKEN_KEY`. See `DEPLOY.md`.
+
+## 9. Buyer account — save an order to the Akun TokoΦ (ADR 0016, BUYER-ACCOUNT-P1)
+
+Optional, AFTER the order exists; merged dark (needs `ACCOUNT_CLAIM_SECRET` on admin + account,
+`ACCOUNT_APP_URL` on the storefront, and a deployed `apps/account`).
+
+```text
+STOREFRONT checkout.astro ── POST /api/public/order (guest, unchanged — no buyer field, no buyer row)
+   │  success answer only: claimToken = b64url(order_id.issued_at) . HMAC-SHA256(ACCOUNT_CLAIM_SECRET)   [30 d]
+   │  → sessionStorage.lastOrderClaim {number, token}   (this tab only; NOT the localStorage `lastOrder`)
+   ▼
+/checkout/sukses ── "Simpan ke Akun TokoΦ" (only when token.number = this order AND ACCOUNT_APP_URL set)
+   │  link: https://account.tokophi.com/klaim?t=<token>        (account pages: no-referrer, no-store, noindex)
+   ▼
+ACCOUNT /klaim ── not signed in → /masuk?next=/klaim?t=… → Google (state cookie) → session row + tphi_account
+   │  previewClaim: verify HMAC + age; read order + store; already claimed by someone else ⇒ the SAME "invalid"
+   │  consent box (names the store; says the store sees "saved", never the account) → POST (checkOrigin)
+   ▼
+claimOrder (ONE txn): lock buyer_accounts row FOR UPDATE (must be active)
+   → insert buyer_order_claims (order_id UNIQUE; store_id FROM THE ORDER ROW) on conflict do nothing
+   → loser reads the winner back: not me ⇒ refused
+   → upsert buyer_store_links (buyer, store) active, consent_version, customer_id = the order's customer
+   ▼
+/orders/<number> — buyer projection: claim(buyer=me) ⋈ link(buyer=me, same store, ACTIVE) ⋈ orders ⋈ stores
+
+SELLER (tokophi_app, RLS): Pelanggan → Akun Pembeli / "Terdaftar" badge / "Tersimpan di Akun TokoΦ"
+   = claims ⋈ ACTIVE links of THIS store only; buyer_accounts/buyer_sessions → 0 rows (RLS, no policy)
+```
+
+- **Unlink** (`/stores/<slug>` → Putus): link `revoked`; the store's orders leave the hub and the Seller
+  sees a guest again. **Close** (`/account` → Tutup akun): sessions revoked + device strings blanked,
+  claims deleted, links revoked, `google_sub` → `closed:<id>`, email/name cleared. Store rows untouched.
+- **Return window / complaint period** (Seller → Pengaturan → Layanan Pembeli): shown on an order only once
+  it is `dikirim`/`selesai`, and only when declared; the complaint button opens the store's own WhatsApp.
+

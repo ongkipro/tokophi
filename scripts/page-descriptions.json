@@ -34,8 +34,9 @@
     "admin:/pelanggan/keranjang": "'Keranjang ditinggal' — abandoned checkouts; recovery over WhatsApp ('WA dibuka', never 'terkirim'); rate = rescued/abandoned only.",
     "admin:/pelanggan/segmen": "'Segmen' — customer segments (create/delete).",
     "admin:/pelanggan/ulasan": "'Ulasan' — product reviews moderation.",
+    "admin:/pelanggan/akun": "'Akun Pembeli' (ADR 0016) — this store's customers who saved an order to a TokoΦ Account: count, since when. Merchant projection only, never the account itself.",
     "admin:/pemasaran": "'Pemasaran' — ad channels (Meta/Google/TikTok) connection, catalog id scheme, conversion queue health; 'dari pesanan toko Anda', never 'menurut Meta'.",
-    "admin:/pengaturan": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision).",
+    "admin:/pengaturan": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), 'Layanan Pembeli' (return window + complaint-resolution days a buyer reads in the Akun TokoΦ, ADR 0016), domains, users/roles. Payment channels are NOT here (platform decision).",
     "admin:/pesanan": "'Pesanan' — orders list with status tabs; URL params validated before any enum cast.",
     "admin:/pesanan/[id]": "Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking.",
     "admin:/pesanan/massal": "'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'.",
@@ -133,7 +134,21 @@
     "landing:/kontak": "Contact.",
     "landing:/privasi": "Privacy policy.",
     "landing:/404": "Not found.",
-    "landing:/sitemap.xml": "Sitemap for the apex."
+    "landing:/sitemap.xml": "Sitemap for the apex.",
+    "account:/": "Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it.",
+    "account:/masuk": "Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle).",
+    "account:/masuk/dev": "LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden.",
+    "account:/keluar": "Revokes this session row and deletes the cookie.",
+    "account:/auth/google/start": "Google sign-in start — mints the 128-bit `state` cookie and the safe `next`.",
+    "account:/auth/google/callback": "Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session.",
+    "account:/account": "'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme.",
+    "account:/klaim": "Saves an order to the account from the store's checkout-success link: claim token (HMAC, one order, 30 days) + sign-in + consent naming the store. A claim is keyed on a UNIQUE `order_id`.",
+    "account:/orders": "'Pesanan' — only orders saved to this account, from stores still linked.",
+    "account:/orders/[number]": "One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one.",
+    "account:/orders/[number]/receipt": "Bukti pesanan — the printable page under the order's own URL.",
+    "account:/stores": "'Toko' — stores this account is actively linked to, most recent purchase first.",
+    "account:/stores/[slug]": "Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link.",
+    "account:/404": "Not found — also what every 'not mine' record answers (another account's order or store)."
   },
   "howto": [
     [

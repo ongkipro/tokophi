@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generates `specs/docs/PAGE_MAP.md` — the page-level map of all four surfaces, DERIVED FROM DISK.
+// Generates `specs/docs/PAGE_MAP.md` — the page-level map of every surface (incl. apps/account), DERIVED FROM DISK.
 //
 // Why a generator and not prose: `CODE_MAP.md` said "admin — 39 routes" while the directory held 55,
 // and `SYSTEM_MAP.md` still described the 2-minute impersonation JWT that Task 4.11 replaced. A map
@@ -322,6 +322,7 @@ const surfaces = [
   nextSurface("super-admin", "Super Admin (platform control plane)"),
   astroSurface("storefront", "Storefront (multi-tenant shopper site)"),
   astroSurface("landing", "Landing (tokophi.com, static, no DB)"),
+  astroSurface("account", "Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016)"),
 ];
 
 let md = `# TokoΦ — PAGE MAP (generated — do not edit by hand)

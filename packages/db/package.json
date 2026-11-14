@@ -8,6 +8,7 @@
     "./schema": "./src/schema.ts",
     "./client": "./src/client.ts",
     "./article-order": "./src/article-order.ts",
+    "./order-payment": "./src/order-payment.ts",
     "./area-coords": "./src/area-coords.ts",
     "./subscription-invoice": "./src/subscription-invoice.ts",
     "./provider-config": "./src/provider-config.ts",

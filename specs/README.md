@@ -54,7 +54,7 @@ gate that would activate it, as the suite requires.
 | Billing & payments (`11`) | **[`docs/FINANCE.md`](docs/FINANCE.md)** (the one money map) · [`docs/PRICING.md`](docs/PRICING.md) · provider contract via skill `autolaris-h2h` | `DEC-001/005/010/011/012` |
 | Shipping, courier, COD (`17` + fulfilment owner) | `AGENTS.md` "Shipping & COD" · [`docs/KIRIMINAJA.md`](docs/KIRIMINAJA.md) (vendor contract as measured) · [`docs/FLOWS.md`](docs/FLOWS.md) §5 | |
 | Security architecture (`12`) | [`docs/SECURITY.md`](docs/SECURITY.md) · audits under `docs/AUDIT_*.md` | `application-security` owner |
-| Privacy & compliance (`13`) | [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) — **stub**; activates with Task 5.8 (buyer accounts, owner decision) | `Unknown` until written — not `Not applicable` |
+| Privacy & compliance (`13`) | [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) — **stub**; ADR 0016 (buyer account, accepted 2026-11-14) makes it a production-enablement gate for `apps/account` | `Unknown` until written — not `Not applicable` |
 | SLA / DRP (`14`) | [`docs/SLA-DRP.md`](docs/SLA-DRP.md) | offsite backup still uncredentialed (Task 8.4) |
 | CI/CD & migrations (`15`) | [`docs/DEPLOY.md`](docs/DEPLOY.md) · `.github/workflows/` · `npm run verify-migrations -w @tokophi/db` · ADR 0017 | migrations are hand-written |
 | Observability & rate limits (`16`) | root [`OBSERVABILITY.md`](../OBSERVABILITY.md) (probes) · [`docs/SECURITY.md`](docs/SECURITY.md) (every rate limit with its value) · cron liveness on Super Admin → Analitik → Sistem | |
@@ -69,10 +69,11 @@ Supporting domain references:
 - [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) explains the surfaces, the tenant boundary and the cross-surface edges (dated; see its header for what is stale).
 - [`docs/FLOWS.md`](docs/FLOWS.md) and [`docs/UML.md`](docs/UML.md) describe critical flows and state machines.
 - [`docs/SCHEMA.md`](docs/SCHEMA.md) is a dated schema snapshot; query the target database before relying on counts.
-- [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) is a **stub** (NOT WRITTEN on `main` — Task 5.8 owner decision; a draft sits on the unmerged `feature/buyer-account-local`). Today's data-handling rules are in `docs/SECURITY.md`.
+- [`docs/PRIVACY-COMPLIANCE.md`](docs/PRIVACY-COMPLIANCE.md) is a **stub** (NOT WRITTEN on `main`; a draft sits on the unmerged `feature/buyer-account-local`). ADR 0016 lists it as a gate before the buyer account is switched on in production. Today's data-handling rules are in `docs/SECURITY.md`.
 - [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) is a **pointer stub**: the probe contract is repository-root [`OBSERVABILITY.md`](../OBSERVABILITY.md); SLI/SLO, RTO/RPO and the recovery runbook are in [`docs/SLA-DRP.md`](docs/SLA-DRP.md).
 - [`openapi/storefront-api.yaml`](openapi/storefront-api.yaml) and [`openapi/admin-api.yaml`](openapi/admin-api.yaml) describe observed HTTP boundaries.
-- [`docs/HEADLESS_STOREFRONT_SPEC.md`](docs/HEADLESS_STOREFRONT_SPEC.md), [`openapi/headless.yaml`](openapi/headless.yaml), [`docs/TOKOPHI_ACCOUNT_SPEC.md`](docs/TOKOPHI_ACCOUNT_SPEC.md), and [`openapi/account.yaml`](openapi/account.yaml) are **stubs marked NOT WRITTEN — Task 5.8 owner decision**. They are not deployed behavior and not accepted contracts; each stub says where its draft (if any) lives. `npm run verify:doc-authority` keeps these links resolving; `npm run verify:openapi` skips the two YAML stubs by their `x-tokophi-status`.
+- [`docs/HEADLESS_STOREFRONT_SPEC.md`](docs/HEADLESS_STOREFRONT_SPEC.md) and [`openapi/headless.yaml`](openapi/headless.yaml) are **stubs marked NOT WRITTEN**; `npm run verify:openapi` skips the YAML stub by its `x-tokophi-status`.
+- [`docs/TOKOPHI_ACCOUNT_SPEC.md`](docs/TOKOPHI_ACCOUNT_SPEC.md) is the **accepted phase-1 spec** of the buyer account (ADR 0016, 2026-11-14) — what `apps/account` does, not the earlier drafts. [`openapi/account.yaml`](openapi/account.yaml) records that phase 1 has **no JSON API** (HTML pages + same-origin form POSTs) and exempts its four browser-navigation endpoints.
 
 Historical audits, `docs/BACKLOG.md`, `docs/WORKLOG.md`, `docs/TASKS.md`, and `docs/tasks/NEXT.md` remain evidence only. [`docs/tasks/OPEN.md`](docs/tasks/OPEN.md) is a concise navigation handoff; it does not own work beside root `TASKS.md`.
 
@@ -170,7 +171,7 @@ when the task depends on the provider's current roster.
 | [0013](decisions/0013-stable-catalog-product-ids.md) | Stable catalog product IDs |
 | [0014](decisions/0014-platform-absorbs-cod-shipping.md) | **Superseded by ADR 0015** — former platform-absorbed COD shipping rule |
 | [0015](decisions/0015-net-seller-proceeds-and-shipping-reconciliation.md) | **Accepted** — Net Seller proceeds and shipping reconciliation (supersedes ADR 0014) |
-| [0016](decisions/0016-global-buyer-account.md) | **NOT WRITTEN — stub** (Task 5.8 owner decision). Draft "Global buyer identity with isolated per-store customer projections" on unmerged `feature/buyer-account-local`; nothing accepted, runtime not deployed |
+| [0016](decisions/0016-global-buyer-account.md) | **Accepted (2026-11-14)** — Global TokoΦ buyer identity with isolated per-store customer projections: `apps/account` (account.tokophi.com), consented order claims, guest checkout unchanged; affiliate = phase 2. Merged dark, production enablement owner-gated |
 | [0017](decisions/0017-zero-downtime-deploy.md) | **Accepted** — health-first in-place deploy swap on Coolify compose |
 | [0018](decisions/0018-mengantar-per-store-seller-accounts.md) | **Accepted** — Mengantar shipping through a per-store seller account (Partner API) behind a provider switch; KiriminAja = fallback + COD (amends 0004, 0015); dispatch + auto-registration amended by 0019 |
 | [0019](decisions/0019-store-level-shipping-provider.md) | **Accepted** — shipping provider per store, set by Super Admin or a signup code (default KiriminAja); platform switch = master kill-switch; Mengantar accounts only for Mengantar stores (amends 0018) |

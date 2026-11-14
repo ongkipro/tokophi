@@ -17,7 +17,7 @@ const env = loadEnv(process.env.NODE_ENV ?? "development", process.cwd(), "");
 // reached the host→store fallback and `http://localhost:4327/` answered 404 ("Toko tidak
 // ditemukan") for the one host a developer actually types. Surface them here, same as DATABASE_URL.
 // `??=` — a real container env always wins.
-for (const key of ["DATABASE_URL", "STORE_SLUG", "DEFAULT_STORE_SLUG", "STOREFRONT_BASE_DOMAIN"]) {
+for (const key of ["DATABASE_URL", "STORE_SLUG", "DEFAULT_STORE_SLUG", "STOREFRONT_BASE_DOMAIN", "ACCOUNT_APP_URL"]) {
   if (env[key]) process.env[key] ??= env[key];
 }
 

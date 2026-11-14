@@ -83,6 +83,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Keranjang Ditinggal", href: "/pelanggan/keranjang" },
           { label: "Segmen", href: "/pelanggan/segmen" },
           { label: "Ulasan", href: "/pelanggan/ulasan" },
+          // TokoΦ Account (ADR 0016): which customers saved this store's orders to their account.
+          { label: "Akun Pembeli", href: "/pelanggan/akun" },
         ],
       },
       // Obrolan = shopper ⇄ merchant chat (specs/docs/CHAT_SPEC.md). It sits with Pesanan/Pelanggan

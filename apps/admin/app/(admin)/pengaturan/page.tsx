@@ -11,6 +11,7 @@ import {
   Users,
   Store,
   Plug,
+  ShieldCheck,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -37,6 +38,8 @@ import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
+import { ReturCard } from "@/components/admin/pengaturan/retur-card"
+import { PengaduanCard } from "@/components/admin/pengaturan/pengaduan-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -46,6 +49,7 @@ import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
 type Section =
   | "profil"
   | "pengiriman"
+  | "pembeli"
   | "alamat"
   | "domain"
   | "rekening"
@@ -62,6 +66,7 @@ const SECTIONS: {
 }[] = [
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
   { id: "pengiriman", label: "Pengiriman", desc: "Jasa kirim & COD", icon: <Truck /> },
+  { id: "pembeli", label: "Layanan Pembeli", desc: "Retur & komplain", icon: <ShieldCheck /> },
   { id: "alamat", label: "Alamat", desc: "Alamat pengambilan", icon: <MapPin /> },
   { id: "domain", label: "Domain", desc: "Domain kustom storefront", icon: <Globe /> },
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
@@ -216,6 +221,16 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
             <div className="max-w-3xl space-y-5">
               <MengantarCard onOpenAlamat={() => setSection("alamat")} />
               <JasaKirimCard />
+            </div>
+          )}
+
+          {/* LAYANAN PEMBELI (ADR 0016, BUYER-ACCOUNT-P1) — the two promises a buyer reads on an order
+              in their Akun TokoΦ: the return window and the complaint-resolution period. Both NULL by
+              default = the buyer is shown nothing; we never make a promise on the store's behalf. */}
+          {section === "pembeli" && (
+            <div className="grid max-w-3xl gap-5">
+              <ReturCard />
+              <PengaduanCard />
             </div>
           )}
 
