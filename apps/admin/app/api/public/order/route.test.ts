@@ -872,4 +872,40 @@ suite("POST /api/public/order — affiliate attribution wiring (0125, ADR 0022)"
   it("programme OFF: a valid code is ignored and the order still goes through", async () => {
     expect([...(await place("affoff", { affiliateCode: AFF_CODE }))]).toEqual([]);
   });
+
+  // F-A13: `/lp/<slug>?ref=CODE` → the landing funnel (components/OrderFunnel.astro) posts ITS OWN body
+  // shape — no checkout session, no item name/price, no voucher, COD, plus the captured `refCode`. That
+  // exact shape must attribute like checkout. (The storefront half — that the funnel sends `refCode` at
+  // all — is `apps/storefront/src/lib/order-forms-affiliate-ref.test.ts`.)
+  it("an /lp landing-funnel order carrying the captured ?ref= creates ONE `link` commission", async () => {
+    const fixture = fixtures.aff!;
+    const res = await POST(
+      new Request("http://localhost/api/public/order", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.250" },
+        body: JSON.stringify({
+          storeSlug: fixture.slug,
+          refCode: AFF_CODE,
+          trackingCookies: { fbp: "", fbc: "", ga: "", gcl: "", ttp: "", ttclid: "" },
+          items: [{ handle, variant: "Default", qty: 1 }],
+          customer: { name: "Pembeli Landing", phone: "0813 2222 3333", email: undefined },
+          address: { alamat: "Jl. Merdeka No. 10, RT 01/RW 02", kota: "x", provinsi: "x", kodepos: "40123" },
+          shipping: { label: "SPX", service: "spx", serviceType: "1", destId: 321 },
+          destId: 321,
+          channelCode: "cod",
+        }),
+      }),
+    );
+    const body = (await res.json()) as { ok?: boolean; orderNumber?: string; error?: string };
+    expect(res.status, body.error).toBe(200);
+    const rows = await client<{ code: string; source: string; base_idr: string; commission_idr: string }[]>`
+      select a.code, c.source, c.base_idr::text, c.commission_idr::text
+        from affiliate_commissions c
+        join affiliates a on a.id = c.affiliate_id and a.store_id = c.store_id
+        join orders o on o.id = c.order_id and o.store_id = c.store_id
+       where o.store_id = ${fixture.id} and o.number = ${body.orderNumber ?? ""}
+    `;
+    // No voucher on this path, so the base is the full goods value: 10% of Rp100.000.
+    expect([...rows]).toEqual([{ code: AFF_CODE, source: "link", base_idr: "100000", commission_idr: "10000" }]);
+  });
 });

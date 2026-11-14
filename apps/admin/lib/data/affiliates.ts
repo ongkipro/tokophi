@@ -8,6 +8,7 @@ import { can } from "@/lib/rbac-policy";
 import { affiliateContactView } from "@/lib/affiliate-mask";
 import { affiliateAppUrl } from "@/lib/affiliate-url";
 import { commissionState, type CommissionState } from "@/lib/commission-state";
+import { STORE_TZ } from "@/lib/data/day-bucket";
 
 // Seller panel → Affiliate (Task 9.4, specs/AFFILIATE_SPEC.md). Every read runs under the tenant
 // context (RLS) AND filters on `storeId` explicitly — the WHERE is the rule, the policy is the net.
@@ -24,6 +25,8 @@ export type AffiliateRow = {
   bank: string | null;
   /** True when phone/email/bank above are masked for this viewer (F-A12) — no WhatsApp link then. */
   contactMasked: boolean;
+  /** The raw bank fields for the edit form — ONLY for a viewer with `affiliates:write` (null otherwise, F-A12). */
+  bankParts: { name: string | null; account: string | null; holder: string | null } | null;
   status: AffiliateStatus;
   note: string | null;
   /** Bound to an affiliate account (0125) — the affiliate sees this store's commissions at affiliate.tokophi.com. */
@@ -60,6 +63,9 @@ export type AffiliateProgram = {
   commissions: CommissionRow[];
   overrides: { productId: string; title: string; rateBps: number }[];
   products: { id: string; title: string }[];
+  /** Default range of the commission export (F-A11): the 1st of this month → today, WIB, computed on the
+   *  server so the SSR and client renders agree. */
+  exportRange: { from: string; to: string };
 };
 
 /** Applications waiting for the merchant's yes/no — the sidebar badge on Promo → Affiliate. A pending
@@ -163,6 +169,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
       .limit(1000);
 
     const iso = (d: Date | null) => (d ? d.toISOString() : null);
+    const todayWib = new Intl.DateTimeFormat("sv-SE", { timeZone: STORE_TZ }).format(new Date()); // YYYY-MM-DD
     return {
       storeHost: systemDomainFor(store?.slug ?? ""),
       invites: fullContact && affiliateAppUrl() !== null,
@@ -172,6 +179,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
         code: a.code,
         name: a.name,
         ...affiliateContactView(a, fullContact),
+        bankParts: fullContact ? { name: a.bankName, account: a.bankAccount, holder: a.bankHolder } : null,
         status: a.status,
         note: a.note,
         linked: a.linked,
@@ -197,6 +205,7 @@ export async function getAffiliateProgram(): Promise<AffiliateProgram> {
       })),
       overrides,
       products,
+      exportRange: { from: `${todayWib.slice(0, 8)}01`, to: todayWib },
     };
   });
 }

@@ -28,8 +28,9 @@ export const STATE_MEANING: Record<CommissionState, string> = {
   batal: "Pesanan dibatalkan atau diretur, jadi tidak ada komisi.",
 };
 
-/** The public TokoΦ contact (same default as apps/landing `IDENTITY.email`). */
-export const SUPPORT_EMAIL = "hello@tokophi.com";
+/** Where an affiliate asks for a password reset ("Lupa kata sandi?"). Owner decision 2026-11-14: this address,
+ *  not the landing page's public `IDENTITY.email` — an operator reads it and resets in Super Admin → Affiliate. */
+export const SUPPORT_EMAIL = "ongkiardiansyah@gmail.com";
 
 /** `https://wa.me/?text=…` — WhatsApp's own share link: the affiliate picks the chat; no API, no number. */
 export function waShareUrl(storeName: string, link: string): string {

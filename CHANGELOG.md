@@ -2,6 +2,14 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-14 — Affiliate: landing page, ekspor komisi, ubah data, reset kata sandi oleh tim (AFFILIATE-V11) — PR pending, belum di-merge
+
+- **Pembeli / landing page:** pesanan dari `/lp/<slug>` dan `/promo/<produk>` yang dibuka lewat link affiliate (`?ref=`, 30 hari) sekarang tercatat sebagai komisi affiliate — sama seperti checkout biasa.
+- **Seller:** Promo → Affiliate → Komisi: **Unduh CSV komisi** per rentang tanggal pesanan (hanya owner/admin/advertiser). Tab Affiliate: **Ubah data** affiliate (nama, WhatsApp, email, rekening, catatan) — kode dan komisi tidak berubah.
+- **Halaman `/affiliate` toko** menampilkan komisi standar (mis. 10%) dan kapan komisi bisa dibayar (mis. H+3).
+- **Super Admin → Affiliate:** daftar akun affiliate, **reset kata sandi** (kata sandi sementara tampil sekali, semua sesi dikeluarkan) dan **nonaktifkan / aktifkan** akun. "Lupa kata sandi?" di area affiliate sekarang menyebut bahwa tim TokoΦ bisa meresetnya, dengan kontak `ongkiardiansyah@gmail.com`.
+- Tanpa migrasi.
+
 ## 2026-11-14 — Tampilan program affiliate dirapikan (AFFILIATE-UX) — PR pending, belum di-merge
 
 - **Affiliate (affiliate.tokophi.com):** ringkasan komisi dengan arti tiap status (Siap dibayar / Ditahan / Sudah dibayar) dan "Kapan komisi bisa dicairkan?"; tiap toko aktif punya tombol **Bagikan ke WhatsApp**, **Salin link**, **Salin kode**; status menunggu/ditolak/nonaktif dijelaskan dengan kata; riwayat komisi terbaca di HP; tombol tampilkan kata sandi; "Lupa kata sandi?" menjelaskan jujur bahwa reset belum ada. Menu jadi tab bawah di HP.

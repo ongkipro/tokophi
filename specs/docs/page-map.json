@@ -1645,6 +1645,7 @@
             "apps/admin/lib/plugins/order-hook-position.test.ts",
             "apps/admin/lib/public-guard.test.ts",
             "apps/admin/lib/shipping-quote-mengantar.test.ts",
+            "apps/storefront/src/lib/order-forms-affiliate-ref.test.ts",
             "packages/lib/src/provider-label.test.ts"
           ],
           "whatItIs": "THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment."
@@ -1862,6 +1863,27 @@
       "app": "apps/super-admin",
       "label": "Super Admin (platform control plane)",
       "routes": [
+        {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/affiliate/page.tsx",
+          "clients": [
+            "affiliate-accounts-client.tsx"
+          ],
+          "data": [],
+          "actions": [
+            "affiliate-accounts"
+          ],
+          "gate": [
+            "route:/affiliate"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": true,
+          "tests": [],
+          "whatItIs": "'Akun Affiliate' (ADR 0022, AFFILIATE-PW-RESET interim) — every affiliate account (email, name, stores joined), with reset password (minted once, sessions revoked) and disable / enable; floor admin."
+        },
         {
           "url": "/analitik",
           "kind": "page",
@@ -2842,6 +2864,7 @@
           "gate": [],
           "setHtml": false,
           "tests": [
+            "apps/storefront/src/lib/order-forms-affiliate-ref.test.ts",
             "apps/storefront/src/lib/order-forms-post-kodepos.test.ts",
             "apps/storefront/src/lib/safe-href.test.ts"
           ],
@@ -4094,13 +4117,15 @@
         "module": "affiliates.ts",
         "exports": [
           "createAffiliate",
+          "exportAffiliateCommissionsCsv",
           "getAffiliateProgramEnabled",
           "inviteAffiliateToAccount",
           "markCommissionPaid",
           "saveAffiliateSettings",
           "setAffiliateProgramEnabled",
           "setAffiliateStatus",
-          "setProductAffiliateRate"
+          "setProductAffiliateRate",
+          "updateAffiliate"
         ]
       },
       {
@@ -4560,6 +4585,15 @@
         ]
       },
       {
+        "module": "affiliate-accounts.ts",
+        "exports": [
+          "AFFILIATE_LIST_LIMIT",
+          "listAffiliateAccounts",
+          "resetAffiliatePassword",
+          "setAffiliateDisabled"
+        ]
+      },
+      {
         "module": "comp-invoice.ts",
         "exports": [
           "buildCompInvoice"
@@ -4744,6 +4778,7 @@
       {
         "module": "route-roles.ts",
         "exports": [
+          "AFFILIATE_ACCOUNT_MIN_RANK",
           "ROUTE_RULES",
           "canOpenPath",
           "landingForRole",
@@ -4819,6 +4854,7 @@
           "randomProducts",
           "recentProducts",
           "storeAffiliateEnabled",
+          "storeAffiliateTerms",
           "storeCodEnabled",
           "storeCodPolicy",
           "storeFreeShip",
