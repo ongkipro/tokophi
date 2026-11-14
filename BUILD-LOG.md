@@ -5237,3 +5237,19 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
   tokophi_merge469_test, tokophi_kelola2/_test). Kept: `tokophi`, `tokophi_test`, `tokophi_pre_sync_20261011` (never
   dropped by rule), the paused-branch worktree `~/Projects/tokophi-kelola` + `tokophi_kelola` (a live session still
   runs there; its branch is fully in main), and every older worktree/DB that holds uncommitted or unpushed work.
+
+### [2026-11-14 UTC] — DEPLOY · #471 BUYER-ACCOUNT-P1 live and DORMANT (ADR 0016 accepted)
+- **Executor:** Main Session. Owner: "akun pembeli dulu" (affiliate = phase 2, PRs #424/#430/#431/#455 left open) and
+  "ya, lanjut" after review. Review fixes folded in before merge (`876ead1e`): Seller menus + routes gated on the same
+  `buyerAccountEnabled()` predicate the order API uses (OFF → items hidden, routes 404, saves refused; 5-mutant proof),
+  and `account` added to the CI build matrix (`build · account` green).
+- **Pre-merge checks:** CI six jobs green; production `ACCOUNT_CLAIM_SECRET` and `ACCOUNT_APP_URL` UNSET (checked in the
+  admin/storefront containers, values not printed); journal 0121–0124 stamped 1787600000000–1787600003000 > prod max.
+- **Merged `6592fbae`**; deploy `kylht2m4apsoygd64mwgmrlt`; four surfaces `(healthy)` twice; `seed` Exited 0; 125 migrations
+  (max stamp 1787600003000); `buyer_accounts` = 0. `/checkout/sukses` HTML: the only "Simpan ke Akun" occurrence is a
+  `//` comment inside the inline script — no offer rendered (no `ACCOUNT_APP_URL`). `GET app.tokophi.com/pelanggan/akun`
+  without a session → 307 (login). Quotes unchanged (demo non-COD Mengantar SPX 5700 `codRequote:true`). Logs clean.
+  Disk 32 % before the build → 40 % after.
+- **Not done (owner decisions, ADR 0016):** `account.tokophi.com` DNS + compose service, Google OAuth redirect URI,
+  `ACCOUNT_CLAIM_SECRET` (admin + account), `ACCOUNT_APP_URL` (storefront), `AUTH_SECRET` (account), the UU PDP processing
+  note, retention of revoked buyer sessions.
