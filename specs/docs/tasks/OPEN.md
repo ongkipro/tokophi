@@ -21,7 +21,7 @@ PAY-QRIS-EXPIRY (`specs/docs/TASKS.md`).
 - `feat/autolaris-auto-confirm` — AL-AUTOCONFIRM (AutoLaris auto-confirm via Advice cron + callback fixes (A)/(C), 2026-11-05), uncommitted work saved as a `wip(snapshot)` commit; "review pending".
 - `fix/backup-correctness-2026-10` — R-22 (backup writes `pg_dumpall --globals-only` beside each dump), `wip(snapshot)`; still to be proven by a restore into an empty cluster.
 - `fix/landing-review-r8` — landing review r8 (narrow screenshots, edge-cache plan), 2 commits.
-Everything else (42 branches: superseded affiliate/buyer-account lines, Aug Stage-4 task branches, Astro 7/deps already on `main`) was deleted
+Everything else (60 local branches: 21 merged, 39 superseded — affiliate/buyer-account lines, Aug Stage-4 task branches, Astro 7/deps already on `main`) was deleted
 after `git bundle` archives: `/data/backups/tokophi-worktrees/tokophi-{worktrees,branches}-20261115.bundle` (+ `.heads`; restore with
 `git fetch <bundle> <branch>:<branch>`). `~/Projects/tokophi-kelola` (panel 2) is still in use by another session — left alone.
 
