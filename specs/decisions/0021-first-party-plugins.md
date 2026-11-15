@@ -72,3 +72,10 @@ workspace receiving identical data from both products.
 - **Kelola as core columns behind a flag** — AdsBookCMS tried it (0063–0065) and undid it (0066).
 - **A generic outbox table enqueued inside the order transaction** — unnecessary: the queue is derived
   (`orders LEFT JOIN plugin_kelola_orders`), and a claim statement before each POST gives one sender at a time.
+
+## 5. Notes
+
+- **2026-11-15 — menu location amended (owner: "menu plugin masuk ke sidebar mungkin di bawah tema bukan di
+  pengaturan").** The plugin list moves from Pengaturan → Plugin to a sidebar row **Plugin** directly under
+  **Tema** (`/plugin`), and an enabled plugin contributes its own menu rows as children of that row. Everything
+  else in §2 stands. Design and tasks: `specs/docs/tasks/2026-11-15-plugin-menu-and-crm-followup.md` (PLUG-NAV).
