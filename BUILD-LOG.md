@@ -4735,6 +4735,21 @@ sempurnakan, buat pdf"* · artefact OUTSIDE the repo (owner-submitted): `~/Downl
 - **Guard that caught us:** `packages/lib/src/password.test.ts` file-type census went red on the new `.mdx` and `.conf` types → `.mdx` scanned (MDX compiles to a JS module), `.conf` inert (nginx directives).
 - **Verification on the merged tree:** builds landing/storefront/docs exit 0, admin/super-admin exit 0 (Dockerfile dummy `DATABASE_URL`); `vitest run` 163 files passed / 29 skipped (DB suites skip without a `_test` database), 1452 tests passed; `check:storefront` and `check:landing` 0 errors; `npm run check -w @tokophi/docs` green; `docker build -f apps/docs/Dockerfile .` exit 0; `verify:doc-authority` and `verify:traceability` ok.
 
+### [2026-10-28 14:20 UTC] — DOCS · AGENTS.md split under the 150k-char limit (owner request in chat)
+
+- **Executor:** Main Session. Trigger: Claude Code warned `CLAUDE.md is over the 150.0k-char limit (154.2k chars)`; `CLAUDE.md` is a symlink to `AGENTS.md` (155 917 B), so the global dotfiles file was never the cause.
+- **What moved:** Super Admin, Database (pools/RLS/child-table detail), Billing, Shipping & COD, Promo + per-store codes, Storefront performance, Dashboard & Analitik, Order lifecycle, Store Builder + Landing HTML, Checkout input, Public API, the test-guard rules (`Run`) and the migration-numbering / hand-written-migration bullets. Moved **verbatim** to `specs/docs/rules/{super-admin,database-rls,billing,shipping-cod,promo-vouchers,storefront-perf,dashboard-analytics,order-ledger,store-builder-landing,checkout-validation,public-api,testing-guards,migrations}.md` + `rules/README.md` (index). `AGENTS.md` keeps each heading, a digest of the load-bearing rules and a `→ specs/docs/rules/…` pointer; the multi-agent section, naming, monorepo, seed-is-not-a-migration, conventions, tracking and the docs table stay whole. New docs-table row points at `rules/README.md`.
+- **Files:** `AGENTS.md` (155 917 → 51 355 chars), `specs/docs/rules/*.md` (14 new), `test/agents-md-size.test.ts` (new), `specs/docs/TASKS.md` (Epic 0 line), this entry.
+- **Verification:** every non-blank line of the old `AGENTS.md` is present in the new `AGENTS.md` or in a rules file (script, 1317 lines, 0 lost); `npx vitest run test` → 163 files passed / 29 skipped (DB down, expected); `packages/db/src/doc-counts.test.ts` 18/18 (the `**84 tables · 116 migrations \`0000\`–\`0115\`**` anchor kept verbatim); `node scripts/verify-doc-authority.mjs` ok; size guard proved red against a copy with the limit at 1 000.
+- **Not touched / flagged:** the two guards that read `AGENTS.md` still pass without edits. The multi-agent section's "demo looks dead? run `seed:recent`" advice predates the 2026-10-11 production-copy dev DB — left as written, needs an owner decision. Pre-existing uncommitted blank-line change in `AGENTS.md` (Database blockquote) was folded into this edit. Nothing committed.
+
+### [2026-10-28 UTC] — DOCS · live reference docs stop describing deleted mock-era code (follow-up to the AGENTS.md split)
+
+- **Executor:** Main Session, owner request ("gunakan dotfiles jika diperlukan dan sempurnakan").
+- **Method:** scanned every tracked `*.md` (193) for backticked repo paths that do not exist (79 hits). History files (`CHANGELOG.md`, `BUILD-LOG.md`, `TASKS.md`, `NEXT.md`, audits) describe deleted files truthfully and were left alone; the **live reference docs** were corrected.
+- **Fixed:** `GUIDE.md`, `DATA_MODEL.md`, `ARCHITECTURE.md` — removed the deleted `apps/admin/lib/mock/store.ts`, `apps/super-admin/lib/mock.ts` and the `@tokophi/data` package (`packages/data/src/menu.ts`) as live sources; nav is per-store DB data (`menus`/`menu_items`, Navigasi editor ↔ `apps/storefront/src/data/nav.ts`); admin has no local `components/ui`/formatters (deleted 2026-07-14); `transpilePackages` lists corrected from the real `next.config.ts` files; §4/§5 of `ARCHITECTURE.md` rewritten around `withCurrentTenant`/`withTenant` and `getCatalog(store)`; "Add a product / nav item" recipes now point at the Seller panel and the DB. `SYSTEM_GUIDE.md` → client paths `packages/lib/src/{kiriminaja,autolaris}.ts`; `KIRIMINAJA.md` → `packages/db/scripts/build-area-coords.mjs`, and the N40 evidence file is flagged as living only on unmerged `origin/docs/n40-v62-contract`.
+- **Verification:** every fact above was read from the tree first (`next.config.ts`, `git ls-files`, `nav.ts` header, `catalog.ts` header); `doc-counts.test.ts`, `verify-doc-authority`, full `test/` re-run — see the entry's commit.
+- **Not done / left for the owner:** the deeper mock-era narrative in `DATA_MODEL.md` (entity field lists, `*-mock` shapes) is only bannered as historical, not rewritten — `SCHEMA.md` is the derived truth. The `seed:recent` advice in the multi-agent section still conflicts with the production-copy dev DB.
 ### [2026-11-02 UTC] — HARDENING · repo review items 3a, 5, lint gate, CI audit (branch `chore/hardening-2026-11`, not committed)
 - **Executor:** Main Session (Claude). **Scope:** `specs/docs/tasks/2026-11-02-repo-review-recommendations.md` items 1 (repo half), 3a, 3d, 4 (history scan), 5, 12.
 - **Files:** `apps/admin/package.json`, `apps/super-admin/package.json`, `package-lock.json` (next 16.2.9 → 16.4.3, exact; closes the Next middleware-bypass / Server Actions advisories); `apps/admin/next.config.ts`, `apps/super-admin/next.config.ts` (X-Frame-Options DENY, `frame-ancestors 'none'`, nosniff, Referrer-Policy, Permissions-Policy); `apps/storefront/src/middleware.ts` (nosniff, Referrer-Policy, Permissions-Policy — deliberately no frame deny); `test/security-headers.test.ts` (new); `.github/workflows/ci.yml` (lint gate, advisory `npm audit`); `ops/tokophi-custom-domains.yaml` (`priority: -1`, matches the dedicated host, Traefik 3.7 tie-break); review doc.
@@ -5338,3 +5353,20 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
   had been written in the same second and the check demanded `-gt 0`. Now `-ge 0` (a stat failure still reads as a
   huge age and fails the upper bound). Re-run: exit 0. No probe copy is installed on this machine (`/usr/local/bin`,
   crontab) — the off-box schedule in the script header is still not installed anywhere (no alert channel, STATUS).
+
+### [2026-11-15 12:30 UTC] — DOCS · AGENTS.md split (#421) brought up to date with `main` (owner: "lanjut comit push deploy")
+
+- **Executor:** Main Session. **Why:** `main`'s `AGENTS.md` had grown back to 159 476 chars (over Claude Code's 150k
+  limit) while #421 sat `CONFLICTING` since 2026-10-28; 13 commits on `main` had edited `AGENTS.md` meanwhile
+  (Mengantar, ADR 0019/0020/0021/0022, PAY-RETRY, buyer account) and both sides created `specs/docs/rules/shipping-cod.md`.
+- **Resolution (merge of `origin/main`, no rebase/force-push):** `AGENTS.md` keeps #421's digest and gains a one-line
+  digest of each `main` change (apps tree incl. `affiliate/` + `docs/`, counts 99 tables · 126 migrations
+  `0000`–`0125`, billing Rp178.500 / Rp1.713.600 / `first_invoice`, Mengantar bullet, Akun TokoΦ, `pay/retry`). The
+  verbatim long forms went to `rules/billing.md`, `rules/database-rls.md`, `rules/public-api.md` (incl. the full
+  `pay/retry` bullet). `rules/shipping-cod.md` = #421's moved body, then `main`'s Mengantar section unchanged.
+  `BUILD-LOG.md`: both sides kept.
+- **Files:** `AGENTS.md` (159 476 on main → 55 446 chars), `BUILD-LOG.md`, `specs/docs/rules/{billing,database-rls,public-api,shipping-cod}.md`.
+- **Verification:** every non-blank line of `main`'s `AGENTS.md` is present in the new `AGENTS.md` or a rules file
+  except the 2 lines deliberately rewritten (apps-tree `account/` line, Mengantar digest) — script, 1 426 lines.
+  `npx vitest run` 221 files passed / 47 skipped (DB suites skipped: no `DATABASE_URL` in the worktree), incl.
+  `test/agents-md-size.test.ts` and `packages/db/src/doc-counts.test.ts`. Docs only — no deploy needed.

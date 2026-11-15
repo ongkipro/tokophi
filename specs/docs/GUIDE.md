@@ -50,19 +50,17 @@ tokophi/
 └─ packages/
    ├─ ui/       @tokophi/ui       shared shadcn-on-Base-UI components + cn + Tailwind tokens
    ├─ lib/      @tokophi/lib      IDR/num/pct/timeAgo formatters + colours (colors.ts, ADR 0009)
-   ├─ data/     @tokophi/data     canonical MAIN_MENU / FOOTER_MENU (shared nav source)
-   ├─ db/       @tokophi/db       Drizzle schema + client + migrations (server-only)
-   └─ sections/ @tokophi/sections Store Builder section registry (ADR 0009) — shared by the
-                                  admin Puck config and the Astro SectionRenderer
+   ├─ sections/ @tokophi/sections Store Builder section registry (ADR 0009) — shared by the admin Puck config and the Astro SectionRenderer
+   └─ db/       @tokophi/db       Drizzle schema + client + migrations (server-only)
 ```
 
 ### `apps/admin/`
 - `app/(admin)/` — route group. `page.tsx` = Dashboard (`/`). Sections: pesanan, produk(+kategori/inventori/pembelian), pelanggan(+segmen/ulasan), crm, diskon, analitik, pemasaran, halaman(+baru), blog(+baru), navigasi, pengaturan.
 - `components/admin/` — shell (`sidebar`, `topbar`, `nav-links`, `brand`) + shared bits (`page-header`, `order-status`, `kpi-card`, `*-chart`, …) + per-screen subfolders.
-- `components/ui/` — **local** shadcn primitives (on Base UI). *(De-dup vs `@tokophi/ui` is backlog.)*
-- `lib/mock/store.ts` — deterministic seeded fixtures, anchored `TODAY=2026-06-30`. **Single source of demo data.**
-- `lib/data/` — thin selectors over the mock (`getSummary/getSeries/…`). **Swap bodies for API later; keep signatures.**
-- `lib/format.ts` — local `IDR()/num()/pct()/timeAgo()`. `lib/nav.ts` — admin sidebar `NAV_GROUPS` + `STORES`.
+- *(no local `components/ui/` — deleted 2026-07-14; import shared primitives from `@tokophi/ui`.)*
+- `lib/types/domain.ts` — the admin's domain VIEW types. *(`lib/mock/store.ts` was deleted 2026-09-09, Task 6.7; demo data is `packages/db/src/seed.ts`.)*
+- `lib/data/` — server-only reads against Postgres, each wrapped in `withCurrentTenant` (see `AGENTS.md` → Database).
+- `@tokophi/lib/format` — shared `IDR()/num()/pct()/timeAgo()` (admin's local `lib/format.ts` is gone). `lib/nav.ts` — admin sidebar `NAV_GROUPS` + `STORES`.
 - `CLAUDE.md` / `AGENTS.md` — working agreement + the "this Next 16 has breaking changes, read `node_modules/next/dist/docs/`" note.
 
 ### `apps/super-admin/`
@@ -72,12 +70,11 @@ tokophi/
 - `src/pages/` — `index.astro`, `produk/[handle].astro`, `kategori/[handle].astro`, `blog/`, `keranjang.astro`, `checkout.astro`, `checkout/sukses.astro`, `akun.astro`, `kontak.astro`.
 - `src/components/` — `Header.astro`, `Footer.astro`, `ProductCard.astro`.
 - `src/layouts/Layout.astro`, `src/styles/global.css`.
-- `src/data/catalog.ts` — the shopper mock (STORE, COLLECTIONS, 14 PRODUCTS, helpers). `src/data/nav.ts` — `MAIN_NAV` derived from the shared `@tokophi/data` menu.
+- `src/data/catalog.ts` — `getCatalog(store)`, the per-request, per-store catalog read (DB, memoised). `src/data/nav.ts` — `MAIN_NAV` read from the store's own `menus`/`menu_items`.
 
 ### `packages/`
 - `ui/src/components/ui/*.tsx` (exported as `@tokophi/ui/<name>`), `ui/src/lib/utils.ts` (`cn`), `ui/src/styles/globals.css` (`@tokophi/ui/styles.css`).
 - `lib/src/format.ts` (`@tokophi/lib/format`).
-- `data/src/menu.ts` (`@tokophi/data/menu`) + `data/src/index.ts` (re-export).
 
 ---
 
@@ -122,18 +119,15 @@ tokophi/
 
 ### Add an admin screen
 1. Create `app/(admin)/<route>/page.tsx` (add `"use client"` if interactive).
-2. Add mock to `lib/mock/store.ts` and (optionally) selectors in `lib/data/`.
+2. Add the read to `lib/data/<entity>.ts` (inside `withCurrentTenant`) and its view type to `lib/types/domain.ts`.
 3. Register it in `lib/nav.ts` (`NAV_GROUPS`).
 4. Build + verify console clean + screenshot (Playwright renders charts correctly; `chrome --headless --virtual-time-budget` mis-sizes Recharts).
 
-### Add a product to the mock
-- **Storefront:** append to `PRODUCTS` in `apps/storefront/src/data/catalog.ts` with `{handle, name, price, category, categoryHandle, image, description, sizes, …}`. Drop the image at `public/products/<handle>.webp`; the 5-image gallery (`productImages`) expects `<handle>-2.webp … -5.webp`.
-- **Admin:** add to the products fixture in `apps/admin/lib/mock/store.ts` (keep it deterministic — no random in module scope beyond the seeded PRNG). Image at `apps/admin/public/products/<slug>.webp`.
+### Add a product
+Products are database rows now — there is no fixture to edit. A merchant adds one in the Seller panel (Produk editor, images upload to `apps/admin/public/uploads/`); the storefront reads it per request through `getCatalog(store)` (`apps/storefront/src/data/catalog.ts`). Demo data for a fresh database lives in `packages/db/src/seed.ts` (the local dev DB is a production copy since 2026-10-11 — see `AGENTS.md`; do not re-seed it).
 
-### Add / edit a nav menu item (updates BOTH surfaces)
-Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_MENU` for footer). A `MenuItem` is `{ id, label, type, href, children? }` with `type ∈ beranda|koleksi|produk|halaman|blog|url`.
-- The admin menu builder (`/navigasi`) derives `MENUS` via `toNavItems()` in `lib/mock/store.ts` (`label→title`, `href→target`).
-- The storefront header/footer derive `MAIN_NAV` in `src/data/nav.ts` (parents with `children` become dropdown triggers).
+### Add / edit a nav menu item
+Nav is **per store, in the database** (`menus` ⟶ `menu_items`). A merchant edits it in the Seller **Navigasi** editor (`apps/admin/lib/actions/menus.ts` writes, `lib/data/menus.ts` reads). The storefront header/footer read the same rows (`apps/storefront/src/data/nav.ts`); a store with no menu rows gets a fallback derived from its own collections. `@tokophi/data` / `packages/data/src/menu.ts` no longer exist.
 - Rebuild both apps → they stay in sync. (Live admin-UI editing that persists to the storefront is M3 / backend.)
 
 ### Add a storefront page or collection
@@ -157,11 +151,10 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 
 | Edit… | …and who picks it up |
 |---|---|
-| `packages/ui/src/**` | **super-admin** (via `@tokophi/ui/<component>`). admin has its own copy — mirror the change into `apps/admin/components/ui/` if it must apply there too. |
-| `packages/lib/src/format.ts` | **super-admin** + **storefront** (`@tokophi/lib/format`). admin uses its own `lib/format.ts`. |
-| `packages/data/src/menu.ts` | **admin** (menu builder) + **storefront** (header/footer). |
+| `packages/ui/src/**` | **admin** and **super-admin** (via `@tokophi/ui/<component>`). |
+| `packages/lib/src/format.ts` | **admin**, **super-admin** + **storefront** (`@tokophi/lib/format`). |
 
-- Next apps import package **source** directly, so packages must stay in each app's `transpilePackages` (admin → `@tokophi/data`; super-admin → `@tokophi/ui`, `@tokophi/lib`). Astro resolves the workspace symlink with no config.
+- Next apps import package **source** directly, so packages must stay in each app's `transpilePackages` (admin → `@tokophi/db`, `@tokophi/lib`, `@tokophi/sections`, `@tokophi/ui`; super-admin → `@tokophi/ui`, `@tokophi/lib`, `@tokophi/db`). Astro resolves the workspace symlink with no config.
 - Adding a new export to a package: update the package's `package.json` `exports` map, then import as `@tokophi/<pkg>/<subpath>`.
 
 ---
@@ -183,7 +176,7 @@ Edit **one file**: `packages/data/src/menu.ts` (`MAIN_MENU` for header, `FOOTER_
 `productImages(product)` returns `[base, base-2, …, base-5]` (5 AI-generated shots). The PDP (`produk/[handle].astro`) renders the main image + thumbnails from it.
 
 ### Nav
-`Header.astro` + `Footer.astro` consume `MAIN_NAV` (from `src/data/nav.ts`, itself derived from `@tokophi/data`). Edit menus in `packages/data/src/menu.ts`, not here.
+`Header.astro` + `Footer.astro` consume `MAIN_NAV` (from `src/data/nav.ts`, which reads the store's own `menus`/`menu_items`). Menus are edited by the merchant in Seller → Navigasi, not in code.
 
 ---
 

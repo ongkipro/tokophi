@@ -24,7 +24,7 @@ TokoΦ is a Shopify-style commerce SaaS for Indonesia (Bahasa Indonesia UI, IDR)
 | **super-admin** | `@tokophi/super-admin` | Next.js 16 | `:3001` | **We (the platform)** — cross-tenant control plane: all stores, plans, billing. |
 | **storefront** | `@tokophi/storefront` | Astro 5 + Tailwind v4 | `:4327` | A **shopper** — one **SSR multi-tenant** storefront (resolves store by `Host`), rendering each store's chosen section templates (browse, cart, checkout, blog, account, contact). |
 
-Started as **UI/UX with mock data**; the **local backend is wired** on PostgreSQL (see §9) — all 3 surfaces read + all 12 admin editors write + local auth/RBAC/RLS enforcing. (`lib/mock/store.ts` now only serves as the deterministic seed-parity source.)
+Started as **UI/UX with mock data**; the **local backend is wired** on PostgreSQL (see §9) — all surfaces read + all admin editors write + local auth/RBAC/RLS enforcing. (`lib/mock/store.ts` was deleted 2026-09-09; demo data is `packages/db/src/seed.ts`.)
 
 ```mermaid
 flowchart LR
@@ -61,22 +61,21 @@ tokophi/
 └─ packages/
    ├─ ui/            @tokophi/ui    shadcn-on-Base-UI components + cn + Tailwind tokens
    ├─ lib/           @tokophi/lib   IDR/num/pct/timeAgo formatters (id-ID)
-   ├─ data/          @tokophi/data  canonical MAIN_MENU / FOOTER_MENU (shared source of truth)
+   ├─ sections/      @tokophi/sections  Store Builder section registry (ADR 0009) — shared by the admin Puck config and the Astro SectionRenderer
    └─ db/            @tokophi/db    Drizzle schema + client + versioned migrations (local Postgres; VPS-target)
 ```
 
 Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see §9 + ADR 0007.
 
-### The three shared packages
+### The shared packages
 
 | Package | Exports | Provides | Consumed by |
 |---|---|---|---|
 | **`@tokophi/ui`** | `./styles.css` (Tailwind v4 tokens), `./lib/utils` (`cn`), `./*` (each component, e.g. `@tokophi/ui/button`) | shadcn/ui primitives built on **Base UI** (`@base-ui/react`), Recharts, lucide, cva | **super-admin** (Tailwind picks the components up via `@source` in its `globals.css`). |
 | **`@tokophi/lib`** | `.` (index), `./format` | Money/number formatters: `IDR()`, `num()`, `pct()`, `timeAgo()` | **super-admin** (`@tokophi/lib/format`), **storefront** (`IDR` in Astro pages). |
-| **`@tokophi/data`** | `.` (re-exports menu), `./menu` | `MAIN_MENU`, `FOOTER_MENU`, `MenuItem`/`MenuItemType` — the **single source of truth for navigation** | **admin** (menu builder), **storefront** (header/footer nav). |
 | **`@tokophi/db`** | `.`, `./schema`, `./client` | Drizzle **schema** (70 tables, snake_case, money=`bigint` IDR), `db` client singleton, inferred types, versioned migrations, seed/reset. **Server-only** (`postgres` in `serverExternalPackages`). | **super-admin** + **admin** (13 modules via `lib/data/*` — live). **storefront** next. |
 
-> **admin is a partial migrant.** admin still keeps its **own** local `components/ui` + `lib` (formatters, utils) — de-duping against `@tokophi/ui`/`@tokophi/lib` is a tracked backlog task. It has, however, already adopted the shared **data** package (`@tokophi/data` is in admin's `transpilePackages`). So today: super-admin + storefront consume ui/lib/data; admin consumes only data (plus its local copies of the rest).
+> **The de-dup is done**: `apps/admin/components/ui` and its local formatters were deleted (2026-07-14); admin imports `@tokophi/ui` and `@tokophi/lib`. `apps/admin/lib` stays app-local on purpose (tenant/RBAC/data code). The former `@tokophi/data` package is gone — nav is per-tenant DB data (§5). The tree above omits `apps/landing` and `apps/docs`; see `AGENTS.md` → Monorepo for the four live surfaces.
 
 ---
 
@@ -85,55 +84,35 @@ Plus a root **`docker-compose.yml`** (local PostgreSQL 16, port `5433`) — see 
 Two different mechanisms, because Next and Astro handle workspace TypeScript sources differently:
 
 - **Next.js apps (admin, super-admin)** import raw `.ts`/`.tsx` from the workspace packages, so those packages must be listed in `transpilePackages` (Next won't transpile `node_modules` by default):
-  - `apps/admin/next.config.ts` → `transpilePackages: ["@tokophi/data"]`
-  - `apps/super-admin/next.config.ts` → `transpilePackages: ["@tokophi/ui", "@tokophi/lib"]`
-- **Astro storefront** resolves the workspace symlink directly — Astro/Vite compiles the package's TypeScript source with no extra config. `apps/storefront/src/data/nav.ts` simply `import`s from `@tokophi/data/menu`.
-  - Note: storefront's `package.json` currently declares only `@tokophi/lib` as a dep but still imports `@tokophi/data`; it works because npm workspaces symlink all packages under `node_modules/@tokophi/*`. Add the explicit dep if you ever publish/prune.
+  - `apps/admin/next.config.ts` → `transpilePackages: ["@tokophi/db", "@tokophi/lib", "@tokophi/sections", "@tokophi/ui"]`
+  - `apps/super-admin/next.config.ts` → `transpilePackages: ["@tokophi/ui", "@tokophi/lib", "@tokophi/db"]`
+- **Astro storefront** resolves the workspace symlink directly — Astro/Vite compiles the package's TypeScript source with no extra config. `apps/storefront/src/data/nav.ts` reads the store's own `menus`/`menu_items` through `@tokophi/db`.
 - **Tailwind v4** is config-less; each consumer's `globals.css` uses `@source` / `@import` to pull the shared component classes and token layer from `@tokophi/ui`.
 
 ---
 
 ## 4. The data-layer seam (most important idea)
 
-Screens NEVER import raw storage. They call **`lib/data/*`** functions that today read the mock and tomorrow call an API/DB — **same signatures**, so the swap is mechanical.
+Screens NEVER import raw storage. They call **`lib/data/*`** (reads) and **`lib/actions/*`** (writes). The seam this section was written to protect has been used: the bodies are Postgres queries now and the components did not change.
 
 ```
-component ─▶ apps/admin/lib/data/dashboard.ts (getSummary, getSeries, getTopProducts, getChannels, …)
-                    │  today:                         later (M3):
-                    └▶ apps/admin/lib/mock/store.ts ──▶ swap body → Postgres query / server action / route handler
+component ─▶ apps/admin/lib/data/<entity>.ts ─▶ withCurrentTenant(async (db, storeId) => …) ─▶ Postgres (RLS, role tokophi_app)
+component ─▶ apps/admin/lib/actions/<entity>.ts ("use server") ─▶ requireCapability ─▶ withTenant(storeId, …)
 ```
 
-- `lib/mock/store.ts` is the **single source of demo data** for admin (deterministic — see §5).
-- `lib/data/*` is a thin selector layer that derives view models (e.g. range resolution, KPI deltas, channel weights) from the mock. Component props stay identical when the body changes.
-- Entity list screens currently read some mock arrays directly (`PAGES`, `ORDERS`, `MENUS`, …) for brevity; the M3 pattern is to introduce `getOrders()/getProducts()/…` wrappers and switch imports, keeping props the same.
-- The **storefront** has its own equivalent seam: `apps/storefront/src/data/catalog.ts` (the shopper-facing mock) with helper selectors (`bestsellers`, `byCollection`, `findProduct`, `productImages`).
-
-### How M3 swaps bodies
-1. Stand up the VPS Postgres; model tables from [`SCHEMA.md`](SCHEMA.md) / [`DATA_MODEL.md`](DATA_MODEL.md); enable RLS keyed on `store_id`.
-2. Replace each `lib/data/*` function body with a query (server action / route handler). **Component code unchanged.**
-3. Storefront reads published data via a read API or a static build per deploy.
+- `lib/data/*` returns flat **view shapes** (types in `apps/admin/lib/types/domain.ts`), so a component's props are independent of the table layout. The tenant/RLS and RBAC rules every new read or write must follow are in `AGENTS.md` → Database and `specs/docs/rules/database-rls.md`.
+- The **storefront** has its own seam: `apps/storefront/src/data/catalog.ts` → `getCatalog(store)`, per request and per store (the store comes from the `Host` header), memoised with a short TTL. Nothing there may run at module scope or build time — `astro build` must stay DB-free.
+- Demo data for a fresh database is `packages/db/src/seed.ts`; the old `lib/mock/store.ts` was deleted 2026-09-09 (Task 6.7). Production is self-hosted Postgres on the VPS (`PROD_PLAN.md`, `DEPLOY.md`).
 
 ---
 
 ## 5. Shared-source pattern (single source of truth)
 
-Beyond the seam, some data must stay **identical across surfaces**. The pattern: put the canonical definition in `@tokophi/data`; each surface derives its own shape from it, so they can never drift.
+Some data must stay **identical across surfaces**. The pattern: one canonical definition in a shared package, and each surface derives its own shape from it, so they cannot drift.
 
-**Nav is the first shared source.** `packages/data/src/menu.ts` defines `MAIN_MENU` + `FOOTER_MENU` (typed `MenuItem[]`). Both surfaces derive from it:
-
-```mermaid
-flowchart TD
-  Src["@tokophi/data/menu<br/>MAIN_MENU + FOOTER_MENU"]
-  Src -->|toNavItems label to title, href to target| AdminMENUS["admin lib/mock/store.ts<br/>MENUS (menu builder screen)"]
-  Src -->|map to NavItem| StoreNav["storefront src/data/nav.ts<br/>MAIN_NAV (Header + Footer)"]
-  AdminMENUS --> Navigasi["/navigasi admin screen"]
-  StoreNav --> Header["Header.astro / Footer.astro"]
-```
-
-- admin's `MENUS` are built via `toNavItems(MAIN_MENU)` (maps `label→title`, `href→target`, recursing children) in `lib/mock/store.ts`.
-- storefront's `MAIN_NAV` maps `MAIN_MENU` into `{label, href, children}` (parents with children become dropdown triggers, `href` undefined).
-- Edit `packages/data/src/menu.ts` once → both the admin menu builder and the storefront header/footer update on rebuild. (Live "edit in admin UI → storefront" still needs the backend to persist changes; that's M3.)
-- **Expandable:** the catalog is the next candidate to promote into `@tokophi/data` (currently duplicated in `apps/storefront/src/data/catalog.ts` vs admin's mock) — tracked in [`TASKS.md`](TASKS.md).
+- **Nav** used to be the first shared source (`@tokophi/data` → `MAIN_MENU`/`FOOTER_MENU`). That package was **deleted**: nav is now per-tenant data — the store's own `menus`/`menu_items` rows, written by the Seller Navigasi editor (`apps/admin/lib/actions/menus.ts`) and read by the storefront (`apps/storefront/src/data/nav.ts`, falling back to a list derived from the store's own collections when it has none).
+- **Catalog and pricing** are single-sourced in the database; the storefront and the order API both read `product_variants`, never a client-supplied price.
+- Cross-surface constants live in `@tokophi/lib`: catalog ids (`tracking-ids.ts`), billing (`billing.ts`), payment fees (`payment-fees.ts`), couriers (`couriers.ts`), validation (`validate.ts`). A second copy of any of them is how the weaker one survives a fix — see `AGENTS.md`.
 
 ---
 
