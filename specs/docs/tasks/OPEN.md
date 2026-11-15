@@ -9,30 +9,18 @@ This file is a navigation handoff. It is not a second task board.
 
 ## ▶ Resume here — 2026-11-13
 
-Production: dedicated host since 2026-11-01, release `5efd052b` (2026-11-14: #476 affiliate programme + #477 UI polish + #479 V11 — **affiliate area OPEN**, programme on for the demo store only; #473/#471 buyer account, dormant — BUILD-LOG 2026-11-14 09:15; on top of #469 plugins, #468 pricing, #465 PAY-RETRY, #466 store-level provider), probe green — `STATUS.md`. Deploys are
+Production: dedicated host since 2026-11-01, release `fc843b29` (2026-11-15: #481 FK indexes, migration `0126` — 127 migrations), before it `5efd052b` (2026-11-14: #476 affiliate programme + #477 UI polish + #479 V11 — **affiliate area OPEN**, programme on for the demo store only; #473/#471 buyer account, dormant — BUILD-LOG 2026-11-14 09:15; on top of #469 plugins, #468 pricing, #465 PAY-RETRY, #466 store-level provider), probe green — `STATUS.md`. Deploys are
 MANUAL on this host (`DEPLOY.md` step 2). **Mengantar (ADR 0018) is live for the demo store only** (owner-attached
 account, non-COD); every other store waits for Mengantar's production Partner origin + IP allow-list (O2).
 Next on that path: the first real Mengantar booking + cancel (test order `PHI-555925447U5H`, unpaid), then
 PAY-QRIS-EXPIRY (`specs/docs/TASKS.md`).
 
-**Open PRs (merging is owner-gated and serialised; listed 2026-11-13 with `gh pr list`):**
+**Open PRs: none** after the 2026-11-15 sweep (`gh pr list`). Merged: #421 (AGENTS.md split, brought up to
+date), #481 (port of #426 — FK indexes as `0126`). Closed as superseded, with a comment on each: #426 (→ #481),
+#418 (main gates CRM per store), #385 (old-host `watch_paths`; deploys are manual now), #396 (README rewritten
+2026-09-14), #423 and #456 (history backfilled into `BUILD-LOG.md`; OUT-1028 resolved by the cutover). #424,
+#430, #431, #455 were closed earlier — their affiliate half became AFFILIATE-P2, the buyer half BUYER-ACCOUNT-P1.
 
-| PR | Branch | Base | What |
-|---|---|---|---|
-| #456 | `docs/record-deploy-428-429` | `main` | docs(release): record the #428/#429 production deploys |
-| #455 | `test/affiliate-gaps` | `fix/affiliate-audit` | test(affiliate): close the audit's two gaps — order-route wiring and the /affiliate form |
-| #431 | `fix/affiliate-audit` | `feat/accounts-consolidated` | fix(affiliate): validate ids and input sizes in Seller actions, keep commission math total; first tests for the actions |
-| #430 | `feat/affiliate-visibility` | `feat/accounts-consolidated` | feat(admin): affiliate applicant badge in the sidebar + commission on every order |
-| #426 | `feat/fk-indexes-main` | `main` | feat(db): index every foreign key (0116) + catalog guard |
-| #424 | `feat/accounts-consolidated` | `main` | feat: consolidate store affiliate (0116) and buyer account (0117–0121) onto main |
-| #423 | `docs/outage-2026-10-28` | `main` | docs(ops): production outage 2026-10-28 — Task OUT-1028 + diagnosis |
-| #421 | `docs/split-agents-md` | `main` | docs: split AGENTS.md under Claude Code's 150k limit + fix stale reference docs |
-| #418 | `feat/hide-crm-prod` | `main` | feat(admin): hide CRM in production until it ships |
-| #396 | `docs/readme-clean` | `main` | docs(readme): clean front door — identity, authority links, run steps |
-| #385 | `docs/deploy-watchpaths` | `main` | docs(deploy): a docs-only merge does not deploy — watch_paths, not a lost webhook |
-
-- 🔴 **Migration clash:** `main` already shipped `0116_mengantar_shipping`; #424 and #426 both use `0116`.
-  Each renumbers AND re-stamps before merge (`specs/docs/rules/migrations.md`). Merge #424 before #430/#431.
 - **Store affiliate programme → AFFILIATE-P2 (2026-11-14, ADR 0022, its own PR on `feat/affiliate-p2`).** The
   affiliate half of #424/#430/#431/#455 is ported onto `main` with the owner's changed identity (affiliates get
   their OWN accounts at `affiliate.tokophi.com`, not the buyer account), as migration `0125`. The 2026-10-29

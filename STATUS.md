@@ -1,6 +1,6 @@
 # Status — tokophi
 
-Updated: 2026-11-06
+Updated: 2026-11-15
 Status: Active
 State: VERIFIED
 Review-Risk: R2
@@ -35,31 +35,29 @@ Use `BLOCKED` only as an interruption state. Record the blocker and exact state 
 a dedicated Vultr host** (Singapore, 2 vCPU / 4 GB, Ubuntu 24.04, Coolify 4.5.3) — runbook
 `specs/docs/DEPLOY.md`, bootstrap history `specs/docs/tasks/2026-11-01-dedicated-vps-bootstrap.md`;
 host identifiers are device-local (SSH alias `tokophi-new-ops`). The old box `volumdev` is retired.
-Postgres 16 with **117 migrations (`0000`–`0116`)**, equal on the repo journal and production
-(BUILD-LOG 2026-11-05); the table count is guarded by `packages/db/src/doc-counts.test.ts`.
+Postgres 16 with **127 migrations (`0000`–`0126`)**, equal on the repo journal and production
+(BUILD-LOG 2026-11-15); the table count is guarded by `packages/db/src/doc-counts.test.ts`.
 ⚠️ A merge to `main` deploys nothing on this host — the deploy is triggered by hand (`DEPLOY.md` step 2).
 
-**Release on production: `0e4d950a` (PR #451, storefront redesign C)**, deployed by hand 2026-11-05
-12:18 UTC — `RELEASE.md`. Followed by a data-only run the same day (monochrome brand reset, 3 stores,
-backup table `ops_backup.store_theme_20261105`). `main` after it is docs-only.
+**Release on production: `fc843b29` (PR #481, FK lookup indexes `0126`)**, deployed by hand 2026-11-15
+~06:57 UTC — `RELEASE.md` (lists the releases since `0e4d950a`: Mengantar for the demo store, store-level
+shipping provider, Bayar ulang, pricing ADR 0020, Kelola plugin, buyer account (dormant), affiliate programme).
 
-**Why `VERIFIED`:** `ops/tokophi-probe.sh` run off-box 2026-11-06 ~02:45 WIB (2026-11-05 19:45 UTC)
-with `TOKOPHI_SSH_TARGET=tokophi-new-ops` — landing 200 · app/login 200 · rich 307 · toko 200 ·
-`batiknusantara.tokophi.id` 200 · `db_ongkir` search 200 with rows · ssh OK · disk 42 % / 52 GB free ·
-L1 watchdog heartbeat 41 s; exit 0.
+**Why `VERIFIED`:** `ops/tokophi-probe.sh` run off-box 2026-11-15 06:58 UTC with
+`TOKOPHI_SSH_TARGET=tokophi-new-ops` — landing 200 · app/login 200 · rich 307 · toko 200 ·
+`batiknusantara.tokophi.id` 200 · `db_ongkir` search 200 with rows · ssh OK · disk 39 % / 54 GB free ·
+L1 watchdog heartbeat 45 s; exit 0.
 
-**Mengantar (Partner API) is shipped but DORMANT:** `MENGANTAR_ENV` is unset on production and the
-shipping switch stays on KiriminAja. Owner-gated prerequisites: the Partner API production origin, the
-dedicated host's IP on Mengantar's allow-list, and Terms/Privacy URLs for the consent line. The area
-import (`npm run load:mengantar-areas -w @tokophi/db`) has not run on production.
+**Mengantar (Partner API) is live for the demo store only** (since 2026-11-12, owner-attached account,
+non-COD; ADR 0018/0019): the provider is per store (Super Admin or a signup code), COD never goes via
+Mengantar, every other store stays on KiriminAja. Registering further stores waits on the owner-gated
+prerequisites (Partner API production origin, the host IP on Mengantar's allow-list) — `OPEN.md`.
 
 ## Active work
 
-No code task active (2026-11-06). Open PRs: #421 (AGENTS.md split, docs), #424 (affiliate + buyer
-account), #426 (FK indexes), #428 (auth hardening), #429 (media paging), #430/#431 (stacked on #424).
-⚠️ #424 and #426 both carry a `0116_*` migration while `main` already shipped `0116_mengantar_shipping`
-— each must renumber AND re-stamp before merge (`specs/docs/rules/migrations.md`). Handoff:
-`specs/docs/tasks/OPEN.md`.
+No code task active (2026-11-15). No open PRs after the 2026-11-15 sweep (BUILD-LOG 2026-11-15 07:05).
+Waiting on the owner: `BUYER-ACCOUNT-ENABLE` (Google OAuth client, PDP text) and the affiliate follow-ups
+in `specs/docs/TASKS.md`. Handoff: `specs/docs/tasks/OPEN.md`.
 
 ## Blockers
 
