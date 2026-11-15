@@ -24,6 +24,8 @@ Everything else (60 local branches: 21 merged, 39 superseded — affiliate/buyer
 after `git bundle` archives: `/data/backups/tokophi-worktrees/tokophi-{worktrees,branches}-20261115.bundle` (+ `.heads`; restore with
 `git fetch <bundle> <branch>:<branch>`). `~/Projects/tokophi-kelola` (panel 2) is still in use by another session — left alone.
 
+🔴 **R2 offsite backup is DOWN since 2026-11-15 ~08:00 UTC** — Cloudflare answers 401 to the unchanged credential (BUILD-LOG 2026-11-15 09:05). Owner: check/re-mint the R2 token, update Coolify + `secrets-env`, restart `backup-offsite`.
+
 **Open PRs: none** after the 2026-11-15 sweep (`gh pr list`). Merged: #421 (AGENTS.md split, brought up to
 date), #481 (port of #426 — FK indexes as `0126`). Closed as superseded, with a comment on each: #426 (→ #481),
 #418 (main gates CRM per store), #385 (old-host `watch_paths`; deploys are manual now), #396 (README rewritten
