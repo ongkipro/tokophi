@@ -1,11 +1,11 @@
 # Release Manifest — tokophi
 
-Release-ID: 0e4d950a-pr451
-Base: 0e4d950a4288e196ff3edc608a4e689b73aa9341
+Release-ID: fc843b29-pr481
+Base: fc843b297ff77ab0514062b60d4f68ed2b9dbc03
 Environment: production
 Declared-Risk: R2
-Rollback-Ref: 14bf5d43fc1fc9854199831e6b345427eb01b50a
-Rollback-Command: Coolify (dedicated host) → application tokophi → Deployments → redeploy commit 14bf5d43 (PR #448; its image is retained on the host), or `git revert -m 1 0e4d950a` + push to `main` and then trigger the deploy BY HAND — a merge does not deploy on this host (specs/docs/DEPLOY.md step 2)
+Rollback-Ref: 5efd052bb60e3fde6f438db119032478389e276a
+Rollback-Command: Coolify (dedicated host) → application tokophi → Deployments → redeploy commit 5efd052b (PR #479; image retained, `docker_images_to_keep = 2`). `0126` is additive (indexes only) and needs no down-migration — the old code runs unchanged on top of it. Or `git revert -m 1 fc843b29` → PR → merge → trigger the deploy BY HAND (specs/docs/DEPLOY.md step 2)
 Backup-Proof: NOT_REQUIRED
 Status: DEPLOYED
 
@@ -20,7 +20,24 @@ This file defines the current release boundary. It is repository truth for relea
 - `Backup-Proof` is `NOT_REQUIRED` unless migration risk requires a structured `backup://`, `snapshot://`, or artifact reference.
 - Set `Status: READY` only after the release scope is frozen for production gating.
 
-## This release — `0e4d950a` (PR #451, storefront redesign C; deployed by hand 2026-11-05 11:59 → 12:18 UTC)
+## This release — `fc843b29` (PR #481, DB-FK-INDEX; deployed by hand 2026-11-15 06:35 → ~06:57 UTC)
+
+- **Scope:** migration `0126_fk_lookup_indexes` — 70 × `create index if not exists` on foreign-key columns
+  that had no leading index (port of #426). Additive only: no row read, written or deleted. Also carries the
+  docs-only #421 (AGENTS.md split). Deployment `v0qatapqc8zc23xmf5qvrqxu`.
+- **Why R2:** a production migration (SHARE lock per table during `migrate`, milliseconds at these sizes).
+  `Backup-Proof: NOT_REQUIRED` — additive DDL, nothing to restore if reverted.
+- **Verified:** six web containers (admin, super-admin, storefront, landing, account, affiliate) `(healthy)`
+  on `fc843b29` on two polls; `migrate` and `seed` exited 0; production `__drizzle_migrations` = **127**,
+  max stamp `1787600005000`; unindexed-FK query → **0**; invalid indexes → 0; `ops/tokophi-probe.sh` exit 0;
+  live shipping quotes equal to the pre-deploy baseline (3 cases); admin/storefront/affiliate logs 0 errors
+  in the first 5 min; disk 39 %.
+- **Releases between `0e4d950a` and this one** (all on the dedicated host, each recorded in `BUILD-LOG.md`):
+  #428/#429 (`f6ba56e8`, 2026-11-06) · Mengantar own account + area bridge (2026-11-12) · #460/#462
+  (2026-11-13) · #464/#465/#466 (2026-11-13) · #468/#469 (2026-11-13) · #471, #473 (2026-11-14) · #476/#477
+  (`7125fb14`) · #479 (`5efd052b`, 2026-11-14).
+
+## Earlier release — `0e4d950a` (PR #451, storefront redesign C; deployed by hand 2026-11-05 11:59 → 12:18 UTC)
 
 - **Host:** the dedicated Vultr host (since the 2026-11-01 cutover; `specs/docs/DEPLOY.md`). Deploys
   there are manual; the GitHub webhook cannot reach Coolify through Cloudflare Access.
