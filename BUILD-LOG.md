@@ -5442,3 +5442,10 @@ Executor: Main Session (Claude Code); owner order via supervisor ("review, commi
   - `docker compose -f docker-compose.coolify.yml config -q` valid; `npx vitest run` 221 files passed / 48 skipped.
 - **Docs:** `SLA-DRP.md` §3 (the pair), §7 (fresh-cluster restore steps, the one expected error), §8 (drill ✓); review R-21/R-22 `[x]`; `TASKS.md`; `OPEN.md` (kept-branch line removed).
 - **After deploy, still to observe:** the first `.globals.sql` beside a new dump (≤ 6 h — the service dumps when the newest is older than 6 h) and an `offsite-ok` line listing it in R2.
+
+### [2026-11-15 09:30 UTC] — DOCS · plugin menu + CRM audit → spec and tasks (PLUG-NAV, CRM-FU-1…4)
+
+- **Executor:** Main Session. Owner: plugin list → sidebar under Tema, not Pengaturan; "scan crm sidebar … jika kurang maksimal kamu riset dan kembangkan buat md dan task developmentnya".
+- **Audit (code on `main` + production read-only aggregates):** plugins have no menu mechanism (list lives in `/pengaturan?section=plugin`); CRM gate is a hard-coded slug set (`CRM_STORE_SLUGS`); production `followups` 10 rows + `leads` 12 rows, all demo-store seed data dated June–July 2026; `wa_messages` 0 rows and no writer; 5 of 6 follow-up types have no code path that creates them.
+- **Output:** `specs/docs/tasks/2026-11-15-plugin-menu-and-crm-followup.md` (state, research with sources, design: `Plugin` row under `Tema` + plugin-contributed nav; "Follow-up WA" as a first-party plugin whose queue is DERIVED from orders/payments/carts/reviews/customers with `followups` as the action log; Pipeline removal; WABA later; owner decisions D1–D5 with defaults). `specs/docs/TASKS.md`: PLUG-NAV, CRM-FU-1…4. ADR 0021: dated note on the menu location.
+- **Not done:** no code; owner decisions D1–D5 open (defaults in force).
