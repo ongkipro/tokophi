@@ -5370,3 +5370,11 @@ Executor: MengantarIdempotencyAgent (Claude Code sub-agent, owner-approved sandb
   except the 2 lines deliberately rewritten (apps-tree `account/` line, Mengantar digest) — script, 1 426 lines.
   `npx vitest run` 221 files passed / 47 skipped (DB suites skipped: no `DATABASE_URL` in the worktree), incl.
   `test/agents-md-size.test.ts` and `packages/db/src/doc-counts.test.ts`. Docs only — no deploy needed.
+
+### [2026-11-15 13:20 UTC] — DB · DB-FK-INDEX: PR #426 ported onto `main` as `0126_fk_lookup_indexes` (branch `feat/fk-indexes-0126`)
+
+- **Executor:** Main Session. Owner: "ya review PR lama satu per satu". #426 was `CONFLICTING` and its number `0116` had been taken by `0116_mengantar_shipping`; ported onto current `main` instead of rebasing (no force-push).
+- **Measured:** a scratch DB (`tokophi_fkidx`, local container) built by replaying all 126 migration files in journal order → **70** FK columns with no index whose first column is the FK (`pg_constraint` contype `f` ⋈ `pg_index` on `indkey[0] = conkey[1]`): #426's 67 + `buyer_order_claims.store_id`, `buyer_store_links.customer_id`, `signup_codes.created_by`.
+- **Change:** `0126_fk_lookup_indexes.sql` (70 × `create index if not exists`, statement breakpoints, additive only, stamp `1787600005000` > production max `1787600004000`); `schema.ts` mirrors all 70; census `schema-indexes.test.ts` classifies them `drizzle`; `fk-indexes.test.ts` (from #426) guards every future FK from the catalog. Counts 127 / head `0126` in `AGENTS.md`, `rules/database-rls.md`, `SCHEMA.md`, `CODE_MAP.md`, `STATUS.md`.
+- **Verification:** after 0126 the scratch DB has **0 of 133** FKs unindexed; a second run of 0126 only prints "already exists, skipping". `npm run verify-migrations -w @tokophi/db` ✓ (127 entries). `npx vitest run` 221 files passed / 48 skipped — DB-coupled suites (incl. `fk-indexes.test.ts`) skip locally (no `DATABASE_URL` in the worktree) and run in CI with `TEST_DB_REQUIRED=1`.
+- **Not done:** merge + deploy (owner-gated; this is a production migration). Production impact when deployed: ~70 short SHARE locks inside the migrate step, largest store-scoped heap ~hundreds of kB.
