@@ -79,3 +79,4 @@ workspace receiving identical data from both products.
   pengaturan").** The plugin list moves from Pengaturan → Plugin to a sidebar row **Plugin** directly under
   **Tema** (`/plugin`), and an enabled plugin contributes its own menu rows as children of that row. Everything
   else in §2 stands. Design and tasks: `specs/docs/tasks/2026-11-15-plugin-menu-and-crm-followup.md` (PLUG-NAV).
+- **2026-11-16 — shipped (PLUG-NAV):** `/plugin` under Tema; `/pengaturan?section=plugin` redirects there. Plugin-contributed child rows are PLUG-NAV-2, deferred until a plugin has a page of its own.

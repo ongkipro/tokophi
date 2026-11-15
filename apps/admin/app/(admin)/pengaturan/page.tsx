@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { redirect } from "next/navigation"
 import {
   Bell,
   MapPin,
@@ -10,7 +11,6 @@ import {
   Truck,
   Users,
   Store,
-  Plug,
   ShieldCheck,
   Handshake,
 } from "lucide-react"
@@ -25,7 +25,7 @@ import {
   CardContent,
   CardFooter,
 } from "@tokophi/ui/card"
-import { useBuyerAccountsEnabled, useStoreName } from "@/components/admin/store-context"
+import { useBuyerAccountsEnabled, useStoreHref, useStoreName } from "@/components/admin/store-context"
 import { settingsSectionVisible } from "@/lib/nav"
 import { initials } from "@/components/admin/initials"
 import { Badge } from "@tokophi/ui/badge"
@@ -39,7 +39,6 @@ import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-ca
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
-import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
 import { ReturCard } from "@/components/admin/pengaturan/retur-card"
 import { PengaduanCard } from "@/components/admin/pengaturan/pengaduan-card"
 import { AffiliateCard } from "@/components/admin/pengaturan/affiliate-card"
@@ -58,7 +57,6 @@ type Section =
   | "rekening"
   | "pajak"
   | "pengguna"
-  | "plugin"
   | "affiliate"
   | "notifikasi"
 
@@ -76,8 +74,6 @@ const SECTIONS: {
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
-  // ADR 0021 (KEL-001): first-party plugins, deep link `/pengaturan?section=plugin`.
-  { id: "plugin", label: "Plugin", desc: "Kelola CRM & lainnya", icon: <Plug /> },
   // ADR 0022: the store affiliate programme switch, deep link `/pengaturan?section=affiliate`.
   { id: "affiliate", label: "Affiliate", desc: "Program affiliate toko", icon: <Handshake /> },
   {
@@ -108,6 +104,11 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
   // and client start on the same section — no effect, no hydration mismatch. An unknown value is
   // ignored, never trusted as a Section.
   const wanted = React.use(searchParams).section
+  // Plugins moved to their own page under Tema (PLUG-NAV, 2026-11-16). Old deep links — Kelola's emails,
+  // docs, bookmarks — still land: `redirect` during render is allowed in a Client Component (Next 16
+  // redirect.md) and is a server-side redirect on first load.
+  const storeHref = useStoreHref()
+  if (wanted === "plugin") redirect(storeHref("/plugin"))
   // Layanan Pembeli exists only while the TokoΦ Account feature is ON (ADR 0016) — a typed
   // `?section=pembeli` falls back to Profil when it is off, and the section is not listed.
   const buyerAccounts = useBuyerAccountsEnabled()
@@ -273,8 +274,6 @@ export default function Page({ searchParams }: { searchParams: Promise<Record<st
 
           {/* PENGGUNA — real store_users list + invite/role/remove (lib/actions/users.ts) */}
           {section === "pengguna" && <PenggunaCard />}
-
-          {section === "plugin" && <PluginCard />}
 
           {/* AFFILIATE — the seller's own switch (ADR 0022); the programme itself lives on /affiliate */}
           {section === "affiliate" && <AffiliateCard />}

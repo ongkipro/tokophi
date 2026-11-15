@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, Plug, FolderOpen, type LucideIcon } from "lucide-react";
 
 export type NavChild = { label: string; href: string; badgeKey?: NavBadgeKey };
 
@@ -85,6 +85,11 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Ulasan", href: "/pelanggan/ulasan" },
           // TokoΦ Account (ADR 0016): which customers saved this store's orders to their account.
           { label: "Akun Pembeli", href: "/pelanggan/akun" },
+          // Store affiliate programme (ADR 0022). Moved here from Promo on 2026-11-16 (owner: "affiliate
+          // dan customer terdaftar taruh di tree pelanggan"): an affiliate is a PERSON the store works
+          // with, like a customer, not a discount mechanic. The badge counts applicants waiting for a
+          // yes/no, and still rolls up onto the collapsed parent (nav-links.tsx).
+          { label: "Affiliate", href: "/affiliate", badgeKey: "affiliateMenunggu" },
         ],
       },
       // Obrolan = shopper ⇄ merchant chat (specs/docs/CHAT_SPEC.md). It sits with Pesanan/Pelanggan
@@ -111,8 +116,6 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Voucher", href: "/diskon" },
           { label: "Flash Sale", href: "/flash-sale" },
           { label: "Landing Page", href: "/promo" },
-          // Store affiliate programme (ADR 0022). The badge counts applicants waiting for a yes/no.
-          { label: "Affiliate", href: "/affiliate", badgeKey: "affiliateMenunggu" },
         ],
       },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },
@@ -123,6 +126,9 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Toko Online",
     items: [
       { label: "Tema", href: "/tema", icon: Palette },
+      // First-party plugins (ADR 0021 §5, PLUG-NAV): owner 2026-11-15 "di bawah tema". Was a section of
+      // Pengaturan; `/pengaturan?section=plugin` now redirects here.
+      { label: "Plugin", href: "/plugin", icon: Plug },
       { label: "Halaman", href: "/halaman", icon: FileText },
       // Landing Page (/promo) moved up into the Promo group — it is a promo funnel, not store chrome.
       { label: "Blog", href: "/blog", icon: Newspaper },

@@ -50,7 +50,7 @@
 
 | surface | pages | layouts | API/endpoints |
 |---|---|---|---|
-| Seller (merchant panel) | 58 | 4 | 22 |
+| Seller (merchant panel) | 59 | 4 | 22 |
 | Super Admin (platform control plane) | 15 | 2 | 2 |
 | Storefront (multi-tenant shopper site) | 19 | — | 11 |
 | Landing (tokophi.com, static, no DB) | 9 | — | 1 |
@@ -59,13 +59,13 @@
 
 ## Seller (merchant panel) — `apps/admin`
 
-58 pages · 4 layouts · 22 API routes
+59 pages · 4 layouts · 22 API routes
 
 ### Pages
 
 | URL | what it is | kind | file | client component(s) | lib/data | lib/actions (page + client) | gate (page) | gate (client) | dyn | tests |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `/affiliate` | 'Affiliate' (Promo → Affiliate, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`. | page | `apps/admin/app/(admin)/affiliate/page.tsx` | `affiliate-client.tsx` | `affiliates` | `affiliates` | — | — | ✓ | — |
+| `/affiliate` | 'Affiliate' (Pelanggan → Affiliate since 2026-11-16, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`. | page | `apps/admin/app/(admin)/affiliate/page.tsx` | `affiliate-client.tsx` | `affiliates` | `affiliates` | — | — | ✓ | `apps/admin/lib/nav-crm.test.ts` |
 | `/akun/keamanan` | 'Keamanan' — change password (revokes other sessions), 2FA/TOTP. | page | `apps/admin/app/(admin)/akun/keamanan/page.tsx` | `security-client.tsx` | — | `security` | — | — | ✓ | — |
 | `/akun/langganan` | 'Langganan' — the store's plan, trial/period countdown, payment history, link to the printable faktur. | page | `apps/admin/app/(admin)/akun/langganan/page.tsx` | — | `billing` `platform-finance` | `billing` `payment-settings` | — | — | ✓ | — |
 | `/akun` | layout | layout | `apps/admin/app/(admin)/akun/layout.tsx` | `akun-nav.tsx` | — | — | — | — |  | — |
@@ -83,7 +83,7 @@
 | `/crm/template` | 'Template' — WhatsApp message templates used by CRM and abandoned-cart recovery. | page | `apps/admin/app/(admin)/crm/template/page.tsx` | `template-client.tsx` | `crm` | `crm` | — | — | ✓ | — |
 | `/diskon/[id]` | Voucher editor — a blank period = no end date; an edit never moves `starts_at`. | page | `apps/admin/app/(admin)/diskon/[id]/page.tsx` | `discount-editor.tsx` | `discounts` | `discounts` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/diskon/baru` | New voucher. | page | `apps/admin/app/(admin)/diskon/baru/page.tsx` | — | — | — | — | — |  | — |
-| `/diskon` | 'Diskon' (vouchers) — list; status shown from `nonaktif` + dates, never dates alone. | page | `apps/admin/app/(admin)/diskon/page.tsx` | `diskon-client.tsx` | `discounts` | `discounts` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
+| `/diskon` | 'Diskon' (vouchers) — list; status shown from `nonaktif` + dates, never dates alone. | page | `apps/admin/app/(admin)/diskon/page.tsx` | `diskon-client.tsx` | `discounts` | `discounts` | — | — | ✓ | `apps/admin/lib/nav-crm.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/files` | 'File' — media library (uploads under `/api/uploads`). | page | `apps/admin/app/(admin)/files/page.tsx` | `files-client.tsx` | — | `media` | — | — | ✓ | `test/pagination-keyboard.test.ts` |
 | `/flash-sale/[id]` | Flash sale editor — price reaches variant rows, not only the headline. | page | `apps/admin/app/(admin)/flash-sale/[id]/page.tsx` | `flash-editor.tsx` | `flash` | `flash` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/flash-sale/baru` | New flash sale. | page | `apps/admin/app/(admin)/flash-sale/baru/page.tsx` | — | `flash` | — | — | — | ✓ | — |
@@ -100,7 +100,7 @@
 | `/pelanggan/[id]` | Customer detail: orders, tags, notes. | page | `apps/admin/app/(admin)/pelanggan/[id]/page.tsx` | `customer-detail.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/uuid-guard.test.ts` |
 | `/pelanggan/akun` | 'Akun Pembeli' (ADR 0016) — this store's customers who saved an order to a TokoΦ Account: count, since when. Merchant projection only, never the account itself. | page | `apps/admin/app/(admin)/pelanggan/akun/page.tsx` | — | `customers` | — | — | — | ✓ | `apps/admin/lib/buyer-account-gate.test.ts` |
 | `/pelanggan/keranjang` | 'Keranjang ditinggal' — abandoned checkouts; recovery over WhatsApp ('WA dibuka', never 'terkirim'); rate = rescued/abandoned only. | page | `apps/admin/app/(admin)/pelanggan/keranjang/page.tsx` | `keranjang-client.tsx` | `checkout` | `checkout` | — | — | ✓ | — |
-| `/pelanggan` | 'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case. | page | `apps/admin/app/(admin)/pelanggan/page.tsx` | `pelanggan-client.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/buyer-account-gate.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/pelanggan` | 'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case. | page | `apps/admin/app/(admin)/pelanggan/page.tsx` | `pelanggan-client.tsx` | `customers` | `customers` | — | — | ✓ | `apps/admin/lib/buyer-account-gate.test.ts` `apps/admin/lib/nav-crm.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/pelanggan/segmen` | 'Segmen' — customer segments (create/delete). | page | `apps/admin/app/(admin)/pelanggan/segmen/page.tsx` | `segmen-client.tsx` | `segments` | `segments` | — | — | ✓ | — |
 | `/pelanggan/ulasan` | 'Ulasan' — product reviews moderation. | page | `apps/admin/app/(admin)/pelanggan/ulasan/page.tsx` | `ulasan-client.tsx` | `reviews` | `reviews` | — | — | ✓ | — |
 | `/pemasaran` | 'Pemasaran' — ad channels (Meta/Google/TikTok) connection, catalog id scheme, conversion queue health; 'dari pesanan toko Anda', never 'menurut Meta'. | page | `apps/admin/app/(admin)/pemasaran/page.tsx` | `feed-card.tsx` `pemasaran-client.tsx` | `feed` `marketing` `tracking` | `tracking` | `session` | — | ✓ | — |
@@ -108,6 +108,7 @@
 | `/pesanan/[id]` | Order detail — status actions (one writer: `applyOrderStatusChange`), 'Cek Ongkir' → book any service with the cost delta reconciled to the seller ledger, label, tracking. | page | `apps/admin/app/(admin)/pesanan/[id]/page.tsx` | `order-detail.tsx` | `order-detail` `orders` | `mengantar` `orders` `payments` `shipping` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` |
 | `/pesanan/massal` | 'Pesanan massal' — bulk booking with the service the shopper paid for, bulk labels, 'sudah/belum dicetak'. | page | `apps/admin/app/(admin)/pesanan/massal/page.tsx` | `massal-client.tsx` | `bulk-shipping` | `bulk-shipping` | — | — | ✓ | `apps/admin/lib/search-model.test.ts` |
 | `/pesanan` | 'Pesanan' — orders list with status tabs; URL params validated before any enum cast. | page | `apps/admin/app/(admin)/pesanan/page.tsx` | `pesanan-client.tsx` | `orders` `returns` | `orders` | — | — | ✓ | `apps/admin/lib/actions/orders.test.ts` `apps/admin/lib/search-model.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` `packages/lib/src/autolaris-submit.test.ts` `test/pagination-keyboard.test.ts` |
+| `/plugin` | 'Plugin' (Toko Online → Plugin, under Tema; ADR 0021 §5, PLUG-NAV) — every compiled-in first-party plugin with this store's state; Aktifkan / Nonaktifkan / Hapus koneksi and Kelola CRM's credential + send history. Switches are owner-only (`plugins:manage`) in the actions. `/pengaturan?section=plugin` redirects here. | page | `apps/admin/app/(admin)/plugin/page.tsx` | — | — | — | — | — |  | `apps/admin/lib/nav-crm.test.ts` |
 | `/produk/[id]` | Product editor — variants grid, media (upload/drag), dimensions (they price ongkir), taxonomy. | page | `apps/admin/app/(admin)/produk/[id]/page.tsx` | `product-editor.tsx` `taxonomy-field.tsx` | `products` | `media` `products` `purchases` `taxonomy` | — | — | ✓ | `apps/admin/lib/form-labels.test.tsx` `apps/admin/lib/uuid-guard.test.ts` |
 | `/produk/baru` | New product. | page | `apps/admin/app/(admin)/produk/baru/page.tsx` | — | `products` | — | — | — | ✓ | — |
 | `/produk/inventori` | 'Inventori' — stock per variant/location, bulk save. | page | `apps/admin/app/(admin)/produk/inventori/page.tsx` | `inventori-client.tsx` | `inventory` `products` | `inventory` | — | — | ✓ | `apps/admin/lib/actions/inventory.test.ts` `apps/admin/lib/search-model.test.ts` `apps/admin/lib/seller-entity-links.test.ts` |
@@ -122,7 +123,7 @@
 | `/promo` | 'Promo' hub — vouchers, flash sales and landing pages in one place. | page | `apps/admin/app/(admin)/promo/page.tsx` | `promo-list-client.tsx` | `landing` `promo` | — | — | — | ✓ | `apps/admin/lib/admin-link-targets.test.ts` `apps/admin/lib/landing-html-gate.test.ts` `apps/admin/lib/promo-ai.test.ts` `apps/admin/lib/seller-entity-links.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/saldo` | 'Saldo' — pending/available balance derived from the ledger, payout requests (never joins `orders` when summing). | page | `apps/admin/app/(admin)/saldo/page.tsx` | `saldo-client.tsx` | `ledger` | `ledger` | — | — | ✓ | `apps/admin/lib/seller-entity-links.test.ts` |
 | `/tema/[id]` | Puck editor for one template; palette is per template type. | page | `apps/admin/app/(admin)/tema/[id]/page.tsx` | `builder-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
-| `/tema` | 'Tema' (Store Builder) — homepage/category/product templates list. | page | `apps/admin/app/(admin)/tema/page.tsx` | `tema-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
+| `/tema` | 'Tema' (Store Builder) — homepage/category/product templates list. | page | `apps/admin/app/(admin)/tema/page.tsx` | `tema-client.tsx` | `theme` | `theme` | `session` | — | ✓ | `apps/admin/lib/admin-h1-floor.test.ts` `apps/admin/lib/nav-crm.test.ts` `apps/admin/lib/uuid-guard.test.ts` |
 | `/daftar` | Self-serve store sign-up → review queue in Super Admin. | page | `apps/admin/app/daftar/page.tsx` | `daftar-form.tsx` `google-button.tsx` | — | `register` | — | — |  | — |
 | `/faktur/[number]` | Printable subscription invoice (renders the STORED tax). | page | `apps/admin/app/faktur/[number]/page.tsx` | `print-button.tsx` | `billing` | `billing` | `session` | — | ✓ | — |
 | `/` | layout | layout | `apps/admin/app/layout.tsx` | — | — | — | — | — |  | — |
