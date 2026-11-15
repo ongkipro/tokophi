@@ -15,6 +15,16 @@ account, non-COD); every other store waits for Mengantar's production Partner or
 Next on that path: the first real Mengantar booking + cancel (test order `PHI-555925447U5H`, unpaid), then
 PAY-QRIS-EXPIRY (`specs/docs/TASKS.md`).
 
+**Local-only unfinished work (owner workstation, 2026-11-15 worktree cleanup)** — kept as LOCAL branches in
+`~/Projects/tokophi`, not merged, not pushed (the repo is public; WIP snapshots were not reviewed for it):
+- `feat/seller-release-h2` — Task 8.39 "seller funds withdrawable H+2 after delivery" (owner ruling 2026-10-15) + its ledger fix; **not on `main`** (no `RELEASE_DELAY_DAYS` there). Money path — needs a fresh port + review.
+- `feat/autolaris-auto-confirm` — AL-AUTOCONFIRM (AutoLaris auto-confirm via Advice cron + callback fixes (A)/(C), 2026-11-05), uncommitted work saved as a `wip(snapshot)` commit; "review pending".
+- `fix/backup-correctness-2026-10` — R-22 (backup writes `pg_dumpall --globals-only` beside each dump), `wip(snapshot)`; still to be proven by a restore into an empty cluster.
+- `fix/landing-review-r8` — landing review r8 (narrow screenshots, edge-cache plan), 2 commits.
+Everything else (60 local branches: 21 merged, 39 superseded — affiliate/buyer-account lines, Aug Stage-4 task branches, Astro 7/deps already on `main`) was deleted
+after `git bundle` archives: `/data/backups/tokophi-worktrees/tokophi-{worktrees,branches}-20261115.bundle` (+ `.heads`; restore with
+`git fetch <bundle> <branch>:<branch>`). `~/Projects/tokophi-kelola` (panel 2) is still in use by another session — left alone.
+
 **Open PRs: none** after the 2026-11-15 sweep (`gh pr list`). Merged: #421 (AGENTS.md split, brought up to
 date), #481 (port of #426 — FK indexes as `0126`). Closed as superseded, with a comment on each: #426 (→ #481),
 #418 (main gates CRM per store), #385 (old-host `watch_paths`; deploys are manual now), #396 (README rewritten
