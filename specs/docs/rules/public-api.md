@@ -6,7 +6,7 @@
 > layout — follow the named file or section instead. **If this file and the code disagree, the code wins — fix this file.**
 
 
-`ongkir` · `order` · `promo` · `pay/callback`. The only unauthenticated write surface in the
+`ongkir` · `order` · `promo` · `pay/retry` · `pay/callback`. The only unauthenticated write surface in the
 product, and until 2026-08-03 invisible to two repo-wide guards (a `public`-directory skip). Audited
 end-to-end on 2026-08-05 by DRIVING it, not by reading it.
 
@@ -89,3 +89,13 @@ end-to-end on 2026-08-05 by DRIVING it, not by reading it.
   through `readPublicBody` and that neither shipping route serves the provider's string. Both source
   claims carry a **mutation self-check**: the same predicate is asserted to fire on a copy with the
   old code put back, so the guard can never be green for want of matching anything.
+- 🔴 **`pay/retry` ("Bayar ulang", PAY-RETRY) is authorised by a ONE-ORDER SECRET, never by the order
+  number.** `/api/public/order` mints it for prepaid orders, returns it once (`payToken`), stores only
+  its sha256 (`orders.pay_token_hash`). Every refusal to open an order is the SAME 404. **At most one
+  live instruction per order** — `retryDecision`/`instructionState` (`lib/pay-retry.ts`), taken under
+  the order's row lock, are the ONE answer to "is this bill still payable?" for the retry, the Seller's
+  re-bill (`createOrderPayment`) and the order-expiry cron; an UNKNOWN expiry (NULL `expires_at`, a
+  thrown provider call) is presumed payable, never guessed dead. A retry copies amount/fee/total/channel
+  from the previous attempt (never re-prices) and uses reference `<order number>-n`. A collected payment
+  the ledger did not credit (double payment, PAID on a closed order) becomes a `refunds` row in the
+  callback (`refundUncreditedPayment`). Spec: `specs/docs/tasks/2026-11-13-pay-retry.md`.

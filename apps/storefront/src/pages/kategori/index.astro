@@ -1,4 +1,5 @@
 ---
+import { ImageOff } from "@lucide/astro";
 // /kategori — the category index. It 404'd, which mattered more than "one missing URL":
 //
 // The fallback homepage renders a "Belanja per Kategori" grid, but that whole block is SKIPPED when
@@ -50,7 +51,6 @@ const DESCRIPTION = names.length
 <Layout head={HEAD} title="Kategori" description={DESCRIPTION}>
   <PageHeader
     crumbs={CRUMBS}
-    eyebrow="Kategori"
     title="Belanja per Kategori"
     dek={`Pilih kategori yang kamu cari di ${store.name}.`}
   />
@@ -63,7 +63,7 @@ const DESCRIPTION = names.length
             {collections.map((c) => (
               <a
                 href={`/kategori/${c.handle}`}
-                class="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-brand-100 ring-1 ring-line transition-all hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                class="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-mist-strong ring-1 ring-line transition-shadow hover:shadow-xl hover:shadow-brand-200/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               >
                 {c.image ? (
                   <img
@@ -73,11 +73,11 @@ const DESCRIPTION = names.length
                     alt=""
                     loading="lazy"
                     decoding="async"
-                    class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
                   />
                 ) : (
-                  <span class="flex h-full w-full items-center justify-center text-5xl" aria-hidden="true">
-                    {c.emoji}
+                  <span class="flex h-full w-full items-center justify-center bg-mist" aria-hidden="true">
+                    <ImageOff class="size-8 text-muted" stroke-width={1.5} />
                   </span>
                 )}
                 <div class="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/20 to-transparent" />

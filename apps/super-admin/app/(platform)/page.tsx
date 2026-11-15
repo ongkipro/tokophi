@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar";
 import { Badge } from "@tokophi/ui/badge";
 import { IDR, num, share, timeAgo } from "@tokophi/lib/format";
+import { BILLING } from "@tokophi/lib/billing";
 import { initials, SegmentBadge, ActivityIcon, InvoiceBadge, RiskReasonChip } from "@/components/bits";
 import { RevenueChart } from "./revenue-chart";
 import {
@@ -242,10 +243,10 @@ export default async function PlatformDashboard() {
             <div className="rounded-lg border bg-primary/5 p-3">
               <p className="text-xs text-muted-foreground">Paket TokoΦ · satu paket, semua fitur</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums">
-                {IDR(275_000)}
+                {IDR(BILLING.MONTHLY_IDR)}
                 <span className="text-sm font-normal text-muted-foreground">/bln</span>
               </p>
-              <p className="text-[11px] text-muted-foreground">3 hari trial → Rp50rb bln-1 → Rp275rb seterusnya</p>
+              <p className="text-[11px] text-muted-foreground">{BILLING.TRIAL_DAYS} hari trial → {IDR(BILLING.MONTHLY_IDR)}/bln · tahunan {IDR(BILLING.ANNUAL_IDR)} (hemat {BILLING.ANNUAL_DISCOUNT_PCT}%)</p>
             </div>
             {[
               { label: "Pelanggan berbayar", value: `${num(subStats.active)} · ${IDR(subStats.mrr, { compact: true })} MRR`, cls: "text-emerald-600 dark:text-emerald-400" },

@@ -42,9 +42,9 @@ for (let n = 1; n <= totalPages; n += 1) {
 // Shared with the number links so a disabled arrow keeps the exact footprint of an enabled one —
 // min-h-11/min-w-11 is the 44px tap target the a11y pass fixed everywhere else.
 const CELL =
-  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 text-sm font-medium tabular-nums";
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-3 text-sm font-medium tabular-nums";
 const LINK =
-  "border border-line bg-white text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none";
+  "border border-transparent text-ink transition-colors hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream motion-reduce:transition-none";
 // A disabled arrow is a <span>, never an <a>: there is no such thing as a link that goes nowhere, and
 // `aria-disabled` on an anchor still lets a keyboard user follow it.
 const OFF = "border border-line/60 bg-transparent text-muted/60";
@@ -52,15 +52,10 @@ const OFF = "border border-line/60 bg-transparent text-muted/60";
 
 {
   totalPages > 1 && (
-    <nav aria-label={label} class="mx-auto mt-12 max-w-7xl px-4 sm:px-6">
-      <div class="rounded-[1.25rem] border border-line bg-white/75 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-cream/80 sm:p-5">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p class="text-sm font-medium text-ink">Halaman {page} dari {totalPages}</p>
-            <p class="mt-1 text-xs text-muted">Lanjutkan telusuri katalog tanpa kehilangan urutan yang sedang dipilih.</p>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+    <nav aria-label={label} class="mx-auto mt-10 max-w-7xl px-4 sm:px-6">
+      {/* Redesign C: a plain centred row — no card, no explanatory sentence. "Halaman 2 dari 5" is
+          what the highlighted number already says. */}
+          <div class="flex flex-wrap items-center justify-center gap-2">
             {page > 1 ? (
               <a href={href(page - 1)} rel="prev" class:list={[CELL, LINK]}>
                 <span aria-hidden="true">‹</span>
@@ -83,7 +78,7 @@ const OFF = "border border-line/60 bg-transparent text-muted/60";
                 ) : (
                   <li>
                     {slot === page ? (
-                      <span class:list={[CELL, "bg-brand-600 font-semibold text-white"]} aria-current="page">
+                      <span class:list={[CELL, "border border-ink font-semibold text-ink"]} aria-current="page">
                         {slot}
                       </span>
                     ) : (
@@ -109,8 +104,6 @@ const OFF = "border border-line/60 bg-transparent text-muted/60";
               </span>
             )}
           </div>
-        </div>
-      </div>
     </nav>
   )
 }

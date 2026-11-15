@@ -3,6 +3,7 @@ import { schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { normalizePhone } from "@tokophi/lib/validate";
+import { isForeignKeyViolation } from "@tokophi/lib/pg-errors";
 import { requireCapability } from "@/lib/rbac";
 import { withTenant } from "@/lib/tenant";
 
@@ -40,7 +41,7 @@ export async function deleteCustomer(id: string): Promise<void> {
   try {
     await withTenant(sid, (db) => db.delete(schema.customers).where(eq(schema.customers.id, id)));
   } catch (e) {
-    if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "23503") {
+    if (isForeignKeyViolation(e)) {
       throw new Error("Pelanggan punya riwayat (pesanan/ulasan) — tidak bisa dihapus.");
     }
     throw e;

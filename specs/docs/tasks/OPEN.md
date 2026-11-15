@@ -7,6 +7,53 @@ blockers" had been false since 2026-08-22, and it dropped the N36–N43 disambig
 
 This file is a navigation handoff. It is not a second task board.
 
+## ▶ Resume here — 2026-11-13
+
+Production: dedicated host since 2026-11-01, release `5efd052b` (2026-11-14: #476 affiliate programme + #477 UI polish + #479 V11 — **affiliate area OPEN**, programme on for the demo store only; #473/#471 buyer account, dormant — BUILD-LOG 2026-11-14 09:15; on top of #469 plugins, #468 pricing, #465 PAY-RETRY, #466 store-level provider), probe green — `STATUS.md`. Deploys are
+MANUAL on this host (`DEPLOY.md` step 2). **Mengantar (ADR 0018) is live for the demo store only** (owner-attached
+account, non-COD); every other store waits for Mengantar's production Partner origin + IP allow-list (O2).
+Next on that path: the first real Mengantar booking + cancel (test order `PHI-555925447U5H`, unpaid), then
+PAY-QRIS-EXPIRY (`specs/docs/TASKS.md`).
+
+**Open PRs (merging is owner-gated and serialised; listed 2026-11-13 with `gh pr list`):**
+
+| PR | Branch | Base | What |
+|---|---|---|---|
+| #456 | `docs/record-deploy-428-429` | `main` | docs(release): record the #428/#429 production deploys |
+| #455 | `test/affiliate-gaps` | `fix/affiliate-audit` | test(affiliate): close the audit's two gaps — order-route wiring and the /affiliate form |
+| #431 | `fix/affiliate-audit` | `feat/accounts-consolidated` | fix(affiliate): validate ids and input sizes in Seller actions, keep commission math total; first tests for the actions |
+| #430 | `feat/affiliate-visibility` | `feat/accounts-consolidated` | feat(admin): affiliate applicant badge in the sidebar + commission on every order |
+| #426 | `feat/fk-indexes-main` | `main` | feat(db): index every foreign key (0116) + catalog guard |
+| #424 | `feat/accounts-consolidated` | `main` | feat: consolidate store affiliate (0116) and buyer account (0117–0121) onto main |
+| #423 | `docs/outage-2026-10-28` | `main` | docs(ops): production outage 2026-10-28 — Task OUT-1028 + diagnosis |
+| #421 | `docs/split-agents-md` | `main` | docs: split AGENTS.md under Claude Code's 150k limit + fix stale reference docs |
+| #418 | `feat/hide-crm-prod` | `main` | feat(admin): hide CRM in production until it ships |
+| #396 | `docs/readme-clean` | `main` | docs(readme): clean front door — identity, authority links, run steps |
+| #385 | `docs/deploy-watchpaths` | `main` | docs(deploy): a docs-only merge does not deploy — watch_paths, not a lost webhook |
+
+- 🔴 **Migration clash:** `main` already shipped `0116_mengantar_shipping`; #424 and #426 both use `0116`.
+  Each renumbers AND re-stamps before merge (`specs/docs/rules/migrations.md`). Merge #424 before #430/#431.
+- **Store affiliate programme → AFFILIATE-P2 (2026-11-14, ADR 0022, its own PR on `feat/affiliate-p2`).** The
+  affiliate half of #424/#430/#431/#455 is ported onto `main` with the owner's changed identity (affiliates get
+  their OWN accounts at `affiliate.tokophi.com`, not the buyer account), as migration `0125`. The 2026-10-29
+  audit gaps are closed there: order-route wiring tested end to end (typed beats `?ref=`, bad code never costs
+  the sale, self-referral, programme off); UNIQUE `(store_id, phone)`, CHECK `commission_idr >= 0` and a
+  composite FK `(affiliate_id, store_id)` in the schema; the anonymous `/affiliate` form and its "Nomor ini
+  sudah terdaftar" oracle are gone. Once it merges, #424/#430/#431/#455 can be closed unmerged (their buyer
+  half shipped as #471).
+- **Known, not fixed:** two media pickers still load the full library (`collection-editor.tsx`,
+  `article-editor.tsx`).
+- **Owner decision:** 283 commits on `main` carry an AI `Co-authored-by` trailer (DEC-014: not rewritten);
+  the repo is public now. A rewrite is a force-push and needs approval of the exact command.
+- ⚠️ **Never rewrite a shared account's credentials to test** — mint a throwaway `store_users` row and
+  delete it afterwards (BUILD-LOG 2026-10-29).
+- Local only: worktree `~/Projects/tokophi-consolidate`, branch `demo/affiliate-media` (unpushed, clean).
+
+> **Newest sweep: `specs/docs/tasks/2026-10-29-overall-review.md`** (2026-10-29) — every finding
+> re-checked in code; 🔴 P0s there: Astro/@astrojs/node Host-header crash (R-10), off-box uptime +
+> Vultr balance alert (R-20). It also lists the stale states in THIS file (R-41) — trust it over the
+> 2026-09-07 notes below where they disagree.
+
 ## 🔴 Open from production — 2026-09-07
 
 Both surfaced by the incident in `BUILD-LOG.md` 2026-09-07 11:53 UTC. Neither is fixable in code.
@@ -39,7 +86,7 @@ Both surfaced by the incident in `BUILD-LOG.md` 2026-09-07 11:53 UTC. Neither is
   decision, CI on a private repo, written KiriminAja confirmation, real Google OAuth credentials.)
 - The epic-level map [`../TASKS.md`](../TASKS.md) was re-verified 1:1 against the code on
   2026-09-07 (22 items flipped, Epic 8 added for work shipped since 2026-08-24).
-- TokoΦ Account is accepted as a product direction, not as deployed behavior (Task 5.8).
+- TokoΦ Account: ADR 0016 **accepted 2026-11-14** (Task 5.8 done); phase 1 = BUYER-ACCOUNT-P1 (buyer account, merged dark when its PR lands — production enablement is owner-gated, see ADR 0016). Store affiliate = phase 2.
 - Production mutation, deployment, credential rotation, and infrastructure changes remain owner-gated.
 - **CI is inert**: `.github/workflows/ci.yml` exists and caught a real bug on 2026-08-27, but the
   repo went PRIVATE again on 2026-08-28 by owner order (`gh api` → `private`, 2026-09-07). Task 5.12.
@@ -70,6 +117,7 @@ token and a restore is exercised once** (2026-09-02) · generated page map + 35-
 | | what is actually being asked |
 |---|---|
 | **KiriminAja allow-list** | ~~above, item 1~~ **RESOLVED 2026-09-09** — owner re-added the IP; rates 200 with COD from inside the container, live checkout total moved to Rp125.400 in Chromium (BUILD-LOG 2026-09-09; Super Admin update-log v1.4.0). Production still runs `KIRIMINAJA_ENV=sandbox` — that is Task 8.9, not this. |
+| **Akun TokoΦ (buyer account) — DEFERRED 2026-11-14** | Owner: "kita skip dulu". Dormant in production until Google OAuth client + `GOOGLE_*` in Coolify, UU PDP text approved, revoked-session retention chosen. Full checklist: `specs/docs/TASKS.md` → BUYER-ACCOUNT-ENABLE. |
 | **Uptime + billing alert** | above, item 2. |
 | **KiriminAja production cutover** | `KIRIMINAJA_ENV=sandbox` in production (AUDIT-FULL 2026-08-31 ③); the UAT sheet revision 3 is FILLED (2026-09-14, Markdown at `specs/docs/uat/`, see `KIRIMINAJA.md`) after two vendor reviews the same day (v6.1-shaped payload; then force_insurance / insurance fee / Σ qty / COD formula) — all in code, 8/8 re-booked at 4 kg volumetric — and **awaits the owner's submission**, so there is no production key. Same contract both sides (owner ruling 2026-08-03) — an endpoint swap, nothing else. |
 | **R2 credential + restore drill** | `backup-offsite` is deployed and UNHEALTHY on purpose. Needs a Cloudflare token with **R2 Storage: Edit** (both existing tokens are zone-scoped) and one restore-from-R2 into a throwaway DB (`DEPLOY.md` runbook). Until then the only backups sit on the box that was just suspended for 70 h. |

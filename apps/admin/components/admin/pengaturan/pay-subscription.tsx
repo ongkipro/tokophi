@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Landmark, Wallet, QrCode, Store, Copy, Check, ArrowRight, X } from "lucide-react";
 import { createSubscriptionPayment, cancelSubscriptionInvoice, type PaymentDetail } from "@/lib/actions/billing";
 import { IDR } from "@tokophi/lib/format";
-import { quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
+import { BILLING, quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
 import type { PlatformChannel } from "@/lib/actions/payment-settings";
 import { cn } from "@tokophi/ui/lib/utils";
 
@@ -18,7 +18,7 @@ const KIND_ORDER = ["qris", "va", "ewallet", "retail"];
 
 // Subscription payment: pick cycle → Lanjutkan → choose channel (platform-enabled) → show VA/QRIS.
 // An existing unpaid invoice is RESUMED (never duplicated).
-export function PaySubscription({ firstInvoicePaid, pending, channels, ppnEnabled }: { firstInvoicePaid: boolean; pending: PaymentDetail | null; channels: PlatformChannel[]; ppnEnabled: boolean }) {
+export function PaySubscription({ firstInvoicePaid, codeDiscountIdr, discountCode, pending, channels, ppnEnabled }: { firstInvoicePaid: boolean; codeDiscountIdr: number; discountCode: string | null; pending: PaymentDetail | null; channels: PlatformChannel[]; ppnEnabled: boolean }) {
   const [saving, start] = React.useTransition();
   const [cycle, setCycle] = React.useState<Cycle>("monthly");
   const [pickOpen, setPickOpen] = React.useState(false);
@@ -27,8 +27,11 @@ export function PaySubscription({ firstInvoicePaid, pending, channels, ppnEnable
 
   // Platform PPN toggle — decided server-side (platform_finance) and passed down; a client
   // component cannot read the DB, and the preview must equal what the action will bill.
-  const m = subscriptionCharge(quote("monthly", firstInvoicePaid).amount, ppnEnabled);
-  const a = quote("annual", firstInvoicePaid);
+  // ADR 0020 — `codeDiscountIdr` is what the server resolved as OWED (codeDiscountFor); the creator
+  // re-resolves it itself, so this preview can only ever show what the bill will say, never set it.
+  const mq = quote("monthly", firstInvoicePaid, codeDiscountIdr);
+  const m = subscriptionCharge(mq.amount, ppnEnabled);
+  const a = quote("annual", firstInvoicePaid, codeDiscountIdr);
   const aTotal = subscriptionCharge(a.amount, ppnEnabled);
 
   const proceed = () => {
@@ -69,12 +72,12 @@ export function PaySubscription({ firstInvoicePaid, pending, channels, ppnEnable
         <button type="button" onClick={() => setCycle("monthly")} className={cn("rounded-lg border p-3 text-left transition-colors", cycle === "monthly" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
           <div className="flex items-center justify-between"><span className="font-semibold">Bulanan</span>{cycle === "monthly" && <Check className="size-4 text-primary" />}</div>
           <div className="mt-0.5 text-sm tabular-nums">{IDR(m.total)}</div>
-          <div className="text-xs text-muted-foreground">{quote("monthly", firstInvoicePaid).amount === 50_000 ? "promo bulan pertama" : "per bulan"}{ppnEnabled ? " · termasuk PPN 11%" : ""}</div>
+          <div className="text-xs text-muted-foreground">{mq.codeDiscountIdr > 0 ? `potongan kode ${discountCode ?? ""} −${IDR(mq.codeDiscountIdr)}` : "per bulan"}{ppnEnabled ? " · termasuk PPN 11%" : ""}</div>
         </button>
         <button type="button" onClick={() => setCycle("annual")} className={cn("rounded-lg border p-3 text-left transition-colors", cycle === "annual" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50")}>
           <div className="flex items-center justify-between"><span className="font-semibold">Tahunan</span>{cycle === "annual" && <Check className="size-4 text-primary" />}</div>
           <div className="mt-0.5 text-sm tabular-nums">{IDR(aTotal.total)}</div>
-          <div className="text-xs text-emerald-600 dark:text-emerald-400">{a.bonusMonth ? `${a.months} bln (1 gratis)` : "hemat 50rb/bln"}{ppnEnabled ? " · termasuk PPN 11%" : ""}</div>
+          <div className="text-xs text-emerald-600 dark:text-emerald-400">{a.bonusMonth ? `${a.months} bln (1 gratis)` : `hemat ${BILLING.ANNUAL_DISCOUNT_PCT}%`}{a.codeDiscountIdr > 0 ? ` · potongan kode −${IDR(a.codeDiscountIdr)}` : ""}{ppnEnabled ? " · termasuk PPN 11%" : ""}</div>
         </button>
       </div>
 

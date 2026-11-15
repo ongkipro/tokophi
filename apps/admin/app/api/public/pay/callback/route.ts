@@ -11,7 +11,7 @@ import {
   verifyPayCallbackSecret,
 } from "@tokophi/lib/pay-callback";
 import { clientIp, readPublicBody } from "@/lib/public-guard";
-import { creditSaleForPayment } from "@/lib/ledger-credit";
+import { creditSaleForPayment, refundUncreditedPayment } from "@/lib/ledger-credit";
 import { releasePurchase } from "@/lib/tracking-events";
 
 // AutoLaris payment callback — POSTed when a bill is paid/expired. Matches by trx_id / reff_id
@@ -230,7 +230,7 @@ export async function POST(req: Request) {
             .where(and(eq(schema.orders.id, oid), notInArray(schema.orders.status, ["batal", "retur"])))
             .returning({ id: schema.orders.id });
           if (done.length === 0) {
-            console.error(`[pay/callback] PAID arrived for a cancelled/returned order ${oid} — money collected, NOT credited. Needs a refund decision.`);
+            console.error(`[pay/callback] PAID arrived for a cancelled/returned order ${oid} — money collected, NOT credited. Recorded in refunds (PAY-RETRY).`);
           }
         }
         // Conversion tracking (ADR 0012 §14.4): a PREPAID order becomes a Purchase HERE — when the
@@ -260,6 +260,30 @@ export async function POST(req: Request) {
         // its callbacks, so this is deliberately safe to run twice: a partial unique index
         // (ledger_one_sale_per_payment) makes a second credit for the same payment impossible.
         for (const r of rows) await creditSaleForPayment(db, r.id);
+        // PAY-RETRY — an order can carry several instructions now. Once ONE is paid:
+        //  · every other still-`menunggu` instruction of that order is dead to us (`gagal`), so no
+        //    screen offers it as payable and no retry treats it as live. A late PAID on it is still
+        //    accepted above (`gagal → berhasil` is legal) — and then lands in the refund below.
+        //  · a collected payment the ledger did not credit (a second payment, or money arriving on a
+        //    closed order) gets a `refunds` row instead of a log line. Over `matched`, not `rows`, for
+        //    the same reason as the tracking release: a retried callback must still reach it.
+        for (const m of matched) {
+          if (!m.orderId) continue;
+          try {
+            await db
+              .update(schema.payments)
+              .set({ status: "gagal" })
+              .where(and(
+                eq(schema.payments.orderId, m.orderId),
+                ne(schema.payments.id, m.id),
+                eq(schema.payments.status, "menunggu"),
+                ne(schema.payments.method, "cod"),
+              ));
+            await refundUncreditedPayment(db, m.id);
+          } catch (err) {
+            console.error("[pay/callback] retry bookkeeping failed for payment", m.id, err);
+          }
+        }
       }
 
       // subscription invoice? → mark paid + extend the store's subscription one month.

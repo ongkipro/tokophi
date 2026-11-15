@@ -41,6 +41,24 @@ export const KA_BASE: Record<ProviderEnv, string> = {
 
 export const AUTOLARIS_DEFAULT_BASE = "https://api-h2h.autolaris.com";
 
+/**
+ * Mengantar origins per environment (PARTNER model, 2026-11-05 — supersedes D4 "production only").
+ * A FIXED table, no free-form host override: the seller key travels in the URL PATH, so an arbitrary
+ * host would receive every store's key (GeraiExpress keeps fixed origins for the same reason).
+ * `partner: null` = Mengantar has not published the production Partner origin yet — every Partner
+ * call refuses with a clear error until it is filled in here (reference §1).
+ */
+export const MENGANTAR_ORIGINS: Record<ProviderEnv, { partner: string | null; public: string }> = {
+  sandbox: { partner: "https://sandbox.mengantar.com", public: "https://sandbox.mengantar.com" },
+  production: { partner: null, public: "https://api-public.mengantar.com" },
+};
+
+/** Which aggregator quotes and books NEW shipments. An order keeps the provider it was booked with. */
+export type ShippingProvider = "kiriminaja" | "mengantar";
+export const SHIPPING_PROVIDERS: readonly ShippingProvider[] = ["kiriminaja", "mengantar"];
+/** The default provider: today's behaviour, the fallback for unconnected stores and for every COD order (owner O6). */
+export const DEFAULT_SHIPPING_PROVIDER = "kiriminaja" as const satisfies ShippingProvider;
+
 /** The decrypted row (the loader decrypts; the resolver never sees ciphertext). */
 export type KiriminajaRow = {
   activeEnv?: string | null;
@@ -53,6 +71,17 @@ export type KiriminajaRow = {
 
 export type AutolarisRow = { key?: string | null };
 
+/** The decrypted Mengantar PARTNER credential per environment (owner O1: swappable, row > env). */
+export type MengantarRow = {
+  sandboxPartnerId?: string | null;
+  sandboxPartnerSecret?: string | null;
+  productionPartnerId?: string | null;
+  productionPartnerSecret?: string | null;
+};
+
+/** The platform's provider switch, as stored. Free text here; the resolver decides what is valid. */
+export type ShippingProviderRow = { activeProvider?: string | null };
+
 /** The env vars the seam still honours, passed in rather than read — a pure function has no `process`. */
 export type ProviderEnvVars = {
   KIRIMINAJA_ENV?: string;
@@ -60,6 +89,11 @@ export type ProviderEnvVars = {
   KIRIMINAJA_ORDER_PREFIX?: string;
   AUTOLARIS_API_KEY?: string;
   AUTOLARIS_BASE?: string;
+  /** `sandbox` (default) | `production` — selects BOTH Mengantar origins and which partner credential. */
+  MENGANTAR_ENV?: string;
+  MENGANTAR_PARTNER_ID?: string;
+  MENGANTAR_PARTNER_SECRET?: string;
+  SHIPPING_PROVIDER?: string;
 };
 
 /** Where a resolved value came from — surfaced on the Super Admin card, never guessed from the value. */
@@ -92,9 +126,31 @@ export type AutolarisConfig = {
   keySource: ConfigSource;
 };
 
+/**
+ * ONE seller's Public-API config — what every shipment call takes. Never resolved from platform config:
+ * it comes from the store's own account row (`@tokophi/db/mengantar-account` → `openStoreMengantar`).
+ */
+export type MengantarConfig = { env: ProviderEnv; base: string; key: string };
+
+/** The platform's Mengantar PARTNER credential for the active environment. */
+export type MengantarPartnerConfig = {
+  env: ProviderEnv;
+  envSource: "env" | "default";
+  /** `null` = no published Partner origin for this env (production today) → onboarding is blocked. */
+  partnerBase: string | null;
+  publicBase: string;
+  partnerId: string | null;
+  partnerSecret: string | null;
+  /** Where the SECRET came from (the id follows the same precedence). */
+  source: ConfigSource;
+};
+
 export type ProviderConfig = {
   kiriminaja: KiriminajaConfig;
   autolaris: AutolarisConfig;
+  mengantar: MengantarPartnerConfig;
+  /** The provider NEW quotes and bookings go to. Default `kiriminaja` — today's behaviour. */
+  shipping: ShippingProvider;
 };
 
 const nonEmpty = (v: string | null | undefined): string | null => (v && v.trim().length > 0 ? v.trim() : null);
@@ -136,12 +192,60 @@ export function resolveAutolaris(input: { row: AutolarisRow | null | undefined; 
   };
 }
 
-export type ProviderRows = { kiriminaja: KiriminajaRow | null; autolaris: AutolarisRow | null };
+/**
+ * Mengantar partner: env from `MENGANTAR_ENV` (sandbox when unset/unknown — the safe failure mode, as
+ * KiriminAja's); partner id + secret from the row's slot FOR THAT ENV, else the env vars, else none.
+ * A row slot of the OTHER env is never read, so a sandbox secret cannot sign a production call.
+ */
+export function resolveMengantar(input: { row: MengantarRow | null | undefined; env: ProviderEnvVars }): MengantarPartnerConfig {
+  const { row, env } = input;
+  const envName: ProviderEnv = isProviderEnv(env.MENGANTAR_ENV?.trim()) ? (env.MENGANTAR_ENV!.trim() as ProviderEnv) : "sandbox";
+  const prod = envName === "production";
+  const rowId = nonEmpty(prod ? row?.productionPartnerId : row?.sandboxPartnerId);
+  const rowSecret = nonEmpty(prod ? row?.productionPartnerSecret : row?.sandboxPartnerSecret);
+  const envId = nonEmpty(env.MENGANTAR_PARTNER_ID);
+  const envSecret = nonEmpty(env.MENGANTAR_PARTNER_SECRET);
+  // A row slot is used as a PAIR: an id without its secret (or the reverse) never mixes with env.
+  const useRow = !!(rowId && rowSecret);
+  return {
+    env: envName,
+    envSource: isProviderEnv(env.MENGANTAR_ENV?.trim()) ? "env" : "default",
+    partnerBase: MENGANTAR_ORIGINS[envName].partner,
+    publicBase: MENGANTAR_ORIGINS[envName].public,
+    partnerId: useRow ? rowId : envId && envSecret ? envId : null,
+    partnerSecret: useRow ? rowSecret : envId && envSecret ? envSecret : null,
+    source: useRow ? "db" : envId && envSecret ? "env" : "none",
+  };
+}
+
+const asShippingProvider = (v: string | null | undefined): ShippingProvider | null => {
+  const s = (v ?? "").trim().toLowerCase();
+  return s === "kiriminaja" || s === "mengantar" ? s : null;
+};
+
+/**
+ * Which aggregator new shipments use: the row's `activeProvider` > env `SHIPPING_PROVIDER` >
+ * `kiriminaja`. An unrecognised value at either level is ignored — never "booked against" — and the
+ * fallback is today's behaviour, so a typo can only ever keep the platform where it already is.
+ */
+export function resolveShippingProvider(input: { row: ShippingProviderRow | null | undefined; env: ProviderEnvVars }): ShippingProvider {
+  return asShippingProvider(input.row?.activeProvider) ?? asShippingProvider(input.env.SHIPPING_PROVIDER) ?? "kiriminaja";
+}
+
+export type ProviderRows = {
+  kiriminaja: KiriminajaRow | null;
+  autolaris: AutolarisRow | null;
+  /** Optional so a loader that predates Mengantar keeps type-checking and resolves env-only. */
+  mengantar?: MengantarRow | null;
+  shipping?: ShippingProviderRow | null;
+};
 
 export function resolveProviderConfig(rows: ProviderRows | null, env: ProviderEnvVars): ProviderConfig {
   return {
     kiriminaja: resolveKiriminaja({ row: rows?.kiriminaja, env }),
     autolaris: resolveAutolaris({ row: rows?.autolaris, env }),
+    mengantar: resolveMengantar({ row: rows?.mengantar, env }),
+    shipping: resolveShippingProvider({ row: rows?.shipping, env }),
   };
 }
 
@@ -190,6 +294,10 @@ const envVars = (): ProviderEnvVars => ({
   KIRIMINAJA_ORDER_PREFIX: process.env.KIRIMINAJA_ORDER_PREFIX,
   AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
   AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+  MENGANTAR_ENV: process.env.MENGANTAR_ENV,
+  MENGANTAR_PARTNER_ID: process.env.MENGANTAR_PARTNER_ID,
+  MENGANTAR_PARTNER_SECRET: process.env.MENGANTAR_PARTNER_SECRET,
+  SHIPPING_PROVIDER: process.env.SHIPPING_PROVIDER,
 });
 
 /**
@@ -253,11 +361,15 @@ export const activeKaOrderPrefix = async (): Promise<string> => (await getProvid
 export async function providerHealthSummary(): Promise<{
   kiriminaja: { env: ProviderEnv; envSource: KiriminajaConfig["envSource"]; key: ConfigSource };
   autolaris: { key: ConfigSource };
+  mengantar: { env: ProviderEnv; partner: ConfigSource; partnerOrigin: boolean };
+  shipping: ShippingProvider;
 }> {
   const cfg = await getProviderConfig();
   return {
     kiriminaja: { env: cfg.kiriminaja.env, envSource: cfg.kiriminaja.envSource, key: cfg.kiriminaja.keySource },
     autolaris: { key: cfg.autolaris.keySource },
+    mengantar: { env: cfg.mengantar.env, partner: cfg.mengantar.source, partnerOrigin: !!cfg.mengantar.partnerBase },
+    shipping: cfg.shipping,
   };
 }
 

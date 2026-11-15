@@ -13,9 +13,9 @@ export function Testimoni({ heading, items }: TestimoniConfig) {
 
   if (list.length === 0) {
     return (
-      <section className="rounded-2xl bg-brand-50 p-8">
-        <h2 className="mb-6 text-center text-xl font-semibold text-ink">{heading}</h2>
-        <div className="rounded-xl border-2 border-dashed border-line px-6 py-10 text-center">
+      <section className="rounded-sm bg-zinc-100 p-8">
+        <h2 className="mb-6 text-center font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">{heading}</h2>
+        <div className="rounded-sm border-2 border-dashed border-line px-6 py-10 text-center">
           <p className="text-sm font-medium text-ink">Belum ada testimoni</p>
           <p className="mt-1 text-sm text-ink/60">
             Tambahkan kutipan pelanggan <span className="font-medium">asli</span> di panel kanan.
@@ -27,11 +27,11 @@ export function Testimoni({ heading, items }: TestimoniConfig) {
   }
 
   return (
-    <section className="rounded-2xl bg-brand-50 p-8">
-      <h2 className="mb-6 text-center text-xl font-semibold text-ink">{heading}</h2>
+    <section className="rounded-sm bg-zinc-100 p-8">
+      <h2 className="mb-6 text-center font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">{heading}</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((item, i) => (
-          <figure key={i} className="rounded-2xl bg-white p-6">
+          <figure key={i} className="rounded-sm bg-white p-6">
             <div className="mb-2 flex items-center gap-1.5 text-amber-400" aria-hidden="true">
               <span>
                 {"\u2605".repeat(item.rating)}

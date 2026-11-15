@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
-import { kiriminajaConfigured } from "@tokophi/lib/kiriminaja";
 import { resolveArea, kelurahanForDistrict } from "@/lib/data/areas";
 import { rateLimited, readPublicBody, MAX_CART_ITEMS, SHIPPING_QUOTE_UNAVAILABLE } from "@/lib/public-guard";
-import { quoteShipping, FAST_COURIERS } from "@/lib/shipping-quote";
+import { quoteShipping, shippingConfigured, FAST_COURIERS } from "@/lib/shipping-quote";
 
 // Public (no-auth) storefront-facing shipping endpoint. The storefront checkout calls this to
 // (a) search a destination area and (b) get live KiriminAja rates. Shipping is platform-managed
@@ -40,10 +39,12 @@ export async function POST(req: Request) {
 async function handle(req: Request) {
   const limited = rateLimited(req, "ongkir", 60, 60_000, CORS);
   if (limited) return limited;
-  if (!kiriminajaConfigured()) {
+  // Follows the platform shipping switch (KiriminAja ⇄ Mengantar) — `shippingConfigured()` asks the
+  // provider that would quote right now, not KiriminAja by name.
+  if (!(await shippingConfigured())) {
     return NextResponse.json({ ok: false, error: "Shipping belum dikonfigurasi." }, { status: 200, headers: CORS });
   }
-  let body: { op?: string; q?: string; destinationId?: number; items?: { handle?: string; variant?: string; variantId?: string; qty?: number }[]; itemValue?: number; storeSlug?: string; all?: boolean };
+  let body: { op?: string; q?: string; destinationId?: number; kelurahan?: string; items?: { handle?: string; variant?: string; variantId?: string; qty?: number }[]; itemValue?: number; storeSlug?: string; all?: boolean; cod?: boolean };
   // Capped read — see `lib/public-guard.ts`. `req.json()` buffers whatever arrives, and a 64 MB body
   // was accepted here before this line existed.
   const raw = await readPublicBody(req, CORS);
@@ -117,9 +118,17 @@ async function handle(req: Request) {
       storeId: store.id,
       storeCity: store.city,
       destinationId: Number(body.destinationId),
+      // Optional, and the storefront does not send it today: a NAME, re-matched exactly inside the
+      // district by the Mengantar branch (never an id from the browser). Absent = the district's
+      // representative area. KiriminAja ignores it.
+      kelurahan: typeof body.kelurahan === "string" ? body.kelurahan : null,
       items: body.items ?? [],
       itemValue: body.itemValue || 0,
       couriers: body.all === true ? undefined : [...FAST_COURIERS],
+      // Optional SCOPE hint (like `all`): `cod: true` = the shopper chose COD, which always prices through
+      // the default provider (owner O6) — the same quote `/api/public/order` will re-make. The checkout
+      // sends it when the shopper picks COD on a store whose prepaid quote said `codRequote` (D12).
+      cod: body.cod === true,
     });
     // ADR 0004 — the aggregator's own words never reach the shopper (see SHIPPING_QUOTE_UNAVAILABLE).
     // They go to the container log, where whoever can fix an expired key or a bad origin will see them.
@@ -142,6 +151,11 @@ async function handle(req: Request) {
         billableWeight: q.billableGrams,
         weightFallback: q.weightFallback,
         codEnabled: q.codEnabled,
+        // D12: these rates came through a route that never carries COD (every rate `cod:false`), so a
+        // COD-enabled store must be RE-QUOTED with `cod: true` when the shopper picks COD. A neutral
+        // boolean on purpose — the provider's name never reaches the shopper (ADR 0004). Whether COD is
+        // actually allowed is still the store/platform policy, which the checkout already holds.
+        codRequote: q.provider === "mengantar" && body.cod !== true,
         origin: q.origin,
         originFrom: q.originFrom,
         originName: q.originName,

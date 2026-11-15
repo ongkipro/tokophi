@@ -82,6 +82,7 @@ const PAGE_ALIASES: Record<string, string> = {
   "/pelanggan": "customer pembeli konsumen",
   "/pelanggan/keranjang": "abandoned checkout tinggal",
   "/pelanggan/ulasan": "review rating",
+  "/pelanggan/akun": "akun tokophi akun pembeli terhubung tersimpan login",
   "/obrolan": "chat percakapan pesan",
   "/crm": "follow up prospek",
   "/diskon": "kupon kode promo potongan",

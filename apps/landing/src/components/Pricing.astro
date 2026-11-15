@@ -28,11 +28,11 @@ const includes = [
       <label><input type="radio" name="cycle" value="monthly" checked /> <span>Bulanan</span></label>
       <label><input type="radio" name="cycle" value="annual" /> <span>Tahunan</span></label>
     </fieldset>
-    <p class="cycle-note">Bayar tahunan hemat {PRICE.annualSaving} dibanding 12 bulan biasa.</p>
+    <p class="cycle-note">Bayar tahunan hemat {PRICE.annualDiscountPct} ({PRICE.annualSaving}) dibanding 12 bulan biasa.</p>
 
     <div class="price price-monthly">
-      <p class="price-big">{PRICE.firstMonth}<span>bulan pertama</span></p>
-      <p class="price-then">Selanjutnya {PRICE.monthly} per bulan.</p>
+      <p class="price-big">{PRICE.monthly}<span>per bulan</span></p>
+      <p class="price-then">Harga yang sama sejak tagihan pertama.</p>
     </div>
     <div class="price price-annual">
       <p class="price-big">{PRICE.annual}<span>per tahun</span></p>
@@ -40,6 +40,7 @@ const includes = [
     </div>
 
     <a href={signupUrl} class="btn btn-lg price-cta">Coba gratis {PRICE.trialDays} hari</a>
+    <p class="price-fine">Punya kode referral? Masukkan saat mendaftar; kode yang membawa potongan memotong tagihan langganan pertama Anda.</p>
     <p class="price-fine">Pembayaran langganan lewat Virtual Account. Bila tagihan lewat {PRICE.graceDays} hari, Dashboard Seller menjadi baca-saja, tetapi toko Anda tetap bisa dikunjungi pembeli.</p>
   </div>
 

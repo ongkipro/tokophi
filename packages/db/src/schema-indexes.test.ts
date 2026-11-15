@@ -98,6 +98,16 @@ const INDEX_CENSUS: Record<string, Census> = {
   refunds_one_open_per_payment: "sql-only: partial unique index (one OPEN row per payment), not expressible in schema.ts",
   refunds_store_idx: "drizzle",
   refunds_order_idx: "drizzle",
+  buyer_sessions_buyer_idx: "drizzle",
+  buyer_store_links_store_idx: "drizzle",
+  buyer_order_claims_buyer_idx: "drizzle",
+  // 0125 / ADR 0022 — the store affiliate programme and its own accounts.
+  affiliate_sessions_account_idx: "drizzle",
+  affiliates_store_status_idx: "drizzle",
+  affiliates_account_idx: "drizzle",
+  affiliates_invite_hash_idx: "drizzle",
+  affiliate_commissions_store_idx: "drizzle",
+  affiliate_commissions_affiliate_idx: "drizzle",
 
   // Hidup HANYA di SQL. Bukan salah ketik — ini utang yang dinamai, bukan yang tak terlihat.
   ledger_one_adjustment_component_per_booking:
@@ -111,6 +121,18 @@ const INDEX_CENSUS: Record<string, Census> = {
   conversations_store_last_msg_idx: "sql-only: index pencarian polos",
   conversations_store_status_idx: "sql-only: index pencarian polos",
   conversations_store_visitor_idx: "sql-only: index pencarian polos",
+  // 0116 (Mengantar Partner Business API).
+  mengantar_areas_postal_idx: "drizzle",
+  mengantar_areas_district_idx: "drizzle",
+  sma_seller_uniq: "sql-only: unique parsial (env, seller_id) where seller_id is not null — satu seller Mengantar hanya untuk satu toko",
+  sma_ext_uniq: "sql-only: unique (env, external_user_id) — idempotensi pendaftaran Partner per toko",
+  sma_retry_idx: "sql-only: index parsial antrean pendaftaran (state pending/registering) untuk sweep cron",
+  // 0117 (ADR 0019, penyedia pengiriman per toko).
+  stores_signup_code_idx: "sql-only: index parsial (signup_code is not null) — hitung pemakaian kode daftar di Super Admin",
+  // 0119 (ADR 0020, potongan kode di tagihan pertama). Saudara `invoices_one_comp_per_grant`: tabel yang sama,
+  // index parsial yang sama bentuknya.
+  invoices_one_live_code_discount: "sql-only: unique parsial (store_id) where code_discount_idr > 0 and status = 'menunggu' — paling banyak SATU tagihan berpotongan yang hidup per toko",
+  store_plugins_active_idx: "sql-only: index parsial (plugin) where enabled and broken_at is null — daftar toko yang disapu cron plugin (0120, KEL-001)",
 };
 
 /** Nama index → tabel, DITURUNKAN dari berkas migrasi. Tidak pernah ditulis tangan. */

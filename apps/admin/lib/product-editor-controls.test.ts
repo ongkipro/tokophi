@@ -86,6 +86,8 @@ const FORM_STATE: Record<string, Fate> = {
   seoTitle: "payload",
   metaDesc: "payload",
   handle: "payload",
+  // (`auto` — which catalogue fields filled themselves — lives in `use-catalog-autofill.ts` since the
+  // 2026-11-05 extraction; the editor still sends `auto.gcat` as `googleCategoryAuto`.)
 
   // ── local: it feeds a payload field rather than being one ─────────────────────────────────────
   valueDrafts: { local: "the per-option 'ketik nilai lalu Enter' box; Enter/blur commits it into `options`" },

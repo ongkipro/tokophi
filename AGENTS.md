@@ -100,7 +100,7 @@ Put it in `CHANGELOG.md` / `STATUS.md` / here. If your change alters a contract 
 (a data-layer signature, a payment/shipping flag, a DB column), **say so in the commit body** — that is
 the message the other agent will actually see.
 
-Shopify-style commerce SaaS for Indonesia. **No Themes marketplace, no Apps/Plugins** (the Seller **Tema** menu is the Store Builder for the store's own templates). **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `specs/PRD.md` (in this repo).
+Shopify-style commerce SaaS for Indonesia. **No Themes marketplace, no Apps/Plugins marketplace** (the Seller **Tema** menu is the Store Builder for the store's own templates). The only plugins are **first-party, compiled in, activated per store** at Pengaturan → Plugin (ADR 0021 — first one: Kelola CRM, `apps/admin/lib/plugins/`); a store that never activates one is untouched. **Backend live on local PostgreSQL** (Docker :5433, Drizzle): all 3 surfaces READ + all 12 admin editors WRITE the DB, plus local auth (login/session) + local media upload (see Database below). Bahasa Indonesia UI, IDR. **Prod target = self-hosted Postgres + PostgREST on a VPS (NOT Supabase), deferred.** Full spec: `specs/PRD.md` (in this repo).
 
 ## 📛 Naming — say "Seller", never "admin panel"
 There are TWO admin surfaces and calling them both "admin" is what has repeatedly confused agents *and* users. The **UI copy** now says:
@@ -123,6 +123,9 @@ tokophi/
     super-admin/  # "Super Admin" — platform control plane (@tokophi/super-admin) — what WE use (manage all stores/plans/billing)
     storefront/   # Astro SSR shopper site — multi-tenant by Host header
     landing/      # @tokophi/landing — static Astro front door for the apex (no DB on purpose)
+    account/      # @tokophi/account — Akun TokoΦ, the buyer account (account.tokophi.com, ADR 0016) — deployed but DORMANT (503) until the owner steps in TASKS `BUYER-ACCOUNT-ENABLE`
+    affiliate/    # @tokophi/affiliate — store affiliate programme, affiliates' own accounts (affiliate.tokophi.com, ADR 0022)
+    docs/         # @tokophi/docs — the Panduan (help) site
   packages/
     ui/           # @tokophi/ui — shared shadcn/Base UI components + cn + Tailwind v4 tokens (styles.css)
     lib/          # @tokophi/lib — shared formatters (IDR/num/…)
@@ -171,7 +174,7 @@ npm run test:db # same, but a missing/unreachable test DB FAILS instead of skipp
 >    equal across repo journal, local and production.
 > Treat the data as production data: no dumps into the repo, chat or tickets.
 
-Local backend fully wired behind the data layer (all 4 surfaces read, all admin editors write; local auth + RBAC + RLS). Plain **PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **84 tables · 116 migrations `0000`–`0115`**, snake_case, money = bigint IDR). **MULTI-tenant** — the `platformGate` control plane reaches every store. **RLS** covers every store-scoped table except `platform_activity` and enforces at runtime (admin reads/writes run inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`). The coverage count is DERIVED: **run `npm run verify-rls -w @tokophi/db` and believe its output, not any sentence** (it must stay green; nothing runs it automatically). `stores` is keyed by `id`, has no `store_id`, so the verifier cannot see it — policy `0058` is keyed on `id`. Storage (MinIO/S3) and PostgREST come with the VPS.
+Local backend fully wired behind the data layer (all 4 surfaces read, all admin editors write; local auth + RBAC + RLS). Plain **PostgreSQL 16 in Docker** + **Drizzle** (annotated in `specs/docs/SCHEMA.md`: **99 tables · 126 migrations `0000`–`0125`**, snake_case, money = bigint IDR). **MULTI-tenant** — the `platformGate` control plane reaches every store. **RLS** covers every store-scoped table except `platform_activity` and enforces at runtime (admin reads/writes run inside a txn that sets `app.store_id` + `SET LOCAL ROLE tokophi_app`). The coverage count is DERIVED: **run `npm run verify-rls -w @tokophi/db` and believe its output, not any sentence** (it must stay green; nothing runs it automatically). `stores` is keyed by `id`, has no `store_id`, so the verifier cannot see it — policy `0058` is keyed on `id`. Storage (MinIO/S3) and PostgREST come with the VPS.
 ```bash
 docker compose up -d db              # PostgreSQL 16 @ localhost:5433 (persisted volume)
 npm run migrate -w @tokophi/db     # apply versioned migrations (canonical)
@@ -186,7 +189,7 @@ npm run generate -w @tokophi/db    # ⚠️ READ THE WARNING BELOW BEFORE USING 
 - 🔴 **Child-table rule** (five shipped cross-tenant bugs came from it). Before any INSERT/UPDATE/DELETE on a table with NO `store_id` (`verify-rls` prints the current list — `order_line_items`, `product_media`, `menu_items`, `collection_products`, `purchase_order_items`, `flash_sale_items`, …), every id the row is keyed on — the parent AND every FK in its values — must have been read back from an RLS-protected table inside the same `withTenant` txn, and the action must bail if that read returns nothing. The parent write silently no-ops under RLS for a foreign id while the child write lands anyway; `verify-rls` structurally cannot catch it.
 - **RBAC.** Every mutating server action starts with `await requireCapability("<cap>")` (`lib/rbac.ts`) — the security boundary; the role→capability matrix is `lib/rbac-policy.ts`; gate UI with `useCan`/`<Can>`; a new capability must be classified in `rbac-census.test.ts`.
 - **Reads/writes pattern.** Reads: `lib/data/<entity>.ts` returning a flat shape inside `withCurrentTenant`, pages `force-dynamic`. Writes: `lib/actions/<entity>.ts` (`"use server"`) → `requireCapability` → `withTenant` → `revalidatePath`; UI wires `useRouter` + `useTransition` + toast. **Delete = archive** (`status='archived'`) when history references the row.
-- **Buying never requires an account**: `customers.registered_at IS NULL` = Tamu, the NORMAL case. Abandoned-cart recovery travels on WhatsApp ("WA dibuka", never "terkirim"); the rescue metric is `abandoned_at IS NOT NULL AND recovered_at IS NOT NULL`, and `aktif` sessions are excluded from both sides of every rate.
+- **Buying never requires an account**: `customers.registered_at IS NULL` = Tamu, the NORMAL case. Akun TokoΦ (ADR 0016) is offered only AFTER the order (claim token, consent per store); the order API writes no buyer row; never match an order to an account by phone/email. Abandoned-cart recovery travels on WhatsApp ("WA dibuka", never "terkirim"); the rescue metric is `abandoned_at IS NOT NULL AND recovered_at IS NOT NULL`, and `aktif` sessions are excluded from both sides of every rate.
 - Media is local (`apps/admin/public/uploads`, gitignored, 2 MB image cap, `lib/image-store.ts` `MAX_BYTES`) until MinIO/S3 on the VPS.
 
 **Full rules + incident history → `specs/docs/rules/database-rls.md`** — read it before writing any DB read/write, a migration-adjacent change, or touching a pool/RLS policy.
@@ -205,8 +208,8 @@ npm run generate -w @tokophi/db    # ⚠️ READ THE WARNING BELOW BEFORE USING 
 
 ## Billing & super-admin control (single plan)
 
-- **One plan "TokoΦ"** (3-day trial → Rp50rb first month → Rp275rb/mo, annual Rp2.7jt); no tiers. Prices are DPP (ex-tax); PPN 11% is the GLOBAL toggle `platform_finance.subscription_ppn_enabled` (default OFF). Every invoice creator charges via `subscriptionCharge(base, ppnEnabled)` and stores BOTH `amount_idr` + `tax_idr`. Money map: `specs/docs/FINANCE.md`.
-- Segments `trial → first_month → regular → vip`; **VIP = `stores.comped`**, a BILLING bypass, not an abuse shield.
+- **One plan "TokoΦ"** (3-day trial → **Rp178.500/mo**, annual **Rp1.713.600** = ×12 −20%, no first-month promo; a signup code may take `discount_first_invoice_idr` off the FIRST PAID invoice once, via `codeDiscountFor()` in `createSubscriptionInvoice`, stored as `invoices.code_discount_idr` — ADR 0020); no tiers. Prices are DPP (ex-tax); PPN 11% is the GLOBAL toggle `platform_finance.subscription_ppn_enabled` (default OFF). Every invoice creator charges via `subscriptionCharge(base, ppnEnabled)` and stores BOTH `amount_idr` + `tax_idr`. Money map: `specs/docs/FINANCE.md`.
+- Segments `trial → first_invoice → regular → vip` (`first_invoice` = trial over, never paid; was `first_month`); **VIP = `stores.comped`**, a BILLING bypass, not an abuse shield.
 - 🔴 **An operator suspension is a separate fact** (`stores.suspended_at`, 0086). `computeBilling` returns `status` (effective), **`billingStatus` (what the MONEY reads)** and `operatorSuspended`; never derive "did WE suspend this?" from the badge. `StoreBillingRow.suspendedAt` is required on purpose. A suspension REQUIRES a reason (≥5 chars); lifting restores billing state only. Audit lines report the OUTCOME re-read via `.returning()`.
 - 🔵 **Marking an invoice paid by hand is bookkeeping and does NOT move `current_period_end`** (owner ruling 2026-08-20). The only writers are `api/public/pay/callback`, `compStore`, `extendTrial`. Entitlement moves on payment events.
 - 🔴 **A payout completes by compare-and-swap** (`payout-transition.ts`: `diproses → selesai`, one statement decides and writes); nothing is posted to the ledger on completion.
@@ -217,6 +220,7 @@ npm run generate -w @tokophi/db    # ⚠️ READ THE WARNING BELOW BEFORE USING 
 
 ## Shipping & COD (read before touching checkout)
 
+- 🚚 **Mengantar (second provider, live 2026-11-12):** the provider is a fact about the STORE (`stores.shipping_provider`, set only by Super Admin or a signup code — ADR 0019) under the platform kill-switch `shipping_provider_config.active_provider`; Mengantar only for switch ∧ not-COD ∧ connected store, else KiriminAja; **COD NEVER via Mengantar**; `orders.shipping_provider` decides booking/tracking/cancel. Full rules in `specs/docs/rules/shipping-cod.md` § Mengantar.
 - **Ongkir is priced FROM the seller's pickup address** (`store_settings.sender_kecamatan_id`, a KiriminAja district id); never let the client choose the origin (`body.originCity` is ignored). **`apps/admin/lib/shipping-quote.ts` is the ONE place a shipping price is produced**; `/api/public/order` RE-QUOTES, `body.shipping.cost` is not read, and a picked service absent from the fresh quote is rejected. Item prices come from `product_variants`, never the cart.
 - ⚠️ `KIRIMINAJA_ENV` unset = **sandbox**, and sandbox bookings look identical to production ones — a wrong setting is invisible.
 - **COD is a CHAIN of three agreements** — `platform_cod.enabled` (cap Rp2.000.000, 6 allow-listed provinces) ∧ `platform_couriers.services[].codAllowed` (SPX only) ∧ `store_settings.cod_enabled` (default false). **`apps/admin/lib/cod.ts` is the ONE place that answers**; `/api/public/order` is the boundary; never `if (courier === "spx")`. The rate's `cod` flag is the effective one.
@@ -319,9 +323,10 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
 
 **Full rules + incident history → `specs/docs/rules/checkout-validation.md`** — read it before touching `checkout.astro`, `@tokophi/lib/validate` or any checkout field.
 
-## The public API (`apps/admin/app/api/public/**`) — four routes, no session, no Host
+## The public API (`apps/admin/app/api/public/**`) — five shopper routes, no session, no Host
 
-`ongkir` · `order` · `promo` · `pay/callback` — the only unauthenticated write surface.
+`ongkir` · `order` · `promo` · `pay/retry` · `pay/callback` — the only unauthenticated write surface.
+- 🔴 **`pay/retry` ("Bayar ulang") is authorised by a ONE-ORDER SECRET (`payToken`, only its sha256 stored in `orders.pay_token_hash`), never by the order number**; every refusal is the same 404; at most one live instruction per order (`lib/pay-retry.ts` `retryDecision`/`instructionState`, under the order's row lock); a retry copies the previous attempt's amounts, never re-prices.
 - 🔵 **`storeSlug` IN THE BODY IS THE TENANT SELECTOR HERE, AND IT IS CORRECT** — these routes are served by `app.tokophi.com` while the shopper is on `<slug>.tokophi.com`, so the Host carries no tenant. Do NOT "fix" it to the Host header. The voucher error copy being a code-probing oracle is deliberate.
 - Read bodies through **`readPublicBody()`** (`lib/public-guard.ts`), never `req.json()`; `items[]` is capped (`MAX_CART_ITEMS` 100) on the RAW array.
 - 🔴 **A provider's own error text never reaches a shopper** (ADR 0004) — substitute `SHIPPING_QUOTE_UNAVAILABLE` / `PAY_START_FAILED` and `console.error` the original; seller-facing actions keep the provider's words.
@@ -370,6 +375,11 @@ every deploy, and a hardcoded one fails with "No such container" the moment anyt
 2. Add the read to `lib/data/<entity>.ts` (inside `withCurrentTenant`) and its view type to `lib/types/domain.ts`.
 3. Register it in `lib/nav.ts` (`NAV_GROUPS`).
 4. Build + verify console clean + screenshot (Playwright renders charts correctly; `chrome --headless --virtual-time-budget` mis-sizes Recharts).
+
+## Store affiliate programme (ADR 0022) — read `specs/AFFILIATE_SPEC.md` before touching it
+
+- Affiliates have their OWN accounts at `affiliate.tokophi.com` (`apps/affiliate`, email + password) — **never** the buyer account; nothing affiliate-related references `buyer_accounts`. Switch = `AFFILIATE_APP_URL` on affiliate + admin + storefront (empty = dormant); the SELLER turns the programme on per store (`store_settings.affiliate_enabled`).
+- The seller pays outside TokoΦ: a commission never touches the ledger. Attribution runs ONLY in `/api/public/order` (in a savepoint — a code never costs the sale); the lifecycle ONLY through `applyOrderStatusChange` (`onOrderStatusForAffiliate`). A row is bound to an account only by applying while signed in or by the seller's single-use invitation — never by email/phone.
 
 ## Conversion tracking, attribution & catalog feeds (read before touching a pixel or a feed)
 

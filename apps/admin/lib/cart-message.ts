@@ -18,6 +18,20 @@ import type { CartItem } from "@/lib/data/checkout";
 // So: substitute where the merchant has placed it, append where they have not. A merchant who wants
 // the link mid-sentence writes `{{link}}` and gets it there; everyone else gets a working message
 // today with no data fix and no edit.
+/**
+ * The message a store gets when it has no `keranjang` template of its own. Provisioning writes no
+ * templates, so on 2026-11-03 every non-demo store (16/16 in production) had none — the WhatsApp
+ * button never rendered and the row read "Tidak ada nomor" over a cart that HAD a number. The only
+ * template editor (`/crm/template`) is now hidden outside the demo store, so this default is what
+ * makes the button work for everyone.
+ *
+ * No `{{nama}}` (an unnamed checkout would read "Halo kak ,"), no scarcity claim the store has not
+ * made, and no `{{link}}`: `cartMessage` appends the recovery link as its own block only when one
+ * exists, so a store without a resolvable host never sends a sentence pointing at a missing link.
+ */
+export const DEFAULT_CART_TEMPLATE =
+  "Halo kak, ini dari {{toko}}. Pesanan *{{produk}}* belum selesai di checkout. Kalau masih berminat, kami bantu selesaikan. Ada pertanyaan soal produk atau ongkir? Balas saja pesan ini.";
+
 export function cartMessage(
   templateBody: string,
   name: string | null,

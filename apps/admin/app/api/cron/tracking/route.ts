@@ -8,6 +8,8 @@ import { realWaybill } from "@tokophi/lib/kiriminaja-tracking";
 import { isNotFoundReply } from "@/lib/cancel-reconcile";
 import { cronIntervalSec, recordCronRun } from "../record-run";
 import { cronAuthorized } from "@/lib/cron-auth";
+import { sweepMengantarTracking, type MgSweepSummary } from "@/lib/mengantar-tracking";
+import { retryMengantarAccounts, type MgAccountSweep } from "@tokophi/db/mengantar-account";
 
 // Tracking POLLER (BACKLOG shipping #1/#2) — the pull half. A booking returns `awb: null`; the waybill,
 // and every state after it, only exist once a courier accepts the pickup. This cron sweeps the orders
@@ -81,14 +83,35 @@ export async function GET(req: NextRequest) {
   // which is precisely why this branch has to be RECORDED as a failed run. A poller that wakes on
   // schedule and can never fill a waybill is indistinguishable, from the outside, from one that is
   // working; on the panel it now reads red instead of "terakhir jalan 2 menit lalu".
-  if (!kiriminajaConfigured()) {
+  // SHIP-MENGANTAR (Partner Business API): orders booked with the second provider are swept by
+  // `sweepMengantarTracking` (their own query: `shipping_provider = 'mengantar'`, so the two sweeps never
+  // share a row), each pulled with ITS OWN store's seller key. There is no platform key to be "configured":
+  // the sweep always runs and an order whose account is gone is counted, not pulled. The same tick
+  // finishes queued Mengantar account registrations (`retryMengantarAccounts`, bounded, O10).
+  const kaOn = kiriminajaConfigured();
+  let mg: (MgSweepSummary & { accounts?: MgAccountSweep }) | null = null;
+  try {
+    mg = await sweepMengantarTracking();
+  } catch (err) {
+    console.error("[cron/tracking] mg sweep failed", err instanceof Error ? err.name : err);
+    mg = { scanned: 0, advanced: 0, awbFilled: 0, problems: 0, cancelsReconciled: 0, errors: 1, accountMissing: 0 };
+  }
+  try {
+    mg.accounts = await retryMengantarAccounts();
+  } catch (err) {
+    console.error("[cron/tracking] mg account retry failed", err instanceof Error ? err.name : err);
+    mg.errors++;
+  }
+  // The default provider without a key is a FAILED run even though the Mengantar half ran: it is the
+  // fallback every unconnected store and every COD order books through (owner O6).
+  if (!kaOn) {
     await recordCronRun("tracking", {
       ok: false,
       startedAt,
       intervalSec: cronIntervalSec(req),
-      result: { error: `${SHIPPING_SERVICE} belum dikonfigurasi.` },
+      result: { error: `${SHIPPING_SERVICE} belum dikonfigurasi.`, mg },
     });
-    return NextResponse.json({ ok: false, error: `${SHIPPING_SERVICE} belum dikonfigurasi.` }, { status: 200 });
+    return NextResponse.json({ ok: false, error: `${SHIPPING_SERVICE} belum dikonfigurasi.`, mg }, { status: 200 });
   }
 
   // Rank independently inside every store, then execute round 1 for all stores before round 2, etc.
@@ -278,13 +301,13 @@ export async function GET(req: NextRequest) {
   // The SAME summary is returned to the caller and stored. `docker logs` keeps its line; the row is
   // what a human sees without going looking. Storing the counts, not just the timestamp, is the half
   // that matters here: `awbFilled` was 0 for a week and "the cron ran" would have been true all week.
-  const summary = { scanned: orders.length, advanced, awbFilled, sortingFilled, problems, problemsCleared, cancelsReconciled, errors: errors.length };
+  const summary = { scanned: orders.length, advanced, awbFilled, sortingFilled, problems, problemsCleared, cancelsReconciled, errors: errors.length, ...(mg ? { mg } : {}) };
   // ⚠️ `ok` IS DERIVED FROM `errors`, NOT HARD-CODED. It was `ok: true`, so a tick in which every
   // single sync threw wrote a GREEN `cron_runs` row — over the one job whose week-long silence is
   // the reason this table exists at all. `order-expiry` beside it already computes
   // `ok: summary.errors === 0`; this route did not, and a liveness row that cannot go red is a row
   // nobody can act on.
-  const ok = errors.length === 0;
+  const ok = errors.length === 0 && (mg?.errors ?? 0) === 0;
   await recordCronRun("tracking", { ok, startedAt, intervalSec: cronIntervalSec(req), result: summary });
     return NextResponse.json({ ok, ...summary });
   } catch (error) {

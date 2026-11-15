@@ -125,8 +125,10 @@ const FAILED_LOGIN_ESCALATION = 5;
 const FAILED_LOGIN_IDLE_MS = 15 * 60_000;
 const failures = new Map<string, { count: number; nextReport: number; idleUntil: number }>();
 
-export type LoginSurface = "seller" | "platform";
-const SURFACE_LABEL: Record<LoginSurface, string> = { seller: "Dashboard Seller", platform: "Super Admin" };
+// "affiliate" = affiliate.tokophi.com (apps/affiliate, ADR 0022): its own streak per address, so an
+// affiliate's failures never lock a Seller with the same email, and the other way round.
+export type LoginSurface = "seller" | "platform" | "affiliate";
+const SURFACE_LABEL: Record<LoginSurface, string> = { seller: "Dashboard Seller", platform: "Super Admin", affiliate: "Affiliate TokoΦ" };
 
 const failedLoginKey = (surface: LoginSurface, email: string) => `${surface}:${email.trim().toLowerCase()}`;
 

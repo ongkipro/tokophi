@@ -6,6 +6,27 @@
       "label": "Seller (merchant panel)",
       "routes": [
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/affiliate/page.tsx",
+          "clients": [
+            "affiliate-client.tsx"
+          ],
+          "data": [
+            "affiliates"
+          ],
+          "actions": [
+            "affiliates"
+          ],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "'Affiliate' (Promo → Affiliate, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`."
+        },
+        {
           "url": "/akun/keamanan",
           "kind": "page",
           "methods": [],
@@ -238,6 +259,27 @@
         },
         {
           "url": "/crm",
+          "kind": "layout",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/crm/layout.tsx",
+          "clients": [],
+          "data": [
+            "store"
+          ],
+          "actions": [],
+          "gate": [
+            "session"
+          ],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [
+            "apps/admin/lib/nav-crm.test.ts"
+          ],
+          "whatItIs": "layout"
+        },
+        {
+          "url": "/crm",
           "kind": "page",
           "methods": [],
           "file": "apps/admin/app/(admin)/crm/page.tsx",
@@ -253,7 +295,9 @@
           "clientGates": [],
           "dynamic": false,
           "ownerDb": false,
-          "tests": [],
+          "tests": [
+            "apps/admin/lib/nav-crm.test.ts"
+          ],
           "whatItIs": "'CRM' landing — redirects/overview of pipeline, follow-ups, templates."
         },
         {
@@ -375,7 +419,9 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": [],
+          "tests": [
+            "test/pagination-keyboard.test.ts"
+          ],
           "whatItIs": "'File' — media library (uploads under `/api/uploads`)."
         },
         {
@@ -552,6 +598,7 @@
             "error.tsx"
           ],
           "data": [
+            "affiliates",
             "billing",
             "domain",
             "orders",
@@ -633,7 +680,9 @@
             "store",
             "support"
           ],
-          "actions": [],
+          "actions": [
+            "mengantar"
+          ],
           "gate": [
             "session"
           ],
@@ -665,6 +714,25 @@
             "apps/admin/lib/uuid-guard.test.ts"
           ],
           "whatItIs": "Customer detail: orders, tags, notes."
+        },
+        {
+          "url": "/pelanggan/akun",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/pelanggan/akun/page.tsx",
+          "clients": [],
+          "data": [
+            "customers"
+          ],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/admin/lib/buyer-account-gate.test.ts"
+          ],
+          "whatItIs": "'Akun Pembeli' (ADR 0016) — this store's customers who saved an order to a TokoΦ Account: count, since when. Merchant projection only, never the account itself."
         },
         {
           "url": "/pelanggan/keranjang",
@@ -706,6 +774,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/buyer-account-gate.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ],
           "whatItIs": "'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case."
@@ -791,9 +860,10 @@
           "dynamic": false,
           "ownerDb": false,
           "tests": [
-            "apps/admin/lib/actions/users.test.ts"
+            "apps/admin/lib/actions/users.test.ts",
+            "apps/admin/lib/mengantar-readiness.test.ts"
           ],
-          "whatItIs": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), domains, users/roles. Payment channels are NOT here (platform decision)."
+          "whatItIs": "'Pengaturan' — store profile, pickup address ('Alamat': kecamatan + kelurahan → the courier's ids), shipping ('Pengiriman'/'Jasa Kirim' per service, COD opt-in), 'Layanan Pembeli' (return window + complaint-resolution days a buyer reads in the Akun TokoΦ, ADR 0016), domains, users/roles. Payment channels are NOT here (platform decision)."
         },
         {
           "url": "/pesanan/[id]",
@@ -808,6 +878,7 @@
             "orders"
           ],
           "actions": [
+            "mengantar",
             "orders",
             "payments",
             "shipping"
@@ -870,7 +941,8 @@
             "apps/admin/lib/search-model.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts",
-            "packages/lib/src/autolaris-submit.test.ts"
+            "packages/lib/src/autolaris-submit.test.ts",
+            "test/pagination-keyboard.test.ts"
           ],
           "whatItIs": "'Pesanan' — orders list with status tabs; URL params validated before any enum cast."
         },
@@ -1324,6 +1396,7 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/lib/actions/users.test.ts",
             "apps/admin/lib/cron-auth.test.ts"
           ],
           "whatItIs": "Daily billing sweep: trial/period status, renewal invoices, suspension for non-payment (honours `comped`, never `stores.status`)."
@@ -1390,6 +1463,27 @@
           "whatItIs": "Every 15 min asks the PSP's advice endpoint for each live bill — observe only, settles nothing."
         },
         {
+          "url": "/api/cron/plugins",
+          "kind": "api",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/admin/app/api/cron/plugins/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [
+            "cron"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/admin/lib/cron-auth.test.ts"
+          ],
+          "whatItIs": "Every 15 min: retries + leads for each store's active first-party plugin (Kelola CRM); idle until a merchant connects one."
+        },
+        {
           "url": "/api/cron/tracking-events",
           "kind": "api",
           "methods": [
@@ -1434,6 +1528,23 @@
             "apps/admin/lib/ka-sorting-code.test.ts"
           ],
           "whatItIs": "Every 15 min pulls KiriminAja tracking for booked orders (`parseKaTracking`: `details` + package `status_code`): fills a REAL `orders.awb` (never `MOCK-<ref>`), the sorting code, and advances status forward-only."
+        },
+        {
+          "url": "/api/csp-report",
+          "kind": "api",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/admin/app/api/csp-report/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing."
         },
         {
           "url": "/api/health/env",
@@ -1500,7 +1611,9 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
-            "apps/admin/lib/destination-kelurahan.test.ts"
+            "apps/admin/app/api/public/ongkir/route.test.ts",
+            "apps/admin/lib/destination-kelurahan.test.ts",
+            "apps/admin/lib/shipping-quote-mengantar.test.ts"
           ],
           "whatItIs": "Storefront quote: area search + live rates from the seller's pickup district over the seller's catalogue weight/box; effective COD flag per rate."
         },
@@ -1529,7 +1642,11 @@
             "apps/admin/lib/destination-kelurahan.test.ts",
             "apps/admin/lib/fee-truth.test.ts",
             "apps/admin/lib/inventory-location.test.ts",
-            "apps/admin/lib/public-guard.test.ts"
+            "apps/admin/lib/plugins/order-hook-position.test.ts",
+            "apps/admin/lib/public-guard.test.ts",
+            "apps/admin/lib/shipping-quote-mengantar.test.ts",
+            "apps/storefront/src/lib/order-forms-affiliate-ref.test.ts",
+            "packages/lib/src/provider-label.test.ts"
           ],
           "whatItIs": "THE order boundary: re-normalises every field, re-quotes shipping, prices from `product_variants`, enforces voucher/COD, writes the order + payment."
         },
@@ -1552,10 +1669,34 @@
           "dynamic": true,
           "ownerDb": true,
           "tests": [
+            "apps/admin/app/api/public/pay/retry/route.test.ts",
             "apps/admin/lib/commerce-lifecycle.test.ts",
             "apps/admin/lib/fee-truth.test.ts"
           ],
           "whatItIs": "PSP payment callback — signed per-payment `?cb=`, exactly one identity, credits the ledger on `berhasil`."
+        },
+        {
+          "url": "/api/public/pay/retry",
+          "kind": "api",
+          "methods": [
+            "OPTIONS",
+            "POST"
+          ],
+          "file": "apps/admin/app/api/public/pay/retry/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [
+            "public-body",
+            "rate-limit"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": true,
+          "tests": [
+            "apps/admin/lib/pay-retry.test.ts"
+          ],
+          "whatItIs": "\"Bayar ulang\" (PAY-RETRY) — a NEW bill for the SAME order once the last one expired or failed; one-order token, row-locked, never two live bills."
         },
         {
           "url": "/api/public/promo",
@@ -1723,6 +1864,27 @@
       "label": "Super Admin (platform control plane)",
       "routes": [
         {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/affiliate/page.tsx",
+          "clients": [
+            "affiliate-accounts-client.tsx"
+          ],
+          "data": [],
+          "actions": [
+            "affiliate-accounts"
+          ],
+          "gate": [
+            "route:/affiliate"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": true,
+          "tests": [],
+          "whatItIs": "'Akun Affiliate' (ADR 0022, AFFILIATE-PW-RESET interim) — every affiliate account (email, name, stores joined), with reset password (minted once, sessions revoked) and disable / enable; floor admin."
+        },
+        {
           "url": "/analitik",
           "kind": "page",
           "methods": [],
@@ -1740,6 +1902,30 @@
             "apps/super-admin/lib/route-roles.test.ts"
           ],
           "whatItIs": "Platform analytics + cron liveness cards (billing, tracking, conversions, payment advice)."
+        },
+        {
+          "url": "/kode-daftar",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/kode-daftar/page.tsx",
+          "clients": [
+            "kode-daftar-client.tsx"
+          ],
+          "data": [],
+          "actions": [
+            "actions"
+          ],
+          "gate": [
+            "route:/kode-daftar"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/super-admin/lib/route-roles.test.ts",
+            "apps/super-admin/lib/store-shipping-provider.test.ts"
+          ],
+          "whatItIs": "'Kode Daftar' (ADR 0019) — signup codes: each maps a self-serve store to a shipping provider (KiriminAja / Mengantar) and may carry a first-invoice discount (ADR 0020) via /daftar?kode=; list with derived usage count, create, deactivate / re-activate (never delete). Floor + actions = SHIPPING_PROVIDER_MIN_RANK (owner)."
         },
         {
           "url": "/",
@@ -1870,6 +2056,7 @@
           "methods": [],
           "file": "apps/super-admin/app/(platform)/pengaturan/page.tsx",
           "clients": [
+            "mengantar-panel.tsx",
             "pengaturan-client.tsx",
             "provider-keys.tsx"
           ],
@@ -1892,6 +2079,29 @@
             "apps/super-admin/lib/route-roles.test.ts"
           ],
           "whatItIs": "'Pengaturan' — payment channels/gateway, couriers + COD policy (SPX only), KiriminAja test/sync + env badge, finance (PPN toggle), operators."
+        },
+        {
+          "url": "/pengiriman",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/super-admin/app/(platform)/pengiriman/page.tsx",
+          "clients": [
+            "pengiriman-client.tsx"
+          ],
+          "data": [],
+          "actions": [
+            "actions"
+          ],
+          "gate": [
+            "route:/pengiriman"
+          ],
+          "clientGates": [],
+          "dynamic": true,
+          "ownerDb": false,
+          "tests": [
+            "apps/super-admin/lib/route-roles.test.ts"
+          ],
+          "whatItIs": "'Pengiriman' — Mengantar Partner Business API oversight: every store's own Mengantar seller account (state, seller id, last error; admin retries registration, owner rotates the key) and unknown-outcome bookings (owner adopts from a verified pull with the store's key, or releases; reason required)."
         },
         {
           "url": "/tiket/[id]",
@@ -1949,6 +2159,7 @@
           "file": "apps/super-admin/app/(platform)/toko/[id]/page.tsx",
           "clients": [
             "saldo-section.tsx",
+            "shipping-provider-card.tsx",
             "store-detail.tsx"
           ],
           "data": [
@@ -1994,7 +2205,7 @@
             "apps/super-admin/lib/add-store-user.test.ts",
             "apps/super-admin/lib/route-roles.test.ts"
           ],
-          "whatItIs": "'Toko' — all stores by lifecycle segment (trial / first month / regular / VIP) + review queue."
+          "whatItIs": "'Toko' — all stores by lifecycle segment (trial / first invoice / regular / VIP) + review queue."
         },
         {
           "url": "/update-log",
@@ -2034,6 +2245,23 @@
           "ownerDb": false,
           "tests": [],
           "whatItIs": "Deletes the operator cookie."
+        },
+        {
+          "url": "/api/csp-report",
+          "kind": "api",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/super-admin/app/api/csp-report/route.ts",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [],
+          "whatItIs": "CSP Report-Only receiver (session-gated): logs one query-stripped line per browser report, writes nothing."
         },
         {
           "url": "/",
@@ -2092,6 +2320,27 @@
           "setHtml": false,
           "tests": [],
           "whatItIs": "Not found (also what a wrong Host resolves to)."
+        },
+        {
+          "url": "/affiliate",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/storefront/src/pages/affiliate.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "catalog"
+          ],
+          "lib": [
+            "affiliate-link"
+          ],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Store affiliate programme page (ADR 0022): 404 while the seller's switch is off; otherwise how it works + a link to `affiliate.tokophi.com/gabung?toko=<slug>`, or 'belum dibuka' when AFFILIATE_APP_URL is unset. No public form."
         },
         {
           "url": "/api/chat/poll",
@@ -2173,6 +2422,23 @@
           "setHtml": false,
           "tests": [],
           "whatItIs": "Progressive checkout capture (debounced beacons; tenant from Host; fails quiet)."
+        },
+        {
+          "url": "/api/csp-report",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/storefront/src/pages/api/csp-report.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "CSP Report-Only receiver: per-IP floor, one query-stripped log line per browser report, always 204, writes nothing."
         },
         {
           "url": "/api/search",
@@ -2289,13 +2555,16 @@
             "checkout"
           ],
           "lib": [
-            "cart-variant"
+            "cart-variant",
+            "public-api"
           ],
           "locals": true,
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "Checkout — kecamatan/kelurahan cascade, ongkir via `/api/public/ongkir`, COD gate with a reason, Indonesian validation (`novalidate` is load-bearing), progressive capture to `checkout_sessions`."
         },
         {
@@ -2309,12 +2578,17 @@
           "data": [
             "catalog"
           ],
-          "lib": [],
+          "lib": [
+            "account-link",
+            "public-api"
+          ],
           "locals": true,
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "Order success — shows the unpaid VA/QR for prepaid, fires the COD conversion only."
         },
         {
@@ -2394,7 +2668,9 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "Store homepage — the `homepage` template (Store Builder) with hero, sections, pixels deferred to first interaction."
         },
         {
@@ -2516,7 +2792,8 @@
             "catalog"
           ],
           "lib": [
-            "breadcrumb"
+            "breadcrumb",
+            "product-feed"
           ],
           "locals": true,
           "db": false,
@@ -2587,6 +2864,7 @@
           "gate": [],
           "setHtml": false,
           "tests": [
+            "apps/storefront/src/lib/order-forms-affiliate-ref.test.ts",
             "apps/storefront/src/lib/order-forms-post-kodepos.test.ts",
             "apps/storefront/src/lib/safe-href.test.ts"
           ],
@@ -2739,7 +3017,9 @@
             "MarketingLayout"
           ],
           "data": [],
-          "lib": [],
+          "lib": [
+            "offer"
+          ],
           "locals": false,
           "db": false,
           "gate": [],
@@ -2761,7 +3041,9 @@
           "db": false,
           "gate": [],
           "setHtml": false,
-          "tests": [],
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
           "whatItIs": "tokophi.com front door."
         },
         {
@@ -2840,6 +3122,604 @@
           "whatItIs": "Sitemap for the apex."
         }
       ]
+    },
+    {
+      "app": "apps/account",
+      "label": "Akun TokoΦ (buyer account, account.tokophi.com, SSR auth — ADR 0016)",
+      "routes": [
+        {
+          "url": "/404",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/404.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Not found — also what every 'not mine' record answers (another account's order or store)."
+        },
+        {
+          "url": "/account",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/account/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "account",
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view",
+            "session"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Akun' — profil & keamanan: display name, the read-only Google email, signed-in devices, theme."
+        },
+        {
+          "url": "/auth/google/callback",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/auth/google/callback.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Google callback — verifies `state`, exchanges the code server-side, requires a VERIFIED email, then opens the session."
+        },
+        {
+          "url": "/auth/google/start",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/auth/google/start.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
+          "whatItIs": "Google sign-in start — mints the 128-bit `state` cookie and the safe `next`."
+        },
+        {
+          "url": "/belum-dibuka",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/belum-dibuka.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "availability"
+          ],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "The one page a CLOSED account answers (503): the middleware rewrites every path here while no sign-in method exists (`lib/availability.ts`). Reads no row. Redirects home once open."
+        },
+        {
+          "url": "/healthz",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/account/src/pages/healthz.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Container healthcheck — 200 while open OR closed (Traefik routes only to healthy), proves the Postgres connection with `select 1`."
+        },
+        {
+          "url": "/",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
+          "whatItIs": "Beranda Akun TokoΦ — what needs doing now, then where things stand; every card links to the screen that owns it."
+        },
+        {
+          "url": "/keluar",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/account/src/pages/keluar.ts",
+          "layout": [],
+          "data": [
+            "account"
+          ],
+          "lib": [
+            "session"
+          ],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
+          "whatItIs": "Revokes this session row and deletes the cookie."
+        },
+        {
+          "url": "/klaim",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/klaim.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "availability",
+            "nav"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/account/src/lib/availability.test.ts",
+            "apps/account/src/lib/nav.test.ts"
+          ],
+          "whatItIs": "Saves an order to the account from the store's checkout-success link: claim token (HMAC, one order, 30 days) + sign-in + consent naming the store. A claim is keyed on a UNIQUE `order_id`."
+        },
+        {
+          "url": "/masuk",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/masuk.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "dev-signin",
+            "nav"
+          ],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": true,
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
+          "whatItIs": "Sign-in. Google is the only method; names no account and has no email default (no enumeration oracle)."
+        },
+        {
+          "url": "/masuk/dev",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/account/src/pages/masuk/dev.ts",
+          "layout": [],
+          "data": [
+            "account"
+          ],
+          "lib": [
+            "dev-signin",
+            "nav",
+            "signin"
+          ],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "LOCAL DEVELOPMENT sign-in, no password. Refused outright in a production build (`devSignInAllowed`), not merely hidden."
+        },
+        {
+          "url": "/orders/[number]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/orders/[number]/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "One saved order, status first — the allowlisted projection only; a foreign order answers exactly like an unknown one."
+        },
+        {
+          "url": "/orders/[number]/receipt",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/orders/[number]/receipt.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Bukti pesanan — the printable page under the order's own URL."
+        },
+        {
+          "url": "/orders",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/orders/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/account/src/lib/availability.test.ts"
+          ],
+          "whatItIs": "'Pesanan' — only orders saved to this account, from stores still linked."
+        },
+        {
+          "url": "/stores/[slug]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/stores/[slug].astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Connected-store profile — relationship context from MY claimed orders only; 'Putus' revokes the link."
+        },
+        {
+          "url": "/stores",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/account/src/pages/stores/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "orders"
+          ],
+          "lib": [
+            "nav",
+            "order-view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Toko' — stores this account is actively linked to, most recent purchase first."
+        }
+      ]
+    },
+    {
+      "app": "apps/affiliate",
+      "label": "Affiliate TokoΦ (store affiliates' own accounts, affiliate.tokophi.com, email + password — ADR 0022)",
+      "routes": [
+        {
+          "url": "/404",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/404.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [],
+          "locals": true,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Not found — also what another account's programme answers."
+        },
+        {
+          "url": "/akun",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/akun.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "auth"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Akun' — who is signed in, change password (revokes every other session), sign out. No reset by email (no mail provider)."
+        },
+        {
+          "url": "/belum-dibuka",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/belum-dibuka.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "availability"
+          ],
+          "locals": false,
+          "db": false,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "The one page a CLOSED affiliate area answers (503) while AFFILIATE_APP_URL is unset. Reads no row."
+        },
+        {
+          "url": "/daftar",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/daftar.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "auth"
+          ],
+          "lib": [
+            "nav",
+            "session",
+            "signin"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Sign-up: name, email, WhatsApp, password (scrypt). Rate-limited per IP (signup bucket, fails closed)."
+        },
+        {
+          "url": "/gabung",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/gabung.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Gabung toko' — apply to ONE store's programme by slug (`?toko=`): a `menunggu` row with the account's own name + WhatsApp; 5 attempts/account/hour in the DB; a same-phone row the seller added is never taken over."
+        },
+        {
+          "url": "/healthz",
+          "kind": "endpoint",
+          "methods": [
+            "GET"
+          ],
+          "file": "apps/affiliate/src/pages/healthz.ts",
+          "layout": [],
+          "data": [],
+          "lib": [],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Container healthcheck — 200 while open OR closed, proves the Postgres connection with `select 1`."
+        },
+        {
+          "url": "/",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/index.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "packages/lib/src/provider-label.test.ts"
+          ],
+          "whatItIs": "'Ringkasan' — the affiliate's totals across stores (siap / ditahan / dibayar), each programme with status, code and share link `<store>/?ref=CODE`."
+        },
+        {
+          "url": "/keluar",
+          "kind": "endpoint",
+          "methods": [
+            "POST"
+          ],
+          "file": "apps/affiliate/src/pages/keluar.ts",
+          "layout": [],
+          "data": [
+            "auth"
+          ],
+          "lib": [
+            "session"
+          ],
+          "locals": false,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "POST — revokes this session row and deletes the cookie."
+        },
+        {
+          "url": "/komisi",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/komisi.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "'Komisi' — one commission ledger across MY programmes, filterable by state; order number and money only, no buyer data."
+        },
+        {
+          "url": "/masuk",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/masuk.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [],
+          "lib": [
+            "nav",
+            "session",
+            "signin"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [
+            "apps/affiliate/src/lib/availability.test.ts"
+          ],
+          "whatItIs": "Sign-in: email + password. IP cap + per-account failure streak (surface `affiliate`), opaque session token, sha256 stored."
+        },
+        {
+          "url": "/toko/[id]",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/toko/[id].astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "One of MY programmes: status, code, share link, rate/hold, totals, masked payout account, commission history. Another account's id answers 404."
+        },
+        {
+          "url": "/undangan",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/affiliate/src/pages/undangan.astro",
+          "layout": [
+            "Layout"
+          ],
+          "data": [
+            "affiliate"
+          ],
+          "lib": [
+            "nav",
+            "view"
+          ],
+          "locals": true,
+          "db": true,
+          "gate": [],
+          "setHtml": false,
+          "tests": [],
+          "whatItIs": "Accept a seller's invitation (`?t=`, 7 days, single use, sha256 stored): ONE conditional UPDATE binds the row to this account after a confirmation screen."
+        }
+      ]
     }
   ],
   "modules": {
@@ -2848,6 +3728,13 @@
         "module": "activity.ts",
         "exports": [
           "getActivityFeed"
+        ]
+      },
+      {
+        "module": "affiliates.ts",
+        "exports": [
+          "getAffiliateProgram",
+          "getPendingAffiliateCount"
         ]
       },
       {
@@ -2872,6 +3759,7 @@
           "areaById",
           "kelurahanForDistrict",
           "kelurahanWithKaIdForDistrict",
+          "mengantarDestination",
           "provinceForDistrict",
           "resolveArea",
           "resolveDestinationKelurahan",
@@ -2891,7 +3779,8 @@
         "exports": [
           "getBilling",
           "getFaktur",
-          "getMyInvoices"
+          "getMyInvoices",
+          "getOwedCodeDiscount"
         ]
       },
       {
@@ -2944,6 +3833,10 @@
       {
         "module": "customers.ts",
         "exports": [
+          "accountCustomerRows",
+          "customerCols",
+          "customerOrderRows",
+          "getAccountCustomers",
           "getCustomer",
           "getCustomerOrders",
           "getCustomers"
@@ -3089,9 +3982,7 @@
       },
       {
         "module": "order-payment.ts",
-        "exports": [
-          "latestPaymentFirst"
-        ]
+        "exports": []
       },
       {
         "module": "orders.ts",
@@ -3222,6 +4113,21 @@
       }
     ],
     "apps/admin/lib/actions": [
+      {
+        "module": "affiliates.ts",
+        "exports": [
+          "createAffiliate",
+          "exportAffiliateCommissionsCsv",
+          "getAffiliateProgramEnabled",
+          "inviteAffiliateToAccount",
+          "markCommissionPaid",
+          "saveAffiliateSettings",
+          "setAffiliateProgramEnabled",
+          "setAffiliateStatus",
+          "setProductAffiliateRate",
+          "updateAffiliate"
+        ]
+      },
       {
         "module": "articles.ts",
         "exports": [
@@ -3357,6 +4263,17 @@
         ]
       },
       {
+        "module": "mengantar.ts",
+        "exports": [
+          "connectMengantar",
+          "getMengantarCard",
+          "getMengantarDashboardNotice",
+          "getShippingViaMengantar",
+          "payMengantarShipping",
+          "rotateMengantarKey"
+        ]
+      },
+      {
         "module": "menus.ts",
         "exports": [
           "createMenu",
@@ -3390,6 +4307,13 @@
         ]
       },
       {
+        "module": "pengaduan.ts",
+        "exports": [
+          "getComplaintService",
+          "saveComplaintService"
+        ]
+      },
+      {
         "module": "picker.ts",
         "exports": [
           "pickerCategoryImages",
@@ -3397,6 +4321,18 @@
           "pickerPageLinks",
           "pickerProductLinks",
           "pickerProducts"
+        ]
+      },
+      {
+        "module": "plugins.ts",
+        "exports": [
+          "getKelolaOrderPanel",
+          "getPluginCard",
+          "removePluginData",
+          "resendKelolaOrder",
+          "saveKelola",
+          "setKelolaLeads",
+          "setPluginActive"
         ]
       },
       {
@@ -3443,6 +4379,7 @@
       {
         "module": "register.ts",
         "exports": [
+          "checkSignupCode",
           "registerStore"
         ]
       },
@@ -3450,6 +4387,13 @@
         "module": "rekening.ts",
         "exports": [
           "getBankAccount"
+        ]
+      },
+      {
+        "module": "retur.ts",
+        "exports": [
+          "getReturnWindow",
+          "saveReturnWindow"
         ]
       },
       {
@@ -3583,6 +4527,7 @@
           "approveStore",
           "compStore",
           "createManualInvoice",
+          "createSignupCode",
           "createStore",
           "extendTrial",
           "impersonateStore",
@@ -3592,6 +4537,7 @@
           "markRefundPaid",
           "processPayout",
           "processRefund",
+          "reconcileMengantarBooking",
           "rejectPayout",
           "rejectRefund",
           "removeStoreUser",
@@ -3599,9 +4545,12 @@
           "resetOwnerPassword",
           "resetPlatformAdminPassword",
           "resetStoreUserPassword",
+          "retryStoreMengantar",
+          "rotateStoreMengantar",
           "saveCodAllowed",
           "saveCouriers",
           "saveGateways",
+          "saveMengantarPartner",
           "savePaymentChannels",
           "savePayoutPolicy",
           "saveProviderCredentials",
@@ -3609,7 +4558,10 @@
           "sendPaymentReminder",
           "setInvoiceStatus",
           "setProviderEnv",
+          "setShippingProvider",
+          "setSignupCodeActive",
           "setStoreComped",
+          "setStoreShippingProvider",
           "setStoreUserRole",
           "setSubscriptionPpn",
           "setTicketStatus",
@@ -3630,6 +4582,15 @@
           "logHref",
           "logPages",
           "parseLogQuery"
+        ]
+      },
+      {
+        "module": "affiliate-accounts.ts",
+        "exports": [
+          "AFFILIATE_LIST_LIMIT",
+          "listAffiliateAccounts",
+          "resetAffiliatePassword",
+          "setAffiliateDisabled"
         ]
       },
       {
@@ -3722,6 +4683,26 @@
         ]
       },
       {
+        "module": "mengantar-credentials.ts",
+        "exports": [
+          "SWITCH_REASON_MIN",
+          "isShippingProvider",
+          "mengantarReadiness",
+          "saveMengantarPartnerWith",
+          "switchShippingProviderWith"
+        ]
+      },
+      {
+        "module": "mengantar-ops.ts",
+        "exports": [
+          "RECONCILE_REASON_MIN",
+          "listMengantarAccounts",
+          "listStrandedMengantar",
+          "listUnknownMengantar",
+          "reconcileUnknownBookingWith"
+        ]
+      },
+      {
         "module": "nav.ts",
         "exports": [
           "NAV",
@@ -3797,6 +4778,7 @@
       {
         "module": "route-roles.ts",
         "exports": [
+          "AFFILIATE_ACCOUNT_MIN_RANK",
           "ROUTE_RULES",
           "canOpenPath",
           "landingForRole",
@@ -3809,6 +4791,28 @@
         "exports": [
           "SESSION_COOKIE",
           "signSession"
+        ]
+      },
+      {
+        "module": "shipping-data.ts",
+        "exports": [
+          "getStoreShipping",
+          "listSignupCodes"
+        ]
+      },
+      {
+        "module": "store-shipping-provider.ts",
+        "exports": [
+          "PROVIDER_LABEL",
+          "SHIPPING_PROVIDER_MIN_RANK",
+          "SIGNUP_CODE_DISCOUNT_MAX_IDR",
+          "SIGNUP_CODE_NOTE_MAX",
+          "STORE_PROVIDER_REASON_MIN",
+          "createSignupCodeWith",
+          "isShippingProvider",
+          "parseSignupCodeDiscount",
+          "setSignupCodeActiveWith",
+          "setStoreShippingProviderWith"
         ]
       },
       {
@@ -3849,6 +4853,8 @@
           "promoHub",
           "randomProducts",
           "recentProducts",
+          "storeAffiliateEnabled",
+          "storeAffiliateTerms",
           "storeCodEnabled",
           "storeCodPolicy",
           "storeFreeShip",
@@ -3949,6 +4955,18 @@
     ],
     "apps/storefront/src/lib": [
       {
+        "module": "account-link.ts",
+        "exports": [
+          "accountClaimUrl"
+        ]
+      },
+      {
+        "module": "affiliate-link.ts",
+        "exports": [
+          "affiliateJoinUrl"
+        ]
+      },
+      {
         "module": "breadcrumb.ts",
         "exports": [
           "breadcrumbLd",
@@ -3989,9 +5007,23 @@
         "module": "product-feed.ts",
         "exports": [
           "PROFILES",
+          "catalogSpecs",
+          "colourSizeIndexes",
+          "feedBrand",
           "feedDocument",
           "feedItems",
           "xml"
+        ]
+      },
+      {
+        "module": "public-api.ts",
+        "exports": [
+          "CLIENT_API_URLS",
+          "ONGKIR_API",
+          "ORDER_API",
+          "PAY_RETRY_API",
+          "PROMO_API",
+          "STOREFRONT_CSP"
         ]
       },
       {

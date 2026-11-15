@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, Truck, ArrowRight } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@tokophi/ui/card";
 import { Button } from "@tokophi/ui/button";
 import { DateRangeSwitcher } from "@/components/admin/date-range-switcher";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/data/dashboard";
 import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
 import type { FunnelDay } from "@/lib/data/funnel";
+import type { MengantarNotice } from "@/lib/mengantar-readiness";
 import type { ReturnsByCourier } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
 import type { DayPoint, Product, Order, Activity, Review } from "@/lib/types/domain";
@@ -42,6 +43,7 @@ export function DashboardClient({
   funnel,
   storeName,
   ownerName,
+  mengantarNotice,
 }: {
   days: DayPoint[];
   hours: HourPoint[];
@@ -56,6 +58,8 @@ export function DashboardClient({
   funnel: FunnelDay[];
   storeName?: string;
   ownerName?: string;
+  /** Pengiriman lewat Mengantar belum aktif untuk toko ini — `getMengantarDashboardNotice()`. */
+  mengantarNotice?: MengantarNotice | null;
 }) {
   const [range, setRange] = useState<RangeKey>("30d");
   const s = getSummary(days, range);
@@ -95,6 +99,27 @@ export function DashboardClient({
           </Button>
         </div>
       </div>
+
+      {/* 0 — shipping setup the platform now depends on (Mengantar). Server-decided: only when this
+          viewer can fix it. Glyph + words; the link opens the exact Pengaturan section. */}
+      {mengantarNotice && (
+        <div
+          role="status"
+          data-mengantar-notice
+          className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex min-w-0 items-start gap-3">
+            <Truck className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">{mengantarNotice.title}</p>
+              <p className="text-sm text-muted-foreground">{mengantarNotice.body}</p>
+            </div>
+          </div>
+          <Button nativeButton={false} variant="outline" className="shrink-0 gap-1.5" render={<Link href={mengantarNotice.href} />}>
+            {mengantarNotice.cta} <ArrowRight className="size-4" aria-hidden />
+          </Button>
+        </div>
+      )}
 
       {/* 1 — what do I have to do right now? */}
       <ActionQueue items={queue} stuck={stuck} />

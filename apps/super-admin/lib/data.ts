@@ -4,8 +4,9 @@ import { courierName, COURIER_CODES, isInstantCourier, isInstantService } from "
 import { kaCreditBalance, kaTestConnection, type KaTestResult } from "@tokophi/lib/kiriminaja";
 import { cached } from "@tokophi/lib/cache";
 import { classifyKaProbe, type KaProbe } from "./ka-probe";
+import { isShippingProvider, mengantarReadiness } from "./mengantar-credentials";
 import { autolarisConfigured } from "@tokophi/lib/autolaris";
-import { getProviderConfig, maskKey, resolveAutolaris, resolveKiriminaja, type ProviderEnv } from "@tokophi/lib/provider-config";
+import { getProviderConfig, maskKey, resolveAutolaris, resolveKiriminaja, resolveMengantar, resolveShippingProvider, type ProviderEnv, type ShippingProvider } from "@tokophi/lib/provider-config";
 import { encryptionAvailable } from "@tokophi/lib/crypto";
 import { autolarisRow, kiriminajaRow, loadProviderRows } from "@tokophi/db/provider-config";
 import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
@@ -13,6 +14,7 @@ import { likeContains } from "@tokophi/lib/like";
 import { LOG_PAGE_SIZE, logPages, type LogQuery } from "./activity-log";
 import { type Store, type StoreStatus, type Invoice, type PActivity } from "./types";
 import { computeBilling, storeSegment, type BillingState } from "@tokophi/lib/billing";
+import { owedCodeDiscount } from "@tokophi/db/subscription-invoice";
 import { subscriptionKpiBucket } from "./subscription-kpi";
 
 // Task 8.27 — the seeded demo store (`stores.is_demo`) is flagged, not purged, and every platform
@@ -251,7 +253,7 @@ export async function getFinanceStats(): Promise<FinanceStats> {
  * `payoutObligation` is the slice already spoken for — a merchant clicked "Tarik saldo", the money
  * left their available pool, and we owe the bank transfer.
  *
- * This is emphatically NOT platform revenue. Platform revenue is `invoices` (Rp275rb/mo + PPN).
+ * This is emphatically NOT platform revenue. Platform revenue is `invoices` (subscription, ADR 0020 price + PPN when on).
  * Conflating the two is the single most expensive mistake an operator of a marketplace can make.
  */
 /**
@@ -486,6 +488,18 @@ export type ProviderStatus = {
     production: ProviderKeyStatus;
   };
   autolaris: ProviderKeyStatus;
+  /**
+   * Mengantar Partner Business API (0116): the PARTNER credential per env (no shipping key — every store
+   * has its own seller account) + readiness of the ACTIVE env for the switch.
+   */
+  mengantar: {
+    env: ProviderEnv;
+    slots: Record<ProviderEnv, { partnerId: string | null; secretMasked: string; source: "db" | "env" | "none"; originKnown: boolean }>;
+    ready: boolean;
+    why: string | null;
+  };
+  /** Which provider quotes NEW checkouts, and which side decided it. */
+  shipping: { active: ShippingProvider; source: "db" | "env" | "default" };
 };
 export async function getProviderStatus(): Promise<ProviderStatus> {
   const [rows, ka, al] = await Promise.all([loadProviderRows(), kiriminajaRow(), autolarisRow()]);
@@ -495,6 +509,10 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
     KIRIMINAJA_ORDER_PREFIX: process.env.KIRIMINAJA_ORDER_PREFIX,
     AUTOLARIS_API_KEY: process.env.AUTOLARIS_API_KEY,
     AUTOLARIS_BASE: process.env.AUTOLARIS_BASE,
+    MENGANTAR_ENV: process.env.MENGANTAR_ENV,
+    MENGANTAR_PARTNER_ID: process.env.MENGANTAR_PARTNER_ID,
+    MENGANTAR_PARTNER_SECRET: process.env.MENGANTAR_PARTNER_SECRET,
+    SHIPPING_PROVIDER: process.env.SHIPPING_PROVIDER,
   };
   const active = resolveKiriminaja({ row: rows.kiriminaja, env });
   // Each slot is resolved AS IF it were the active env, so a slot shows the same key the platform
@@ -513,10 +531,22 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
     };
   };
   const alCfg = resolveAutolaris({ row: rows.autolaris, env });
+  // Each slot resolved AS IF it were the active env, so the card shows what that env would use.
+  const mgSlot = (e: ProviderEnv) => {
+    const c = resolveMengantar({ row: rows.mengantar, env: { ...env, MENGANTAR_ENV: e } });
+    return { partnerId: c.partnerId, secretMasked: maskKey(c.partnerSecret), source: c.source, originKnown: !!c.partnerBase };
+  };
+  const mgReady = mengantarReadiness(rows, env);
+  const shippingActive = resolveShippingProvider({ row: rows.shipping, env });
+  // Same order and same normalisation as `resolveShippingProvider` (an unrecognised value is skipped).
+  const valid = (v: string | null | undefined) => isShippingProvider((v ?? "").trim().toLowerCase());
+  const shippingSource: "db" | "env" | "default" = valid(rows.shipping?.activeProvider) ? "db" : valid(env.SHIPPING_PROVIDER) ? "env" : "default";
   return {
     encryptionAvailable: encryptionAvailable(),
     kiriminaja: { activeEnv: active.env, envSource: active.envSource, sandbox: slot("sandbox"), production: slot("production") },
     autolaris: { present: !!alCfg.key, source: alCfg.keySource, masked: maskKey(alCfg.key), testedAt: alCfg.keySource === "db" ? (al?.testedAt?.toISOString() ?? null) : null },
+    mengantar: { env: mgReady.cfg.env, slots: { sandbox: mgSlot("sandbox"), production: mgSlot("production") }, ready: mgReady.ready, why: mgReady.why },
+    shipping: { active: shippingActive, source: shippingSource },
   };
 }
 
@@ -680,14 +710,18 @@ export async function getStoreBilling(id: string): Promise<BillingState | null> 
     .from(schema.stores)
     .where(eq(schema.stores.id, id))
     .limit(1);
-  return s ? computeBilling(s) : null;
+  if (!s) return null;
+  // ADR 0020 — the next amount the creator WILL bill, signup-code discount included (same resolver).
+  const codeDiscountIdr = !s.firstInvoicePaid && !s.comped ? (await owedCodeDiscount(id)).discountIdr : 0;
+  return computeBilling({ ...s, codeDiscountIdr });
 }
 
 // ---- platform metrics ----
 //
 // MRR has exactly ONE definition now, and it lives in getSubscriptionStats(): the sum of what each
-// paying store is actually billed next month (Rp50rb while on the first-month promo, Rp275rb after,
-// VIP excluded). getPlatform() used to compute its own — active × Rp275rb — which ignored the promo
+// paying store is billed per month at list price (`BILLING.MONTHLY_IDR`, ADR 0020 — the first-month
+// promo is gone; a one-off code discount is not recurring revenue; VIP excluded). getPlatform() used to
+// compute its own — active × Rp275rb at the time — which ignored the then-promo
 // and produced Rp1.100.000 on the same dashboard where the subscription card said Rp875.000. Two
 // MRRs, one page. Now there is one.
 //

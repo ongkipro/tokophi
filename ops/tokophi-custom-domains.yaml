@@ -8,6 +8,6 @@ http:
       rule: 'HostRegexp(`^.+$`)'
       entryPoints:
         - https
-      priority: 0
+      priority: -1
       service: tokophi-stores@docker
       tls: {}

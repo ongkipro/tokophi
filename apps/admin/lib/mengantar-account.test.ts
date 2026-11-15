@@ -1,0 +1,609 @@
+import { randomUUID } from "node:crypto";
+import postgres, { type Sql } from "postgres";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { MengantarPartnerConfig } from "@tokophi/lib/provider-config";
+
+// Mengantar Partner Business API — the store's OWN seller account: registration, idempotency, the 409
+// path, a lost answer reconciled through the seller list, provisioning that never blocks, rotation, and
+// tenant isolation of the sealed key. REAL Postgres; the Partner API is a FAKE fetch (nothing leaves).
+const URL_ = process.env.TEST_DATABASE_URL;
+const suite = URL_ ? describe : describe.skip;
+const runId = randomUUID().slice(0, 8);
+
+let client: Sql;
+let acct: typeof import("@tokophi/db/mengantar-account");
+let accountId = "";
+const storeIds: string[] = [];
+const userIds: string[] = [];
+
+const PCFG: MengantarPartnerConfig = {
+  env: "sandbox",
+  envSource: "env", // named — registration is held while MENGANTAR_ENV is unset (see the test below)
+  partnerBase: "https://partner.test",
+  publicBase: "https://public.test",
+  partnerId: "tokophi-test",
+  partnerSecret: "partner-secret-test-0001",
+  source: "env",
+};
+
+type Route = "register" | "list" | "key" | "regenerate";
+type Reply = { status?: number; body: unknown; headers?: Record<string, string> } | Error;
+/** A Partner stand-in that records every call and answers per route (a function = dynamic). */
+function fakePartner(answers: Partial<Record<Route, Reply | ((body: Record<string, unknown>, n: number) => Reply | Promise<Reply>)>>) {
+  const calls: { route: Route; body: Record<string, unknown> }[] = [];
+  const fetch = (async (url: string, init?: RequestInit) => {
+    const path = new URL(url).pathname.replace("/api/partner/v1", "");
+    const route: Route = path === "/sellers" ? "register" : path === "/sellers/list" ? "list" : path === "/sellers/api-key" ? "key" : "regenerate";
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    calls.push({ route, body });
+    const a = answers[route];
+    const r = typeof a === "function" ? await a(body, calls.filter((c) => c.route === route).length) : a;
+    if (!r) return new Response(JSON.stringify({ success: false, code: "UNEXPECTED", message: route }), { status: 500 });
+    if (r instanceof Error) throw r;
+    return new Response(JSON.stringify(r.body), { status: r.status ?? 200, headers: { "content-type": "application/json", ...(r.headers ?? {}) } });
+  }) as unknown as typeof globalThis.fetch;
+  return { fetch, calls, count: (r: Route) => calls.filter((c) => c.route === r).length };
+}
+// The owner's click (Pengaturan → "Hubungkan Mengantar"): the only consent a registration may go on.
+const CLICKER = randomUUID();
+const opts = (fetch: typeof globalThis.fetch) => ({ source: "pengaturan" as const, actorUserId: CLICKER, partner: { cfg: PCFG, fetch } });
+const listed = (ext: string, sellerId: string, active = true) => ({ body: { success: true, data: { sellers: [{ sellerId, externalUserId: ext, active }], total: 1 } } });
+const emptyList = { body: { success: true, data: { sellers: [], total: 0 } } };
+
+// `provider` defaults to 'mengantar': every older case here is about a store that IS on Mengantar. ADR 0019
+// made that a precondition (`stores.shipping_provider`); the suite "only a store set to Mengantar…" below
+// covers the KiriminAja side.
+async function newStore(o: { approved?: boolean; phone?: string | null; provider?: "kiriminaja" | "mengantar" } = {}) {
+  const n = storeIds.length;
+  const [st] = await client<{ id: string }[]>`
+    insert into stores (account_id, name, slug, status, approved_at, shipping_provider)
+    values (${accountId}, ${`Toko MG ${runId}`}, ${`mga-${runId}-${n}`}, 'active', ${o.approved === false ? null : new Date()}, ${o.provider ?? "mengantar"}) returning id`;
+  storeIds.push(st.id);
+  const [u] = await client<{ id: string }[]>`insert into users (email, name) values (${`owner-${runId}-${n}@example.test`}, 'Pemilik') returning id`;
+  userIds.push(u.id);
+  await client`insert into store_users (store_id, user_id, role, accepted_at) values (${st.id}, ${u.id}, 'owner', now())`;
+  await client`insert into store_settings (store_id, sender_phone) values (${st.id}, ${o.phone === undefined ? "081234567890" : o.phone})`;
+  return { storeId: st.id, ext: `tokophi:sandbox:store:${st.id}`, email: `owner-${runId}-${n}@example.test` };
+}
+const row = async (storeId: string) =>
+  (await client<{ state: string; seller_id: string | null; api_key_enc: string | null; key_version: number; last_error_code: string | null; retry_after_at: Date | null; partner_id: string | null }[]>`
+    select state, seller_id, api_key_enc, key_version, last_error_code, retry_after_at, partner_id from store_mengantar_accounts where store_id = ${storeId}`)[0];
+
+beforeAll(async () => {
+  if (!URL_) return;
+  process.env.DATABASE_URL = URL_;
+  process.env.INTEGRATION_TOKEN_KEY ??= "test-integration-key-not-a-secret-0001";
+  delete process.env.MENGANTAR_ENV;
+  client = postgres(URL_, { max: 4, onnotice: () => {} });
+  acct = await import("@tokophi/db/mengantar-account");
+  const [a] = await client<{ id: string }[]>`insert into accounts (name) values (${`MGA ${runId}`}) returning id`;
+  accountId = a.id;
+});
+
+const tidy = async (q: () => Promise<unknown>) => {
+  try {
+    await q();
+  } catch (e) {
+    console.warn("[mengantar-account.test] cleanup:", e instanceof Error ? e.message : e);
+  }
+};
+afterAll(async () => {
+  if (!client) return;
+  try {
+    for (const s of storeIds) {
+      await tidy(() => client`delete from store_mengantar_accounts where store_id = ${s}`);
+      await tidy(() => client`delete from store_settings where store_id = ${s}`);
+      await tidy(() => client`delete from store_users where store_id = ${s}`);
+      await tidy(() => client`delete from stores where id = ${s}`);
+    }
+    for (const u of userIds) await tidy(() => client`delete from users where id = ${u}`);
+    await tidy(() => client`delete from accounts where id = ${accountId}`);
+  } finally {
+    await client.end();
+  }
+});
+
+suite("connectStoreMengantar — register with the owner's TokoΦ email, prove ownership, seal", () => {
+  it("201 → list proof → connected; the key is sealed (never stored plain) and the opener hands it out", async () => {
+    const { storeId, ext, email } = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, alreadyRegistered: false, data: { sellerId: `s-${runId}-1`, email, apiKey: `API-KEY-${runId}-1` } } },
+      list: listed(ext, `s-${runId}-1`),
+    });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r.state).toBe("connected");
+    expect(p.calls.map((c) => c.route)).toEqual(["register", "list"]);
+    expect(p.calls[0].body).toEqual({ name: `Toko MG ${runId}`, email, phone: "6281234567890", externalUserId: ext });
+    const db = await row(storeId);
+    expect(db).toMatchObject({ state: "connected", seller_id: `s-${runId}-1`, key_version: 1, partner_id: "tokophi-test" });
+    expect(db.api_key_enc).toMatch(/^v1:/);
+    expect(db.api_key_enc).not.toContain(`API-KEY-${runId}-1`);
+    const open = await acct.openStoreMengantar(storeId);
+    expect(open).toMatchObject({ ok: true, sellerId: `s-${runId}-1`, env: "sandbox", cfg: { env: "sandbox", base: "https://sandbox.mengantar.com", key: `API-KEY-${runId}-1` } });
+  });
+
+  it("idempotent: two concurrent connects register ONCE; a connected store is never re-registered", async () => {
+    const { storeId, ext } = await newStore();
+    const p = fakePartner({
+      register: async () => {
+        await new Promise((r) => setTimeout(r, 120));
+        return { status: 201, body: { success: true, data: { sellerId: `s-${runId}-2`, apiKey: `API-KEY-${runId}-2` } } };
+      },
+      list: listed(ext, `s-${runId}-2`),
+    });
+    const [a, b] = await Promise.all([acct.connectStoreMengantar(storeId, opts(p.fetch)), acct.connectStoreMengantar(storeId, opts(p.fetch))]);
+    expect(p.count("register")).toBe(1);
+    expect([a.state, b.state]).toContain("connected");
+    const again = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(again.state).toBe("connected");
+    expect(p.count("register")).toBe(1);
+  });
+
+  it("409 EMAIL_ALREADY_REGISTERED → email_taken, no key, the opener refuses (store stays on the default provider)", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({ register: { status: 409, body: { success: false, code: "EMAIL_ALREADY_REGISTERED", message: "Email already registered" } } });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r.state).toBe("email_taken");
+    expect(r.message).toMatch(/sudah terdaftar sebagai akun Mengantar/);
+    expect(await row(storeId)).toMatchObject({ state: "email_taken", seller_id: null, api_key_enc: null });
+    expect(await acct.openStoreMengantar(storeId)).toEqual({ ok: false, reason: "not_connected" });
+    // The retry sweep does not hammer a 409.
+    const sweep = await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 50 });
+    expect(p.count("register")).toBe(1);
+    expect(sweep.picked).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a register whose answer is LOST is reconciled through the seller list before anything else", async () => {
+    const { storeId, ext } = await newStore();
+    const p = fakePartner({
+      register: new TypeError("socket hang up"),
+      list: listed(ext, `s-${runId}-3`),
+      key: { body: { success: true, data: { sellerId: `s-${runId}-3`, apiKey: `API-KEY-${runId}-3` } } },
+    });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r.state).toBe("connected");
+    expect(p.calls.map((c) => c.route)).toEqual(["register", "list", "list", "key"]);
+    expect(p.calls[1].body).toEqual({ externalUserId: ext });
+    expect(await row(storeId)).toMatchObject({ state: "connected", seller_id: `s-${runId}-3` });
+  });
+
+  it("lost answer + the list does not show it yet → stays `registering`; after the stale window the SAME register is repeated (idempotent)", async () => {
+    const { storeId, ext } = await newStore();
+    let lost = true;
+    const p = fakePartner({
+      register: () => (lost ? new TypeError("timeout") : { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `s-${runId}-4`, apiKey: `API-KEY-${runId}-4` } } }),
+      list: (_b, n) => (n === 1 ? emptyList : listed(ext, `s-${runId}-4`)),
+    });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("registering");
+    expect(await row(storeId)).toMatchObject({ state: "registering", last_error_code: "outcome_unknown" });
+    // A second click inside the window does NOT register again.
+    await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(p.count("register")).toBe(1);
+    lost = false;
+    const later = Date.now() + acct.MG_CLAIM_STALE_MS + 1000;
+    const r = await acct.connectStoreMengantar(storeId, { ...opts(p.fetch), now: () => later });
+    expect(r.state).toBe("connected");
+    expect(p.calls.filter((c) => c.route === "register").every((c) => c.body.externalUserId === ext)).toBe(true);
+  });
+
+  it("the ownership proof fails (list names another seller) → nothing sealed", async () => {
+    const { storeId, ext } = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, data: { sellerId: `s-${runId}-5`, apiKey: `API-KEY-${runId}-5` } } },
+      list: listed(ext, "somebody-else"),
+    });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("pending");
+    expect(await row(storeId)).toMatchObject({ seller_id: null, api_key_enc: null, last_error_code: "ownership_unproven" });
+  });
+
+  it("429 stores Retry-After and the next attempt (even a click) waits for it", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({ register: { status: 429, body: { success: false, code: "RATE_LIMITED", message: "slow down" }, headers: { "Retry-After": "120" } } });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("pending");
+    const r = await row(storeId);
+    expect(r.last_error_code).toBe("RATE_LIMITED");
+    expect(r.retry_after_at!.getTime()).toBeGreaterThan(Date.now() + 100_000);
+    await acct.requeueMengantar(storeId, opts(p.fetch));
+    await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(p.count("register")).toBe(1);
+  });
+
+  it("a self-serve store that is not approved yet is queued, never registered (its email is unproven)", async () => {
+    const { storeId } = await newStore({ approved: false });
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r.state).toBe("pending");
+    expect(p.calls).toHaveLength(0);
+    expect((await row(storeId)).last_error_code).toBe("awaiting_approval");
+  });
+
+  it("no usable phone → failed with a seller instruction, no call", async () => {
+    const { storeId } = await newStore({ phone: "021-555-0000" });
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r.state).toBe("failed");
+    expect(r.message).toMatch(/nomor HP pengirim/);
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("no Partner origin for the env (production today) → queued, no call, store unaffected", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, { source: "signup", actorUserId: CLICKER, partner: { cfg: { ...PCFG, partnerBase: null }, fetch: p.fetch } });
+    expect(r.state).toBe("pending");
+    expect(p.calls).toHaveLength(0);
+    expect((await row(storeId)).last_error_code).toBe("configuration_blocked");
+  });
+
+  it("an UNSET MENGANTAR_ENV (read as sandbox) holds registration — a real seller is never sent to the sandbox partner", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, { source: "signup", actorUserId: CLICKER, partner: { cfg: { ...PCFG, envSource: "default" }, fetch: p.fetch } });
+    expect(r.state).toBe("pending");
+    expect(p.calls).toHaveLength(0);
+    const got = await row(storeId);
+    expect(got.last_error_code).toBe("configuration_blocked");
+  });
+});
+
+suite("provisioning never waits on, or fails because of, Mengantar", () => {
+  it("enqueue returns immediately while the provider hangs, and leaves a queued row", async () => {
+    const { storeId } = await newStore();
+    const hang = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    const t0 = Date.now();
+    await acct.enqueueMengantarConnect(storeId, { source: "signup", partner: { cfg: PCFG, fetch: hang, timeoutMs: 50 } });
+    expect(Date.now() - t0).toBeLessThan(1500);
+    expect(["pending", "registering"]).toContain((await row(storeId)).state);
+  });
+
+  it("enqueue never throws — not even for a store id that does not exist", async () => {
+    await expect(acct.enqueueMengantarConnect(randomUUID(), { source: "signup", partner: { cfg: PCFG, fetch: fakePartner({}).fetch } })).resolves.toBeUndefined();
+  });
+});
+
+suite("ADR 0019 — only a store set to Mengantar gets an account (enforced at the sink, every door)", () => {
+  const rowCount = async (storeId: string) => (await client<{ n: number }[]>`select count(*)::int as n from store_mengantar_accounts where store_id = ${storeId}`)[0].n;
+
+  it("connect / enqueue / requeue on a KiriminAja store: no row, no partner call, a clear sentence", async () => {
+    const { storeId } = await newStore({ provider: "kiriminaja" });
+    const p = fakePartner({});
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r).toEqual({ state: "none", message: acct.NOT_ON_MENGANTAR_MSG });
+    expect(r.message).not.toMatch(/kiriminaja/i); // ADR 0004: the default provider is never named
+    await acct.enqueueMengantarConnect(storeId, { source: "signup", actorUserId: CLICKER, partner: { cfg: PCFG, fetch: p.fetch } });
+    await acct.requeueMengantar(storeId, opts(p.fetch));
+    await acct.kickMengantarConnect(storeId, { source: "operator", partner: { cfg: PCFG, fetch: p.fetch } });
+    expect(await rowCount(storeId)).toBe(0);
+    expect(p.calls).toHaveLength(0);
+    expect(await acct.storeShippingProvider(storeId)).toBe("kiriminaja");
+  });
+
+  it("the sweep never registers a consented row of a store moved back to KiriminAja — and picks it up again once moved to Mengantar", async () => {
+    const s = await newStore({ provider: "kiriminaja" });
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending', 'signup', now())`;
+    // Answers per externalUserId: the sweep may also pick other suites' queued rows in this shared test DB,
+    // and each must get ITS OWN seller id (one seller id per env is a DB constraint).
+    const sid = (ext: unknown) => `kb-${String(ext).slice(-12)}`;
+    const p = fakePartner({
+      register: (body) => ({ status: 201, body: { success: true, data: { sellerId: sid(body.externalUserId), email: s.email, apiKey: `API-${sid(body.externalUserId)}` } } }),
+      list: (body) => listed(String(body.externalUserId), sid(body.externalUserId)),
+    });
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 500 });
+    expect(p.calls.filter((c) => c.body.externalUserId === s.ext)).toHaveLength(0);
+    expect((await row(s.storeId)).state).toBe("pending");
+    // Super Admin moves the store to Mengantar → the next tick registers it (the owner had consented).
+    await client`update stores set shipping_provider = 'mengantar' where id = ${s.storeId}`;
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 500 });
+    expect((await row(s.storeId)).state).toBe("connected");
+  });
+
+  it("…and such a row does not even take a slot of the tick's budget (the sweep's own filter, not only the sink)", async () => {
+    // A: KiriminAja store, consented queued row, the OLDEST in the queue. B: Mengantar store, next oldest.
+    // One slot per tick. If the sweep picked A, the slot would be spent on a refusal and B would wait.
+    const a = await newStore({ provider: "kiriminaja" });
+    const b = await newStore();
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at, updated_at)
+                 values (${a.storeId}, 'sandbox', ${a.ext}, 'pending', 'signup', now(), '2000-01-01'), (${b.storeId}, 'sandbox', ${b.ext}, 'pending', 'signup', now(), '2000-01-02')`;
+    const sid = (ext: unknown) => `kq-${String(ext).slice(-12)}`;
+    const p = fakePartner({
+      register: (body) => ({ status: 201, body: { success: true, data: { sellerId: sid(body.externalUserId), email: b.email, apiKey: `API-${sid(body.externalUserId)}` } } }),
+      list: (body) => listed(String(body.externalUserId), sid(body.externalUserId)),
+    });
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 1 });
+    expect((await row(b.storeId)).state).toBe("connected");
+    expect((await row(a.storeId)).state).toBe("pending");
+  });
+
+  it("a `registering` row (a register that may have landed) is still RECONCILED after the store was moved away", async () => {
+    const s = await newStore({ provider: "kiriminaja" });
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at, updated_at)
+                 values (${s.storeId}, 'sandbox', ${s.ext}, 'registering', 'signup', now(), now() - interval '10 minutes')`;
+    const p = fakePartner({
+      register: { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `kr-${runId}`, email: s.email, apiKey: `API-KR-${runId}` } } },
+      list: listed(s.ext, `kr-${runId}`),
+    });
+    expect((await acct.connectStoreMengantar(s.storeId, { source: "cron", partner: { cfg: PCFG, fetch: p.fetch } })).state).toBe("connected");
+    // …and it is still a KiriminAja store: quoting follows `stores.shipping_provider`, not the account.
+    expect(await acct.storeShippingProvider(s.storeId)).toBe("kiriminaja");
+  });
+});
+
+suite("rotation — regenerate ONCE, seal v+1, recover a lost answer with get-key (never a 2nd regenerate)", () => {
+  async function connected() {
+    const s = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, data: { sellerId: `rs-${s.storeId.slice(0, 8)}`, apiKey: "API-OLDOLDOLDOLD" } } },
+      list: listed(s.ext, `rs-${s.storeId.slice(0, 8)}`),
+    });
+    await acct.connectStoreMengantar(s.storeId, opts(p.fetch));
+    return s;
+  }
+
+  it("replaces the key and bumps the version; the old blob is gone", async () => {
+    const { storeId } = await connected();
+    const before = await row(storeId);
+    const p = fakePartner({ regenerate: (b) => ({ body: { success: true, data: { sellerId: b.sellerId, apiKey: "API-NEWNEWNEWNEW", callbackSecret: null } } }) });
+    expect((await acct.rotateStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch } })).state).toBe("connected");
+    const after = await row(storeId);
+    expect(after.key_version).toBe(before.key_version + 1);
+    expect(after.api_key_enc).not.toBe(before.api_key_enc);
+    const open = await acct.openStoreMengantar(storeId);
+    expect(open.ok && open.cfg.key).toBe("API-NEWNEWNEWNEW");
+  });
+
+  it("a lost regenerate answer → recovered with get-key; regenerate is called exactly once", async () => {
+    const { storeId } = await connected();
+    const p = fakePartner({ regenerate: new TypeError("reset"), key: (b) => ({ body: { success: true, data: { sellerId: b.sellerId, apiKey: "API-RECOVERED00" } } }) });
+    expect((await acct.rotateStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch } })).state).toBe("connected");
+    expect(p.count("regenerate")).toBe(1);
+    expect(p.count("key")).toBe(1);
+    const open = await acct.openStoreMengantar(storeId);
+    expect(open.ok && open.cfg.key).toBe("API-RECOVERED00");
+  });
+
+  it("while the fence is up the opener refuses (no booking against a key that may be dead)", async () => {
+    const { storeId } = await connected();
+    const p = fakePartner({ regenerate: new TypeError("reset"), key: new TypeError("reset") });
+    expect((await acct.rotateStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch } })).state).toBe("rotating");
+    expect(await acct.openStoreMengantar(storeId)).toEqual({ ok: false, reason: "rotating" });
+  });
+});
+
+suite("tenant isolation — a store can never read another store's sealed key", () => {
+  it("under the tenant role, store B sees 0 rows of store A; A sees its own; a cross-store write is refused", async () => {
+    const a = await newStore();
+    const b = await newStore();
+    for (const s of [a, b]) {
+      await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending') on conflict do nothing`;
+    }
+    const asTenant = async <T>(storeId: string, fn: (tx: Sql) => Promise<T>) =>
+      client.begin(async (tx) => {
+        await tx`select set_config('app.store_id', ${storeId}, true)`;
+        await tx`set local role tokophi_app`;
+        return fn(tx as unknown as Sql);
+      });
+    const seenByB = await asTenant(b.storeId, (tx) => tx`select store_id from store_mengantar_accounts where store_id = ${a.storeId}`);
+    expect(seenByB).toHaveLength(0);
+    const own = await asTenant(a.storeId, (tx) => tx`select store_id from store_mengantar_accounts where store_id = ${a.storeId}`);
+    expect(own).toHaveLength(1);
+    await expect(
+      asTenant(b.storeId, (tx) => tx`insert into store_mengantar_accounts (store_id, env, external_user_id) values (${a.storeId}, 'production', ${`tokophi:store:${a.storeId}`})`),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("the DB refuses an externalUserId that does not name the row's own store, and one seller id per env", async () => {
+    const a = await newStore();
+    const b = await newStore();
+    await expect(client`insert into store_mengantar_accounts (store_id, env, external_user_id) values (${a.storeId}, 'sandbox', ${b.ext})`).rejects.toThrow(/sma_ext_check/);
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id) values (${a.storeId}, 'sandbox', ${a.ext}, ${`dup-${runId}`})`;
+    await expect(client`insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id) values (${b.storeId}, 'sandbox', ${b.ext}, ${`dup-${runId}`})`).rejects.toThrow(/sma_seller_uniq/);
+  });
+
+  it("a sealed blob copied into another store's row does not decrypt (scope binds store + env + seller + version)", async () => {
+    const a = await newStore();
+    const b = await newStore();
+    const { encryptSecret } = await import("@tokophi/lib/crypto");
+    const blob = encryptSecret("API-AAAAAAAAAAAA", acct.mengantarKeyScope(a.storeId, "sandbox", `sa-${runId}`, 1));
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, seller_id, state, api_key_enc, key_version) values (${b.storeId}, 'sandbox', ${b.ext}, ${`sb-${runId}`}, 'connected', ${blob}, 1)`;
+    expect(await acct.openStoreMengantar(b.storeId)).toEqual({ ok: false, reason: "key_unreadable" });
+  });
+});
+
+describe("sellerConnectRefusal — the Seller button cannot spend the shared partner budget", () => {
+  it("blocked is an operator case; one attempt per minute otherwise; a new store goes straight through", async () => {
+    const { sellerConnectRefusal, SELLER_CONNECT_COOLDOWN_MS } = await import("@tokophi/db/mengantar-account");
+    const now = Date.parse("2026-11-05T08:00:00Z");
+    const ago = (ms: number) => new Date(now - ms);
+    expect(sellerConnectRefusal({ state: "blocked", updatedAt: ago(10 * 60_000) }, now)).toMatch(/ditinjau tim TokoΦ/);
+    expect(sellerConnectRefusal({ state: "failed", updatedAt: ago(5_000) }, now)).toMatch(/Coba lagi dalam 55 detik/);
+    expect(sellerConnectRefusal({ state: "email_taken", updatedAt: ago(SELLER_CONNECT_COOLDOWN_MS - 1) }, now)).toMatch(/1 detik/);
+    expect(sellerConnectRefusal({ state: "failed", updatedAt: ago(SELLER_CONNECT_COOLDOWN_MS) }, now)).toBeNull();
+    expect(sellerConnectRefusal({ state: "none", updatedAt: null }, now)).toBeNull();
+    // A key rotation in progress is not a registration to retry.
+    expect(sellerConnectRefusal({ state: "rotating", updatedAt: ago(10 * 60_000) }, now)).toMatch(/sedang diperbarui/);
+  });
+});
+
+// Partner docs audit 2026-11-11 (`sandbox.mengantar.com/docs/partner/`, unchanged since 2026-11-05).
+suite("partner docs audit — refusals, the shared budget, the email Mengantar knows, a seller-rotated key", () => {
+  const pendingRow = async (o: { approved?: boolean } = {}) => {
+    const s = await newStore(o);
+    // A row the owner already agreed to (signup / click) — the sweep only finishes consented work.
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consented_at) values (${s.storeId}, 'sandbox', ${s.ext}, 'pending', 'signup', now())`;
+    return s;
+  };
+
+  it("no owner consent (operator-created store, approval, retry, cron) → waits, NO partner call; the owner's click registers", async () => {
+    const { storeId, ext, email } = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, data: { sellerId: `cs-${runId}`, email, apiKey: `API-CS-${runId}` } } },
+      list: listed(ext, `cs-${runId}`),
+    });
+    const op = await acct.connectStoreMengantar(storeId, { source: "operator", partner: { cfg: PCFG, fetch: p.fetch } });
+    expect(op.state).toBe("pending");
+    expect(p.calls).toHaveLength(0);
+    const waiting = await row(storeId);
+    expect(waiting.last_error_code).toBe("awaiting_consent");
+    expect(waiting.retry_after_at!.getTime() - Date.now()).toBeGreaterThan(7 * 24 * 3600_000); // the sweep leaves it alone
+    // The cron does not register it either.
+    await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 50 });
+    expect(p.count("register")).toBe(0);
+    // The owner presses "Hubungkan Mengantar" (the Seller action requeues, then connects as the owner).
+    await acct.requeueMengantar(storeId, opts(p.fetch));
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("connected");
+    const [c] = await client<{ consent_source: string; consent_by: string }[]>`select consent_source, consent_by from store_mengantar_accounts where store_id = ${storeId}`;
+    expect(c).toEqual({ consent_source: "pengaturan", consent_by: CLICKER });
+  });
+
+  it("a PARTNER-level refusal stops the sweep at the first row (limits are per partner, the budget is shared)", async () => {
+    await pendingRow();
+    await pendingRow();
+    const p = fakePartner({ register: { status: 429, body: { success: false, code: "RATE_LIMITED", message: "slow down" }, headers: { "retry-after": "30" } } });
+    const sum = await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: p.fetch }, limit: 50 });
+    expect(sum.partnerRefused).toBe("RATE_LIMITED");
+    expect(p.count("register")).toBe(1);
+  });
+
+  it("a partner-level refusal of the OWNERSHIP proof honours Retry-After and is reported (stops the sweep), not a blind 60 s retry", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({
+      register: { status: 201, body: { success: true, data: { sellerId: `pl-${runId}`, apiKey: "API-PL" } } },
+      list: { status: 429, body: { success: false, code: "RATE_LIMITED", message: "slow down" }, headers: { "retry-after": "600" } },
+    });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r).toMatchObject({ state: "pending", partnerRefused: "RATE_LIMITED" });
+    const db = await row(storeId);
+    expect(db).toMatchObject({ state: "pending", seller_id: null, last_error_code: "RATE_LIMITED" });
+    expect(db.retry_after_at!.getTime() - Date.now()).toBeGreaterThan(500_000);
+  });
+
+  it("PARTNER_DEACTIVATED (docs: 'Stop retrying') waits a day, not 30 minutes; never a lock-out", async () => {
+    const { storeId } = await newStore();
+    const p = fakePartner({ register: { status: 403, body: { success: false, code: "PARTNER_DEACTIVATED", message: "partner off" } } });
+    const r = await acct.connectStoreMengantar(storeId, opts(p.fetch));
+    expect(r).toMatchObject({ state: "pending", partnerRefused: "PARTNER_DEACTIVATED" });
+    const db = await row(storeId);
+    expect(db.retry_after_at!.getTime() - Date.now()).toBeGreaterThan(23 * 3600_000);
+  });
+
+  it.each(["INVALID_EXTERNAL_USER_ID", "PASSWORD_NOT_ALLOWED", "INVALID_PAGINATION"])("400 %s (docs: retrying unchanged gives the same answer) → failed, not an endless retry", async (code) => {
+    const { storeId } = await newStore();
+    const p = fakePartner({ register: { status: 400, body: { success: false, code, message: code } } });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("failed");
+    expect((await row(storeId)).last_error_code).toBe(code);
+  });
+
+  it("a repeat register with apiKey null (docs: the key is disabled) → blocked, no extra get-key call", async () => {
+    const { storeId, email } = await newStore();
+    const p = fakePartner({ register: { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `dis-${runId}`, email, apiKey: null } } } });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("blocked");
+    expect(p.count("key")).toBe(0);
+    expect((await row(storeId)).last_error_code).toBe("API_KEY_DISABLED");
+  });
+
+  it("the card shows the email Mengantar REGISTERED (first registration wins), not today's TokoΦ email", async () => {
+    const { storeId, ext } = await newStore();
+    const first = `first-${runId}@example.test`;
+    const p = fakePartner({
+      register: { status: 200, body: { success: true, alreadyRegistered: true, data: { sellerId: `em-${runId}`, email: first, apiKey: `API-EM-${runId}` } } },
+      list: listed(ext, `em-${runId}`),
+    });
+    expect((await acct.connectStoreMengantar(storeId, opts(p.fetch))).state).toBe("connected");
+    expect((await acct.mengantarAccountStatus(storeId)).ownerEmail).toBe(first);
+  });
+
+  describe("refreshStoreMengantarKey — the seller regenerated their key inside Mengantar", () => {
+    const connected = async (sellerId: string) => {
+      const s = await newStore();
+      const p = fakePartner({ register: { status: 201, body: { success: true, data: { sellerId, apiKey: `API-OLD-${sellerId}` } } }, list: listed(s.ext, sellerId) });
+      await acct.connectStoreMengantar(s.storeId, opts(p.fetch));
+      return s.storeId;
+    };
+    const part = (p: ReturnType<typeof fakePartner>, at: number) => ({ partner: { cfg: PCFG, fetch: p.fetch }, now: () => at });
+
+    it("a changed key is fetched with get-key (never re-registered) and resealed; the opener hands out the new one", async () => {
+      const storeId = await connected(`rk1-${runId}`);
+      const p = fakePartner({ key: (b) => ({ body: { success: true, data: { sellerId: b.sellerId, apiKey: "API-SELLER-ROTATED" } } }) });
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("refreshed");
+      expect(p.calls.map((c) => c.route)).toEqual(["key"]);
+      const open = await acct.openStoreMengantar(storeId);
+      expect(open.ok && open.cfg.key).toBe("API-SELLER-ROTATED");
+    });
+
+    it("the same key → unchanged (the 403 was a permission/IP refusal), nothing rewritten; a second call inside 10 min is skipped", async () => {
+      const sellerId = `rk2-${runId}`;
+      const storeId = await connected(sellerId);
+      const before = await row(storeId);
+      const p = fakePartner({ key: (b) => ({ body: { success: true, data: { sellerId: b.sellerId, apiKey: `API-OLD-${sellerId}` } } }) });
+      const t = Date.now();
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, t))).toBe("unchanged");
+      expect((await row(storeId)).key_version).toBe(before.key_version);
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, t + 60_000))).toBe("skipped");
+      expect(p.count("key")).toBe(1);
+    });
+
+    it("a rotation that lands while get-key is in flight wins: the older answer is NOT sealed over it", async () => {
+      const storeId = await connected(`rk4-${runId}`);
+      const before = await row(storeId);
+      // Stand-in for "Perbarui kunci" finishing mid-flight: it sealed a newer key at v+1 (state back to connected).
+      const p = fakePartner({
+        key: async (b) => {
+          await client`update store_mengantar_accounts set key_version = key_version + 1, api_key_enc = 'rotated-blob' where store_id = ${storeId}`;
+          return { body: { success: true, data: { sellerId: b.sellerId, apiKey: "API-SEEN-BEFORE-ROTATION" } } };
+        },
+      });
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("skipped");
+      expect(await row(storeId)).toMatchObject({ state: "connected", key_version: before.key_version + 1, api_key_enc: "rotated-blob" });
+    });
+
+    it("API_KEY_DISABLED on get-key → blocked (the opener then refuses)", async () => {
+      const storeId = await connected(`rk3-${runId}`);
+      const p = fakePartner({ key: { status: 403, body: { success: false, code: "API_KEY_DISABLED", message: "disabled" } } });
+      expect(await acct.refreshStoreMengantarKey(storeId, part(p, Date.now()))).toBe("blocked");
+      expect((await row(storeId)).state).toBe("blocked");
+    });
+  });
+
+  describe("go-live: consent given before production named MENGANTAR_ENV reaches the production row", () => {
+    const PROD: MengantarPartnerConfig = { ...PCFG, env: "production" };
+    const consentRow = (storeId: string, env: "sandbox" | "production", consented: boolean) =>
+      client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, consent_source, consent_by, consented_at)
+             values (${storeId}, ${env}, ${env === "production" ? `tokophi:store:${storeId}` : `tokophi:sandbox:store:${storeId}`}, 'pending',
+                     ${consented ? "signup" : null}, ${consented ? CLICKER : null}, ${consented ? new Date() : null})`;
+    const consentOf = async (storeId: string, env: string) =>
+      (await client<{ external_user_id: string; consent_source: string | null; consented_at: Date | null }[]>`
+        select external_user_id, consent_source, consented_at from store_mengantar_accounts where store_id = ${storeId} and env = ${env}`)[0];
+
+    it("a production sweep carries a consented sandbox row into production (consent kept); an unconsented one stays behind", async () => {
+      const yes = (await newStore()).storeId;
+      const no = (await newStore()).storeId;
+      await consentRow(yes, "sandbox", true);
+      await consentRow(no, "sandbox", false);
+      const p = fakePartner({});
+      await acct.retryMengantarAccounts({ partner: { cfg: PROD, fetch: p.fetch }, limit: 0 });
+      expect(await consentOf(yes, "production")).toMatchObject({ external_user_id: `tokophi:store:${yes}`, consent_source: "signup", consented_at: expect.any(Date) });
+      expect(await consentOf(no, "production")).toBeUndefined();
+      expect(p.calls).toHaveLength(0);
+    });
+
+    it("never the other way: a sandbox sweep does not copy a production owner's consent onto the sandbox partner", async () => {
+      const storeId = (await newStore()).storeId;
+      await consentRow(storeId, "production", true);
+      await acct.retryMengantarAccounts({ partner: { cfg: PCFG, fetch: fakePartner({}).fetch }, limit: 0 });
+      expect(await consentOf(storeId, "sandbox")).toBeUndefined();
+    });
+  });
+
+  it("an OWNER-attached account (partner_id NULL, O11) is never touched through the Partner API: no regenerate, no get-key refresh", async () => {
+    const { storeId } = await newStore();
+    await client`insert into store_mengantar_accounts (store_id, env, external_user_id, state, seller_id, partner_id, api_key_enc, key_version, key_hint)
+                 values (${storeId}, 'sandbox', ${`tokophi:sandbox:store:${storeId}`}, 'connected', ${`own-${runId}`}, null, 'sealed-elsewhere', 1, 'abcd')`;
+    const p = fakePartner({});
+    const r = await acct.rotateStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch } });
+    expect(r).toMatchObject({ state: "connected", message: expect.stringContaining("milik pemilik toko") });
+    expect(await acct.refreshStoreMengantarKey(storeId, { partner: { cfg: PCFG, fetch: p.fetch }, now: () => Date.now() + 3_600_000 })).toBe("skipped");
+    expect(p.calls).toHaveLength(0);
+    expect(await row(storeId)).toMatchObject({ state: "connected", key_version: 1, api_key_enc: "sealed-elsewhere" });
+  });
+});
+

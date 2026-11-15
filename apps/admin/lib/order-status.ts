@@ -1,10 +1,20 @@
 import { schema } from "@tokophi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { settleOrderLedger, type Db } from "./ledger-credit";
+import { onOrderStatusForAffiliate } from "./affiliate-attribution";
 import { defaultInventoryLevelId } from "./inventory-location";
 import type { OrderStatusRefusal } from "./order-status-refusal";
 
 export type OrderStatus = "baru" | "diproses" | "dikirim" | "selesai" | "batal" | "retur";
+
+/**
+ * "This order's status is no longer a SHIPMENT's to move" — `selesai`, `batal`, `retur`. Deliberately
+ * WIDER than `applyOrderStatusChange`'s terminal guard (which must keep `selesai → retur` legal); the
+ * full reasoning is the note above its use in `actions/shipping.ts`. Lives here, not in that
+ * `"use server"` file, because a server-action module can export only async functions and both
+ * shipping providers' booking paths need the one definition (SHIP-MENGANTAR).
+ */
+export const shipmentLocked = (status: string | null | undefined): boolean => status === "selesai" || status === "batal" || status === "retur";
 
 // A DISCRIMINATED union, not `{ applied: boolean; reason?: string }`. `reason` used to be a free
 // string, so a caller could neither exhaust it nor turn it into a message — which is part of why the
@@ -142,6 +152,8 @@ export async function applyOrderStatusChange(
   // The order's money moves with its status — booked/released/clawed back — inside THIS transaction,
   // so the book can never disagree with the order it describes.
   await settleOrderLedger(db, { storeId, orderId: order.id, status, prevStatus: order.status });
+  // Affiliate commission (0125, F-A7): voided with the order, or its hold window started — same txn.
+  await onOrderStatusForAffiliate(db, { storeId, orderId: order.id, status });
 
   return { applied: true };
 }

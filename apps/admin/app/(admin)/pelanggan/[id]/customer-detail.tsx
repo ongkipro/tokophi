@@ -263,6 +263,11 @@ export function CustomerDetail({
                     <TableRow key={o.id}>
                       <TableCell className="pl-5 font-mono text-sm font-medium">
                         {o.id}
+                        {o.savedToAccount && (
+                          <span className="ml-2 font-sans text-xs font-normal text-indigo-600 dark:text-indigo-400">
+                            Tersimpan di Akun TokoΦ
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground tabular-nums">
                         {timeAgo(o.minutesAgo)}
@@ -463,14 +468,16 @@ export function CustomerDetail({
 
               <Separator />
 
-              {/* Akun (customers.registered_at). Tamu = normal: belanja di sini tidak pernah
+              {/* Akun (TokoΦ Account link, ADR 0016; or the older customers.registered_at). Tamu = normal: belanja di sini tidak pernah
                   mewajibkan akun, dan memang tidak boleh — itu keputusan, bukan kekurangan data. */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <AccountBadge registered={customer.registered} />
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {customer.registered
+                  {customer.accountLinked
+                    ? `Terhubung ke Akun TokoΦ sejak ${num(customer.registeredDaysAgo ?? 0)} hari lalu — pembeli bisa melihat status & resi pesanan yang ia simpan dari toko ini. Isi akunnya (email, alamat, toko lain) tidak terlihat oleh toko.`
+                    : customer.registered
                     ? `Membuat akun ${num(customer.registeredDaysAgo ?? 0)} hari lalu — bisa masuk & melihat riwayat pesanannya sendiri.`
                     : "Belanja tanpa akun. Normal — checkout tidak pernah mewajibkan pendaftaran. Dikenali lewat nomor WhatsApp & email."}
                 </div>

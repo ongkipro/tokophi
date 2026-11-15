@@ -1,5 +1,5 @@
 ---
-// PAGE HEADER — the `bg-brand-50` band at the top of a non-homepage route.
+// PAGE HEADER — the `bg-mist` band at the top of a non-homepage route.
 //
 // It existed as hand-copied markup in kategori/[handle], blog/index and kontak (and, minus the
 // eyebrow, halaman/[handle]). That is the shape the design audit (#16) flagged: the storefront has no
@@ -19,8 +19,6 @@ import type { Crumb } from "../lib/breadcrumb";
 interface Props {
   /** The visible trail. Build it from the SAME array you hand to `breadcrumbLd()` — see lib/breadcrumb.ts. */
   crumbs?: Crumb[];
-  /** Small brand-coloured kicker above the title ("Koleksi", "Jurnal", "Kontak"). */
-  eyebrow?: string;
   title: string;
   /** One-line standfirst under the title. */
   dek?: string;
@@ -42,14 +40,18 @@ interface Props {
   class?: string;
 }
 
-const { crumbs, eyebrow, title, dek, imageUrl, imageAlt = "", width = "wide", class: className } = Astro.props;
+const { crumbs, title, dek, imageUrl, imageAlt = "", width = "wide", class: className } = Astro.props;
 const hasCrumbs = !!crumbs?.length;
 ---
 
-<section class:list={["bg-brand-50", className]}>
-  <div class:list={["mx-auto px-4 py-14 sm:px-6 sm:py-16", width === "narrow" ? "max-w-3xl" : "max-w-7xl"]}>
+{/* REDESIGN C (DESIGN.md C2): a page header is a title, not a band. The tinted block with a kicker,
+    a standfirst and room to spare pushed the first product below the fold on every listing. Same
+    page background as the content, tight vertical rhythm, no eyebrow (the breadcrumb already says
+    where you are). */}
+<section class:list={[className]}>
+  <div class:list={["mx-auto px-4 pb-4 pt-5 sm:px-6 sm:pb-6 sm:pt-8", width === "narrow" ? "max-w-3xl" : "max-w-7xl"]}>
     {hasCrumbs && <Breadcrumb items={crumbs!} />}
-    <div class:list={["flex flex-col gap-6 sm:flex-row sm:items-center", hasCrumbs && "mt-6"]}>
+    <div class:list={["flex flex-col gap-4 sm:flex-row sm:items-center", hasCrumbs && "mt-3"]}>
       {
         imageUrl && (
           <img
@@ -58,16 +60,15 @@ const hasCrumbs = !!crumbs?.length;
             width="160"
             height="160"
             loading="eager"
-            class="size-28 shrink-0 rounded-2xl object-cover shadow-sm sm:size-40"
+            class="size-20 shrink-0 rounded-sm object-cover sm:size-28"
           />
         )
       }
       <div class="min-w-0">
-        {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
-        <h1 class:list={["font-display text-3xl font-semibold text-balance text-ink sm:text-4xl", eyebrow && "mt-2"]}>
+        <h1 class="font-display text-[1.625rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-4xl">
           {title}
         </h1>
-        {dek && <p class="mt-3 max-w-xl leading-relaxed text-muted">{dek}</p>}
+        {dek && <p class="mt-1.5 max-w-xl text-[0.9375rem] leading-relaxed text-muted">{dek}</p>}
         <slot />
       </div>
     </div>

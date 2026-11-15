@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { appDb, assertRestrictedDbIdentity, db } from "./client";
+import { scrubQueryError } from "./scrub-error";
 
 // Run `fn` inside a transaction scoped to a single tenant.
 //   1. on the RESTRICTED pool where one exists (app-role mode), the owner pool otherwise,
@@ -28,9 +29,15 @@ import { appDb, assertRestrictedDbIdentity, db } from "./client";
 // transaction, and resolves instantly wherever there is no separate restricted pool.
 export async function withTenant<T>(storeId: string, fn: (tx: typeof db) => Promise<T>): Promise<T> {
   await assertRestrictedDbIdentity();
-  return appDb.transaction(async (tx) => {
-    await tx.execute(sql`select set_config('app.store_id', ${storeId}, true)`);
-    await tx.execute(sql`set local role tokophi_app`);
-    return fn(tx as unknown as typeof db);
-  });
+  try {
+    return await appDb.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.store_id', ${storeId}, true)`);
+      await tx.execute(sql`set local role tokophi_app`);
+      return fn(tx as unknown as typeof db);
+    });
+  } catch (e) {
+    // Every Seller write goes through here: drop the bound VALUES from drizzle's error before it
+    // reaches a logger (see scrub-error.ts). The cause chain is untouched.
+    throw scrubQueryError(e);
+  }
 }

@@ -4,7 +4,83 @@
 > (Vultr → Hetzner) or re-provisioning is exact. Companion: `PROD_PLAN.md` (decisions),
 > `.env.coolify.example` (env). Topology: **Cloudflare edge → Coolify/Traefik (origin) → containers**.
 
-## Current server (2026-07-10; it is PRODUCTION since 2026-07-13) — `volumdev`
+## ✅ Current server — the DEDICATED host (production since 2026-11-01 18:53 UTC)
+
+> Re-verified **2026-11-02 13:30 UTC** after three deploys (#439 `afdb1882`, #440 `b71c3752`, #441 `faa06c4e`)
+> and a disk cleanup. Host identifiers + SSH details are device-local (owner workstation: SSH alias
+> `tokophi-new-ops`, Coolify API wrapper `tokophi-coolify`), not in this repo. Bootstrap history:
+> `specs/docs/tasks/2026-11-01-dedicated-vps-bootstrap.md`. **The `volumdev` section below is the PREVIOUS
+> host — kept for its incident history; its IP, plan and "LIVE on volumdev" claims no longer describe production.**
+
+**Shape:** Vultr `sgp`, `vhp-2c-4gb-amd` (**2 vCPU / 4 GB** + 8 GB swap, 94 GB disk), Ubuntu 24.04, Coolify
+4.5.3, Traefik 3.7, Docker 29 (root `/var/lib/docker`). ONE Coolify application (id 1, uuid
+`qbd85i0yfaugxctv8pb15djw`, build pack `dockercompose`). Containers are named `<svc>-qbd85i0yfaugxctv8pb15djw`
+(no per-deploy hash suffix). Coolify dashboard + API sit behind Cloudflare Access / an SSH tunnel.
+
+### Deploy checklist on this host — do every step, in order
+
+1. **Before merging:** `gh pr checks <PR>` all green · `tokophi-coolify "/api/v1/deployments"` returns `[]`
+   (nothing in flight — merges are serialised) · disk under ~70 % (`ssh tokophi-new-ops 'df -h /'`).
+2. **Merge, then TRIGGER the deploy by hand.** A merge to `main` deploys NOTHING here: GitHub's webhook
+   cannot reach Coolify through Cloudflare Access.
+   `tokophi-coolify "/api/v1/deploy?uuid=qbd85i0yfaugxctv8pb15djw" -X POST` → note the `deployment_uuid`.
+3. **Watch the deployment, not the site:** poll `tokophi-coolify "/api/v1/deployments/<deployment_uuid>"`
+   until `status` is `finished` (or `failed`). Measured 2026-11-02: **~18–20 min** per deploy. During the
+   build the 2-vCPU box sits at **load ≈ 10** — the old containers keep serving 200 the whole time; do not
+   start a second deploy, a `docker prune`, or a heavy SSH job while it runs.
+4. **Verify it landed (the sha must CHANGE):** `ssh tokophi-new-ops 'sudo docker ps --format "{{.Names}} {{.Image}} {{.Status}}"'`
+   → admin, super-admin, storefront, landing, docs all on the new `…:<full merge sha>` AND `(healthy)`;
+   `migrate`/`seed` `Exited (0)`. Then `TOKOPHI_SSH_TARGET=tokophi-new-ops ops/tokophi-probe.sh`
+   (5 hosts + `db_ongkir` + disk) and one `docker logs --since 10m cron-tracking-qbd85i0yfaugxctv8pb15djw`
+   line reading `ok:true … errors:0`.
+5. **Downtime to expect:** only the container swap at the END of the build (compose = stop old → start new,
+   no rolling update). Measured **7–8 s per surface on the previous host** (ADR 0017); **not yet re-measured
+   on this host.** Zero-downtime options are ADR 0017 §5 — owner deferred them on 2026-11-02.
+6. **Rollback:** Coolify keeps **2** previous images per service (`application_settings.docker_images_to_keep = 2`)
+   → redeploy the previous sha from the Coolify UI, or `git revert <sha>` → PR → merge → step 2 (~20 min).
+
+### Disk — what fills it and what cleans it
+
+- **What grows:** Docker **build cache** (25 GB after ~6 deploys in 20 h) and one image set per deploy
+  (admin/migrate/seed ≈ 2.5 GB each, landing/storefront ≈ 2.2 GB — mostly shared layers).
+- **Automatic:** Coolify docker cleanup, daily 00:00, `force_docker_cleanup = true`, threshold 80 %.
+  Between those runs the L1b safety-net below prunes hourly.
+- **Manual cleanup (safe, run ONLY with the deploy queue empty) — done 2026-11-02, 63 GB → 33 GB used (70 % → 37 %):**
+  ```bash
+  sudo docker builder prune -f --max-used-space 8GB      # keeps 8 GB so the next build stays fast
+  sudo docker rmi <svc images of shas older than the newest 3>
+  sudo docker volume ls -qf dangling=true                  # anonymous ones only; check each is empty (du) before rm
+  sudo apt-get clean
+  ```
+  🔴 **Never** remove `qbd85i0yfaugxctv8pb15djw_tokophi-{pgdata,uploads,backups,offsite-state}`, `coolify-db`,
+  `coolify-redis`, and never `docker volume prune` (it would take any of them whose container is down).
+
+### Self-healing + disk safety-net on this host (installed 2026-11-02 13:32 UTC)
+
+- **L1 watchdog — LIVE.** `ops/tokophi-watchdog.sh` → `/usr/local/bin/tokophi-watchdog.sh` (sha256 matches the
+  repo file), every minute from `/etc/cron.d/tokophi-watchdog`. Adapted for this host: uuid
+  `qbd85i0yfaugxctv8pb15djw`, names `<svc>-<uuid>` (old `<svc>-<uuid>-<hash>` still matched), **`docs` added**
+  (5 services), and it **skips while a `coolify-helper` container is up** (a deploy is replacing containers
+  on purpose). Proven from cron: `docker stop docs-…` at 13:32:23 → `HEAL docs: was 'exited' -> started` at
+  13:33:05 → `(healthy)`, `panduan.tokophi.com` 200. Logic covered by a stub-docker run (heal, deploy guard,
+  `super-admin` never matched by `admin`, `<id>_<name>` swap container ignored, `migrate` never touched).
+- **L1b disk safety-net — LIVE.** `ops/tokophi-docker-cleanup.sh` → `/usr/local/bin/tokophi-docker-cleanup.sh`
+  (sha256 matches), hourly at :17 from `/etc/cron.d/tokophi-docker-cleanup`. Same two-stage logic as on
+  `volumdev` (normal: cache > 24 h + unused images > 48 h; pressure ≥ 70 % or < 25 GB free: all cache, then
+  all unused images) **plus a deploy guard**: it exits while `coolify-helper` runs, because a just-built image
+  is "unused" until compose starts it and the pressure-mode `image prune -af` would delete it mid-deploy.
+  Log `/var/log/tokophi-docker-cleanup.log`. Never touches volumes.
+- **`ops/tokophi-probe.sh` now defaults to `tokophi-new-ops`.** Verified 2026-11-02: HTTP ×5, `db_ongkir`, ssh,
+  disk 37 %, `watchdog — L1 heartbeat 46s old`, exit 0.
+
+### 🔴 Still open on this host
+
+- **No alert channel** (L2/L3) — the probe is pulled by a human; nothing pages when it goes red.
+- Downtime per deploy not yet re-measured here (step 5 above).
+- `cron-tracking` is running again: KiriminAja whitelisted this host's IP (owner, 2026-11-02); verified
+  `ok:true scanned:3 errors:0 problems:0` and zero `not allowed` lines in the last 6 h.
+
+## Previous server (2026-07-10 → 2026-11-01; production 2026-07-13 → 2026-11-01) — `volumdev`
 
 > ⚠️ **Billing is a single point of failure on this box — realised 2026-09-04 → 2026-09-07 (~70 h down).** Vultr suspends the instance when the account balance runs out, silently. Runbook below: "Origin unreachable / every host 522".
 
@@ -38,6 +114,103 @@ through SSH + `docker`, and rollback is `git revert` + push + webhook (~8–9 mi
 - Services: `postgres` + one-off `migrate` (Drizzle migrate + seed) + `admin` (:3000) + `super-admin` (:3001) + `storefront` (:4327). Ports are `expose` only → Coolify assigns a domain per service.
 - Per-app Dockerfiles (`apps/*/Dockerfile`) build with **context = repo root** (workspaces resolve).
 - After first deploy: assign domains per service in Coolify, then set the cross-surface env (below) + redeploy.
+- **`account`** (`apps/account`, :4329, `account.tokophi.com`) — added 2026-11-14 (BUYER-ACCOUNT-DEPLOY), ships **dormant**. See "Akun TokoΦ" below.
+
+## Akun TokoΦ — `account.tokophi.com` (BUYER-ACCOUNT-DEPLOY, 2026-11-14)
+
+The buyer account (ADR 0016) is a compose service like the others; nothing in Coolify or Cloudflare has to be
+created for it. **It ships dormant and turning it on is Coolify env + redeploy only.**
+
+| | |
+|---|---|
+| Image | `apps/account/Dockerfile` — 3 stages (build the monorepo → `npm ci --omit=dev --workspace @tokophi/account` → runtime with only `dist/` + those deps), runs as **`node`** (uid 1000), no source or build tooling in the final image. Local measure: 588 MB image, 267 MB `node_modules` (astro runtime + `@astrojs/check`/`typescript`, which the workspace lists as dependencies). |
+| Port | **4329** (= its `astro dev` port, like storefront 4327 / landing 4328 / docs 4339). `expose` only. |
+| Routing | Traefik labels in the compose: ``Host(`account.tokophi.com`)``, **priority 100** — above the store wildcard `tokophi-stores` (priority 1), which would otherwise answer 301 → `account.tokophi.id`. `account` is in `RESERVED_SLUGS`, so no store can be allocated that subdomain (same arrangement as `panduan`). |
+| DNS / TLS | Nothing to add: the proxied `*.tokophi.com` wildcard already resolves it; TLS = the Cloudflare Origin CA default cert (no certresolver). |
+| Healthcheck | `wget http://127.0.0.1:4329/healthz` — 200 while open **or** closed (`select 1` against Postgres, no row read), `start_interval: 2s` (ADR 0017). Without a health path that answers while closed, Traefik would have no server for the host. |
+| Depends on | `postgres: service_healthy` only — no `migrate` gate (ADR 0017 §2.4). |
+| Host trust | `apps/account/astro.config.mjs` `security.allowedDomains = account.tokophi.com (https)`. Without it the node adapter ignores Host / X-Forwarded-* and builds every request URL as `http://localhost:4329`, so a form POST from a browser that sends no `Sec-Fetch-Site` failed Astro's origin check with 403 (measured with Traefik's headers). **Serving it on another hostname (staging) needs that list edited.** |
+| DB role | `DATABASE_URL = ${PLATFORM_DATABASE_URL}` + `DATABASE_RUNTIME_ROLE: owner` — the storefront's reasoning: zero `withTenant()` call sites; every query filters on the signed-in buyer explicitly. |
+
+**What a visitor sees while it is dormant** (measured against the container, 2026-11-14):
+
+| Env on the `account` container | `/healthz` | every page (`/`, `/masuk`, `/klaim`, `/orders`, `/auth/google/*`, a POST to `/keluar`, unknown paths) | `/klaim` |
+|---|---|---|---|
+| no `GOOGLE_CLIENT_ID`/`SECRET` (production today) | 200 | **503 "Akun TokoΦ belum dibuka"**, `Retry-After: 86400`, no cookie or DB read | same 503 page |
+| Google set, `ACCOUNT_CLAIM_SECRET` empty | 200 | normal app (`/masuk` shows "Masuk dengan Google") | **503 "Simpan pesanan belum tersedia"** — before any sign-in prompt |
+| Google set + claim secret (≥ 32 chars) | 200 | normal app | sign-in → consent → save |
+
+**Account sign-in has its OWN switch: `ACCOUNT_GOOGLE_REDIRECT_URI` has NO default in the compose** (owner review
+2026-11-14). Setting `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` turns on Google sign-in for the Seller panel only;
+`account.tokophi.com` stays "belum dibuka" until `ACCOUNT_GOOGLE_REDIRECT_URI=https://account.tokophi.com/auth/google/callback`
+is set in Coolify as well (that exact URI must also be registered on the Google client).
+
+**Turning it on** (owner-gated — ADR 0016 "Production enablement" lists the non-technical gates first: the UU PDP
+note in `PRIVACY-COMPLIANCE.md` approved, a retention rule for revoked sessions):
+1. Google Cloud console → the existing OAuth client → add the authorised redirect URI
+   `https://account.tokophi.com/auth/google/callback` (exact match; Seller keeps its own).
+2. Coolify → environment: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (shared with admin);
+   `ACCOUNT_GOOGLE_REDIRECT_URI=https://account.tokophi.com/auth/google/callback` (the account app's own switch — no default);
+   `ACCOUNT_CLAIM_SECRET` = one random value **≥ 32 chars** — the compose forwards the SAME variable to `admin`
+   and `account`, so it is equal by construction; `ACCOUNT_APP_URL=https://account.tokophi.com` (storefront).
+   `AUTH_SECRET` is already set (the account derives its own session key from it).
+3. Redeploy (a var reaches a container only when the service is recreated — "the image tag does not prove the
+   environment arrived", below).
+4. Verify: `curl -s -o /dev/null -w '%{http_code}' https://account.tokophi.com/healthz` → 200;
+   `https://account.tokophi.com/masuk` → 200 with "Masuk dengan Google" (not "belum dibuka"); place a test order on
+   a store → `/checkout/sukses` shows "Simpan ke Akun TokoΦ" → the link opens `/klaim` → sign in → consent →
+   the order is listed; Seller → Pelanggan → Akun Pembeli lists the save. On the host,
+   `docker exec <account> sh -c '[ "${#ACCOUNT_CLAIM_SECRET}" -ge 32 ] && echo set || echo MISSING'` (and the same
+   on `admin`) proves the value arrived without printing it — the compose forwards it EMPTY by default, so
+   "present in env" proves nothing.
+5. Rollback = empty `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` + `ACCOUNT_GOOGLE_REDIRECT_URI` (Seller Google sign-in unaffected) and redeploy; data stays.
+
+## Affiliate — `affiliate.tokophi.com` (AFFILIATE-P2, ADR 0022, 2026-11-14)
+
+Store affiliates' OWN accounts (`apps/affiliate`, email + password — separate from the buyer account). Same
+shape as `account` above; nothing in Coolify or Cloudflare has to be created. **It ships dormant; turning it on
+is ONE env var on three services + redeploy.**
+
+| | |
+|---|---|
+| Image | `apps/affiliate/Dockerfile` — build → `npm ci --omit=dev --workspace @tokophi/affiliate` → runtime, `USER node`, built without DB or secret |
+| Port | **4330** (= its `astro dev` port). `expose` only. |
+| Routing | ``Host(`affiliate.tokophi.com`)``, **priority 100** over the store wildcard; slug `affiliate` is in `RESERVED_SLUGS` |
+| Healthcheck | `wget http://127.0.0.1:4330/healthz` — 200 while open **or** closed (`select 1`), `start_interval: 2s` |
+| Depends on | `postgres: service_healthy` only — no `migrate` gate. Migration `0125_affiliate_programme` runs with the normal `migrate` job. |
+| DB role | `${PLATFORM_DATABASE_URL}` + `DATABASE_RUNTIME_ROLE: owner` (every query filters on the signed-in affiliate account) |
+| Secrets | **None.** The session cookie carries an opaque random token; only its sha256 is stored (`affiliate_sessions`). |
+
+**The switch is `AFFILIATE_APP_URL`** (this app's own origin), forwarded EMPTY by default to `affiliate`, `admin`
+and `storefront`:
+
+| `AFFILIATE_APP_URL` | `affiliate.tokophi.com` | Seller → Affiliate | `<store>/affiliate` |
+|---|---|---|---|
+| empty (default) | every page **503 "Affiliate TokoΦ belum dibuka"**, `/healthz` 200, no row read | everything works except "Undang ke akun affiliate" (hidden; refused if called) | 404 while the store's programme is off; when on: explains the programme + "Pendaftaran affiliate belum dibuka" |
+| `https://affiliate.tokophi.com` | sign-up / sign-in / apply / invitations | invite button shown | "Daftar jadi affiliate" → `https://affiliate.tokophi.com/gabung?toko=<slug>` |
+
+The SELLER still switches the programme on per store (Pengaturan → Affiliate, `store_settings.affiliate_enabled`,
+default off) — the env var only opens the platform side. Checkout attribution (`?ref=` / typed code) works for
+a store whose programme is on whatever `AFFILIATE_APP_URL` says (affiliates the seller added by hand earn too).
+
+**Turning it on** (owner-gated):
+1. Coolify → environment: `AFFILIATE_APP_URL=https://affiliate.tokophi.com` (one variable; the compose forwards it
+   to `affiliate`, `admin` and `storefront`).
+2. Redeploy (a var reaches a container only when the service is recreated).
+3. Verify: `/healthz` → 200; `https://affiliate.tokophi.com/masuk` → 200 with the sign-in form (not "belum
+   dibuka"); sign up a test account; on a test store switch the programme on, open `<store>/affiliate` → the link
+   lands on `/gabung?toko=<slug>`; apply → Seller → Promo → Affiliate shows the applicant (sidebar badge).
+   `docker exec <affiliate> sh -c 'echo "$AFFILIATE_APP_URL"'` shows the value (it is not a secret).
+
+**Rollback:** set `AFFILIATE_APP_URL` empty and redeploy → the area is "belum dibuka" again, invites hidden,
+`/affiliate` stops linking. Nothing is deleted: accounts, applications and commissions stay in the database, and
+the seller's own switch keeps attribution on or off per store. To stop attribution for one store, the seller
+switches the programme off in Pengaturan. Reverting the code is NOT needed for either; migration `0125` is
+additive (new tables + columns with defaults that change nothing for an existing store).
+
+**Known limits:** no password reset by email (no mail provider — the UI says to ask the seller/support; a support
+reset needs an operator tool that does not exist yet, tracked in TASKS); sign-up answers "email sudah
+terdaftar" (same as Seller sign-up).
 
 ## ⚠️ Gotchas / errors hit → fixes (READ before re-deploying or migrating)
 
@@ -217,7 +390,7 @@ env name. Swap `tdev.` for `client.` in the probe when `KIRIMINAJA_ENV=productio
 (`PING-…`, channel `QRIS`, `amount: 10000`) and reading `rc=00`. It is an authorised action, not a
 ping. The KiriminAja test is read-only (province list) and safe.
 
-## L1 self-healing watchdog (LIVE on `volumdev` since 2026-07-15)
+## L1 self-healing watchdog (LIVE on `volumdev` 2026-07-15; on the dedicated host since 2026-11-02 — see "Current server" above for its adapted naming)
 
 On 2026-07-14 production 503'd because Coolify built the app containers, left them `created`, and moved
 on — nothing started them, nothing told us. The watchdog is the automatic recovery for exactly that
@@ -373,8 +546,20 @@ Subscription enforcement is real-time (`computeBilling` in `requireCapability` �
 are read-only immediately, no job needed). But **recurring invoice generation + stored-status
 sync** run via `GET /api/cron/billing` **with `x-cron-secret: $CRON_SECRET` in a HEADER**, and the thing that calls it is the
 `cron` **sidecar** in `docker-compose.coolify.yml`, alongside `cron-tracking` /
-`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` (six loops as of
-2026-09-11 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one). This heading used to read *"schedule this"* and told you to add a **Coolify
+`cron-tracking-events` / `cron-order-expiry` / `cron-domains` / `cron-payment-advice` / `cron-plugins`
+(seven loops since KEL-001 — `cron-auth.test.ts` counts them, and Super Admin → Analitik → Sistem lists every one).
+`cron-plugins` (every 900 s, `GET /api/cron/plugins`) is the retry + lead leg of first-party plugins
+(ADR 0021 — today only Kelola CRM). It is **idle until a merchant activates and connects a plugin**:
+the tick answers `{"ok":true,"stores":0,…}` and writes nothing. It makes outbound calls ONLY to the URL a
+merchant pasted at Pengaturan → Plugin → Kelola; a store whose credential Kelola refused (401/404) is
+skipped until the merchant saves it again, and a store whose owner switched the plugin **Nonaktif** is not
+listed at all (`store_plugins.enabled`). **First deploy of KEL-001 (PR from `feat/kelola-plugin-v2`) is MANUAL**:
+it adds this sidecar and migration `0120_store_plugins_kelola`, so after the merge trigger the deploy by hand
+(checklist below), then confirm (1) `select max(created_at) from drizzle.__drizzle_migrations` =
+`1787546011751` (0120 applied, not skipped), (2) the `cron-plugins-*` container is up and its first log line is
+the JSON, not `cron plugins failed`, (3) Super Admin → Analitik → Sistem lists "Plugin toko" (job `plugins`) with interval 900 s.
+It needs no new env var — `CRON_SECRET` (the route) and `INTEGRATION_TOKEN_KEY` (sealing the Kelola credential;
+without it the Seller connect form refuses to save) are already set on the admin container. This heading used to read *"schedule this"* and told you to add a **Coolify
 Scheduled Task** — following that would have created a **second** caller. Verified 2026-08-03:
 `select count(*) from scheduled_tasks` in `coolify-db` is **0**; the sidecar is the only scheduler
 and always has been.
@@ -700,6 +885,97 @@ curl -s https://toko.tokophi.com/feed/tiktok.xml \
 A migration count (`select count(*) from drizzle.__drizzle_migrations`), a new response header, a new
 field in an API payload, a new route answering 200 — anything the old build cannot emit. Health checks
 tell you the container is alive; only this tells you it is running **your** code.
+
+## 🚚 Mengantar as the default shipping provider — go-live runbook (prepared 2026-11-11, NOT run)
+
+Owner direction 2026-11-11: make Mengantar the default, flip only when Mengantar's production details
+arrive. Rules that do not change with the flip (owner decisions D9/D11, `specs/docs/tasks/2026-11-05-shipping-mengantar-decisions.md`):
+**COD always quotes and books on KiriminAja**, and a store with no connected Mengantar account, no
+Mengantar pickup area, or a destination Mengantar cannot price **falls back to KiriminAja** per quote
+(`quoteShipping`). An order keeps the provider it was quoted with (`orders.shipping_provider`), so
+booking, tracking and cancel follow the order, never the switch. KiriminAja therefore stays configured.
+
+**Blocked on Mengantar/owner (none of these is code):**
+1. The production **Partner API origin**. `MENGANTAR_ORIGINS.production.partner` is `null`
+   (`packages/lib/src/provider-config.ts`); until it is filled, production onboarding is refused.
+2. The dedicated host's egress IP on Mengantar's **allow-list** (the IP lives in device-local ops
+   notes, SSH alias `tokophi-new-ops`; never in this public repo).
+3. The **Terms/Privacy URLs** the Seller consent line cites (decision O8).
+4. ~~Owner approval of the **area import** on production~~ — **approved and DONE 2026-11-12** (step 2 below).
+
+**Steps, in order — each one owner-approved, production writes included:**
+1. **Code PR:** set `MENGANTAR_ORIGINS.production.partner` to the published origin (one line + the
+   `provider-config.test.ts` expectation). Merge, then deploy by hand (step 2 of the checklist above).
+2. ✅ **DONE on production 2026-11-12** (owner-approved; dataset `2026-11-04`; result identical to local: 82 374 areas, kelurahan 71 285/78 764, kecamatan 6 919/7 030, seller origins 6/6 — BUILD-LOG 2026-11-12). Re-run only for a NEW dataset version. **Area import** (once per dataset version, idempotent, upsert-only), from a workstation tunnel to
+   production Postgres: `MENGANTAR_AREAS_FILE=<99ribu>/data/shipping/mengantar-areas.json.gz npm run
+   load:mengantar-areas -w @tokophi/db`. It also fills `store_settings.sender_mengantar_area_id` for
+   stores whose pickup kecamatan matches uniquely. Read back what it prints (`senders_matched`, unmatched
+   districts). Measured on the clone `tokophi_shipping` (2026-11-11): 82 374 areas, **111 of 7 030
+   KiriminAja districts have no Mengantar bridge** (they fall back to KiriminAja), 7/7 configured pickup
+   addresses matched.
+3. **Coolify env** on the `tokophi` application: `MENGANTAR_ENV=production`. It reaches `admin` and
+   `super-admin` only because `docker-compose.coolify.yml` forwards it — added 2026-11-11, before that
+   the variable was silently dropped (`test/compose-provider-env.test.ts`). `MENGANTAR_PARTNER_ID` /
+   `_SECRET` are FALLBACKS: prefer saving the pair on Super Admin → Pengaturan → Kurir (encrypted,
+   probed before save). Leave `MENGANTAR_PICKUP_MODE` empty (production = `scheduledPickup`). Redeploy.
+4. **Super Admin → Pengaturan → Kurir:** save the production partner id + secret (the card probes them).
+5. **Connect the sellers.** Stores that signed up BEFORE step 3 recorded their consent on a `sandbox`
+   row (an unset `MENGANTAR_ENV` reads as sandbox); once production is named, the account sweep carries
+   every consented store into a `production` row and registers it — nothing to click (only that
+   direction: a production owner is never copied onto the sandbox partner). New signups queue
+   automatically (after approval, D15). Stores with NO recorded consent (created from Super Admin, or
+   older than the consent line): the owner presses **"Hubungkan Mengantar"** (Seller → Pengaturan →
+   Pengiriman, it carries the consent line). Super Admin can QUEUE a store but cannot register it, and an
+   operator in "Buka Dashboard Seller" cannot press that button for the owner — the Mengantar docs require
+   the owner's own agreement to their Terms + Privacy Policy. ⚠️ The Dashboard banner appears only AFTER
+   the flip (step 6) — before it, ask those owners directly. After the flip the card tells each seller
+   **"Dipakai di checkout"** or names the first thing stopping it (account, pickup address, an area
+   Mengantar does not know). Count before flipping:
+   `select state, last_error_code, count(*) from store_mengantar_accounts where env = 'production' group by 1, 2;`
+6. **Flip the switch** (Super Admin → Pengaturan → Kurir → Mengantar). It refuses while
+   `MENGANTAR_ENV` is unset in its own process, which is the check step 3 worked.
+7. **Verify:** `ops/tokophi-probe.sh` exits 0; one checkout quote on a connected store shows the
+   Mengantar couriers (admin log has **no** `mengantar could not quote; falling back` line for it);
+   then ONE owner-approved real booking + cancel on that store, recorded in BUILD-LOG.
+
+**Current production state (2026-11-12, owner exception O11):** `MENGANTAR_ENV=production` is set and the switch is
+ON Mengantar, but there is still NO Partner credential: no store can register. Only the demo store `batiknusantara`
+quotes non-COD through Mengantar, on the owner's OWN seller account attached with `ops/mengantar-attach-own-key.ts`
+(`partner_id` NULL, pickup = the Surabaya address already registered on that account). Every other store, and every COD
+order, stays on KiriminAja; with no Partner credential the Seller banner and the connect button stay hidden
+(`canRegister`). The Super Admin switch refuses Mengantar without a Partner credential by design, so it was flipped by
+SQL with a `platform_activity` line. ⚠️ Coolify reports a deploy "finished" BEFORE the `seed` container exits; the area
+bridge is rebuilt at the END of that seed (`seed-areas.ts` → `bridgeMengantarAreas`), so a quote in the first ~2 minutes
+after a deploy falls back to KiriminAja. Check `select count(*) from kiriminaja_areas where mengantar_area_id is not null`
+(expect 6 919) before judging a live quote.
+
+**Rollback:** flip the switch back to KiriminAja. New quotes return to KiriminAja at once (60 s config
+cache); orders already stamped `mengantar` keep tracking and cancelling through Mengantar.
+
+**Local development against the sandbox (owner workstation, 2026-11-11).** TokoΦ's sandbox Partner
+credentials (owner-provided) live ONLY in `secrets-env` (`TOKOPHI_MENGANTAR_SANDBOX_PARTNER_ID` /
+`_PARTNER_SECRET`), never in a `.env` or this repo. Local `tokophi` has the switch on Mengantar. The
+device-local launcher `~/.local/bin/tokophi-dev-mengantar admin|super [port]` (run from a checkout that
+has 0116) maps them to `MENGANTAR_PARTNER_ID` / `_SECRET` in-process, sets `MENGANTAR_ENV=sandbox`,
+`MENGANTAR_PICKUP_MODE=dropOff` and a local-only `INTEGRATION_TOKEN_KEY`, and serves against
+`$TOKOPHI_DB` (default `tokophi`). The local `tokophi` DB was migrated to 117 and the area catalogue
+loaded the same day (6/6 pickup addresses bridged). ⚠️ `tokophi` is a PRODUCTION COPY: pressing
+"Hubungkan Mengantar" there registers a real merchant's email on the sandbox partner — connect a
+throwaway store, or use the clone `tokophi_shipping`.
+
+**Measured in the sandbox before the flip** (read-only `GET /order/estimate`, 2026-11-11 — sandbox prices
+are not production prices; the *behaviour* is what was measured):
+- `courier=all` answers in 150–330 ms warm (≈580 ms cold), faster than KiriminAja's fast pair.
+- Fractional kg is accepted and priced per courier: SiCepat, iDexpress, J&T, Lion, AnterAja and POS
+  scale linearly (1.01 kg = 1.01 × the 1 kg price); JNE, SAP and SPX step up between 1.01 and 1.5 kg.
+  Quote and booking already send the same unrounded Σ-lines kg, so the shopper is charged what the
+  booking prices.
+- Two kelurahan of one kecamatan priced identically (Semarang Tengah, Genteng, Kebayoran Baru) — the
+  district-representative price destination is harmless.
+- The ETD text is free-form (`"1 - 2 days"`, `"2-3 Day"`, `"2 HARI"`) and absent for J&T and iDexpress;
+  `mgEtd` now normalises it to `"1-2"` (it rendered "Estimasi 1 - 2 days hari" before).
+- One of three identical calls omitted Lion. If production does the same, an order whose courier
+  vanishes between quote and re-quote is refused by `/api/public/order` — watch for it after the flip.
 
 ## Env to set in Coolify
 

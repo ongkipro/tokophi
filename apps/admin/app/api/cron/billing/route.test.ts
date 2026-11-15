@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import postgres, { type Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { codeOnly } from "../../../../../../test/source-code";
+import { holdPlatformFinance } from "../../../../../../test/platform-finance-lock";
 
 // Task 8.24 (finance audit 2026-09-16, F1) — the renewal invoice the cron creates.
 //
@@ -28,12 +29,31 @@ const provider = vi.fn(async (input: { reffId: string; channelCode: string; amou
   amount: input.amount,
   total: input.amount,
 }));
+// ⚠️ THE SWEEP WALKS EVERY STORE IN THE DATABASE — and the test database is SHARED by every suite
+// running in parallel. Unscoped, a tick billed (and re-statused) other suites' lapsed test stores, so
+// THEIR cleanup then failed on `invoices_store_id_stores_id_fk` — a flake that moved between
+// unrelated files run to run (users.test, menus.test, ka-sorting-code.test, … seen 2026-11-05).
+// The route, the DB and the invoice creator stay real; only the billing VERDICT for a store this file
+// did not create is pinned to "nothing to do" (its own status, not lapsed), so the sweep leaves it alone.
+const own = vi.hoisted(() => new Set<string>());
+vi.mock("@tokophi/lib/billing", async (orig) => {
+  const real = (await orig()) as typeof import("@tokophi/lib/billing");
+  return {
+    ...real,
+    computeBilling: ((s: Parameters<typeof real.computeBilling>[0] & { id?: string; status?: string }) => {
+      const b = real.computeBilling(s);
+      if (s.id && own.has(s.id)) return b;
+      return { ...b, status: s.status ?? b.status, billingStatus: "active" };
+    }) as typeof real.computeBilling,
+  };
+});
 vi.mock("@tokophi/lib/autolaris", async (orig) => {
   const real = (await orig()) as Record<string, unknown>;
   return { ...real, autolarisConfigured: () => true, alCreateOrder: (i: never) => provider(i) };
 });
 
 let client: Sql;
+let finance: Awaited<ReturnType<typeof holdPlatformFinance>> | undefined;
 let GET: (req: NextRequest) => Promise<Response>;
 let accountId = "";
 const stores: string[] = [];
@@ -47,6 +67,7 @@ async function store(opts: { periodEnd: Date | null; comped?: boolean; firstPaid
             ${opts.periodEnd}, ${opts.firstPaid ?? true}, ${opts.comped ?? false}, now())
     returning id`;
   stores.push(s.id);
+  own.add(s.id);
   return s.id;
 }
 const invoices = (storeId: string) =>
@@ -62,13 +83,16 @@ beforeAll(async () => {
   ({ GET } = await import("./route"));
   const [acc] = await client<{ id: string }[]>`insert into accounts (name) values (${`Cron ${runId}`}) returning id`;
   accountId = acc.id;
-  // The global PPN toggle: OFF, like production (owner ruling 2026-08-24). Restored in afterAll.
-  await client`insert into platform_finance (id, subscription_ppn_enabled) values (1, false) on conflict (id) do update set subscription_ppn_enabled = false`;
+  // The global PPN toggle: OFF, like production (owner ruling 2026-08-24). Held under the shared lock
+  // (ADR 0020's pricing suite flips it ON in parallel) and restored in afterAll.
+  finance = await holdPlatformFinance(client);
+  await finance.setPpn(false);
 });
 
 afterAll(async () => {
   if (!client) return;
   try {
+    await finance?.release();
     for (const id of stores) {
       await client`delete from invoices where store_id = ${id}`;
       await client`delete from platform_activity where store_id = ${id}`;
@@ -81,6 +105,24 @@ afterAll(async () => {
 });
 
 suite("cron/billing — the renewal invoice (Task 8.24)", { timeout: 120_000 }, () => {
+  it("never bills or re-statuses a store this file did not create (the test DB is shared)", async () => {
+    // A lapsed store that belongs to "another suite": exactly the shape the sweep used to bill.
+    const [foreign] = await client<{ id: string }[]>`
+      insert into stores (account_id, name, slug, status, trial_ends_at, current_period_end, first_invoice_paid, comped, approved_at)
+      values (${accountId}, ${`Other ${runId}`}, ${`o${runId}`}, 'active', now() - interval '40 days', now() - interval '1 day', true, false, now())
+      returning id`;
+    try {
+      await tick();
+      expect(await invoices(foreign.id)).toHaveLength(0);
+      const [row] = await client<{ status: string }[]>`select status from stores where id = ${foreign.id}`;
+      expect(row.status).toBe("active");
+    } finally {
+      await client`delete from invoices where store_id = ${foreign.id}`;
+      await client`delete from platform_activity where store_id = ${foreign.id}`;
+      await client`delete from stores where id = ${foreign.id}`;
+    }
+  });
+
   it("creates exactly ONE invoice for a past_due store, on a REAL channel code, at the quoted price with the stored tax", async () => {
     const id = await store({ periodEnd: new Date(Date.now() - 86_400_000) }); // lapsed yesterday → past_due (3-day grace)
     provider.mockClear();
@@ -89,13 +131,13 @@ suite("cron/billing — the renewal invoice (Task 8.24)", { timeout: 120_000 }, 
     const rows = await invoices(id);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ channel: "VABCA", status: "menunggu", cycle: "monthly" });
-    expect(Number(rows[0].amount_idr)).toBe(275_000); // first invoice already paid → the regular price
+    expect(Number(rows[0].amount_idr)).toBe(178_500); // ADR 0020 — the regular price (was 275.000)
     expect(Number(rows[0].tax_idr)).toBe(0); // toggle off → no PPN line
     // The slug is kept under 12 chars: the reference embeds `slug.slice(0, 12)`, so a longer one
     // would be cut and the call could never be matched (the first draft's `cron-<8>-0` was 13).
     const call = provider.mock.calls.find((c) => c[0].reffId.includes(`c${runId}-0`));
     expect(call?.[0].channelCode).toBe("VABCA");
-    expect(call?.[0].amount).toBe(275_000);
+    expect(call?.[0].amount).toBe(178_500);
   });
 
   it("a second tick reuses the pending invoice — never a duplicate bill", async () => {
@@ -118,12 +160,12 @@ suite("cron/billing — the renewal invoice (Task 8.24)", { timeout: 120_000 }, 
     expect(await invoices(id)).toHaveLength(0);
   });
 
-  it("the promo price applies to a store whose first invoice was never paid", async () => {
+  it("ADR 0020 — no first-month promo: a never-paid store without a code is billed the normal price", async () => {
     const id = await store({ periodEnd: new Date(Date.now() - 86_400_000), firstPaid: false });
     await tick();
     const rows = await invoices(id);
     expect(rows).toHaveLength(1);
-    expect(Number(rows[0].amount_idr)).toBe(50_000);
+    expect(Number(rows[0].amount_idr)).toBe(178_500); // was the Rp50.000 promo before ADR 0020
   });
 });
 

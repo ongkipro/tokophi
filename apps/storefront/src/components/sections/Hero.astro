@@ -61,11 +61,11 @@ const HEADING_INDEX = slides.findIndex((s) => (s.heading ?? "").trim() !== "");
 // One class list for both tags, because they must be visually INDISTINGUISHABLE — a second copy of
 // this string is a copy that drifts.
 const HEADING_CLASS =
-  "font-display text-[2.5rem] font-semibold leading-[1.03] tracking-tight text-balance text-white drop-shadow-sm sm:text-6xl md:text-[4rem] lg:text-[4.75rem]";
+  "font-display text-[1.75rem] font-semibold leading-[1.15] tracking-[-0.02em] text-balance text-white drop-shadow-sm sm:text-4xl lg:text-5xl";
 ---
 
 <section
-  class="relative isolate flex min-h-[100svh] flex-col overflow-hidden bg-ink"
+  class="relative isolate flex min-h-[calc(100svh-var(--site-chrome))] flex-col overflow-hidden bg-ink"
   data-hero
   data-interval={interval}
   aria-roledescription={isCarousel ? "carousel" : undefined}
@@ -116,7 +116,7 @@ const HEADING_CLASS =
             decoding={i === 0 ? "sync" : "async"}
             onerror="this.style.display='none'"
             class:list={[
-              "absolute inset-0 -z-10 h-full w-full object-cover transition-opacity duration-1000 ease-out motion-reduce:transition-none",
+              "absolute inset-0 -z-10 h-full w-full object-cover transition-opacity duration-500 ease-out motion-reduce:transition-none",
               focalClass(slide),
               i === 0 ? "opacity-100" : "opacity-0",
             ]}
@@ -157,13 +157,11 @@ const HEADING_CLASS =
   }
 
   <div class="relative flex flex-1 items-end md:items-center">
-    <div class="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 md:py-20">
+    <div class="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 md:py-16">
       <div class:list={["max-w-2xl", centered && "mx-auto text-center"]}>
       {
         badge && (
-          <span class="mb-6 inline-flex rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-medium tracking-wide text-white ring-1 ring-white/30 backdrop-blur-sm">
-            {badge}
-          </span>
+          <p class="mb-2 text-sm font-medium text-white/85">{badge}</p>
         )
       }
       {/* Slides stacked in a single grid cell so the tallest one sets the height (no layout jump
@@ -175,7 +173,7 @@ const HEADING_CLASS =
               data-hero-copy
               inert={i !== 0 ? true : undefined}
               class:list={[
-                "col-start-1 row-start-1 transition-opacity duration-700 ease-out motion-reduce:transition-none",
+                "col-start-1 row-start-1 transition-opacity duration-500 ease-out motion-reduce:transition-none",
                 i === 0 ? "opacity-100" : "pointer-events-none opacity-0",
               ]}
             >
@@ -191,35 +189,29 @@ const HEADING_CLASS =
               )}
               <p
                 class:list={[
-                  "mt-5 max-w-md text-base leading-relaxed text-white/85 sm:text-lg",
+                  "mt-3 max-w-md text-base leading-relaxed text-white/90 sm:text-lg",
                   centered && "mx-auto",
                 ]}
               >
                 {slide.subheading}
               </p>
               {slide.ctaLabel && (
-                <div class:list={["mt-9 flex flex-wrap items-center gap-3 sm:gap-4", centered && "justify-center"]}>
-                  {/* PRIMARY — the slide's own CTA, as a pill with an arrow in a ring that fills on
-                      hover. `pl-2` so the round icon hugs the left edge the way the reference does. */}
+                <div class:list={["mt-6 flex flex-wrap items-center gap-2 sm:gap-4", centered && "justify-center"]}>
+                  {/* ONE filled action per hero (redesign C): the slide's own CTA as a solid white button,
+                      and "browse everything" as a quiet text link beside it — the Horizon/Dawn shape.
+                      The two equal outlined pills it replaces competed for the same tap. */}
                   <a
                     href={safeHref(slide.ctaHref)}
-                    class="group inline-flex items-center gap-3 rounded-full bg-white py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-ink shadow-lg shadow-ink/30 transition-colors hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                    class="inline-flex min-h-12 items-center justify-center rounded-lg bg-white px-6 text-[0.9375rem] font-semibold text-ink transition-colors hover:bg-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none"
                   >
-                    <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-ink/15 transition-colors group-hover:bg-ink group-hover:text-white">
-                      <ArrowRight class="size-4" stroke-width={2} aria-hidden="true" />
-                    </span>
                     {slide.ctaLabel}
                   </a>
-                  {/* SECONDARY — the universal "browse everything" page every store has (never a
-                      guessed collection). Ghost pill on the photo; a second action, not a second brand. */}
                   <a
                     href="/kategori/semua"
-                    class="group inline-flex items-center gap-3 rounded-full border border-white/40 py-2 pl-2 pr-6 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:border-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                    class="inline-flex min-h-12 items-center gap-1.5 px-2 text-[0.9375rem] font-medium text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   >
-                    <span class="flex size-9 items-center justify-center rounded-full ring-1 ring-white/40 transition-colors group-hover:bg-white group-hover:text-ink">
-                      <ArrowRight class="size-4" stroke-width={2} aria-hidden="true" />
-                    </span>
-                    Lihat Semua
+                    Lihat semua produk
+                    <ArrowRight class="size-4" stroke-width={2} aria-hidden="true" />
                   </a>
                 </div>
               )}
@@ -231,7 +223,7 @@ const HEADING_CLASS =
       {
         isCarousel && (
           <div
-            class:list={["mt-9 flex items-center gap-2 lg:hidden", centered && "justify-center"]}
+            class:list={["mt-6 flex items-center gap-2 lg:hidden", centered && "justify-center"]}
             role="tablist"
             aria-label="Pilih sorotan"
             data-hero-dots
@@ -245,7 +237,7 @@ const HEADING_CLASS =
                 aria-selected={i === 0 ? "true" : "false"}
                 aria-label={`Sorotan ${i + 1}: ${slide.heading}`}
                 tabindex={i === 0 ? 0 : -1}
-                class="h-1.5 rounded-full bg-white/40 transition-all duration-300 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-white w-2.5"
+                class="box-content h-1.5 rounded-full bg-white/40 bg-clip-content px-[7px] py-[9px] transition-[width,background-color] duration-300 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-ink motion-reduce:transition-none aria-selected:w-8 aria-selected:bg-white w-2.5"
               />
             ))}
           </div>
@@ -288,7 +280,7 @@ const HEADING_CLASS =
       the text stays legible; a phone scrolls it horizontally, a desktop lays it out in four columns. */}
   {
     featureList.length > 0 && (
-      <div class="relative z-10 border-t border-white/15 bg-ink/30 backdrop-blur-md">
+      <div class="relative z-10 border-t border-white/15 bg-ink/70">
         <ul class="mx-auto flex max-w-7xl snap-x gap-5 overflow-x-auto px-4 py-4 sm:px-6 lg:grid lg:grid-cols-4 lg:gap-0 lg:overflow-visible lg:divide-x lg:divide-white/12 lg:py-5">
           {featureList.map((f) => {
             const Icon = Object.hasOwn(HERO_FEATURE_ICONS, f.icon) ? HERO_FEATURE_ICONS[f.icon as keyof typeof HERO_FEATURE_ICONS] : null;
@@ -303,7 +295,7 @@ const HEADING_CLASS =
                 </span>
                 <div class="min-w-0">
                   <p class="text-sm font-semibold leading-tight text-white">{f.title}</p>
-                  {f.text && <p class="mt-0.5 text-xs leading-snug text-white/70">{f.text}</p>}
+                  {f.text && <p class="mt-0.5 text-[0.8125rem] leading-snug text-white/75">{f.text}</p>}
                 </div>
               </li>
             );

@@ -24,12 +24,60 @@ Last measured **2026-08-05** against `origin/main` and production. Re-verificati
 | Storefront | `<slug>.tokophi.com`, `toko.` | the public | read one tenant's catalog, write `checkout_sessions` |
 | Seller (admin) | `app.tokophi.com` | a merchant's staff | everything inside ONE store |
 | Super Admin | `rich.tokophi.com` | us | **every tenant**, billing, impersonation |
-| Public API | `app.tokophi.com/api/public/**` | the public, no session | quote shipping, place orders, redeem vouchers, receive payment callbacks |
+| Public API | `app.tokophi.com/api/public/**` | the public, no session | quote shipping, place orders, redeem vouchers, renew an expired payment instruction (one-order token), receive payment callbacks |
 | Landing | `tokophi.com` | the public | static, no DB |
+| Akun TokoΦ (buyer account, ADR 0016) | `account.tokophi.com` — **not deployed yet**; compose service ready (BUYER-ACCOUNT-DEPLOY) and CLOSED until a Google client is set: every path answers one 503 page before any cookie or DB read (`apps/account/src/lib/availability.ts`). Host trust = `security.allowedDomains` (account.tokophi.com, https) for Astro's origin check | a buyer, signed in with Google | read ONLY the orders that buyer claimed (token + consent), unlink a store, close the account. Cross-tenant by design, owner connection, every statement keyed `buyer_id` |
 
 **Observed:** the Public API is the only unauthenticated *write* surface in the product. It is served
 by the admin app rather than the storefront **(Decision)** so the platform's KiriminAja and AutoLaris
 credentials never enter the storefront container.
+
+**Observed (SHIP-MENGANTAR, 2026-11-12):** the second shipping provider adds two OUTBOUND trust
+boundaries, both crossed only from server code in `admin`, `super-admin` and the cron/ops processes —
+nothing under `apps/storefront`, `apps/landing` or any client component imports a Mengantar module:
+- **Partner API** (TokoΦ as Mengantar's partner, one credential per env) — opens and manages one Mengantar
+  *seller* account per store. Requests are signed (`partner-id` + `timestamp` + `signature`, a SHA-256 over
+  method, path, body, timestamp and the secret — `signPartnerRequest`, `packages/lib/src/mengantar-partner.ts`);
+  the secret itself is never sent.
+- **Public API, with the STORE'S OWN seller key** — quote, book, cancel, pay, track. There is no platform
+  key: every call takes the `cfg` that `openStoreMengantar` (`packages/db/src/mengantar-account.ts`)
+  decrypted for that store, and an existing shipment reopens only the account that booked it
+  (`mg_env` + `mg_seller_id`; another env or seller is refused, never handed the current key).
+- **Decision (D16):** there is **no inbound Mengantar route.** The webhook route was removed (per-seller
+  webhook secrets could only be set by the seller); tracking is polling from the `cron-tracking` sidecar.
+  The public routes under `app/api/public/**` are still the only unauthenticated write surface.
+- **`/api/public/pay/retry` ("Bayar ulang", PAY-RETRY, 2026-11-13) — the fifth shopper route.** It
+  creates a payment instruction for an EXISTING prepaid order, so it is authorised by a **one-order
+  secret**, never by the order number (printed on labels, quoted in chats): 256 random bits minted by
+  `/api/public/order`, returned once in that response, held in the checkout browser's `localStorage`;
+  only `sha256` is stored (`orders.pay_token_hash`). Wrong token, unknown order, another store, COD and
+  pre-0118 orders all get the SAME 404 (no existence oracle). Body through `readPublicBody`, 6/min per
+  IP, CORS, provider text never in the response (ADR 0004), at most 5 instructions per order, and the
+  decision is taken under the order's row lock so an order never holds two live bills. Worst case for
+  a leaked token: someone renews THAT order's bill for the same amount to the same shop — it cannot
+  move money, change the amount, or touch another order.
+
+**Observed (KEL-001, ADR 0021 — pending merge on `feat/kelola-plugin-v2`): outbound shopper-PII egress to
+`kelolatim.com`, per store, only when that store's OWNER switched it on.** The Kelola CRM plugin POSTs each
+eligible order (shopper name, WhatsApp, full address, items, totals) and — opt-in — abandoned checkouts with a
+phone to Kelola, from server code in `admin` only (the post-commit `after()` in `/api/public/order` and the
+`cron-plugins` sidecar). Boundaries:
+- **Who can open it:** `plugins:manage`, OWNER ONLY (not `integrations:write`, which `advertiser` holds);
+  classified in `rbac-census.test.ts` with an every-role sweep. The Seller screen carries the UU PDP
+  processor disclosure; the storefront privacy page still needs a processor line (owner sign-off, open).
+- **Where it can go:** the webhook URL is pinned to `https://kelolatim.com/api/public/toko/order/<token>`
+  exactly — https, no port, no userinfo, no subdomain, no fragment (`normalizeKelolaWebhookUrl`; 12 refused
+  shapes in `wire.test.ts`, incl. private/loopback IPs and `admin:3000`). An open host would be SSRF from inside
+  the admin container plus a PII exfiltration path. A new Kelola origin is a code change.
+- **When it flows:** only while the plugin is **Aktif AND connected** (`enabled`, `connected_at`, no
+  `broken_at`). **Nonaktif stops both legs immediately**, and what arrives while off is never back-filled on
+  re-activation (spec §4.9) — the seller's "off" is consent withdrawn for those orders. Dormant stores: zero
+  outbound requests, one indexed read per order. Prepaid orders only once paid; never `batal`/`retur`; 7-day window.
+- **What comes back:** nothing is consumed (no inbound Kelola route in v1); Kelola's response text stays
+  seller-side and token-redacted (`@tokophi/lib/redact`) in logs and `plugin_kelola_*.last_error`; it never
+  reaches a shopper (ADR 0004 pattern). "Kelola" is a seller-chosen integration: named on Seller screens,
+  never on shopper surfaces (`provider-label.test.ts` scope). No plugin path writes `orders`
+  (`lib/plugins/no-order-writes.test.ts`).
 
 ---
 
@@ -45,6 +93,11 @@ credentials never enter the storefront container.
 - **Decision.** Generated passwords are **60 bits** over a 32-symbol Crockford alphabet, one
   implementation in `@tokophi/lib/password`. `password.test.ts` measures the generator's real
   min-entropy and fails under 48 bits.
+- **Decision (ADR 0016).** Buyers have **no password** — Google sign-in only (a dev-only email sign-in is
+  404 in a production build). Their session is a host-only `tphi_account` cookie on the account origin
+  carrying a `buyer_sessions` id; the row decides every request. It is signed with a key **derived** from
+  `AUTH_SECRET` (HMAC, fixed label) and requires audience `tokophi-account`, so a Seller/Super Admin token
+  never verifies as a buyer session and vice versa (`apps/account/src/lib/account-lib.test.ts`).
 - **Observed.** A password change **revokes every other session** (`@tokophi/lib/session-revocation`,
   migrations 0087/0088) — one implementation shared by merchant and platform sides.
 
@@ -77,6 +130,18 @@ the mint's entropy is load-bearing rather than a nice-to-have.
 ---
 
 ## 4. Tenant isolation
+
+- **Decision (ADR 0016, BUYER-ACCOUNT-P1, 2026-11-14).** The buyer account is the first surface that
+  holds ONE person's relationship with SEVERAL tenants. Isolation is layered: `buyer_accounts` and
+  `buyer_sessions` have RLS enabled with **no policy** (every Seller path, as `tokophi_app`, reads zero
+  rows — no email, name or device can reach a merchant even through a deliberate join);
+  `buyer_order_claims` and `buyer_store_links` carry `store_id` + `tenant_isolation`, so a Seller sees
+  only "connected / saved" facts of ITS customers and cannot write into another store. The account app
+  reads on the owner connection with `buyer_id = <me>` on the claim AND an active link of the same buyer
+  and store. **Observed:** `apps/admin/lib/data/customers-account.test.ts` (one buyer, two stores, under
+  RLS; red when the claims policy is opened or `buyer_accounts` gets a permissive policy) and
+  `apps/account/src/data/buyer-data.test.ts` (red when the buyer predicate is dropped). **Decision:**
+  nothing is matched by phone or email — possession of the order's claim token is the proof.
 
 - **Observed, re-verified on production 2026-08-05 (`npm run verify-rls`):** RLS is enabled on
   **51 of 52** store-scoped tables. The one exception is `platform_activity` — the platform's own
@@ -223,6 +288,57 @@ architecture decision before the PostgREST cutover.
   move onto a proven key (N35: a sandbox booking is shaped like a production one, so a switch onto
   a dead key would look healthy). Pinned by `packages/lib/src/provider-config.test.ts` and
   `apps/super-admin/lib/provider-credentials.test.ts` (five mutations, five reds).
+- **Decision (SHIP-MENGANTAR, 0116) — Mengantar has two kinds of credential, and neither is a platform
+  shipping key.**
+  - **The Partner credential, one per environment** (owner O1: swappable, not hard-coded):
+    `shipping_provider_config.mengantar_{sandbox,production}_partner_secret_enc`, GCM scope
+    `provider:mengantar:partner:<env>`; env `MENGANTAR_PARTNER_ID` / `_SECRET` are the fallback, read as a
+    PAIR, and a slot of the other env is never read (`resolveMengantar`). Saving it and flipping the
+    shipping switch are **owner rank** (`saveMengantarPartner`, `setShippingProvider`), audited with the
+    masked tail. ⚠️ Unlike KiriminAja, a Partner credential for an env with NO known Partner origin
+    (production today) is stored **untested** and the audit line says so — there is nothing to probe it
+    against. A probe that runs and fails stores nothing.
+  - **A seller key per store** (`store_mengantar_accounts.api_key_enc`, RLS on `store_id`), fetched from
+    the Partner API at registration and **never shown to anyone** — the card shows `key_hint` only, and
+    there is no key field anywhere in the product (D13: no bring-your-own-key). Rotation = the system
+    regenerates once (store owner via `settings:write`, or Super Admin owner rank); a lost regenerate
+    answer is recovered with get-key, never a second regenerate.
+  - 🔴 **The seller key travels in the URL PATH** (`{base}/api/public/{key}/…`). So: origins are a FIXED
+    per-env table (`MENGANTAR_ORIGINS`, no host override — an arbitrary host would receive every store's
+    key); every message the client throws or returns passes through `redactKey()` (raw AND URL-encoded);
+    no original error is attached as `cause`; the estimate cache key carries a SHA-256 fingerprint of the
+    key, never the key; `packages/lib/src/mengantar.ts` is `server-only`. Never log a Mengantar URL.
+  - **Consent is the owner's own act.** Registration refuses without a recorded `consented_at`
+    (`awaiting_consent`): signup and the Seller "Hubungkan Mengantar" button record it (owner-only
+    `settings:write`), and the button is **refused under impersonation** — an operator in "Buka Dashboard
+    Seller" cannot agree to Mengantar's Terms for the merchant. Super Admin and the cron can queue a store,
+    never register it without consent.
+  - **Only a store set to Mengantar is registered (ADR 0019, 2026-11-13).** `stores.shipping_provider` is
+    checked at the sink (`connectStoreMengantar`, enqueue, requeue, the retry sweep), so no caller can open a
+    Mengantar account — and hand an owner's email and phone to the partner — for a store the platform did not
+    put on Mengantar. Changing a store's provider and managing signup codes are Super Admin acts at ONE rank
+    (`SHIPPING_PROVIDER_MIN_RANK`, owner), audited in `platform_activity`; the seller cannot choose.
+  - **Signup codes are a selector on a public form, not a credential.** `/daftar` accepts an optional code
+    (`?kode=` or typed). What a valid code buys: a self-serve store created on that code's provider — still
+    locked until an operator approves it (0090), and no Mengantar account is registered before approval
+    (D15) nor without the consent shown for that exact code. We rely on: (1) the signup door's own limit
+    (`signup:admin:<ip>`, 5 / 10 min) for submissions; (2) `signup-code:admin:<ip>` (30 / 10 min) on the live
+    check, which is a code-existence oracle by design; (3) one refusal sentence for unknown / inactive /
+    malformed codes (no hint which); (4) codes being deactivatable at once (the signup transaction re-reads
+    the code `FOR SHARE`). `signup_codes` has RLS with no policy (owner pool only). Known gap, same as every
+    limit here: process-local decision, IP-keyed — the wall is Cloudflare. A code is not a secret and may
+    appear in a URL. **Since ADR 0020 (2026-11-13) a code MAY also grant money**: its
+    `discount_first_invoice_idr` (set by an owner-rank operator at creation, bounded below the monthly price)
+    comes off the new store's FIRST paid subscription invoice, once. What a guessed or leaked discount code buys
+    is therefore at most that one discount, on a store that must still be approved before it can trade — and it
+    is priced ONLY inside `createSubscriptionInvoice` from the store's own `signup_code` (nothing the client
+    sends can set it; at most one live discounted invoice per store is a DB constraint, 0119). A leaked code
+    is deactivated at once; stores that already signed up with it keep their discount (owner-confirmable). Never
+    make a code grant anything beyond the provider choice and this one first-invoice discount.
+  - **Exception (owner O11, 2026-11-12):** `ops/mengantar-attach-own-key.ts` attaches an account the store
+    owner already owns (production: the demo store only). The key comes from `secrets-env` at run time, is
+    sealed exactly as a registered key, and is never printed; `partner_id` NULL marks the row so rotate /
+    refresh never call the Partner API for it. An ops step, not a product feature.
 - **Observed.** `packages/lib/src/no-published-credentials.test.ts` scans **every** app source for a
   credential printed on a shipped screen. It exists because both login pages once published a working
   account — and it was **four** sites, not the two visible `Dev:` lines: each email input's
@@ -259,6 +375,21 @@ architecture decision before the PostgREST cutover.
   `server-only` guard), used for **CAPI tokens** in `store_tracking_channels` and, since Task 8.33,
   for the platform's own **provider keys** (§6). Both bind the ciphertext to its row/column through
   the GCM scope.
+- **Observed (0116).** The same cipher seals the Mengantar **Partner secret** (scope
+  `provider:mengantar:partner:<env>`) and every store's Mengantar **seller key** under the scope
+  `mengantar:<store>:<env>:<seller>:v<n>` (`mengantarKeyScope`) — a blob replayed into another store, env,
+  seller or key version does not decrypt, and an undecryptable key fails CLOSED (`key_unreadable`: no
+  cfg, the quote falls back to the default provider and a booking is refused). Registration is held
+  (`configuration_blocked`) while `INTEGRATION_TOKEN_KEY` is unset rather than storing a key in clear.
+  ⚠️ An ops script that seals a key (`ops/mengantar-attach-own-key.ts`) must run with the TARGET
+  deployment's `INTEGRATION_TOKEN_KEY`, or it writes a blob the app cannot open.
+- **Observed (KEL-001, pending merge).** The Kelola plugin seals `{webhook_url, webhook_secret}` TOGETHER in
+  `store_plugins.secret_enc` (the URL path carries Kelola's store token, so the URL is a credential too) under
+  scope `kelola:<store_id>:v<secret_v>` (`kelolaScope`) — a blob replayed into another store or an older version
+  does not decrypt, and `secret_v` bumps on every accepted re-save. Nothing is stored unless Kelola accepted a
+  signed test call; the browser only ever sees the masked URL. **Nonaktif keeps the sealed blob** (re-activation
+  needs no re-typing); **"Hapus koneksi" deletes it** with the store's plugin rows. With `INTEGRATION_TOKEN_KEY`
+  unset the connect form refuses to save rather than storing in clear.
 - **Decision.** Its key is derived with **scrypt**, not a bare SHA-256, because the env var is allowed
   to be a human-chosen string; scrypt makes offline GPU cracking expensive. Derived once and cached.
 - **Observed, and state it plainly:** everything else — orders, customer names, phone numbers,
@@ -298,6 +429,7 @@ architecture decision before the PostgREST cutover.
 | `login:admin:<ip>` | 15 | 1 min | merchant login, before the scrypt check |
 | `login:platform:<ip>` | 10 | 1 min | **control-plane** login |
 | `signup:admin:<ip>` | 5 | 10 min | store creation **and** the email-existence oracle |
+| `signup-code:admin:<ip>` | 30 | 10 min | the `/daftar` signup-code check (ADR 0019) — a code-existence oracle; over the limit the form shows "checked at signup" and the boundary decides |
 | `paycb:<ip>` | 60 | 1 min | payment callback |
 | `tracking-retry:<storeId>` | 5 | 1 min | provider quota |
 | `tracking-test:<storeId>:<channel>` | 10 | 1 min | provider quota |
@@ -345,6 +477,9 @@ recommendation this repository cannot implement (zone configuration).
 | ✅ **N1 — CLOSED 2026-08-21 (Task 4.11 / SEC-10).** The URL carried a 2-minute session-shaped JWT: verified, never spent, so REUSABLE for its whole life from history, `Referer`, proxy logs or a pasted ticket — and the session it minted lasted 7 days with no operator marker on it. | The URL now carries a 256-bit **opaque** handle backed by `impersonation_grants` (0098), spent by one atomic `update … where consumed_at is null and expires_at > now()`. Replay/tamper/expiry all match zero rows. The session is **30 minutes** and carries the signed operator identity, which `requireCapability` writes into `platform_activity` on every gated write; `/impersonate/exit` ends it on demand. | It is closed — do not reopen it by putting any signed token back in a URL. `apps/admin/lib/impersonation.test.ts` fails if `jwtVerify` returns to the route or `signImpersonation` comes back. |
 | **N16 — `tokophi_app` DML on platform tables.** | Enforced by app code today. | The PostgREST cutover. |
 | **No compliance document.** | Beta; deferred deliberately. | Leaving beta, or the first real DSAR. |
+| **Kelola plugin (pending merge): no storefront processor line yet, and post-push state is never synced.** A store that activates Kelola ships shopper PII to a processor; the Seller screen discloses it, the shopper-facing privacy page does not yet. Kelola is create-only, so an order cancelled after the push stays live there until CS closes it. | Opt-in per store, owner-only, dormant by default; one-way mirror that never writes `orders`. | Owner sign-off on the privacy line before the first store activates; a Kelola update endpoint or the deferred receiver (spec §4.6). |
+| **Mengantar production Partner API not reachable (O2).** `MENGANTAR_ORIGINS.production.partner` is `null` and the host's egress IP is not yet confirmed on Mengantar's allow-list (DEPLOY.md § Mengantar), so no store can be registered in production; the stored production Partner credential (if any) is untested. | Every Partner call refuses before sending; stores without an account fall back to KiriminAja (D11). Production Mengantar today is one owner-attached account (O11). | Mengantar publishes the origin + allow-lists the IP → one-line code PR, then the DEPLOY.md runbook. |
+| **Mengantar `idempotencyKey` not relied on in production.** It is sent on every booking, but a retry after an unreadable answer could still be a second parcel and a second wallet debit. | Every unreadable `POST /order` is `unknown` and blocks re-booking until an operator reconciles it — no blind retry exists. | Replay behaviour confirmed against production. |
 
 ---
 

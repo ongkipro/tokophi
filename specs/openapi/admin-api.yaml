@@ -352,6 +352,14 @@ components:
 # public routes (`/api/public/*`) are documented in storefront-api.yaml, not exempted.
 x-tokophi-route-exemptions:
   - app: apps/admin
+    path: /api/csp-report
+    methods: [POST]
+    reason: Browser CSP Report-Only receiver (`report-uri` of the policy in `@tokophi/lib/csp`); the body shape is the browser's, not ours. Logs one query-stripped line, writes nothing, capped body. Internal. Session-gated.
+  - app: apps/super-admin
+    path: /api/csp-report
+    methods: [POST]
+    reason: Browser CSP Report-Only receiver (`report-uri` of the policy in `@tokophi/lib/csp`); the body shape is the browser's, not ours. Logs one query-stripped line, writes nothing, capped body. Internal. Session-gated.
+  - app: apps/admin
     path: /api/auth/google/start
     methods: [GET]
     reason: Browser redirect into Google OAuth for the seller login page (Task 5.20); a navigation, not a JSON operation. Not a third-party contract.

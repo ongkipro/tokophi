@@ -36,7 +36,9 @@ describe("RESERVED_SLUGS", () => {
     // deploy seed inserts the holder row. See the note beside it in store-slug.ts.
     expect([...RESERVED_SLUGS].sort()).toEqual(
       [
+        "account",
         "admin",
+        "affiliate",
         "api",
         "app",
         "batik-nusantara",
@@ -125,11 +127,14 @@ describe("every writer of stores.slug uses the shared rule", () => {
   const CONSTANT_SLUG_WRITERS = new Set(["packages/db/src/seed-platform-theme.ts"]);
   const IMPORTS_PLATFORM_CONSTANT = /from\s*"@tokophi\/lib\/platform-theme"/;
 
-  it("finds the four writers, and no more", () => {
+  // `ops/mengantar-sandbox-e2e.ts` (SHIP-MENGANTAR) creates its idempotent SANDBOX test store — through
+  // `slugify`, like every other writer.
+  it("finds the five writers, and no more", () => {
     expect(storeSlugWriters().sort()).toEqual(
       [
         "apps/admin/lib/provision.ts",
         "apps/super-admin/lib/actions.ts",
+        "ops/mengantar-sandbox-e2e.ts",
         "packages/db/src/seed.ts",
         "packages/db/src/seed-platform-theme.ts",
       ].sort(),

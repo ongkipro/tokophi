@@ -70,18 +70,16 @@ const waHref = store.whatsapp
     )}
   </div>
 
-  {/* Bubble */}
-  <button id="chat-toggle" type="button" aria-label="Buka obrolan"
-    class="relative flex size-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-xl transition hover:scale-105">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></svg>
-    <span id="chat-dot" class="absolute -right-0.5 -top-0.5 hidden size-3.5 rounded-full border-2 border-white bg-red-500"></span>
-  </button>
+  {/* NO BUBBLE (owner, 2026-11-05 — redesign direction C). The floating corner button covered the
+      PDP rating row, the hero trust strip and category cards on every phone. The panel stays here as
+      the dialog; what OPENS it is any `[data-chat-open]` element — the header icon (Header.astro) and
+      the PDP sticky buy bar — and each launcher carries its own `[data-chat-dot]` unread marker. */}
 </div>
 
 <script>
   (function () {
     var panel = document.getElementById("chat-panel");
-    var toggle = document.getElementById("chat-toggle");
+    var toggles = Array.prototype.slice.call(document.querySelectorAll("[data-chat-open]")) as HTMLElement[];
     var closeBtn = document.getElementById("chat-close");
     var list = document.getElementById("chat-messages");
     var empty = document.getElementById("chat-empty");
@@ -92,8 +90,10 @@ const waHref = store.whatsapp
     var input = document.getElementById("chat-input") as HTMLTextAreaElement | null;
     var sendBtn = document.getElementById("chat-send") as HTMLButtonElement | null;
     var errEl = document.getElementById("chat-error");
-    var dot = document.getElementById("chat-dot");
-    if (!panel || !toggle || !list || !form || !input || !sendBtn) return;
+    var dots = Array.prototype.slice.call(document.querySelectorAll("[data-chat-dot]")) as HTMLElement[];
+    var setDot = function (on: boolean) { dots.forEach(function (d) { d.classList.toggle("hidden", !on); }); };
+    var lastLauncher: HTMLElement | null = null;
+    if (!panel || !toggles.length || !list || !form || !input || !sendBtn) return;
 
     // ---- state ----------------------------------------------------------------------------
     var open = false;
@@ -175,7 +175,7 @@ const waHref = store.whatsapp
         if (d.cursor) cursor = d.cursor;
         var added = render(d.messages || []);
         if (!open && (d.unread > 0 || (added && d.messages.some((x: any) => x.sender !== "customer")))) {
-          if (dot) dot.classList.remove("hidden");
+          setDot(true);
         }
         if (open && d.unread > 0) markRead();
       } catch {
@@ -185,7 +185,7 @@ const waHref = store.whatsapp
 
     function markRead() {
       fetch("/api/chat/read", { method: "POST" }).catch(function () {});
-      if (dot) dot.classList.add("hidden");
+      setDot(false);
     }
 
     // Cadence (spec §4): 3s while open + focused, 15s when closed or the tab is hidden, and stop
@@ -205,7 +205,9 @@ const waHref = store.whatsapp
       panel!.classList.toggle("hidden", !open);
       if (open) panel!.setAttribute("data-open", "");
       else panel!.removeAttribute("data-open");
-      toggle!.setAttribute("aria-label", open ? "Tutup obrolan" : "Buka obrolan");
+      toggles.forEach(function (t) {
+        t.setAttribute("aria-expanded", open ? "true" : "false");
+      });
       syncIntro();
       if (open) {
         poll().then(function () {
@@ -213,12 +215,20 @@ const waHref = store.whatsapp
           markRead();
         });
         input!.focus();
+      } else if (lastLauncher) {
+        lastLauncher.focus(); // back to the control that opened it (WCAG 2.4.3)
       }
       schedule();
     }
 
-    toggle.addEventListener("click", function () {
-      setOpen(!open);
+    toggles.forEach(function (t) {
+      t.addEventListener("click", function () {
+        lastLauncher = t;
+        setOpen(!open);
+      });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (open && e.key === "Escape") setOpen(false);
     });
     if (closeBtn) closeBtn.addEventListener("click", function () { setOpen(false); });
     document.addEventListener("visibilitychange", schedule);

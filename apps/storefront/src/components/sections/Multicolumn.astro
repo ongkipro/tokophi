@@ -45,7 +45,7 @@ const COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "sm:g
             const Icon = Object.hasOwn(ICONS, row.icon) ? ICONS[row.icon as keyof typeof ICONS] : null;
             return (
               <li class="flex flex-col items-center text-center">
-                <span class="mb-4 flex size-12 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                <span class="mb-4 flex size-12 items-center justify-center rounded-full bg-mist text-brand-700">
                   {Icon ? (
                     <Icon class="size-6" stroke-width={1.75} aria-hidden="true" />
                   ) : (

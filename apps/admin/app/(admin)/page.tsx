@@ -8,6 +8,7 @@ import { getReturnsByCourier } from "@/lib/data/returns";
 import { getStoreName } from "@/lib/data/store";
 import { getActivityFeed } from "@/lib/data/activity";
 import { getSession } from "@/lib/auth";
+import { getMengantarDashboardNotice } from "@/lib/actions/mengantar";
 import { DashboardClient } from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 // their existing uses; `returns` feeds the retur rate (orders.status = 'retur', migration 0039).
 export default async function DashboardPage() {
   const session = await getSession();
-  const [days, hours, products, orders, reviews, tickets, returns, storeName, activities, channels, productSales, funnel] =
+  const [days, hours, products, orders, reviews, tickets, returns, storeName, activities, channels, productSales, funnel, mengantarNotice] =
     await Promise.all([
       getDailyStats(),
       getHourlyStats(), // real intraday buckets for the "Hari ini"/"Kemarin" ranges
@@ -31,6 +32,8 @@ export default async function DashboardPage() {
       getChannelSalesDaily(),
       getProductSalesDaily(),
       getFunnelDaily(),
+      // A banner must never take the dashboard down with it: any failure reads as "no banner".
+      getMengantarDashboardNotice().catch(() => null),
     ]);
   // No "pengunjung online" ticker: nothing tracks concurrent sessions. Pengunjung/Konversi are
   // COUNTED from analytics_events (funnel rows) and fall back to "—" for a store with no events.
@@ -49,6 +52,7 @@ export default async function DashboardPage() {
       funnel={funnel}
       storeName={storeName ?? undefined}
       ownerName={session?.name}
+      mengantarNotice={mengantarNotice}
     />
   );
 }

@@ -41,10 +41,10 @@ export function StatusBadge({ status, className }: { status: StoreStatus; classN
   );
 }
 
-// Billing lifecycle segment (the 4 sessions): trial → first_month → regular → vip.
+// Billing lifecycle segment (the 4 sessions): trial → first_invoice → regular → vip.
 const SEGMENT_STYLES: Record<StoreSegment, string> = {
   trial: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
-  first_month: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
+  first_invoice: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
   regular: "bg-primary/10 text-primary",
   vip: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
 };

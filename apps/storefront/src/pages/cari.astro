@@ -32,13 +32,13 @@ const CRUMBS: Crumb[] = [{ name: "Beranda", href: "/" }, { name: "Cari" }];
 const TITLE = q ? `Hasil pencarian: ${q}` : "Cari produk";
 const DEK = q
   ? results.length > 0
-    ? `${results.length} hasil untuk «${q}»`
-    : `Tidak ada hasil untuk «${q}»`
+    ? `${results.length} hasil untuk “${q}”`
+    : `Tidak ada hasil untuk “${q}”`
   : `Cari produk di ${store.name} berdasarkan nama atau kategori.`;
 ---
 
 <Layout title={TITLE} description={DEK} robots="noindex,follow">
-  <PageHeader crumbs={CRUMBS} eyebrow="Pencarian" title={q ? "Hasil pencarian" : "Cari produk"} dek={DEK} />
+  <PageHeader crumbs={CRUMBS} title={q ? "Hasil pencarian" : "Cari produk"} dek={DEK} />
 
   {/* THIS PAGE'S OWN SEARCH BOX — and it is not a nicety, it is what makes the header's icon safe.
       The header used to hold the only text input on the site; this page leaned on it and said so.

@@ -11,7 +11,14 @@ import { PaymentView } from "@/components/admin/pengaturan/pay-subscription";
 
 export const dynamic = "force-dynamic";
 
-const jenis = (a: number) => (a >= 2_000_000 ? "Langganan Tahunan" : a <= 100_000 ? "Langganan Bulan Pertama (promo)" : "Langganan Bulanan");
+// The cycle is READ from the row (ADR 0020). It used to be guessed from the amount (≥ Rp2jt = annual,
+// ≤ Rp100rb = "bulan pertama"), which mislabels every invoice the moment prices move: Rp1.713.600 is an
+// annual bill and Rp78.500 is a discounted monthly one. Only seeded legacy rows (cycle NULL) fall back.
+const jenis = (inv: { cycle: string | null; kind: string | null; amount: number }) =>
+  inv.kind === "comp" ? "Masa langganan gratis dari TokoΦ"
+  : inv.cycle === "annual" ? "Langganan Tahunan"
+  : inv.cycle === "monthly" ? "Langganan Bulanan"
+  : inv.amount >= 1_000_000 ? "Langganan Tahunan" : "Langganan Bulanan";
 const fmt = (d: Date | string) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 
 export default async function FakturPage({ params }: { params: Promise<{ number: string }> }) {
@@ -25,8 +32,12 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
   // STORED breakdown (0101), never a derivation: since the platform PPN toggle exists, dividing by
   // 1,11 would invent tax on an invoice that billed none. Historical rows were backfilled by 0101.
   const ppn = inv.taxIdr;
-  const base = inv.amount - ppn;
+  const base = inv.amount - ppn; // DPP actually billed (after any code discount)
   const total = inv.amount;
+  // ADR 0020 — a signup-code discount is a stored fact of the row (0119), printed as its own line. The
+  // list price is recovered from the row alone, never from today's price list.
+  const discount = inv.codeDiscountIdr;
+  const listPrice = base + discount;
   const payment = inv.status === "menunggu" ? await getInvoicePayment(number) : null;
 
   return (
@@ -99,10 +110,19 @@ export default async function FakturPage({ params }: { params: Promise<{ number:
               <tr className="border-b">
                 <td className="py-3">
                   <div className="font-medium">Paket {BILLING.PLAN_NAME}</div>
-                  <div className="text-xs text-muted-foreground">{jenis(total)} — semua fitur</div>
+                  <div className="text-xs text-muted-foreground">{jenis(inv)} — semua fitur</div>
                 </td>
-                <td className="py-3 text-right tabular-nums">{IDR(base)}</td>
+                <td className="py-3 text-right tabular-nums">{IDR(listPrice)}</td>
               </tr>
+              {discount > 0 && (
+                <tr className="border-b" data-faktur-discount>
+                  <td className="py-3">
+                    <div className="font-medium">Potongan kode {inv.discountCode}</div>
+                    <div className="text-xs text-muted-foreground">Berlaku sekali, untuk tagihan langganan pertama</div>
+                  </td>
+                  <td className="py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">−{IDR(discount)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
 

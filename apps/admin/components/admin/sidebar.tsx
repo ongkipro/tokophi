@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { NavLinks, type NavCounts } from "./nav-links";
 import { Brand } from "./brand";
+import { PanduanCard } from "./panduan-card";
 import { Sparkles } from "lucide-react";
 import { getBilling } from "@/lib/data/billing";
 
@@ -24,8 +25,10 @@ export async function Sidebar({ navCounts }: { navCounts?: NavCounts }) {
   const pending = !!bill?.pendingApproval;
   const label = pending ? "Menunggu review" : bill?.operatorSuspended ? "Ditangguhkan" : vip ? "VIP · gratis" : ui.label;
   const days = bill && !vip && bill.status !== "suspended" ? `${bill.daysLeft}h` : null;
+  // sticky + h-dvh: the sidebar stays in the viewport while the PAGE scrolls; only the nav list
+  // scrolls inside it (min-h-0 lets the flex-1 child shrink below its content and overflow).
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
+    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col self-start border-r bg-card lg:flex">
       <div className="flex h-16 items-center border-b px-5">
         <Brand />
       </div>
@@ -42,9 +45,10 @@ export async function Sidebar({ navCounts }: { navCounts?: NavCounts }) {
           </span>
         </Link>
       </div>
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 scrollbar-none">
         <NavLinks counts={navCounts} />
       </div>
+      <PanduanCard />
     </aside>
   );
 }

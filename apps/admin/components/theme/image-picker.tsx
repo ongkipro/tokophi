@@ -156,7 +156,7 @@ export function ImagePickerField({
     const f = files?.[0];
     if (!f) return;
     if (!f.type.startsWith("image/")) return toast.error("File bukan gambar.");
-    if (f.size > MAX) return toast.error(`Melebihi 5MB (${(f.size / 1048576).toFixed(1)}MB).`);
+    if (f.size > MAX) return toast.error(`Melebihi 2MB (${(f.size / 1048576).toFixed(1)}MB).`);
     const fd = new FormData();
     fd.append("file", f);
     start(async () => {

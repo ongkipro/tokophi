@@ -1,5 +1,44 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **2026-11-14 10:30 UTC — AFFILIATE-V11 on `feat/affiliate-v11` (PR open, NOT merged, NOT deployed):** `/lp` + `/promo`
+> orders attribute `?ref=` (F-A13), Seller commission CSV (F-A11) + affiliate edit, Super Admin → Affiliate (reset
+> password / disable — interim AFFILIATE-PW-RESET), storefront `/affiliate` shows rate + hold days. **No migration**
+> (still 126 · head `0125`). `npm run test:db` on a scratch `_test` DB: **267 files / 2672 tests passed**.
+
+> **2026-11-14 — AFFILIATE-P2 on `feat/affiliate-p2` (PR open, NOT merged, NOT deployed):** store affiliate programme with
+> affiliates' own accounts (ADR 0022). Repo schema **99 tables · 126 migrations (head `0125_affiliate_programme`)**; on a
+> scratch DB migrated to `0125`: `verify-rls` 62/63 store-scoped tables with RLS (exception `platform_activity`),
+> `verify-rls-app` green. 🟢 real once merged: Seller `/affiliate` + Pengaturan switch, commissions from real orders,
+> `apps/affiliate`. Production unchanged until merge + deploy; ships dormant (`AFFILIATE_APP_URL` empty).
+
+> **2026-11-14 10:55 UTC — affiliate area OPEN (`AFFILIATE_APP_URL` set), demo store programme ON, #479 AFFILIATE-V11 deployed (`5efd052b`):** sign-up → apply verified on production (test rows deleted); `/lp` orders attribute `?ref=`, Seller CSV export + edit, Super Admin → Affiliate (reset password / disable). BUILD-LOG 2026-11-14 10:55.
+> **2026-11-14 09:15 UTC — PR #476 (AFFILIATE-P2) + #477 (AFFILIATE-UX) deployed (`7125fb14`):** new `affiliate` service `(healthy)`; `affiliate.tokophi.com` answers **503 "Belum dibuka · Affiliate TokoΦ"** until `AFFILIATE_APP_URL` is set; production at **126 migrations** (`0125_affiliate_programme`), programme off on every store. Probe exit 0, disk 51%. BUILD-LOG 2026-11-14 09:15.
+> **2026-11-14 05:06 UTC — PR #473 deployed (`f4998416`):** new `account` service `(healthy)`; `account.tokophi.com` answers **503 "Belum dibuka · Akun TokoΦ"** (dormant: no Google client, no `ACCOUNT_GOOGLE_REDIRECT_URI`), `/healthz` 200; store wildcard and every other host unchanged. Account sign-in has its own switch (`ACCOUNT_GOOGLE_REDIRECT_URI`, no compose default). Owner steps to turn it on: `~/Documents/work/notes/tokophi-panduan-owner-2026-11-14.md` (Google OAuth client, UU PDP text approval, session retention).
+
+> **Current state — 2026-11-14 UTC (deploy of PR #471).** Production runs on the **dedicated host** (since 2026-11-01;
+> `DEPLOY.md` → "Current server — the DEDICATED host"). Live commit **`6592fbae`** (deploy of PR #471 BUYER-ACCOUNT-P1, on top of #469 KEL-001 plugins,
+> #468 pricing, #465 PAY-RETRY, #466 store-level shipping provider), admin / super-admin / storefront / landing
+> `(healthy)` on that image on two consecutive polls; `migrate` + `seed` `Exited (0)`; NEW sidecar **`cron-plugins`**
+> `(healthy)`, first tick `{"ok":true,"stores":0}`. **Schema: 95 tables · 125 migrations on production (head `0124_store_complaint_resolution`,
+> max stamp 1787600003000)**. **Buyer account (ADR 0016, accepted 2026-11-14): merged and DORMANT** — `ACCOUNT_CLAIM_SECRET` /
+> `ACCOUNT_APP_URL` unset on production, so the order API answers byte-identically, `/checkout/sukses` renders no
+> "Simpan ke Akun" offer, the Seller menus (Pelanggan → Akun Pembeli, Pengaturan → Layanan Pembeli) are hidden and
+> their routes 404; `apps/account` (account.tokophi.com) is NOT deployed on production yet; `buyer_accounts` = 0.
+> 🟡 **Pending (BUYER-ACCOUNT-DEPLOY, branch `feat/account-deploy`, PR open, not merged):** Dockerfile + compose service `account` (dormant: no Google client ⇒ every page "Akun TokoΦ belum dibuka", 503) and the env forwards; UU PDP notes DRAFTED in `PRIVACY-COMPLIANCE.md` for owner approval. After it deploys, turning it on = Google redirect URI + `GOOGLE_*`, `ACCOUNT_CLAIM_SECRET`, `ACCOUNT_APP_URL` in Coolify + redeploy (`DEPLOY.md` → "Akun TokoΦ"). **Pricing (ADR 0020):** Rp178.500/mo, annual Rp1.713.600 (×12 −20%), trial 3 days, no
+> Rp50rb promo; a signup code may carry a first-paid-invoice discount (default Rp100.000) — landing `/harga` shows the
+> new prices; the 12 `menunggu` invoices issued before the deploy kept their amounts (Rp1.116.000 total, unchanged);
+> signup codes: 0. **Plugins (ADR 0021):** Pengaturan → Plugin, Kelola CRM with Aktif / Nonaktif; `store_plugins` = 0,
+> so every store is dormant (zero outbound requests); `/api/cron/plugins` without the secret → 401 JSON.
+> **Shipping (ADR 0018 + 0019):** provider per store, production = 1 `mengantar` (demo store, owner-attached) + 16
+> `kiriminaja`; platform switch = Mengantar (kill-switch); COD always KiriminAja; quotes identical to the pre-deploy
+> baseline across all three deploys (demo non-COD → Mengantar `codRequote:true` SPX Rp5.700; demo COD → KiriminAja).
+> **Payments:** "Bayar ulang" live (`/api/public/pay/retry`). **Disk:** four deploys in one day left 22 GB of build
+> cache (67 % used, probe FAIL at the 65 % line); `tokophi-docker-cleanup.sh` run by hand with
+> `TOKOPHI_CLEANUP_AGGRESSIVE_PCT=65` (cache only, rollback images kept) → 50 %, probe exit 0. Merges do NOT deploy
+> here — trigger by hand. Still open: no alert channel; Mengantar production Partner origin + IP allow-list (O2); the
+> first real courier booking + cancel; the first real "Bayar ulang" (`-n` reff_id unproven on `/submit`); the UU PDP
+> processor line on the storefront privacy page before any store activates Kelola (owner approval).
+
 > **Incident + boundary — 2026-09-07 (branch `feat/sweep-0907`).**
 > **(a) PRODUCTION OUTAGE, ~70 h 20 min, cause = hosting BILLING, not hardware.** The single Vultr VPS
 > `volumdev` (`45.77.33.112`, the box that runs all 18 containers) was **suspended for an unpaid
@@ -29,7 +68,7 @@
 > Docker DB up (the 2026-09-04 block's 137 / 1120 was true on that day — #381 added 2 files / 19
 > tests, and this tree carries one more); `npm run verify-rls -w @tokophi/db` → **54/55 store-scoped
 > tables with RLS** (exception `platform_activity`), **11** un-RLS'd child tables (`inventory_levels`
-> left the list with `0100`); `packages/db/src/schema.ts` → **84 tables**.
+> left the list with `0100`); `packages/db/src/schema.ts` → **90 tables**.
 >
 > **Refreshed 2026-08-21 — PRE-RELEASE, BLOCKED.** The prior `v1.0.0 Release Edition` and “100% remediation closure” claims were invalidated by the 2026-08-16 precision audit. Current evidence is in [`AUDIT-SUMMARY.md`](./AUDIT-SUMMARY.md); accepted contracts are in [`REQUIREMENTS.md`](./REQUIREMENTS.md); root [`TASKS.md`](../../TASKS.md) owns the 42-task remediation queue and release gate.
 >
@@ -57,7 +96,7 @@
 >
 > **Release blockers — recounted 2026-08-24 against evidence, not against stale flags.** **Stage 4 is COMPLETE**: all 13 P0 tasks carry documented completion evidence (BUILD-LOG entries and/or `[x]` flags — reconciled 2026-08-24 after the flags were found under-reporting by 16 tasks). The active queue is now **14 P1 open** (5.1, 5.4–5.9, 5.12–5.15, 5.18–5.20 — of which 5.8/5.19/5.20 are owner-gated decisions/credentials and 5.12 is blocked on GitHub Actions billing) **and 7 P2 open** (6.1, 6.3, 6.4, 6.6–6.9 — 6.1 is blocked on 5.12–5.15). No production release sign-off until the Stage 7 executable gate passes; that gate has not been run.
 >
-> **Data/security status:** the 116-entry migration journal is healthy through `0115_provider_order_prefix`, and the existing SQL/application RLS verifiers pass. **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
+> **Data/security status:** the 126-entry migration journal (repo, 99 tables) is healthy through `0125_affiliate_programme` — `0125` is AFFILIATE-P2 (ADR 0022), **deployed 2026-11-14 (`7125fb14`)**; production was at 125 / `0124_store_complaint_resolution` until then (`0121`–`0124` BUYER-ACCOUNT-P1 before it), and the existing SQL/application RLS verifiers pass (62/63 store-scoped tables with RLS on a scratch DB migrated to `0125`, 2026-11-14). **Both caveats this sentence used to carry are now closed, on different days and by different work:** the deployed app surfaces do connect as restricted roles (Task 4.12 proved the identity and refuses to serve without it; SEC-18 step 2 moved the owner-mode pools off the bootstrap superuser — measured on production, `pg_stat_activity` shows `tokophi_platform` and `tokophi_app` and **zero** application connections as `tokophi`), and `inventory_levels` now carries a direct policy derived from `product_variants.store_id` (Task 6.2, migration `0100`) rather than depending on the application to read its parent first.
 >
 > **API/documentation status:** currently documented OpenAPI operations show no confirmed implementation drift, but complete route coverage and reproducible validation are not established. The active traceability checker reports 31 structural findings. Historical audits and release prose are evidence only, never current certification.
 >

@@ -25,8 +25,23 @@ import {
   writeKiriminajaActiveEnv,
   writeKiriminajaKey,
   writeKiriminajaOrderPrefix,
+  writeActiveShippingProvider,
+  writeMengantarPartner,
 } from "@tokophi/db/provider-config";
+import { partnerListSellers } from "@tokophi/lib/mengantar-partner";
+import { isUuid } from "@tokophi/lib/uuid";
+import { enqueueMengantarConnect, kickMengantarConnect, mengantarAccountStatus, NOT_ON_MENGANTAR_MSG, rotateStoreMengantarKey, storeShippingProvider } from "@tokophi/db/mengantar-account";
+import {
+  createSignupCodeWith,
+  setSignupCodeActiveWith,
+  setStoreShippingProviderWith,
+  SHIPPING_PROVIDER_MIN_RANK,
+  type SignupCodeDeps,
+  type StoreProviderDeps,
+} from "./store-shipping-provider";
+import { saveMengantarPartnerWith, switchShippingProviderWith, type MengantarDeps } from "./mengantar-credentials";
 import { planChannelSync } from "./payment-channel-sync";
+import { reconcileUnknownBookingWith, type ReconcileInput } from "./mengantar-ops";
 import { saveCredentials, saveOrderPrefix, switchKiriminajaEnv, testStoredKey, type CredentialDeps, type ProviderId } from "./provider-credentials";
 // Audit helper — record an operator action against a specific store (shown on the store detail).
 async function logStore(storeId: string, text: string): Promise<void> {
@@ -304,6 +319,10 @@ export async function approveStore(storeId: string): Promise<SuspensionResult> {
 
   await logStore(storeId, `Pendaftaran DISETUJUI oleh ${admin.email}. Status efektif "${EFFECTIVE_LABEL[res.state.status]}".`);
   revalidateStore(storeId);
+  // Mengantar Partner Business API: a signup that a Mengantar code put on Mengantar queued its account and
+  // held it for this approval — release it now (background; a provider outage never fails the approval).
+  // A KiriminAja store (no code, or a KiriminAja code) is a no-op: the sink refuses it (ADR 0019).
+  await kickMengantarConnect(storeId, { source: "operator" });
   return { ok: true, effective: res.state.status, message: `“${res.row.name}” disetujui — panel Seller-nya bisa menulis sekarang.` };
 }
 
@@ -361,6 +380,9 @@ export async function createStore(input: NewStoreInput): Promise<{ ok: boolean; 
     throw e;
   }
   await logStore(storeId, `Toko dibuat oleh platform: ${name} (${slug}), pemilik ${email}`);
+  // ADR 0019: a store is born on KiriminAja (owner 2026-11-13, "default pakai KiriminAja") and gets NO
+  // Mengantar account here. Putting it on Mengantar is a separate, owner-rank, audited act on the store
+  // page ("Penyedia pengiriman"), which queues the account for the owner's consent.
   revalidatePath("/toko");
   revalidatePath("/");
   return { ok: true, storeId, password: pw };
@@ -763,6 +785,148 @@ export async function testProviderKey(provider: string, env: string): Promise<{ 
   return r;
 }
 
+// ---- Mengantar Partner Business API (0116): partner credential + the shipping-provider switch ----
+//
+// The rules (partner credential stored only after a read-only probe when the env has a Partner origin;
+// switch TO Mengantar only with a credential + origin for the active env; a written reason; the audit
+// line reports the re-read outcome) live in `mengantar-credentials.ts` with every side effect injected.
+const mengantarDeps: MengantarDeps = {
+  rows: loadProviderRows,
+  env: () => ({ MENGANTAR_ENV: process.env.MENGANTAR_ENV, MENGANTAR_PARTNER_ID: process.env.MENGANTAR_PARTNER_ID, MENGANTAR_PARTNER_SECRET: process.env.MENGANTAR_PARTNER_SECRET, SHIPPING_PROVIDER: process.env.SHIPPING_PROVIDER }),
+  testPartner: async (cfg) => {
+    try {
+      const r = await partnerListSellers({ size: 1 }, { cfg });
+      return r.ok ? { ok: true } : { ok: false, error: `${r.code}: ${r.message}` };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Partner API tidak bisa dihubungi." };
+    }
+  },
+  writePartner: writeMengantarPartner,
+  writeActiveProvider: writeActiveShippingProvider,
+  log: logPlatform,
+};
+
+/** OWNER only: the Mengantar PARTNER credential for one env (owner O1: swappable; row outranks env on every replica). */
+export async function saveMengantarPartner(env: string, partnerId: string, secret: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await saveMengantarPartnerWith(mengantarDeps, gate.admin.email, env, partnerId, secret);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+/** OWNER only: which provider quotes and books NEW checkouts of connected stores. Reason required; readiness enforced; outcome audited. */
+export async function setShippingProvider(provider: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await switchShippingProviderWith(mengantarDeps, gate.admin.email, provider, reason);
+  if (r.ok) revalidatePath("/pengaturan");
+  return r;
+}
+
+// ---- Mengantar per-store accounts (oversight + recovery) ----
+
+/** admin: retry a store's Mengantar registration now (queued / failed / email-taken). Never touches a connected account. */
+export async function retryStoreMengantar(storeId: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate();
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isUuid(storeId)) return { ok: false, message: "Toko tidak dikenal." };
+  // ADR 0019: only a store set to Mengantar gets an account — move it on its page first.
+  if ((await storeShippingProvider(storeId)) !== "mengantar") return { ok: false, message: `${NOT_ON_MENGANTAR_MSG} Ubah penyedia pengiriman toko di halaman tokonya dulu.` };
+  const before = await mengantarAccountStatus(storeId);
+  if (before.state === "connected") return { ok: false, message: "Akun Mengantar toko ini sudah terhubung." };
+  if (before.state === "none") await enqueueMengantarConnect(storeId, { source: "operator" });
+  else await kickMengantarConnect(storeId, { source: "operator" });
+  await logStore(storeId, `Pendaftaran akun Mengantar toko dijalankan ulang oleh ${gate.admin.email} (status sebelumnya: ${before.state}).`);
+  revalidatePath("/pengiriman");
+  return { ok: true, message: "Pendaftaran dijalankan ulang di latar belakang. Muat ulang untuk melihat hasilnya." };
+}
+
+/** OWNER: rotate a store's Mengantar seller key (regenerate once, old key dies). Audited. */
+export async function rotateStoreMengantar(storeId: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isUuid(storeId)) return { ok: false, message: "Toko tidak dikenal." };
+  const r = await rotateStoreMengantarKey(storeId);
+  await logStore(storeId, `Kunci akun Mengantar toko diperbarui oleh ${gate.admin.email}: ${r.state} — ${r.message}`);
+  revalidatePath("/pengiriman");
+  return { ok: r.state === "connected", message: r.message };
+}
+
+// ---- ADR 0019: per-store shipping provider + signup codes ----
+// ONE rank for all three (`SHIPPING_PROVIDER_MIN_RANK`, owner today) — lowering it is one line in
+// store-shipping-provider.ts, which also moves the `/kode-daftar` route floor.
+
+const storeProviderDeps: StoreProviderDeps = {
+  read: async (storeId) => {
+    const [r] = await db.select({ name: schema.stores.name, provider: schema.stores.shippingProvider }).from(schema.stores).where(eq(schema.stores.id, storeId)).limit(1);
+    return r ?? null;
+  },
+  write: async (storeId, provider) => {
+    const [r] = await db.update(schema.stores).set({ shippingProvider: provider }).where(eq(schema.stores.id, storeId)).returning({ provider: schema.stores.shippingProvider });
+    return r?.provider ?? null;
+  },
+  accountState: async (storeId) => (await mengantarAccountStatus(storeId)).state,
+  queueAccount: (storeId) => enqueueMengantarConnect(storeId, { source: "operator" }),
+  log: logStore,
+};
+
+/** Super Admin: put ONE store on KiriminAja or Mengantar. Reason required; outcome re-read; audited on the store. */
+export async function setStoreShippingProvider(storeId: string, provider: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate(SHIPPING_PROVIDER_MIN_RANK);
+  if (!gate.ok) return { ok: false, message: gate.error };
+  if (!isUuid(storeId)) return { ok: false, message: "Toko tidak dikenal." };
+  const r = await setStoreShippingProviderWith(storeProviderDeps, gate.admin.email, storeId, provider, reason);
+  revalidatePath(`/toko/${storeId}`);
+  revalidatePath("/pengiriman");
+  return r;
+}
+
+const signupCodeDeps: SignupCodeDeps = {
+  insert: async (row) => {
+    const done = await db
+      .insert(schema.signupCodes)
+      .values({ code: row.code, shippingProvider: row.provider, discountFirstInvoiceIdr: row.discountIdr, note: row.note, createdBy: row.createdBy })
+      .onConflictDoNothing()
+      .returning({ discountIdr: schema.signupCodes.discountFirstInvoiceIdr });
+    return done.length ? { discountIdr: Number(done[0].discountIdr) } : "duplicate";
+  },
+  setActive: async (code, active) => {
+    const [r] = await db.update(schema.signupCodes).set({ active, updatedAt: new Date() }).where(eq(schema.signupCodes.code, code)).returning({ active: schema.signupCodes.active });
+    return r ? r.active : null;
+  },
+  log: logPlatform,
+};
+
+/** Super Admin: create a signup code that puts a new store on `provider` and may carry a first-invoice discount (ADR 0020). */
+export async function createSignupCode(code: string, provider: string, note: string, discountIdr: string | number): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate(SHIPPING_PROVIDER_MIN_RANK);
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await createSignupCodeWith(signupCodeDeps, { id: isUuid(gate.admin.adminId) ? gate.admin.adminId : null, email: gate.admin.email }, code, provider, note, discountIdr);
+  if (r.ok) revalidatePath("/kode-daftar");
+  return r;
+}
+
+/** Super Admin: deactivate (or re-activate) a signup code. Codes are never deleted. */
+export async function setSignupCodeActive(code: string, active: boolean): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate(SHIPPING_PROVIDER_MIN_RANK);
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await setSignupCodeActiveWith(signupCodeDeps, gate.admin.email, code, active === true);
+  revalidatePath("/kode-daftar");
+  return r;
+}
+
+// ---- Mengantar operator reconciliation ----
+
+/** OWNER: release an `unknown` Mengantar booking — adopt it from the store's account, or fail it. Reason required. */
+export async function reconcileMengantarBooking(bookingId: string, input: ReconcileInput): Promise<{ ok: boolean; message: string }> {
+  const gate = await platformGate("owner");
+  if (!gate.ok) return { ok: false, message: gate.error };
+  const r = await reconcileUnknownBookingWith({ log: logStore }, gate.admin.email, bookingId, input);
+  revalidatePath("/pengiriman");
+  return r;
+}
+
 // ---- platform team: invite another operator (real platform_admins row) ----
 /**
  * 🔴 This was a PRIVILEGE-ESCALATION PATH, and it quietly undid the role hierarchy added earlier
@@ -927,7 +1091,8 @@ export async function compStore(storeId: string, months = 1): Promise<{ ok: bool
   // Rp50rb first-month promo as a side effect of a goodwill gesture: comp a store still on its trial
   // and its first real invoice becomes Rp305.250 instead of Rp55.500 — Rp249.750 too much, charged to
   // the merchant we were trying to compensate. `computeBilling` reads `active` from
-  // `currentPeriodEnd` alone (billing.ts), so the comp works without it.
+  // `currentPeriodEnd` alone (billing.ts), so the comp works without it. (ADR 0020: the promo is gone, but
+  // the flag still guards the annual bonus month and an owed signup-code discount — still untouched.)
   //
   // THE PERIOD MOVE AND ITS RECORD LAND TOGETHER (Task 8.26 / 0113). A comp used to leave nothing a
   // KPI could read, so MRR counted every comped store as paying. The Rp0 `kind='comp'` invoice is

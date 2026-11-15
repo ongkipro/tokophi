@@ -121,6 +121,12 @@ export async function syncOrderFromKa(
    * (`sortingCodeFromHint`). Normalised again here, because this is the column's only writer.
    */
   sortingCode?: string | null,
+  /**
+   * The provider shipment this fact was pulled FOR. When given, the sync applies only while the order
+   * still holds that shipment (`orders.mg_order_id`, re-read under the row lock): a pull that started
+   * before a void/re-book must not land on the order afterwards (Mengantar; reviewer 2026-11-05).
+   */
+  expect?: { mgOrderId: string | null },
 ): Promise<KaSyncResult> {
   const code = normalizeSortingCode(sortingCode);
   const changed: string[] = [];
@@ -143,6 +149,7 @@ export async function syncOrderFromKa(
         awb: schema.orders.awb,
         sortingCode: schema.orders.sortingCode,
         problemAt: schema.orders.problemAt,
+        mgOrderId: schema.orders.mgOrderId,
       })
       .from(schema.orders)
       .where(eq(schema.orders.number, orderNumber))
@@ -152,6 +159,7 @@ export async function syncOrderFromKa(
       found = false;
       return;
     }
+    if (expect && order.mgOrderId !== expect.mgOrderId) return; // stale pull: the shipment changed under it
 
     // ── A PENDING CANCELLATION IS RECONCILED BEFORE ANYTHING ELSE (Task 5.1 / F-S12) ─────────
     // `cancelShipment` recorded the merchant's intent as `shipment_bookings.status =
@@ -193,7 +201,10 @@ export async function syncOrderFromKa(
         await tx
           .update(schema.orders)
           // The sorting code belongs to the waybill being voided — it goes with it (0110).
-          .set({ awb: null, kaOrderId: null, sortingCode: null, problemAt: null, problemNote: null })
+          // SHIP-MENGANTAR: a voided Mengantar booking drops its provider ids the same way, so the
+          // order can be re-booked and the poller stops pulling a shipment that no longer exists.
+          // `shipping_provider` stays — a re-book follows the provider that priced the order.
+          .set({ awb: null, kaOrderId: null, sortingCode: null, problemAt: null, problemNote: null, mgOrderId: null, mgOrderCode: null, mgBatchId: null, mgIsPaid: null, mgCourier: null })
           .where(eq(schema.orders.id, order.id));
         changed.push("cancel:voided");
         if (order.status === "dikirim") {

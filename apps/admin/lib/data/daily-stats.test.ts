@@ -311,7 +311,7 @@ suite("daily series, derived from orders (real Postgres, under RLS)", () => {
         values (${storeId}, ${orderId}, 100000, 100000)`);
       await expect(
         tx.execute(sql`update order_financials set goods_proceeds_idr = 1 where order_id = ${orderId}`),
-      ).rejects.toThrow(/immutable/i);
+      ).rejects.toMatchObject({ cause: { message: expect.stringMatching(/immutable/i) } });
     });
   });
 

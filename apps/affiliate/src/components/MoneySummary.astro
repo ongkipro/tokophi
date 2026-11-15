@@ -1,0 +1,35 @@
+---
+// The three commission totals, with what each one MEANS (not only a label). "Siap dibayar" is the lead
+// figure — it is the money the affiliate can ask a store for. Each figure links to its filtered ledger.
+// The Ditahan figure includes orders not finished yet (same sum as the data layer's `heldIdr`).
+import { IDR } from "@tokophi/lib/format";
+
+interface Props {
+  readyIdr: number;
+  heldIdr: number;
+  paidIdr: number;
+  holdDays: number | null;
+  label: string;
+}
+const { readyIdr, heldIdr, paidIdr, holdDays, label } = Astro.props;
+const hold = holdDays === null ? "masa tahan toko" : `${holdDays} hari masa tahan`;
+---
+<section class="card money" aria-label={label}>
+  <a class="money-main" href="/komisi?state=siap">
+    <span class="k"><span class="dot siap" aria-hidden="true"></span>Siap dibayar</span>
+    <strong class="v num">{IDR(readyIdr)}</strong>
+    <span class="d">Sudah lewat masa tahan. Toko yang mentransfer ke rekening Anda.</span>
+  </a>
+  <div class="money-row">
+    <a href="/komisi?state=ditahan">
+      <span class="k"><span class="dot ditahan" aria-hidden="true"></span>Ditahan</span>
+      <strong class="v num">{IDR(heldIdr)}</strong>
+      <span class="d">Menunggu pesanan selesai + {hold}.</span>
+    </a>
+    <a href="/komisi?state=dibayar">
+      <span class="k"><span class="dot dibayar" aria-hidden="true"></span>Sudah dibayar</span>
+      <strong class="v num">{IDR(paidIdr)}</strong>
+      <span class="d">Ditandai lunas oleh toko.</span>
+    </a>
+  </div>
+</section>

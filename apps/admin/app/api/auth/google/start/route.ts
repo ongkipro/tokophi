@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
-import { OAUTH_STATE_COOKIE, authorizeUrl, googleConfig } from "@/lib/google";
+import { OAUTH_SIGNUP_CODE_COOKIE, OAUTH_STATE_COOKIE, authorizeUrl, googleConfig } from "@/lib/google";
+import { normalizeSignupCode } from "@tokophi/lib/signup-code";
 
 // Kick off the Google OAuth code flow. `mode` (login|daftar) rides along in the state cookie:
 //   • daftar → an unknown email auto-provisions a store (same one-txn path as the Daftar form)
@@ -11,6 +12,10 @@ export async function GET(req: NextRequest) {
   const cfg = googleConfig();
   if (!cfg) return NextResponse.redirect(new URL("/login", req.url)); // feature-flagged off
   const mode = req.nextUrl.searchParams.get("mode") === "daftar" ? "daftar" : "login";
+  // ADR 0019 — a signup code typed on /daftar. A malformed one is refused HERE, before the round trip to
+  // Google, with the same notice the callback gives an unknown one (relative Location, see the callback).
+  const code = mode === "daftar" ? normalizeSignupCode(req.nextUrl.searchParams.get("kode")) : "";
+  if (code === null) return new NextResponse(null, { status: 307, headers: { Location: "/daftar?error=kode" } });
   const nonce = randomBytes(16).toString("hex");
   const state = `${mode}.${nonce}`;
 
@@ -22,5 +27,16 @@ export async function GET(req: NextRequest) {
     maxAge: 600, // 10 min
     secure: process.env.NODE_ENV === "production",
   });
+  // Always written on a signup start (empty = no code), so a code from an abandoned earlier attempt in this
+  // browser can never ride along into a later signup that did not enter one.
+  if (mode === "daftar") {
+    res.cookies.set(OAUTH_SIGNUP_CODE_COOKIE, code ? `${code}.${req.nextUrl.searchParams.get("setuju") === "1" ? 1 : 0}` : "", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: code ? 600 : 0,
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
   return res;
 }

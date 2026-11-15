@@ -5,10 +5,13 @@ import Pricing from "../components/Pricing.astro";
 import FeeTable from "../components/FeeTable.astro";
 import Closing from "../components/home/Closing.astro";
 import { BILLING } from "@tokophi/lib/billing";
+import { PRICE } from "../lib/offer";
 
 const signupUrl = import.meta.env.PUBLIC_SIGNUP_URL || "https://app.tokophi.com/daftar";
-const title = "Harga Langganan Toko Online Rp275.000 per Bulan - TokoΦ";
-const description = "Satu paket TokoΦ dengan semua fitur: uji coba 3 hari, Rp50.000 bulan pertama, lalu Rp275.000/bulan atau Rp2.700.000/tahun. Tanpa komisi penjualan.";
+// Read from BILLING, like every other number on this site (lib/offer.ts) — this title and description
+// were the two places a price was retyped by hand, so they would have kept quoting Rp275.000 (ADR 0020).
+const title = `Harga Langganan Toko Online ${PRICE.monthly} per Bulan - TokoΦ`;
+const description = `Satu paket TokoΦ dengan semua fitur: uji coba ${PRICE.trialDays} hari, lalu ${PRICE.monthly}/bulan atau ${PRICE.annual}/tahun (hemat ${PRICE.annualDiscountPct}). Tanpa komisi penjualan.`;
 const url = "https://tokophi.com/harga/";
 const jsonLd = {
   "@context": "https://schema.org",

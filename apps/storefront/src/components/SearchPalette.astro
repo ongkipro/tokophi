@@ -22,6 +22,15 @@
 // Every state is written, not just the happy one: idle, loading, empty, error. A palette that shows
 // nothing while a request is in flight reads as broken.
 import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
+
+// The same automatic category list the desktop mega panel shows (Header.astro): every published
+// category that has products, with its live count. Rendered into the dialog so the EMPTY state can
+// offer categories without a request, in the same order and words as the menu.
+const { catalog } = Astro.locals;
+const CATEGORIES = catalog.collections
+  .filter((c) => c.handle !== "produk-terlaris")
+  .map((c) => ({ handle: c.handle, name: c.name, count: catalog.byCollection(c.handle).length }))
+  .filter((c) => c.count > 0);
 ---
 
 {/* One palette per page, mounted by Layout.astro so every route has it.
@@ -30,7 +39,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
     Phone, tablet and desktop all get the whole viewport. Searching is a mode, not a side panel: the
     shop behind it is not something you are meant to be reading while you type.
 
-    Width is spent on BREATHING ROOM, not on stretching. The content sits in a centred `max-w-2xl`
+    Width is spent on BREATHING ROOM, not on stretching. The content sits in a centred `max-w-7xl`
     column — on a 1920px screen an input 1900px wide is not "using the space", it is losing the eye
     between the magnifier and the caret. The surface goes edge to edge; the reading measure does not.
 
@@ -46,31 +55,46 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
   id="search-palette"
   data-search-dialog
   aria-label="Cari produk"
-  class="fixed inset-x-0 top-0 m-0 h-[100dvh] max-h-none w-screen max-w-none overscroll-contain rounded-none border-0 bg-cream p-0 text-ink"
+  data-categories={JSON.stringify(CATEGORIES)}
+  class="fixed inset-x-0 top-0 m-0 h-[100dvh] max-h-none w-screen max-w-none overscroll-contain rounded-none border-0 bg-cream p-0 text-ink md:bottom-auto md:h-auto md:max-h-[85vh] md:shadow-[0_24px_48px_-24px_rgb(0_0_0/0.35)]"
 >
   {/* The INNER column is what visualViewport sizes (`--sp-h`) + shifts (`translateY(offsetTop)`); the
       sheet above stays pinned full-screen. `min-h-0` on the scroller lets the results area SHRINK
       instead of pushing the input off the top of the screen when the keyboard opens. */}
-  <div data-sp-inner style="height: var(--sp-h, 100dvh);" class="flex flex-col overflow-hidden">
+  <div data-sp-inner style="height: var(--sp-h, 100dvh);" class="flex flex-col overflow-hidden md:h-auto! md:max-h-[85vh]">
+    {/* REDESIGN C (owner 2026-11-05, "Shopify modern"): the query sits in a real bordered FIELD, with
+        its own clear button, instead of bare text on a white sheet. Same column as the results. */}
     <div class="shrink-0 border-b border-line">
-      <div class="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 sm:px-6">
-        <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
-        {/* `text-base` is not a style choice: below 16px iOS Safari zooms the page on focus and never
-            zooms back (see global.css). Do not shrink this for looks. */}
-        <input
-          id="search-palette-input"
-          type="search"
-          autocomplete="off"
-          enterkeyhint="search"
-          placeholder="Cari produk atau kategori…"
-          aria-controls="search-palette-results"
-          class="min-h-16 w-full border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none sm:min-h-20 sm:text-lg"
-        />
+      <div class="mx-auto flex w-full max-w-7xl items-center gap-2 px-4 py-3 sm:px-6 md:py-4">
+        <label class="flex min-h-12 flex-1 items-center gap-2 rounded-lg border border-line bg-white px-3 transition-[border-color,box-shadow] hover:border-muted focus-within:border-ink focus-within:shadow-[0_0_0_1px_var(--color-ink)]">
+          <Search class="size-5 shrink-0 text-muted" stroke-width={1.8} aria-hidden="true" />
+          {/* `text-base` is not a style choice: below 16px iOS Safari zooms the page on focus and never
+              zooms back (see global.css). Do not shrink this for looks. */}
+          <input
+            id="search-palette-input"
+            type="search"
+            autocomplete="off"
+            enterkeyhint="search"
+            placeholder="Cari produk atau kategori…"
+            aria-label="Cari produk atau kategori"
+            aria-controls="search-palette-results"
+            class="h-11 w-full min-w-0 border-0 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none"
+          />
+          <button
+            type="button"
+            data-search-clear
+            hidden
+            aria-label="Hapus pencarian"
+            class="-mr-1.5 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-mist hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            <X class="size-4" stroke-width={2} aria-hidden="true" />
+          </button>
+        </label>
         {/* A word, not a glyph: a bigger target than a 14px ✕, and it says what it does. */}
         <button
           type="button"
           data-search-close
-          class="-mr-2 shrink-0 rounded-full px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-brand-50 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
+          class="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-ink transition-colors hover:bg-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"
         >
           Batal
         </button>
@@ -87,7 +111,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       role="listbox"
       aria-live="polite"
       aria-busy="false"
-      class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      class="min-h-0 flex-1 overflow-y-auto overscroll-contain md:max-h-[calc(85vh-5rem)]"
     >
     </div>
   </div>
@@ -95,8 +119,8 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
 
 {/* Icon markup the script clones into results. Rendering lucide components here — rather than
     hand-writing their paths in a JS string — keeps one source for each icon. */}
-<template id="search-icon-product"><Package class="size-4 text-brand-500" stroke-width={1.75} /></template>
-<template id="search-icon-category"><Tag class="size-4 text-brand-500" stroke-width={1.75} /></template>
+<template id="search-icon-product"><Package class="size-4 text-muted" stroke-width={1.75} /></template>
+<template id="search-icon-category"><Tag class="size-4 text-muted" stroke-width={1.75} /></template>
 
 <style>
   /* ONE entrance. The surface is opaque and covers the viewport, so there is no backdrop to fade and
@@ -116,11 +140,25 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
      button: two identical glyphs, one labelled and 36px, one unlabelled and ~14px. Ours stays (it
      has an accessible name and a real tap target); the browser's is hidden. Esc also clears by
      closing, and re-opening always starts empty, so nothing is lost. */
+  /* From md the palette is a panel, not a sheet: the shop shows (dimmed) beneath it. */
+  #search-palette::backdrop { background: rgb(0 0 0 / 0.35); }
+
   #search-palette-input::-webkit-search-cancel-button,
   #search-palette-input::-webkit-search-decoration {
     -webkit-appearance: none;
     appearance: none;
   }
+</style>
+
+{/* GLOBAL, not scoped: everything below targets markup the script injects with `innerHTML`, which never
+    carries Astro's scope attribute — a scoped rule here silently matches nothing. */}
+<style is:global>
+  /* ↑↓ highlight — an outline on the active option, never a fill. */
+  #search-palette-results a[data-active] { outline: 2px solid var(--color-ink); outline-offset: 3px; border-radius: 4px; }
+  /* From md the panel shows ONE full row of products (4, then 5 from lg); the rest is one click away
+     in "Lihat semua hasil". Phones keep every result. */
+  @media (min-width: 768px) { #search-palette-results [data-sp-grid] > :nth-child(n + 5) { display: none; } }
+  @media (min-width: 1024px) { #search-palette-results [data-sp-grid] > :nth-child(5) { display: block; } }
 </style>
 
 <script is:inline>
@@ -152,144 +190,135 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       items.forEach(function (el, n) {
         var on = n === active;
         el.setAttribute("aria-selected", on ? "true" : "false");
-        el.classList.toggle("bg-brand-50", on);
+        el.toggleAttribute("data-active", on);
         if (on) el.scrollIntoView({ block: "nearest" });
       });
     }
 
-    // ── `sizes` FOR A CARD, DERIVED FROM THE PALETTE'S OWN GRID (owner, 2026-08-25) ────────────────
-    // The results used to be list rows with a 42px thumbnail — one fixed number at every viewport,
-    // which made `sizes` trivial. They are CARDS now (see below), so the box is a grid column and
-    // the arithmetic has to be done properly, exactly as `ProductCard.astro` does it for the shop's
-    // grids. The column lives in `mx-auto w-full max-w-2xl` (672px) with `px-3 sm:px-5` and `gap-3`:
-    //   <640px   2 cols: (100vw - 24 - 12)/2      = 50vw - 18px       (412px → 188px ✓)
-    //   >=640px  3 cols: capped by max-w-2xl at   = (672 - 40 - 24)/3 = 202,7px
-    // …and then MINUS the card's own `p-1.5` (12px), because the box the browser fills is the IMAGE,
-    // not the column: 50vw - 30px and 196px. Measured in a browser: 176px image inside a 188px card
-    // at 412px, 191px inside 203px at 1280px. Claiming the column would over-ask by 12px on every
-    // card — small, but it is the exact class of error `sizes` exists to avoid.
-    // The `sm` figure is the CAP, reached at 672px of viewport and held from there up; between 640
-    // and 672 the real column is a few px narrower, which is the direction `sizes` is allowed to err
-    // (the browser picks the next rung up, never a blurry one). Named constant beside the classes it
-    // is derived from — never a literal buried in the string builder.
-    var CARD_SIZES = "(min-width: 640px) 196px, calc(50vw - 30px)";
+    // ── `sizes` FOR A CARD, DERIVED FROM THE PALETTE'S OWN GRID ────────────────────────────────────
+    // Same measure as the desktop mega panel (owner 2026-11-05): `max-w-7xl px-4 sm:px-6`; from md an
+    // `11rem` suggestions column + `gap-12` beside the grid. Cards have no padding, so image = column:
+    //   <768       2-up, gap-3:  (100vw - 32 - 12) / 2                   = calc(50vw - 22px)
+    //   768-1023   4-up, gap-4:  (100vw - 48 - 48) / 4  (no suggestions)  = calc(25vw - 24px)
+    //   1024-1279  5-up, gap-4:  (100vw - 48 - 64) / 5  (no suggestions)  = calc(20vw - 22px)
+    //   >=1280     (1280 - 48 - 64) / 5 = 234px without suggestions, 188px with them
+    // ONE `sizes` serves both layouts, so it declares the WIDER (no-suggestions) box: the only error it
+    // can make is a rung up, never a blurry image. `scripts/check-search-srcset.mjs` measures it.
+    var CARD_SIZES = "(min-width: 1280px) 234px, (min-width: 1024px) calc(20vw - 22px), (min-width: 768px) calc(25vw - 24px), calc(50vw - 22px)";
 
-    // A PRODUCT CARD, in the shop's own language: the SAME shape as the grid the shopper just came
-    // from — 3:4 portrait image, name, price — because a garment is recognised by its silhouette and
-    // a 42px sliver of one is not a picture, it is a bullet point. Two up on a phone, three from
-    // `sm`, so the photo does the work the list row asked type to do.
-    //
-    // ⚠️ THE IMAGE CARRIES A SRCSET, AND IT COMES FROM THE SERVER (`api/search.ts`), NOT FROM A
-    // MANIFEST IN THIS FILE. Without it the browser had exactly one file to fetch — the full-size
-    // original — measured 91 178 B for six thumbnails on the seeded store, 7,1x oversize
-    // (`scripts/check-search-srcset.mjs`). It was invisible to every static check and to the browser
-    // checks alike, because this <img> does not exist until somebody presses ⌘K. The cards are
-    // bigger boxes than the old 42px rows, so they pick a HIGHER rung off the same ladder — the
-    // guard measures the real box and the picked candidate, so it keeps this honest either way.
-    // `p.srcset` is absent for a product whose image has no ladder; then both attributes are omitted.
-    // Both go through `esc` — this is string concatenation into `innerHTML`, so an unescaped URL is
-    // an injection vector, not just a bug.
+    // A PRODUCT CARD in the shop's own language — the same shape as `ProductCard.astro` after redesign
+    // C: image (4:5, 4px radius) → name (two lines, regular weight) → price. No category eyebrow.
+    // ⚠️ THE IMAGE CARRIES A SRCSET, AND IT COMES FROM THE SERVER (`api/search.ts`). This <img> does not
+    // exist until somebody opens the palette, so only the browser check above can see it. `p.srcset`
+    // absent → both attributes omitted. Everything goes through `esc` — this is string concatenation
+    // into `innerHTML`, so an unescaped value is an injection vector, not just a bug.
     function productCard(p) {
       var srcset = p.srcset ? ' srcset="' + esc(p.srcset) + '" sizes="' + esc(CARD_SIZES) + '"' : "";
       var thumb = p.image
-        ? '<img src="' + esc(p.image) + '"' + srcset + ' alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />'
+        ? '<img src="' + esc(p.image) + '"' + srcset + ' alt="" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100" />'
         : '<span class="flex h-full w-full items-center justify-center">' + iconProduct + "</span>";
       var price = p.soldOut
-        ? '<span class="text-xs font-medium text-muted">Stok habis</span>'
+        ? '<span class="text-sm text-muted">Stok habis</span>'
         : p.price > 0
-          ? '<span class="text-[0.95rem] font-semibold tabular-nums text-ink">' + esc(IDR.format(p.price)) + "</span>"
-          : '<span class="text-xs font-medium text-muted">Tanya harga</span>';
-      // `aria-selected` + the ↑↓ ring live on the <a>, so the keyboard walk is unchanged by the
-      // switch to a grid — `setActive` still toggles `bg-brand-50` on whatever is at `items[n]`.
+          ? '<span class="text-sm font-semibold tabular-nums text-ink">' + esc(IDR.format(p.price)) + "</span>"
+          : '<span class="text-sm text-muted">Tanya harga</span>';
       return (
         '<a href="/produk/' + esc(p.handle) + '" role="option" aria-selected="false" ' +
-        'class="group flex flex-col rounded-xl p-1.5 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none' +
-        (p.soldOut ? " opacity-60" : "") + '">' +
-          '<span class="block aspect-[3/4] w-full overflow-hidden rounded-lg bg-brand-50">' + thumb + "</span>" +
-          // The kategori label rides ABOVE the name here, same as `ProductCard.astro` — the palette
-          // is meant to read as a miniature of the grid, and the field is already on the payload.
-          (p.category
-            ? '<span class="mt-2 block truncate text-[0.65rem] font-medium uppercase tracking-widest text-muted">' + esc(p.category) + "</span>"
-            : "") +
-          '<span class="' + (p.category ? "mt-1" : "mt-2") + ' line-clamp-2 text-sm font-medium leading-snug text-ink">' + esc(p.name) + "</span>" +
-          '<span class="mt-1.5 block">' + price + "</span>" +
+        'class="group block min-w-0 focus-visible:outline-none' + (p.soldOut ? " opacity-60" : "") + '">' +
+          '<span class="block aspect-[4/5] w-full overflow-hidden rounded-sm bg-mist">' + thumb + "</span>" +
+          '<span class="mt-2 line-clamp-2 break-words text-sm leading-snug text-ink">' + esc(p.name) + "</span>" +
+          '<span class="mt-0.5 block">' + price + "</span>" +
         "</a>"
       );
     }
 
-    // The grid wrapper. `role="option"` elements must stay DIRECT children of something inside the
-    // listbox for the ↑↓ walk to find them — `render()` collects them with a descendant query, so a
-    // wrapper is fine; what matters is that no wrapper carries a competing role.
     function productGrid(list) {
+      // From md the panel shows ONE full row (4, then 5 from lg) — a lone card on a second row read as a
+      // mistake; "Lihat semua hasil" is the way to the rest. Phones keep every result (2-up, scrolls).
+      return '<div data-sp-grid class="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-4 md:gap-x-4 lg:grid-cols-5">' + list.map(productCard).join("") + "</div>";
+    }
+
+    // SUGGESTIONS — the left column from md (a plain text list, Horizon-style); on a phone the same links
+    // become one horizontal row of outlined chips above the products, so they cost one line of height.
+    function suggestionLink(href, label, count) {
       return (
-        '<div class="mx-auto grid w-full max-w-2xl grid-cols-2 gap-3 px-3 pb-2 sm:grid-cols-3 sm:px-5">' +
-        list.map(productCard).join("") +
+        '<a href="' + href + '" role="option" aria-selected="false" ' +
+        'class="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm text-ink transition-colors hover:border-ink ' +
+        'md:flex md:min-h-0 md:justify-between md:gap-3 md:rounded-sm md:border-0 md:px-0 md:py-1.5 md:text-[0.9375rem] md:underline-offset-4 md:hover:underline">' +
+        '<span class="truncate">' + label + "</span>" +
+        (count != null ? '<span class="hidden shrink-0 text-sm text-muted tabular-nums md:inline">' + count + "</span>" : "") +
+        "</a>"
+      );
+    }
+    var STORE_CATEGORIES = [];
+    try { STORE_CATEGORIES = JSON.parse(dialog.getAttribute("data-categories") || "[]"); } catch (e) { STORE_CATEGORIES = []; }
+    function suggestions(data, q) {
+      var links = [];
+      if (q) links.push(suggestionLink("/cari?q=" + encodeURIComponent(q), "Cari \u201c" + esc(q) + "\u201d"));
+      // Typed → the categories the API matched; empty → every category, with counts (= the mega panel).
+      var cats = q ? data.categories || [] : STORE_CATEGORIES;
+      cats.forEach(function (c) {
+        links.push(suggestionLink("/kategori/" + esc(c.handle), esc(c.name), q ? null : c.count));
+      });
+      if (!links.length) return "";
+      return (
+        "<div>" +
+          heading(q ? "Saran" : "Kategori") +
+          '<div class="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 md:mx-0 md:flex-col md:gap-0 md:overflow-visible md:px-0">' +
+          links.join("") + "</div>" +
         "</div>"
       );
     }
 
-    // CATEGORIES ARE PILLS, not list rows — the shortcut shape an Indonesian shopper already reads
-    // fluently, and three rows become one line on a screen with no vertical room to spare.
-    function categoryPills(list) {
-      return (
-        '<div class="mx-auto flex w-full max-w-2xl flex-wrap gap-2 px-3 pb-1 pt-4 sm:px-5">' +
-        list
-          .map(function (c) {
-            return (
-              '<a href="/kategori/' + esc(c.handle) + '" role="option" aria-selected="false" ' +
-              'class="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-brand-50 px-4 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none">' +
-              iconCategory + esc(c.name) + "</a>"
-            );
-          })
-          .join("") +
-        "</div>"
-      );
-    }
-
-    // A label carrying its count is information; "PRODUK" in grey caps was decoration.
+    // A label carrying its count is information; grey caps were decoration.
     function heading(text, count) {
-      return (
-        '<p class="mx-auto w-full max-w-2xl px-4 pb-1 pt-4 text-xs font-medium text-muted sm:px-6">' + esc(text) +
-        (count ? ' <span class="tabular-nums">· ' + count + "</span>" : "") + "</p>"
-      );
+      // Same label as the mega panel's ("Belanja", "Kategori", "Produk terbaru"): small, muted, no caps.
+      return '<p class="mb-3 text-sm text-muted">' + esc(text) + (count ? ' <span class="tabular-nums">· ' + count + "</span>" : "") + "</p>";
     }
 
     function message(text) {
-      return '<p class="mx-auto w-full max-w-2xl px-4 py-16 text-center text-sm text-muted">' + esc(text) + "</p>";
+      return '<p class="mx-auto w-full max-w-7xl px-4 py-16 text-center text-sm text-muted">' + esc(text) + "</p>";
     }
 
-    // The way OUT sits at the END of the list, full width — where a thumb already is after scrolling
-    // results. It used to be a right-aligned link in a footer bar: the corner of a phone furthest
-    // from anyone's hand.
+    // The way OUT: under the products, as a text link with an arrow (the Horizon footer of the panel).
     function seeAllRow(q) {
       return (
         '<a href="/cari?q=' + encodeURIComponent(q) + '" role="option" aria-selected="false" ' +
-        'class="mx-auto mt-2 mb-[max(1rem,env(safe-area-inset-bottom))] flex w-full max-w-2xl min-h-12 items-center justify-center gap-1.5 rounded-xl border border-line px-4 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none">' +
-        "Lihat semua hasil untuk «" + esc(q) + "»</a>"
+        'class="mt-6 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-ink underline underline-offset-4 hover:text-brand-700">' +
+        "Lihat semua hasil untuk \u201c" + esc(q) + "\u201d →</a>"
       );
     }
 
-    function render(data, q) {
-      var html = "";
-      if (data.categories && data.categories.length) html += categoryPills(data.categories);
-      if (data.products && data.products.length) {
-        html += heading(q ? "Produk" : "Paling dicari", q ? data.products.length : 0);
-        html += productGrid(data.products);
-      }
-      if (q) html += seeAllRow(q);
+    var BTN = "inline-flex min-h-11 items-center rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white hover:bg-brand-700";
 
-      if (!(data.products || []).length && !(data.categories || []).length) {
+    function render(data, q) {
+      var products = data.products || [];
+      var html = "";
+      var side = suggestions(data, q);
+      var main = "";
+      if (products.length) {
+        main += heading(q ? "Produk" : "Paling dicari", q ? products.length : 0);
+        main += productGrid(products);
+      }
+      if (q && products.length) main += seeAllRow(q);
+      html =
+        '<div class="mx-auto w-full max-w-7xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 md:pb-10 md:pt-6' +
+          (side ? ' md:grid md:grid-cols-[11rem_minmax(0,1fr)] md:gap-12">' + side + '<div class="mt-6 min-w-0 md:mt-0">' : '"><div class="min-w-0">') +
+          main + "</div>" +
+        "</div>";
+
+      if (!products.length && !(data.categories || []).length) {
         // An empty result is a moment for direction, not for mood: say what happened, then offer the
         // one move that always works.
         html =
-          message("Tidak ada yang cocok dengan «" + q + "».") +
-          '<p class="px-4 pb-8 text-center"><a class="inline-flex min-h-11 items-center rounded-full bg-brand-600 px-5 text-sm font-semibold text-white" href="/produk">Telusuri semua produk</a></p>';
+          message("Tidak ada yang cocok dengan \u201c" + q + "\u201d.") +
+          '<p class="px-4 pb-8 text-center"><a class="' + BTN + '" href="/produk">Telusuri semua produk</a></p>';
       }
 
       results.innerHTML = html;
-      items = Array.prototype.slice.call(results.querySelectorAll("a[role='option']"));
+      // Only what is visible: ↑↓ must never land on a card the row limit above has hidden.
+      items = Array.prototype.slice.call(results.querySelectorAll("a[role='option']")).filter(function (el) { return el.offsetParent !== null; });
       active = -1;
-      if (items.length) setActive(0);
     }
 
     function search(q) {
@@ -313,15 +342,22 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
           // server and needs nothing from this endpoint.
           results.innerHTML =
             message("Pencarian sedang bermasalah.") +
-            '<p class="px-4 pb-8 text-center"><a class="inline-flex min-h-11 items-center rounded-full bg-brand-600 px-5 text-sm font-semibold text-white" href="/cari?q=' +
+            '<p class="px-4 pb-8 text-center"><a class="' + BTN + '" href="/cari?q=' +
             encodeURIComponent(q) + '">Buka halaman pencarian</a></p>';
           items = [];
         });
     }
 
     var timer = null;
+    var clearBtn = dialog.querySelector("[data-search-clear]");
+    if (clearBtn) clearBtn.addEventListener("click", function () {
+      input.value = "";
+      input.dispatchEvent(new Event("input"));
+      input.focus();
+    });
     input.addEventListener("input", function () {
       var q = input.value.trim();
+      if (clearBtn) clearBtn.hidden = !input.value;
       clearTimeout(timer);
       // 150ms: long enough that a fast typist sends one request instead of eight, short enough that
       // the list feels like it is keeping up.
@@ -410,6 +446,7 @@ import { Search, Package, Tag, CornerDownLeft, X } from "@lucide/astro";
       dialog.showModal();
       syncViewport();
       input.value = "";
+      if (clearBtn) clearBtn.hidden = true;
       results.innerHTML = message("Memuat…");
       input.focus();
       search("");

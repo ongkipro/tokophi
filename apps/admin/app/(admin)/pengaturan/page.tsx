@@ -10,6 +10,9 @@ import {
   Truck,
   Users,
   Store,
+  Plug,
+  ShieldCheck,
+  Handshake,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/admin/page-header"
@@ -22,18 +25,24 @@ import {
   CardContent,
   CardFooter,
 } from "@tokophi/ui/card"
-import { useStoreName } from "@/components/admin/store-context"
+import { useBuyerAccountsEnabled, useStoreName } from "@/components/admin/store-context"
+import { settingsSectionVisible } from "@/lib/nav"
 import { initials } from "@/components/admin/initials"
 import { Badge } from "@tokophi/ui/badge"
 import { Separator } from "@tokophi/ui/separator"
 import { Avatar, AvatarFallback } from "@tokophi/ui/avatar"
 import { SenderAddressCard } from "@/components/admin/pengaturan/sender-address-card"
 import { JasaKirimCard } from "@/components/admin/pengaturan/jasa-kirim-card"
+import { MengantarCard } from "@/components/admin/pengaturan/mengantar-card"
 import { RekeningCard } from "@/components/admin/pengaturan/rekening-card"
 import { StoreProfileCard } from "@/components/admin/pengaturan/store-profile-card"
 import { DomainCard } from "@/components/admin/pengaturan/domain-card"
 import { PenggunaCard } from "@/components/admin/pengaturan/pengguna-card"
 import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
+import { PluginCard } from "@/components/admin/pengaturan/plugin-card"
+import { ReturCard } from "@/components/admin/pengaturan/retur-card"
+import { PengaduanCard } from "@/components/admin/pengaturan/pengaduan-card"
+import { AffiliateCard } from "@/components/admin/pengaturan/affiliate-card"
 
 // NOTE: there is no "pembayaran" section. Payment channels are a PLATFORM decision
 // (super-admin → platform_payment_channels) and flow straight to the shopper's checkout.
@@ -43,11 +52,14 @@ import { PajakCard } from "@/components/admin/pengaturan/pajak-card"
 type Section =
   | "profil"
   | "pengiriman"
+  | "pembeli"
   | "alamat"
   | "domain"
   | "rekening"
   | "pajak"
   | "pengguna"
+  | "plugin"
+  | "affiliate"
   | "notifikasi"
 
 const SECTIONS: {
@@ -58,11 +70,16 @@ const SECTIONS: {
 }[] = [
   { id: "profil", label: "Profil Toko", desc: "Nama, logo, kontak", icon: <Store /> },
   { id: "pengiriman", label: "Pengiriman", desc: "Jasa kirim & COD", icon: <Truck /> },
+  { id: "pembeli", label: "Layanan Pembeli", desc: "Retur & komplain", icon: <ShieldCheck /> },
   { id: "alamat", label: "Alamat", desc: "Alamat pengambilan", icon: <MapPin /> },
   { id: "domain", label: "Domain", desc: "Domain kustom storefront", icon: <Globe /> },
   { id: "rekening", label: "Rekening", desc: "Tujuan penarikan saldo", icon: <Landmark /> },
   { id: "pajak", label: "Pajak", desc: "PPN & NPWP", icon: <Receipt /> },
   { id: "pengguna", label: "Pengguna", desc: "Anggota & peran", icon: <Users /> },
+  // ADR 0021 (KEL-001): first-party plugins, deep link `/pengaturan?section=plugin`.
+  { id: "plugin", label: "Plugin", desc: "Kelola CRM & lainnya", icon: <Plug /> },
+  // ADR 0022: the store affiliate programme switch, deep link `/pengaturan?section=affiliate`.
+  { id: "affiliate", label: "Affiliate", desc: "Program affiliate toko", icon: <Handshake /> },
   {
     id: "notifikasi",
     label: "Notifikasi",
@@ -85,9 +102,17 @@ function SaveFooter() {
   )
 }
 
-export default function Page() {
-  // Navigasi
-  const [section, setSection] = React.useState<Section>("profil")
+export default function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // Navigasi. Deep link `/pengaturan?section=alamat` (the Dashboard's Mengantar banner): the page's own
+  // `searchParams` prop read with React `use()` (Next 16 page.md, "Client Component pages"), so server
+  // and client start on the same section — no effect, no hydration mismatch. An unknown value is
+  // ignored, never trusted as a Section.
+  const wanted = React.use(searchParams).section
+  // Layanan Pembeli exists only while the TokoΦ Account feature is ON (ADR 0016) — a typed
+  // `?section=pembeli` falls back to Profil when it is off, and the section is not listed.
+  const buyerAccounts = useBuyerAccountsEnabled()
+  const sections = SECTIONS.filter((s) => settingsSectionVisible(s.id, buyerAccounts))
+  const [section, setSection] = React.useState<Section>(() => sections.find((s) => s.id === wanted)?.id ?? "profil")
   const storeName = useStoreName()
 
 
@@ -116,7 +141,7 @@ export default function Page() {
         <div className="lg:sticky lg:top-6 h-fit space-y-4">
           <Card className="p-1.5">
             <nav className="flex flex-col gap-0.5">
-              {SECTIONS.map((s) => {
+              {sections.map((s) => {
                 const active = section === s.id
                 return (
                   <button
@@ -203,8 +228,19 @@ export default function Page() {
               Rp250.000" — that were plain useState with NO column and NO action behind them: the
               merchant set them and nothing whatsoever happened. Removed rather than left lying. */}
           {section === "pengiriman" && (
-            <div className="max-w-3xl">
+            <div className="max-w-3xl space-y-5">
+              <MengantarCard onOpenAlamat={() => setSection("alamat")} />
               <JasaKirimCard />
+            </div>
+          )}
+
+          {/* LAYANAN PEMBELI (ADR 0016, BUYER-ACCOUNT-P1) — the two promises a buyer reads on an order
+              in their Akun TokoΦ: the return window and the complaint-resolution period. Both NULL by
+              default = the buyer is shown nothing; we never make a promise on the store's behalf. */}
+          {section === "pembeli" && buyerAccounts && (
+            <div className="grid max-w-3xl gap-5">
+              <ReturCard />
+              <PengaduanCard />
             </div>
           )}
 
@@ -237,6 +273,11 @@ export default function Page() {
 
           {/* PENGGUNA — real store_users list + invite/role/remove (lib/actions/users.ts) */}
           {section === "pengguna" && <PenggunaCard />}
+
+          {section === "plugin" && <PluginCard />}
+
+          {/* AFFILIATE — the seller's own switch (ADR 0022); the programme itself lives on /affiliate */}
+          {section === "affiliate" && <AffiliateCard />}
 
           {/* NOTIFIKASI */}
           {section === "notifikasi" && (

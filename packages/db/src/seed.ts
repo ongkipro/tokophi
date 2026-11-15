@@ -106,9 +106,7 @@ const PLANS: Array<{ key: "pemula" | "bisnis" | "skala"; name: string; price: nu
 // Writing amountIdr with tax baked in while taxIdr stayed 0 (the old hardcoded 305_250/55_500) made every
 // seeded invoice self-contradictory the moment the toggle defaulted off.
 const SUB_MONTHLY_CHARGE = subscriptionCharge(BILLING.MONTHLY_IDR, false);
-const SUB_FIRST_MONTH_CHARGE = subscriptionCharge(BILLING.FIRST_MONTH_IDR, false);
 const SUB_MONTHLY = SUB_MONTHLY_CHARGE.total;
-const SUB_FIRST_MONTH = SUB_FIRST_MONTH_CHARGE.total;
 
 // THE COD POLICY, defined ONCE — the platform_cod row below is seeded from these, and so is the
 // choice of which demo orders are COD. Two literals would let the seed mint a COD order in a
@@ -128,7 +126,7 @@ const INVOICES: Array<{ number: string; status: "dibayar" | "menunggu" | "gagal"
 ];
 
 const ACTIVITY: Array<{ kind: "signup" | "upgrade" | "payment" | "churn" | "support" | "admin"; text: string; minutesAgo: number }> = [
-  { kind: "payment", text: "Pembayaran Rp275.000 dari “Batik Nusantara”", minutesAgo: 52 },
+  { kind: "payment", text: `Pembayaran Rp${BILLING.MONTHLY_IDR.toLocaleString("id-ID")} dari “Batik Nusantara”`, minutesAgo: 52 },
   { kind: "support", text: "Tiket support baru dari “Batik Nusantara”", minutesAgo: 4 * 60 },
   { kind: "payment", text: "“Batik Nusantara” mulai langganan TokoΦ (setelah trial)", minutesAgo: 40 * 24 * 60 },
   { kind: "signup", text: "Toko “Batik Nusantara” mendaftar", minutesAgo: STORE.createdDaysAgo * 24 * 60 },
@@ -146,13 +144,13 @@ type DemoStore = {
   lastOrderDaysAgo: number | null; // null = no orders yet
   invoices: Array<{ status: "dibayar" | "menunggu" | "gagal"; daysAgo: number }>;
   comped?: boolean; // VIP (billing bypassed by platform)
-  firstPaid?: boolean; // false → still on the Rp50rb first-month (segment "bulan pertama")
+  firstPaid?: boolean; // false → never paid a subscription invoice (segment "first_invoice", ADR 0020)
   ship7d?: number; // avg shipments/day over the last 7 days (demo signal for VIP thresholds)
 };
 const DEMO_STORES: DemoStore[] = [
   // healthy: recent orders, invoices paid
   { name: "Kopi Senja", owner: "Rangga Saputra", email: "rangga@kopisenja.id", city: "Bandung", plan: "bisnis", status: "active", gmv: 42_600_000, orders: 210, products: 22, createdDaysAgo: 95, lastOrderDaysAgo: 1, invoices: [{ status: "dibayar", daysAgo: 2 }, { status: "dibayar", daysAgo: 32 }], ship7d: 8 },
-  // BILLING problem: an overdue "menunggu" (>14d) + a failed charge → Bermasalah. On the Rp50rb first month.
+  // BILLING problem: an overdue "menunggu" (>14d) + a failed charge → Bermasalah. Still on its first invoice.
   { name: "Hijab Amara", owner: "Amara Zahwa", email: "amara@hijabamara.id", city: "Bekasi", plan: "pemula", status: "active", gmv: 8_500_000, orders: 64, products: 18, createdDaysAgo: 70, lastOrderDaysAgo: 5, invoices: [{ status: "menunggu", daysAgo: 22 }, { status: "gagal", daysAgo: 22 }, { status: "dibayar", daysAgo: 52 }], firstPaid: false, ship7d: 3 },
   // ACTIVITY problem: last order 46d ago on an active paid store → Bermasalah
   { name: "Sepatu Lokal Project", owner: "Dimas Prakoso", email: "dimas@sepatulokal.id", city: "Surabaya", plan: "bisnis", status: "active", gmv: 31_200_000, orders: 140, products: 30, createdDaysAgo: 140, lastOrderDaysAgo: 46, invoices: [{ status: "dibayar", daysAgo: 3 }, { status: "dibayar", daysAgo: 33 }], ship7d: 1 },
@@ -823,7 +821,7 @@ async function main() {
     socialX: "batiknusantara",
     plan: STORE.plan,
     status: STORE.status,
-    // billing: active, first month paid → recurring Rp275rb; ~20 days left in the current period
+    // billing: active, first invoice paid → recurring BILLING.MONTHLY_IDR (ADR 0020); ~20 days left in the current period
     trialEndsAt: fromNow(-(STORE.createdDaysAgo - 3)),
     currentPeriodEnd: fromNow(20),
     firstInvoicePaid: true,
@@ -1694,7 +1692,7 @@ async function main() {
     })),
   );
 
-  // invoices for this account — single plan TokoΦ (Rp275rb/bln recurring)
+  // invoices for this account — single plan TokoΦ (BILLING.MONTHLY_IDR recurring, ADR 0020)
   await db.insert(schema.invoices).values(
     INVOICES.map((inv) => ({ number: inv.number, accountId: account.id, storeId: store.id, planKey: STORE.plan, amountIdr: SUB_MONTHLY, taxIdr: SUB_MONTHLY_CHARGE.taxIdr, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })),
   );
@@ -1793,7 +1791,7 @@ async function main() {
   for (const d of DEMO_STORES) {
     const [acc] = await db.insert(schema.accounts).values({ name: d.name, plan: d.plan, createdAt: daysAgo(d.createdDaysAgo) }).returning();
     const [u] = await db.insert(schema.users).values({ email: d.email, name: d.owner, passwordHash: hashPassword(seedPassword(`Seller  ${d.email}`)) }).returning();
-    // demo billing lifecycle from the store's status. firstPaid=false → still on the Rp50rb first month.
+    // demo billing lifecycle from the store's status. firstPaid=false → never paid (segment first_invoice).
     const firstPaid = d.firstPaid ?? true;
     const bill =
       d.status === "trial"
@@ -1808,8 +1806,8 @@ async function main() {
     await db.insert(schema.storeSettings).values({ storeId: st.id });
     await db.insert(schema.storeStats).values({ storeId: st.id, gmvIdr: d.gmv, ordersCount: d.orders, productsCount: d.products, ship7dAvg: d.ship7d ?? 0, updatedAt: TODAY });
     if (d.invoices.length) {
-      // single plan: Rp50rb first-month promo (firstPaid=false) else Rp275rb recurring
-      const charge = firstPaid ? SUB_MONTHLY_CHARGE : SUB_FIRST_MONTH_CHARGE;
+      // single plan, ONE price (ADR 0020 — the Rp50rb first-month promo is gone): every seeded invoice is the monthly price
+      const charge = SUB_MONTHLY_CHARGE;
       await db.insert(schema.invoices).values(d.invoices.map((inv) => ({ number: `INV-${invSeq++}`, accountId: acc.id, storeId: st.id, planKey: d.plan, amountIdr: charge.total, taxIdr: charge.taxIdr, status: inv.status, issuedAt: daysAgo(inv.daysAgo) })));
     }
     if (d.lastOrderDaysAgo !== null) {

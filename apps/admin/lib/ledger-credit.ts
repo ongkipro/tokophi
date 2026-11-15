@@ -37,7 +37,9 @@ export type Db = typeof rootDb;
  * stored facts, never recomputed: `orders.tax_idr` is the liability, `included_sales_tax_idr` the
  * portion already inside the sticker price, so `tax_idr − included` is exactly the exclusive-mode
  * PPN line the buyer paid on top. Inclusive-mode stores need no add-back — their proceeds already
- * carry the tax. Never shipping, gateway fee, COD fee, or fee VAT.
+ * carry the tax. Never gateway fee, COD fee, or fee VAT — and never shipping, EXCEPT on an order stamped
+ * `shipping_provider = 'mengantar'`: there the seller's own Mengantar wallet paid the courier, so the
+ * buyer-paid shipping is passed through to them (owner O3, FINANCE.md §2). COD never travels Mengantar.
  *
  * LEGACY orders (no order_financials) credit `greatest(orders.subtotal_idr − discount_idr, 0)` —
  * goods only, from the order's own columns. The old fallback was `payments.amount_idr`, which
@@ -59,7 +61,11 @@ export async function creditSaleForPayment(
     insert into ledger_entries (store_id, order_id, payment_id, kind, status, amount_idr, note, available_at)
     select coalesce(p.store_id, o.store_id), o.id, p.id, 'sale',
            case when o.status in ('selesai', 'retur') then 'available' else 'pending' end::ledger_status,
-           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0)),
+           coalesce(f.goods_proceeds_idr + greatest(coalesce(o.tax_idr, 0) - f.included_sales_tax_idr, 0), greatest(o.subtotal_idr - o.discount_idr, 0))
+             -- Mengantar Partner Business API (owner O3): the seller's OWN Mengantar wallet pays the
+             -- courier, so the shipping the buyer paid us is the seller's money. Same expression as
+             -- order_seller_entitlements.shipping_pass_through_idr (0116) — one rule, two readers.
+             + case when o.shipping_provider = 'mengantar' then greatest(coalesce(f.shipping_charged_idr, o.shipping_idr), 0) else 0 end,
            'Penjualan ' || o.number,
            case when o.status in ('selesai', 'retur') then now() end
       from payments p
@@ -79,6 +85,47 @@ export async function creditSaleForPayment(
          select 1 from ledger_entries l
           where l.kind = 'sale' and (l.payment_id = p.id or l.order_id = o.id)
        )
+    on conflict do nothing
+  `);
+}
+
+/**
+ * PAY-RETRY — a collected prepaid payment the ledger did NOT credit is the BUYER's money: give it a
+ * `refunds` row (Task 8.31's table, settled by Super Admin) instead of a console line nobody reads.
+ *
+ * Two ways to get here, both ordinary once an order can carry more than one instruction:
+ *   · "Pembayaran ganda" — the order's sale is already booked against ANOTHER payment
+ *     (`ledger_one_sale_per_order` let exactly one credit in). Retry only ever issues a bill once the
+ *     previous one is dead, but "dead" is our reading of the vendor's clock, and a shopper with a
+ *     screenshot of the old QR can still try it.
+ *   · "Dibayar setelah pesanan ditutup" — PAID landed on a `batal`/`retur` order (the order-expiry
+ *     cron cancelled it, or the seller did). `creditSaleForPayment` rightly skips it, and
+ *     `applyOrderStatusChange` only writes a refund for money that was ALREADY in at cancel time.
+ *
+ * MUST run after `creditSaleForPayment` for the same callback: the ledger's one sale decides which
+ * payment is the order's, so of two payments exactly one is credited and every other is owed back —
+ * deterministic, whatever order the two callbacks arrive in. Idempotent: the open-per-payment unique
+ * index, plus `not exists` so a callback replayed after the refund was SETTLED cannot reopen the debt.
+ * `amount_idr` follows 0112: what the buyer paid to us, pre-gateway-fee.
+ */
+export async function refundUncreditedPayment(db: Db, paymentId: string): Promise<void> {
+  await db.execute(sql`
+    insert into refunds (store_id, order_id, payment_id, amount_idr, reason)
+    select p.store_id, p.order_id, p.id, p.amount_idr,
+           case when o.status in ('batal', 'retur') then 'Dibayar setelah pesanan ditutup' else 'Pembayaran ganda' end
+      from payments p
+      join orders o on o.id = p.order_id
+     where p.id = ${paymentId}
+       and p.status = 'berhasil'
+       and p.method <> 'cod'
+       and (
+         o.status in ('batal', 'retur')
+         or exists (
+           select 1 from ledger_entries l
+            where l.order_id = o.id and l.kind = 'sale' and l.payment_id is distinct from p.id
+         )
+       )
+       and not exists (select 1 from refunds r where r.payment_id = p.id)
     on conflict do nothing
   `);
 }

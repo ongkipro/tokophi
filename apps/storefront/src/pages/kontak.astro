@@ -30,7 +30,6 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
 >
   <PageHeader
     crumbs={CRUMBS}
-    eyebrow="Kontak"
     title="Hubungi Kami"
     dek={`Ada pertanyaan seputar produk, ukuran, atau pesanan? Tim ${store.name} senang membantu.`}
   />
@@ -111,7 +110,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
         <div class="mt-6 flex flex-col gap-3">
           <button
             type="button"
-            data-open-chat
+            data-chat-open
             class="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-semibold text-cream transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
           >
             <MessageCircle class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
@@ -123,7 +122,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
               href={waHref}
               target="_blank"
               rel="noopener"
-              class="inline-flex items-center justify-center gap-2 rounded-full border border-line bg-white px-6 py-3 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-ink px-6 text-[0.9375rem] font-semibold text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Chat via WhatsApp
             </a>
@@ -138,9 +137,3 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
   </section>
 </Layout>
 
-<script is:inline>
-  // Open the real chat widget (Chat.astro mounts #chat-toggle on every page).
-  document.querySelector("[data-open-chat]")?.addEventListener("click", function () {
-    document.getElementById("chat-toggle")?.click();
-  });
-</script>

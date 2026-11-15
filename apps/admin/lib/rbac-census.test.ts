@@ -35,6 +35,8 @@ const CENSUS: Record<Capability, Holder> = {
   "products:write": "admin-too",
   "products:delete": "admin-too",
   "discounts:write": "admin-too",
+  // Affiliate programme (0125, ADR 0022) — switch, approve, rates, invite, mark paid; money moves outside TokoΦ.
+  "affiliates:write": "admin-too",
   "content:write": "admin-too",
   "orders:write": "admin-too",
   "inventory:write": "admin-too",
@@ -53,6 +55,9 @@ const CENSUS: Record<Capability, Holder> = {
   // Raw markup rendered with `set:html` on the shop's own origin, on the page carrying the COD order
   // form (name, WhatsApp, full address). No sanitizer, no CSP. 2026-07-30 decision.
   "landing:html": "owner-only",
+  // First-party plugins (ADR 0021): activating one ships every order's shopper PII to a third party.
+  // NOT folded into integrations:write — `advertiser` holds that one.
+  "plugins:manage": "owner-only",
 };
 
 const ROLES: Role[] = ["owner", "admin", "staff", "gudang"];
@@ -76,6 +81,13 @@ describe("the admin capability census", () => {
       const holders = ROLES.filter((r) => can(r, cap));
       expect(holders, `${cap} must be owner-only`).toEqual(["owner"]);
     }
+  });
+
+  it("plugins:manage reaches the owner and NO other role — advertiser and cs included", () => {
+    // The ROLES sweep above stops at gudang; the reason this capability exists separately from
+    // integrations:write is precisely the advertiser role, so check every role in the matrix.
+    const holders = (Object.keys(ROLE_CAPS) as Role[]).filter((r) => can(r, "plugins:manage"));
+    expect(holders).toEqual(["owner"]);
   });
 
   it("owner holds every capability, so a missing union entry locks everyone out instead", () => {

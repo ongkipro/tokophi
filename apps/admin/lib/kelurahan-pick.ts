@@ -40,3 +40,20 @@ export function pickKelurahan(
   if (!hit || hit.kaKelurahanId === null) return null;
   return { name: hit.name, kaKelurahanId: hit.kaKelurahanId };
 }
+
+/**
+ * The Mengantar area `_id` of the village the shopper named (SHIP-MENGANTAR), or `null`.
+ *
+ * Same rule as `pickKelurahan`, for the same reason: EXACT on the name (case/space-insensitive),
+ * never fuzzy, and a row whose bridge column is NULL is not a match — `kelurahan.mengantar_area_id`
+ * is written by the loader only on a unique match, so a NULL means "we do not know", and the caller
+ * falls back to the district's representative rather than guessing a neighbour village.
+ */
+export function pickMengantarKelurahan(
+  rows: readonly { name: string; mengantarAreaId: string | null }[],
+  name: string | null | undefined,
+): string | null {
+  const wanted = key(name ?? "");
+  if (!wanted) return null;
+  return rows.find((r) => key(r.name) === wanted)?.mengantarAreaId ?? null;
+}

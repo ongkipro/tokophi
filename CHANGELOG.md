@@ -2,6 +2,107 @@
 
 All notable changes. Dates are absolute. Phase: local backend done (Postgres + Drizzle, RBAC + RLS enforcing) · **rebranded to TokoΦ 2026-07-08** · focus = admin-client feature depth (VPS infra deferred).
 
+## 2026-11-14 — Affiliate: landing page, ekspor komisi, ubah data, reset kata sandi oleh tim (AFFILIATE-V11) — PR pending, belum di-merge
+
+- **Pembeli / landing page:** pesanan dari `/lp/<slug>` dan `/promo/<produk>` yang dibuka lewat link affiliate (`?ref=`, 30 hari) sekarang tercatat sebagai komisi affiliate — sama seperti checkout biasa.
+- **Seller:** Promo → Affiliate → Komisi: **Unduh CSV komisi** per rentang tanggal pesanan (hanya owner/admin/advertiser). Tab Affiliate: **Ubah data** affiliate (nama, WhatsApp, email, rekening, catatan) — kode dan komisi tidak berubah.
+- **Halaman `/affiliate` toko** menampilkan komisi standar (mis. 10%) dan kapan komisi bisa dibayar (mis. H+3).
+- **Super Admin → Affiliate:** daftar akun affiliate, **reset kata sandi** (kata sandi sementara tampil sekali, semua sesi dikeluarkan) dan **nonaktifkan / aktifkan** akun. "Lupa kata sandi?" di area affiliate sekarang menyebut bahwa tim TokoΦ bisa meresetnya, dengan kontak `ongkiardiansyah@gmail.com`.
+- Tanpa migrasi.
+
+## 2026-11-14 — Tampilan program affiliate dirapikan (AFFILIATE-UX) — PR pending, belum di-merge
+
+- **Affiliate (affiliate.tokophi.com):** ringkasan komisi dengan arti tiap status (Siap dibayar / Ditahan / Sudah dibayar) dan "Kapan komisi bisa dicairkan?"; tiap toko aktif punya tombol **Bagikan ke WhatsApp**, **Salin link**, **Salin kode**; status menunggu/ditolak/nonaktif dijelaskan dengan kata; riwayat komisi terbaca di HP; tombol tampilkan kata sandi; "Lupa kata sandi?" menjelaskan jujur bahwa reset belum ada. Menu jadi tab bawah di HP.
+- **Seller:** banner "pendaftar menunggu persetujuan", ringkasan ringkas, daftar affiliate dan komisi berbentuk kartu di HP, konfirmasi sebelum Tolak / Nonaktifkan / Tandai dibayar.
+- **Pembeli:** kolom "Kode affiliate" di checkout diberi keterangan (tidak mengubah harga). Tidak ada perubahan perhitungan komisi.
+
+## 2026-11-14 — Program affiliate toko, akun affiliate sendiri di affiliate.tokophi.com (ADR 0022, AFFILIATE-P2) — PR #476, merged (630f1345)
+
+- **Seller:** Pengaturan → **Affiliate** menyalakan program per toko (default mati). Promo → **Affiliate**: setujui/tolak pendaftar (badge di sidebar), tambah affiliate, undang ke akun affiliate (link 7 hari, sekali pakai), komisi per pesanan + **Tandai dibayar** (seller mentransfer sendiri, di luar TokoΦ), komisi standar, masa tahan, komisi per produk. Komisi tampil di daftar dan detail Pesanan.
+- **Affiliate:** akun **sendiri** (email + kata sandi, terpisah dari akun belanja) di `affiliate.tokophi.com`: daftar ke toko, kode + link `?ref=`, total ditahan/siap/dibayar, riwayat komisi tanpa data pembeli. Reset kata sandi lewat email belum ada.
+- **Pembeli:** link `?ref=` (30 hari) atau kode di checkout; kode salah tidak pernah menggagalkan pesanan.
+- **Dormant:** tanpa `AFFILIATE_APP_URL` area affiliate menjawab "belum dibuka" (503). Migrasi `0125_affiliate_programme`.
+
+## 2026-11-14 — Akun TokoΦ untuk pembeli, fase 1 (ADR 0016, BUYER-ACCOUNT-P1) — PR pending, belum di-merge
+
+- **Belanja tetap tanpa akun.** Setelah pesanan dibuat, halaman sukses boleh menawarkan **"Simpan ke Akun
+  TokoΦ"**: pembeli masuk dengan Google di `account.tokophi.com`, menyetujui toko itu ditampilkan, lalu bisa
+  memantau status, resi dan rincian pesanan dari banyak toko di satu tempat. Bisa memutus toko atau menutup
+  akun kapan saja. Tanpa kata sandi.
+- **Seller:** Pengaturan → **Layanan Pembeli** (jendela retur 2–90 hari kerja, jangka waktu penyelesaian komplain
+  1–60 hari kerja — kosong = pembeli tidak melihat apa pun); Pelanggan → **Akun Pembeli** (pelanggan yang
+  menyimpan pesanan ke akun); lencana "Terdaftar" dan tanda "Tersimpan di Akun TokoΦ" di riwayat pesanan
+  pelanggan. Toko tidak pernah melihat email, perangkat, atau pesanan pembeli di toko lain.
+- Migrasi `0121`–`0124` (hand-written, idempoten). App baru `apps/account` — **belum di-deploy** (belum ada
+  Dockerfile/compose); fitur mati sampai `ACCOUNT_CLAIM_SECRET` + `ACCOUNT_APP_URL` diisi. Affiliate toko = fase 2.
+
+## 2026-11-13 — Plugin toko: Kelola CRM, Aktif / Nonaktif (KEL-001, ADR 0021) — PR #469
+
+- **Pengaturan → Plugin** (khusus Pemilik toko): daftar plugin buatan TokoΦ, masing-masing dengan saklar
+  **Aktif / Nonaktif**. Plugin pertama: **Kelola CRM** (`kelolatim.com`) — pesanan COD dikirim ke Penjualan
+  Kelola saat dibuat, pesanan prabayar setelah lunas; keranjang yang ditinggal opsional. Status pesanan tetap
+  diatur di TokoΦ (satu arah).
+- **Nonaktif** = berhenti mengirim saat itu juga; URL, secret dan riwayat tetap tersimpan sehingga mengaktifkan
+  lagi tidak perlu menempel ulang. Pesanan yang masuk selama nonaktif **tidak dikirim otomatis** saat diaktifkan
+  lagi (bisa dikirim satu per satu lewat "Kirim ulang"). **Hapus koneksi** menghapus kredensial dan riwayat.
+- Toko yang tidak mengaktifkan plugin tidak berubah sama sekali (tanpa permintaan keluar). URL webhook hanya
+  diterima dari `kelolatim.com`. Migrasi `0120`, sidecar baru `cron-plugins` (deploy manual).
+
+## 2026-11-13 — Harga langganan baru + potongan kode untuk tagihan pertama (ADR 0020, BILL-PRICE-2026-11) — PR #468
+
+- **Harga langganan: Rp178.500/bulan** (DPP; PPN mengikuti saklar global seperti sebelumnya), **tahunan Rp1.713.600**
+  (= bulanan × 12 dikurangi 20%, setara Rp142.800/bulan). Uji coba tetap 3 hari. **Promo bulan pertama Rp50.000
+  dihapus** — tanpa kode, tagihan pertama berharga normal. Bayar tahunan langsung dari uji coba tetap 13 bulan.
+- **Satu kolom "Kode" di `/daftar`** (kode daftar ADR 0019 diperluas): Super Admin → Kode Daftar kini bisa memberi
+  kode **potongan tagihan pertama** (default Rp100.000; 0 = tanpa potongan). Toko yang mendaftar dengan kode itu
+  mendapat potongan **sekali**, di tagihan langganan pertama yang lunas: bulanan Rp78.500, tahunan Rp1.613.600.
+  Tautan `?kode=` adalah tautan referral. Kode lama tetap tanpa potongan.
+- **Faktur** mencetak "Potongan kode XXX −Rp100.000"; jenis tagihan (bulanan/tahunan) kini dibaca dari tagihannya,
+  bukan ditebak dari jumlahnya. Tagihan yang sudah terbit tidak pernah diubah harganya; toko lama pindah ke harga baru
+  di tagihan berikutnya.
+- Migrasi `0119` (hand-written, idempoten). Segmen Super Admin "Bulan 1" menjadi **"Tagihan 1"** (isi sama).
+
+## 2026-11-13 — Penyedia pengiriman per toko + kode daftar (ADR 0019, PR #466)
+
+- **Penyedia pengiriman kini dipilih per toko** (`stores.shipping_provider`, migrasi `0117`): default KiriminAja;
+  Super Admin memindahkan satu toko ke Mengantar (atau balik) dari halaman toko — peran owner, alasan wajib,
+  tercatat di log. Seller tidak memilih. Saklar platform tetap ada sebagai saklar darurat (KiriminAja = Mengantar
+  mati untuk semua toko). COD tetap KiriminAja.
+- **Kode daftar** (Super Admin → Kode Daftar): kode yang dimasukkan di `/daftar` (atau `?kode=`) menentukan
+  penyedia toko baru. Kode salah/nonaktif ditolak dengan satu kalimat jelas. Persetujuan Mengantar di halaman
+  daftar hanya muncul untuk kode Mengantar.
+- **Akun Mengantar hanya dibuat untuk toko yang diatur ke Mengantar** — tidak lagi untuk setiap toko yang
+  mendaftar. Seller KiriminAja tidak melihat kartu/banner Mengantar apa pun.
+
+## 2026-11-13 — "Bayar ulang": tagihan baru untuk pesanan yang sama (PAY-RETRY)
+
+- **Pembeli yang telat bayar (QRIS/VA/e-wallet kedaluwarsa) atau tagihannya gagal dibuat** kini bisa menekan
+  **Buat tagihan baru** di halaman sukses checkout — pesanan, jumlah, dan metode tetap sama. Dibuka oleh
+  rahasia satu-pesanan yang hanya dimiliki browser pembeli (bukan nomor pesanan); paling banyak satu tagihan
+  hidup per pesanan; maksimal 5 percobaan; ditutup 15 menit sebelum pesanan dibatalkan otomatis (24 jam).
+- **Uang yang masuk dua kali atau masuk setelah pesanan dibatalkan** kini tercatat sebagai `refunds`
+  (Super Admin → Pencairan), bukan sekadar log. Ledger tetap satu penjualan per pesanan.
+- **Jam "Bayar sebelum"** kini dibaca sebagai WIB di server (sebelumnya meleset 1–2 jam untuk pembeli di
+  WITA/WIT, dan hilang di Safari). Kedaluwarsa tagihan disimpan (`payments.expires_at`, migrasi `0118`).
+- **Seller:** tagihan kedaluwarsa tidak lagi memblokir "Buat tagihan"; detail pesanan menampilkan status
+  "Kedaluwarsa", "Berlaku sampai", dan riwayat tagihan. Cron pembatalan menunggu selama tagihan masih hidup.
+
+## 2026-11-13 — Mengantar live untuk toko demo; CSP checkout dibereskan
+
+- **Pengiriman lewat Mengantar (ADR 0018).** Tiap toko bisa punya akun seller Mengantar sendiri, didaftarkan
+  TokoΦ lewat Partner API (tanpa kolom API key, dengan persetujuan pemilik). Switch provider di Super Admin;
+  ongkir non-COD toko yang terhubung dihitung Mengantar, COD dan toko yang belum terhubung tetap KiriminAja.
+  Ongkir dibayar dari saldo Mengantar seller sendiri — tidak ada potongan di ledger TokoΦ. Live di production
+  sejak 2026-11-12 untuk toko demo `batiknusantara` (akun Mengantar milik owner, gudang Pakis Surabaya).
+  Toko lain menunggu origin Partner production + whitelist IP dari Mengantar. (#446, #457, #459)
+- **Bug deploy: jembatan area Mengantar terhapus tiap deploy** (seed area meng-truncate tabelnya) → dibangun
+  ulang otomatis setelah seed. (#458)
+- **`idempotencyKey` Mengantar terbukti di sandbox:** key sama dikirim dua kali = satu kiriman. (#460)
+- **CSP checkout:** `connect-src` toko kini memuat origin API Seller (`app.tokophi.com`) dari nilai env yang sama
+  dengan yang dipakai checkout — sebelumnya, begitu CSP dipaksakan, ongkir dan pesanan akan mati. (#462)
+- **Docs:** aturan Mengantar di `rules/shipping-cod.md`, SECURITY.md, ADR 0018 + catatan di ADR 0004/0015, PRD,
+  FLOWS §5.1, STATUS. (#461, PR ini)
+
 ## Unreleased — 2026-09-08 — Sweep: peta pengembangan 1:1 dengan kode, 14 task terbuka dieksekusi
 
 - **Dokumen jadi benar lagi.** Root `TASKS.md` punya baris Status di tiap task (19 sebelumnya tanpa) + 17 task

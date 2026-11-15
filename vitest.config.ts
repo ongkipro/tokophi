@@ -42,5 +42,11 @@ export default defineConfig({
     // every copy racing the others for the one `_test` database. Same trap `scripts/gen-page-map.mjs`
     // hit on its first run.
     exclude: [...configDefaults.exclude, "**/.claude/**"],
+    // Vitest's 5 s / 10 s defaults are too tight on a shared machine: the source guards walk the whole
+    // tree and the DB suites migrate and seed. Measured 2026-10-29 at load average ~28 (other agents'
+    // builds and browsers): `page-map-fresh`, `cname-target` and `public/order` timed out, then passed
+    // in isolation. Still bounded - a hang fails.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

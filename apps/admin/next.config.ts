@@ -1,5 +1,24 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+// Relative on purpose: next.config.ts is loaded before `transpilePackages` applies, so a workspace
+// specifier cannot be resolved here. Pure module, no imports of its own.
+import { ADMIN_CSP_REPORT_ONLY, CSP_REPORT_ONLY_HEADER } from "../../packages/lib/src/csp";
+
+// Browser-side hardening (2026-11 review item 5). None of these is set by Cloudflare, so a live
+// `curl -I` showed only HSTS. Nothing in this app is ever framed by another origin (the theme
+// preview is a same-origin portal into an src-less iframe), so DENY costs nothing and closes
+// clickjacking on the credential/payout screens. CSP is deliberately NOT here: it needs a
+// Report-Only rollout first.
+const SECURITY_HEADERS = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  // REPORT-ONLY (blocks nothing): measure what the surface really loads before enforcing. Reports land
+  // in app/api/csp-report. Production only — `next dev` uses eval and would drown the signal.
+  ...(process.env.NODE_ENV === "production" ? [{ key: CSP_REPORT_ONLY_HEADER, value: ADMIN_CSP_REPORT_ONLY }] : []),
+];
 
 const nextConfig: NextConfig = {
   turbopack: {
@@ -17,6 +36,15 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+      // ⚠️ NOT /api/uploads/*. That route sets its OWN `Content-Security-Policy: sandbox; default-src
+      // 'none'` on SVGs — the only thing stopping a stored `<svg><script>` from running on this origin
+      // when someone opens the file directly — and a config header with the same key REPLACES it.
+      // Measured 2026-11-02 (independent review): with the blanket rule the SVG came back with only
+      // `frame-ancestors 'none'`. The route also sets its own nosniff.
+      {
+        source: "/((?!api/uploads/).*)",
+        headers: SECURITY_HEADERS,
       },
       // EXCEPTION — merchant-uploaded media. These files live behind the admin app but are embedded
       // on the PUBLIC storefronts (storefront `mediaUrl()` rewrites /api/uploads/* onto the admin

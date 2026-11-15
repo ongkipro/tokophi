@@ -19,6 +19,7 @@ import {
   unique,
   index,
   uniqueIndex,
+  foreignKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -266,9 +267,10 @@ export const stores = pgTable("stores", {
   timezone: text().notNull().default("Asia/Jakarta"),
   plan: planKey().notNull().default("pemula"),
   status: storeStatus().notNull().default("trial"),
-  // Subscription lifecycle (single plan, all features): 3-day free trial → 50rb first month →
-  // 275rb/month. trialEndsAt = end of free trial; currentPeriodEnd = end of the paid period;
-  // firstInvoicePaid flips the recurring price from the 50rb promo to 275rb.
+  // Subscription lifecycle (single plan, all features; ADR 0020): 3-day free trial →
+  // Rp178.500/month (annual Rp1.713.600). trialEndsAt = end of free trial; currentPeriodEnd = end of the paid period;
+  // firstInvoicePaid: the store has paid a subscription invoice (set by pay/callback). Since ADR 0020 it no
+  // longer changes the price; it ends the annual bonus month and the signup-code discount.
   trialEndsAt: ts(),
   currentPeriodEnd: ts(),
   firstInvoicePaid: boolean().notNull().default(false),
@@ -306,6 +308,14 @@ export const stores = pgTable("stores", {
   // the queue cannot re-fill with stores that have already been vetted. Stores that existed before
   // this column were backfilled to `created_at`: they were onboarded by an operator by hand.
   approvedAt: ts(),
+  // 0117 / ADR 0019: which provider quotes this store's NON-COD checkouts — 'kiriminaja' (default) |
+  // 'mengantar'. Written only by Super Admin (`setStoreShippingProvider`, owner rank) and by a signup
+  // code (`provisionStore`); the seller never chooses. Read by the ONE dispatch (`quoteShipping`) and by
+  // every Mengantar registration path (`mengantar-account.ts`): an account is registered only for a
+  // store set to 'mengantar'. text + CHECK, not an enum (see the migration header).
+  shippingProvider: text().notNull().default("kiriminaja"),
+  // 0117: the signup code this store registered with (FK → signup_codes.code). NULL = none.
+  signupCode: text().references((): AnyPgColumn => signupCodes.code, { onDelete: "restrict" }),
   // Branding read-only by the storefront/checkout (ADR 0009 — checkout is locked/uniform,
   // only pulls these tokens; NOT part of the drag-drop Store Builder).
   logoUrl: text(),
@@ -517,6 +527,9 @@ export const products = pgTable(
     // is retired forever, because handing it to the next variant re-points a live catalog item at a
     // different SKU — a silent mis-attribution, not an error.
     variantSeqNext: integer().notNull().default(1),
+    // Affiliate commission override in basis points (0125, ADR 0022). NULL = the store default
+    // (`store_settings.affiliate_rate_bps`); 0 is a real "no commission on this product". 0–10000 (check).
+    affiliateRateBps: integer(),
   },
   (t) => [unique().on(t.storeId, t.handle), unique().on(t.storeId, t.number)],
 );
@@ -959,6 +972,9 @@ export const orders = pgTable("orders", {
   // session, and NULLs do not collide. TEXT, not uuid: this is `checkout_sessions.session_id`, the
   // string the storefront generates and the API receives — not that row's primary key.
   checkoutSessionId: text(),
+  // PAY-RETRY (0118) — sha256 hex of the shopper-held secret that authorises
+  // `/api/public/pay/retry` for THIS order. Never the token itself. NULL = COD or pre-0118.
+  payTokenHash: text(),
 
   // KiriminAja shipment (set when "Buat Pengiriman" succeeds)
   awb: text(),
@@ -994,6 +1010,17 @@ export const orders = pgTable("orders", {
   // dump — the raw tracking response goes to the cron log, never into this column.
   problemNote: text(),
   kaOrderId: text(),
+  // 0116 (SHIP-MENGANTAR): which provider this order was quoted/booked with — NULL = legacy = KiriminAja.
+  // Tracking, cancel, label and payment follow THIS stamp, never the current platform switch.
+  shippingProvider: text(),
+  shipMengantarAreaId: text(),
+  mgOrderId: text(), // Mengantar shipment _id — what DELETE /order cancels by
+  mgOrderCode: text(), // Mengantar ORDER_ID — polled while cnote_no is still null
+  mgBatchId: text(), // for POST /order/pay-unpaid
+  mgIsPaid: boolean(), // false = booked but unpaid (the seller's Mengantar wallet was short); null = pay requested, unconfirmed
+  mgCourier: text(), // booking courier name (shipmentName of the estimate key)
+  mgEnv: text(), // sandbox | production — the env the shipment was booked in
+  mgSellerId: text(), // Partner sellerId whose key booked it; tracking/cancel/pay use THAT account
   // ── What the COURIER's own booking costs, and who settles it ─────────────────────────────────
   // ONE booking call carries TWO different money flows, and conflating them is how a parcel sits
   // unpaid while every screen reads "dibooking":
@@ -1135,6 +1162,10 @@ export const payments = pgTable("payments", {
   requestState: paymentRequestState(),
   requestError: text(),
   requestUpdatedAt: ts(),
+  // PAY-RETRY (0118). When the provider stops accepting this instruction; NULL = unknown, bounded
+  // conservatively by `lib/pay-retry.ts`. `createdAt` orders several attempts on one order.
+  expiresAt: ts(),
+  createdAt: createdAt(),
 }, (t) => [
   index("payments_trx_idx")
     .on(t.trxId)
@@ -1713,6 +1744,197 @@ export const refunds = pgTable(
   }),
 );
 
+// ── TokoΦ Account (0121–0122, ADR 0016, BUYER-ACCOUNT-P1) ─────────────────────────────────────────
+// One platform identity per person (apps/account). Cross-tenant: no store_id; RLS on with NO policy,
+// so `tokophi_app` (every Seller path) sees zero rows. apps/account reads with an explicit buyer_id.
+export const buyerAccounts = pgTable("buyer_accounts", {
+  id: pk(),
+  /** Google `sub`. `dev:<email>` only from the local dev sign-in (refused in production builds);
+   *  `closed:<id>` once the account is closed, so the same Google account starts a new one. */
+  googleSub: text().notNull().unique(),
+  email: text(),
+  name: text(),
+  /** active | suspended | closed (check constraint in 0121). */
+  status: text().notNull().default("active"),
+  createdAt: createdAt(),
+});
+export const buyerSessions = pgTable(
+  "buyer_sessions",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    createdAt: createdAt(),
+    lastSeenAt: createdAt(),
+    revokedAt: ts(),
+    userAgent: text(),
+  },
+  (t) => [index("buyer_sessions_buyer_idx").on(t.buyerId)],
+);
+// A claim (one claimant per order) + the store link it consents to are the ONLY bridge from an account
+// to a store's orders — never an email/phone match. Both carry store_id ⇒ standard tenant policy: the
+// Seller sees its own rows (the merchant projection ADR 0016 allows) and never the account behind them.
+export const buyerStoreLinks = pgTable(
+  "buyer_store_links",
+  {
+    id: pk(),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    customerId: uuid().references(() => customers.id),
+    /** active | revoked (check constraint in 0122). */
+    status: text().notNull().default("active"),
+    consentVersion: text().notNull(),
+    consentedAt: createdAt(),
+    revokedAt: ts(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("buyer_store_links_buyer_id_store_id_unique").on(t.buyerId, t.storeId),
+    index("buyer_store_links_store_idx").on(t.storeId),
+  ],
+);
+export const buyerOrderClaims = pgTable(
+  "buyer_order_claims",
+  {
+    id: pk(),
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    buyerId: uuid()
+      .notNull()
+      .references(() => buyerAccounts.id),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    claimedAt: createdAt(),
+  },
+  (t) => [index("buyer_order_claims_buyer_idx").on(t.buyerId, t.storeId)],
+);
+
+// ── Store affiliate programme (0125, ADR 0022, specs/AFFILIATE_SPEC.md) ──────────────────────────────
+// The merchant pays affiliates OUTSIDE TokoΦ: nothing here touches `ledger_entries` or `payouts`.
+// The affiliate's identity is its OWN account (email + password at affiliate.tokophi.com) — never a
+// buyer account. `affiliate_accounts` / `affiliate_sessions`: cross-tenant, no store_id, RLS on with NO
+// policy (tokophi_app sees nothing); apps/affiliate reads with an explicit account predicate.
+export const affiliateStatus = pgEnum("affiliate_status", ["menunggu", "aktif", "ditolak", "nonaktif"]);
+export const affiliateCommissionStatus = pgEnum("affiliate_commission_status", ["pending", "dibayar", "batal"]);
+
+export const affiliateAccounts = pgTable("affiliate_accounts", {
+  id: pk(),
+  /** Lower-cased (check constraint) and unique — the sign-in identifier. */
+  email: text().notNull().unique(),
+  name: text().notNull(),
+  /** Canonical `62…` (normalizePhone). Used for every store application this account makes. */
+  phone: text().notNull(),
+  /** scrypt `salt:hash` (@tokophi/lib/password). */
+  passwordHash: text().notNull(),
+  createdAt: createdAt(),
+  /** Set = cannot sign in (support action); live sessions are refused on the next request. */
+  disabledAt: ts(),
+});
+export const affiliateSessions = pgTable(
+  "affiliate_sessions",
+  {
+    id: pk(),
+    /** sha256 hex of the opaque cookie token. The token itself is never stored. */
+    tokenHash: text().notNull().unique(),
+    accountId: uuid()
+      .notNull()
+      .references(() => affiliateAccounts.id),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    lastSeenAt: createdAt(),
+    revokedAt: ts(),
+    userAgent: text(),
+  },
+  (t) => [index("affiliate_sessions_account_idx").on(t.accountId)],
+);
+export const affiliates = pgTable(
+  "affiliates",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    /** The affiliate account owning this per-store row — one account, many stores. Set by applying while
+     *  signed in or by accepting the seller's invitation; NEVER by email/phone match. */
+    accountId: uuid().references((): AnyPgColumn => affiliateAccounts.id),
+    /** Upper-case, `[A-Z0-9]{3,20}` — what the shopper types and what `?ref=` carries. Unique per store. */
+    code: text().notNull(),
+    name: text().notNull(),
+    /** Canonical `62…` (normalizePhone) — unique per store, and the self-referral check against the buyer. */
+    phone: text().notNull(),
+    email: text(),
+    bankName: text(),
+    bankAccount: text(),
+    bankHolder: text(),
+    status: affiliateStatus().notNull().default("menunggu"),
+    /** Applicant's pitch (where they promote) or the merchant's note. */
+    note: text(),
+    /** sha256 of the seller-issued invitation token (7 days, single use: cleared on accept). */
+    inviteHash: text(),
+    inviteExpiresAt: ts(),
+    createdAt: createdAt(),
+    approvedAt: ts(),
+  },
+  (t) => [
+    unique("affiliates_store_id_code_unique").on(t.storeId, t.code),
+    unique("affiliates_store_id_phone_unique").on(t.storeId, t.phone),
+    unique("affiliates_store_id_account_id_unique").on(t.storeId, t.accountId),
+    // Target of affiliate_commissions' composite FK: a commission names an affiliate of its OWN store.
+    unique("affiliates_id_store_id_unique").on(t.id, t.storeId),
+    index("affiliates_store_status_idx").on(t.storeId, t.status),
+    index("affiliates_account_idx").on(t.accountId),
+    uniqueIndex("affiliates_invite_hash_idx").on(t.inviteHash).where(sql`${t.inviteHash} is not null`),
+  ],
+);
+export const affiliateCommissions = pgTable(
+  "affiliate_commissions",
+  {
+    id: pk(),
+    storeId: uuid()
+      .notNull()
+      .references(() => stores.id),
+    /** FK is COMPOSITE (affiliate_id, store_id) → affiliates (id, store_id), declared below. */
+    affiliateId: uuid().notNull(),
+    /** One commission per order, ever — the database's guarantee, not a check-then-write. */
+    orderId: uuid()
+      .notNull()
+      .unique()
+      .references(() => orders.id),
+    /** `kode` = typed at checkout · `link` = captured `?ref=` (check constraint). */
+    source: text().notNull(),
+    /** Goods value after discount that the rate applied to (frozen at order time). ≥ 0 (check). */
+    baseIdr: money().notNull().default(0),
+    /** ≥ 0 (check). */
+    commissionIdr: money().notNull().default(0),
+    /** Human-readable rate snapshot, e.g. "10%" or "10% / 20%" (per product). */
+    rateNote: text(),
+    status: affiliateCommissionStatus().notNull().default("pending"),
+    /** Set when the order reaches `selesai` (+ hold days). Pending AND eligible_at <= now() = payable. */
+    eligibleAt: ts(),
+    paidAt: ts(),
+    paidNote: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "affiliate_commissions_affiliate_store_fk",
+      columns: [t.affiliateId, t.storeId],
+      foreignColumns: [affiliates.id, affiliates.storeId],
+    }),
+    index("affiliate_commissions_store_idx").on(t.storeId, t.status),
+    // The affiliate's own ledger joins and filters on this pair; the store index cannot serve it.
+    index("affiliate_commissions_affiliate_idx").on(t.affiliateId, t.status),
+  ],
+);
+
 // Platform-side payout policy (single row).
 export const platformPayout = pgTable("platform_payout", {
   id: pk(),
@@ -1744,6 +1966,9 @@ export const storeSettings = pgTable("store_settings", {
   senderKecamatanName: text(),
   senderKelurahanId: integer(),
   senderKelurahanName: text(),
+  // 0116 (SHIP-MENGANTAR): the seller's origin as a Mengantar area `_id`. The registered pickup
+  // address lives on `store_mengantar_accounts` (it belongs to ONE seller account in ONE env).
+  senderMengantarAreaId: text(),
   // Postcode of the chosen kelurahan. KiriminAja's `request_pickup` SENDER has no zipcode field
   // (only `destination_zipcode`, for the buyer), so this is NOT sent as its own key — it rides in the
   // written pickup `address` that the rider actually reads, together with the kelurahan name. That is
@@ -1766,6 +1991,15 @@ export const storeSettings = pgTable("store_settings", {
   // Which SERVICES may carry it is not a merchant choice — KiriminAja reports a per-service `cod`
   // flag (see kaServices()), and the platform narrows that further. See ADR/BACKLOG.
   codEnabled: boolean().notNull().default(false),
+  /** Working days after receipt the store accepts a return request (2–90, check in 0123; floor = PP 80/2019 Pasal 69(1)). NULL = not declared. */
+  returnWindowDays: integer(),
+  /** Working days within which the store commits to resolve a complaint (1–60, check in 0124; PP 80/2019 Pasal 27(2)(e)). NULL = not declared. */
+  complaintResolutionDays: integer(),
+  // Store affiliate programme (0125, ADR 0022). The SELLER's own switch, OFF by default: an existing store
+  // never starts attributing commissions on deploy. Rate in basis points (0–10000), hold in days (0–90).
+  affiliateEnabled: boolean().notNull().default(false),
+  affiliateRateBps: integer().notNull().default(1000),
+  affiliateHoldDays: integer().notNull().default(3),
   // Automatic free shipping (PROMO P1) — when enabled, an order whose goods subtotal ≥ free_ship_min_idr
   // gets its ongkir zeroed by /api/public/order (server-priced, never a client claim). 0 min = always.
   freeShipEnabled: boolean().notNull().default(false),
@@ -1804,6 +2038,9 @@ export const kiriminajaAreas = pgTable("kiriminaja_areas", {
   // address we only know to the district. NULL (~4%: districts with no kelurahan rows) ⇒ omitted.
   lat: doublePrecision(),
   lng: doublePrecision(),
+  // 0116: a deterministic representative Mengantar kelurahan `_id` of this kecamatan — used to QUOTE
+  // when no kelurahan was picked. NULL = not matched (resolved live, never guessed).
+  mengantarAreaId: text(),
 });
 
 // Kelurahan (village) + its postcode, under a KiriminAja district. Migration 0046 created the
@@ -1836,6 +2073,8 @@ export const kelurahan = pgTable(
     // fall back to the district centroid, then omit — never 0,0.
     lat: doublePrecision(),
     lng: doublePrecision(),
+    // 0116: Mengantar area `_id` for this kelurahan, written ONLY on a unique match (load-mengantar-areas.mjs).
+    mengantarAreaId: text(),
   },
   // The ONLY access pattern: "give me the kelurahan of the district the shopper just picked".
   // 78k rows, read on every checkout — without this it is a seq scan (25ms) per selection.
@@ -1877,6 +2116,144 @@ export const shippingAggregator = pgTable("shipping_aggregator", {
   sandboxTestedAt: ts(),
   productionTestedAt: ts(),
 });
+
+// 0116 (SHIP-MENGANTAR): Mengantar's own area catalogue — kelurahan grain, 24-hex `_id`. Reference data
+// imported from 99ribu's harvest (scripts/load-mengantar-areas.mjs), NOT store-scoped (no RLS).
+export const mengantarAreas = pgTable(
+  "mengantar_areas",
+  {
+    id: text().primaryKey(),
+    province: text().notNull(),
+    city: text().notNull(),
+    district: text().notNull(),
+    subdistrict: text().notNull(),
+    postalCode: text().notNull().default(""),
+    datasetVersion: text().notNull(),
+  },
+  (t) => ({
+    postalIdx: index("mengantar_areas_postal_idx").on(t.postalCode),
+    districtIdx: index("mengantar_areas_district_idx").on(t.district, t.city),
+  }),
+);
+
+// 0116: the platform shipping switch (one row, id = 1). `activeProvider` decides who QUOTES new
+// checkouts (stores without a connected Mengantar account fall back to KiriminAja); an existing order
+// follows its own `orders.shipping_provider`. The Mengantar PARTNER credential is per environment, the
+// secret AES-GCM at rest (same helper as shipping_aggregator 0111) — swappable (owner O1).
+export const shippingProviderConfig = pgTable("shipping_provider_config", {
+  id: smallint().primaryKey().default(1),
+  activeProvider: text().notNull().default("kiriminaja"),
+  mengantarSandboxPartnerId: text(),
+  mengantarSandboxPartnerSecretEnc: text(),
+  mengantarProductionPartnerId: text(),
+  mengantarProductionPartnerSecretEnc: text(),
+  updatedAt: ts().notNull().defaultNow(),
+});
+
+// 0117 / ADR 0019: signup codes made in Super Admin; each maps a self-serve signup to a provider.
+// Platform table (no store_id), RLS on with NO policy — owner pool only (signup + Super Admin). Never
+// deleted (deactivated), so `stores.signup_code` always names a row. `code` is canonical upper-case
+// (`@tokophi/lib/signup-code` normalises; a CHECK pins the shape).
+export const signupCodes = pgTable("signup_codes", {
+  code: text().primaryKey(),
+  shippingProvider: text().notNull(),
+  // 0119 / ADR 0020: IDR (DPP) off the FIRST PAID subscription invoice of a store that signed up with
+  // this code; 0 = provider-only code. Set at creation, never edited; honoured after deactivation.
+  discountFirstInvoiceIdr: money().notNull().default(0),
+  active: boolean().notNull().default(true),
+  note: text(),
+  createdBy: uuid().references((): AnyPgColumn => platformAdmins.id, { onDelete: "set null" }),
+  createdAt: ts().notNull().defaultNow(),
+  updatedAt: ts().notNull().defaultNow(),
+});
+
+// 0116 (Mengantar PARTNER model): one Mengantar seller account per (store, env), registered by TokoΦ
+// with the owner's TokoΦ email. RLS (store_id). `apiKeyEnc` = AES-GCM under
+// `mengantarKeyScope(storeId, env, sellerId, keyVersion)` (packages/db/src/mengantar-account.ts).
+export const storeMengantarAccounts = pgTable(
+  "store_mengantar_accounts",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    env: text().notNull(),
+    externalUserId: text().notNull(),
+    partnerId: text(),
+    sellerId: text(),
+    state: text().notNull().default("pending"),
+    ownerEmail: text(),
+    ownerName: text(),
+    ownerPhone: text(),
+    consentSource: text(),
+    consentBy: uuid(),
+    consentedAt: ts(),
+    apiKeyEnc: text(),
+    keyHint: text(),
+    keyVersion: integer().notNull().default(0),
+    pickupAddressId: text(),
+    attempts: integer().notNull().default(0),
+    lastErrorCode: text(),
+    lastError: text(),
+    retryAfterAt: ts(),
+    connectedAt: ts(),
+    createdAt: ts().notNull().defaultNow(),
+    updatedAt: ts().notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.env], name: "store_mengantar_accounts_pk" })],
+);
+
+// KEL-001 / ADR 0021 (migration 0120): first-party plugins a store has activated — AdsBookCMS
+// `plugins` + store_id. No row = dormant. `settings` is non-secret; credentials live sealed in
+// `secretEnc` (scope `<plugin>:<store_id>:v<secretV>`). Store-scoped → RLS.
+export const storePlugins = pgTable(
+  "store_plugins",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    plugin: text().notNull(),
+    enabled: boolean().notNull().default(false),
+    settings: jsonb().notNull().default({}),
+    secretEnc: text(),
+    secretV: integer().notNull().default(0),
+    connectedAt: ts(),
+    brokenAt: ts(),
+    activatedAt: ts(),
+    // When the store last switched it OFF (null while on). Re-activation marks what arrived since as
+    // skipped — never back-filled (KEL-001, owner "aktif / nonaktif").
+    disabledAt: ts(),
+    updatedAt: ts().notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.plugin], name: "store_plugins_pk" })],
+);
+
+// The Kelola plugin's own push state (0120). NO foreign key to orders / checkout_sessions on purpose:
+// a plugin never blocks the core from deleting a row. claimedAt = the 5-minute send lease.
+export const pluginKelolaOrders = pgTable(
+  "plugin_kelola_orders",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    orderId: uuid().notNull(),
+    claimedAt: ts(),
+    syncedAt: ts(),
+    gaveUpAt: ts(),
+    attempts: integer().notNull().default(0),
+    lastError: text(),
+    lastNote: text(),
+    remoteId: text(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.orderId], name: "plugin_kelola_orders_pk" })],
+);
+
+export const pluginKelolaLeads = pgTable(
+  "plugin_kelola_leads",
+  {
+    storeId: uuid().notNull().references(() => stores.id),
+    sessionId: uuid().notNull(),
+    claimedAt: ts(),
+    syncedAt: ts(),
+    gaveUpAt: ts(),
+    attempts: integer().notNull().default(0),
+    lastError: text(),
+  },
+  (t) => [primaryKey({ columns: [t.storeId, t.sessionId], name: "plugin_kelola_leads_pk" })],
+);
 
 export const platformCouriers = pgTable("platform_couriers", {
   id: pk(),
@@ -1986,6 +2363,12 @@ export const invoices = pgTable("invoices", {
   // never a derivation: since the platform PPN toggle exists, "total / 1.11" would invent tax on a
   // toggle-off invoice. Backfilled for historical rows, which were all PPN-inclusive.
   taxIdr: money().notNull().default(0),
+  // 0119 / ADR 0020: the signup-code discount (DPP) THIS invoice carries and the code it came from,
+  // stored at creation so the faktur prints "Potongan kode XXX" from the row, never from today's code.
+  // `amountIdr` already has it taken off; list price = amountIdr − taxIdr + codeDiscountIdr.
+  // At most ONE live (menunggu) discounted invoice per store: `invoices_one_live_code_discount` (SQL-only).
+  codeDiscountIdr: money().notNull().default(0),
+  discountCode: text(),
   status: invoiceStatus().notNull().default("menunggu"),
   // subscription payment (AutoLaris VA) matching + kind
   // "subscription" = a bill the merchant pays · "comp" = a period the platform GRANTED (0113):

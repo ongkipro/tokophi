@@ -14,7 +14,7 @@
 // Verified pixel-for-pixel against the old markup on 40 rating widgets across `/`, `/produk`, a PDP
 // (both `sm` and `md`) and a category page: byte-identical crops at DPR 2 and DPR 8, and at DPR 3 a
 // worst case of **2 pixels out of 45.288 differing by 5/255** on the fractional-fill clip edge.
-// ⚠️ Keep the two layers. The fill colour is CSS (`text-line` / `text-brand-500` + `fill-current`) so
+// ⚠️ Keep the two layers. The fill colour is CSS (`text-line` / `text-ink` + `fill-current`) so
 // it follows the merchant's scheme; folding them into one <svg> with a gradient would need literal
 // colour values and per-instance ids, and the rating would stop tracking the store's brand.
 interface Props {
@@ -42,7 +42,7 @@ const label = `Rating ${value.toFixed(1)} dari 5${count != null ? `, ${count} ul
     <svg width={W} height={PX} viewBox={`0 0 ${W} ${PX}`} class="block shrink-0 fill-current text-line">
       {stars.map((i) => <path transform={`translate(${i * (PX + GAP)}) scale(${PX / 20})`} d={STAR} />)}
     </svg>
-    <div class="absolute inset-0 overflow-hidden text-brand-500" style={`width:${pct}%`}>
+    <div class="absolute inset-0 overflow-hidden text-ink" style={`width:${pct}%`}>
       <svg width={W} height={PX} viewBox={`0 0 ${W} ${PX}`} class="block shrink-0 fill-current">
         {stars.map((i) => <path transform={`translate(${i * (PX + GAP)}) scale(${PX / 20})`} d={STAR} />)}
       </svg>

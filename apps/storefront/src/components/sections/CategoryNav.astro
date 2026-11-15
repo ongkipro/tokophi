@@ -63,7 +63,7 @@ const SIZES = "(min-width: 768px) 200px, 33vw";
 
 {
   items.length > 0 && (
-    <section class="mx-auto max-w-7xl px-4 py-12 sm:px-6" data-catnav>
+    <section class="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12" data-catnav>
       <div class="relative">
         {/* PREV / NEXT — desktop only, and only when the shelf overflows. A mouse cannot swipe, so a
             horizontal shelf without arrows is unreachable past the fold on desktop. The script
@@ -73,7 +73,7 @@ const SIZES = "(min-width: 768px) 200px, 33vw";
             type="button"
             data-catnav-prev
             aria-label="Kategori sebelumnya"
-            class="absolute -left-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-cream/95 text-ink shadow-md backdrop-blur transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-0 lg:flex"
+            class="absolute -left-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full border border-ink bg-cream text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-0 lg:flex"
           >
             <ArrowRight class="size-5 rotate-180" stroke-width={1.75} aria-hidden="true" />
           </button>
@@ -83,7 +83,7 @@ const SIZES = "(min-width: 768px) 200px, 33vw";
             type="button"
             data-catnav-next
             aria-label="Kategori berikutnya"
-            class="absolute -right-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-cream/95 text-ink shadow-md backdrop-blur transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-0 lg:flex"
+            class="absolute -right-3 top-1/2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full border border-ink bg-cream text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-0 lg:flex"
           >
             <ArrowRight class="size-5" stroke-width={1.75} aria-hidden="true" />
           </button>
@@ -103,7 +103,7 @@ const SIZES = "(min-width: 768px) 200px, 33vw";
               <a
                 href={safeHref(item.href)}
                 class:list={[
-                  "group relative block overflow-hidden rounded-md bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+                  "group relative block overflow-hidden rounded-sm bg-mist-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
                   aspectClass,
                 ]}
               >
@@ -114,10 +114,10 @@ const SIZES = "(min-width: 768px) 200px, 33vw";
                     sizes={imageSrcSet(item.imageUrl) ? SIZES : undefined}
                     alt=""
                     loading="lazy"
-                    class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                    class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03] motion-reduce:group-hover:scale-100"
                   />
                 ) : (
-                  <span class="block h-full w-full bg-gradient-to-br from-brand-100 to-brand-200" aria-hidden="true" />
+                  <span class="block h-full w-full bg-gradient-to-br from-mist-strong to-mist-strong" aria-hidden="true" />
                 )}
                 {/* The name is on the photo, so it is white over a bottom scrim — the same treatment as
                     the hero and the fallback category tiles, so a catalogue gap looks intentional. */}

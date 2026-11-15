@@ -1,0 +1,24 @@
+---
+// "Kapan komisi bisa dicairkan?" — the commission lifecycle in four plain steps, each naming the status
+// word the affiliate sees in the ledger. A native disclosure; open by default until money has been paid.
+import type { MyStore } from "../data/affiliate";
+
+interface Props {
+  stores: Pick<MyStore, "holdDays">[];
+  open?: boolean;
+}
+const { stores, open = false } = Astro.props;
+const days = [...new Set(stores.map((s) => s.holdDays))];
+const hold = days.length === 1 ? `${days[0]} hari` : "beberapa hari (tergantung toko)";
+---
+<details class="explain" open={open}>
+  <summary>Kapan komisi bisa dicairkan?</summary>
+  <div class="explain-body">
+    <ol class="steps">
+      <li><div><strong>Pembeli memesan lewat link atau kode Anda</strong><span>Komisi langsung tercatat sebagai "Pesanan belum selesai".</span></div></li>
+      <li><div><strong>Pesanan selesai, lalu masa tahan {hold}</strong><span>Status "Ditahan" — waktu untuk pembeli mengajukan retur.</span></div></li>
+      <li><div><strong>Lewat masa tahan: "Siap dibayar"</strong><span>Toko mentransfer komisi langsung ke rekening Anda, di luar TokoΦ.</span></div></li>
+      <li><div><strong>Toko menandai lunas: "Sudah dibayar"</strong><span>Pesanan yang batal atau diretur tidak menghasilkan komisi.</span></div></li>
+    </ol>
+  </div>
+</details>

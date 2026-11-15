@@ -1,6 +1,6 @@
 import "server-only";
 import { schema } from "@tokophi/db";
-import { eq, asc, desc, sql } from "drizzle-orm";
+import { and, eq, asc, desc, sql } from "drizzle-orm";
 import { withCurrentTenant } from "@/lib/tenant";
 import {
   shipmentPaymentState,
@@ -8,7 +8,9 @@ import {
   type ShipmentPaymentState,
 } from "@/lib/shipment-payment";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
+import { instructionState } from "@/lib/pay-retry";
 import { weightForOrder } from "@/lib/shipping-weight";
+import { commissionState, type CommissionState } from "@/lib/commission-state";
 
 // The real, per-order truth the detail page needs: line items straight out of `order_line_items`
 // (joined to the variant + product for the variant title / image / emoji), the money columns the
@@ -112,6 +114,8 @@ export type OrderShipment = {
   payment: ShipmentPaymentState;
   /** The same state as merchant-facing Indonesian, formatted server-side. */
   paymentLabel: string;
+  /** A Mengantar booking the store's own wallet has not paid yet — "Bayar ongkir" is offered. */
+  mengantarPayable: boolean;
   city: string | null;
   province: string | null;
   /**
@@ -170,6 +174,19 @@ export type OrderPaymentRecord = {
   total: number;
   virtualAccount: string | null;
   channelCode: string | null;
+  /** `menunggu` in the row but past its window (lib/pay-retry.ts) — not payable, re-billable. */
+  expired: boolean;
+  expiresAtLabel: string | null;
+};
+
+/** One bill in the order's history (PAY-RETRY). */
+export type OrderPaymentAttempt = {
+  reffId: string | null;
+  channelCode: string | null;
+  status: "menunggu" | "berhasil" | "gagal";
+  expired: boolean;
+  createdAtLabel: string;
+  total: number;
 };
 
 /**
@@ -198,6 +215,20 @@ export type OrderSender = {
   postcode: string | null;
 };
 
+/** The affiliate commission frozen on this order (0116, F-A6) — at most one row per order. */
+export type OrderAffiliateRecord = {
+  code: string;
+  name: string;
+  /** How the order was attributed: the `?ref=` link or the code typed at checkout. */
+  source: string;
+  baseIdr: number;
+  commissionIdr: number;
+  rateNote: string | null;
+  state: CommissionState;
+  eligibleAtLabel: string | null;
+  paidAtLabel: string | null;
+};
+
 export type OrderDetail = {
   lines: OrderLine[];
   money: OrderMoney;
@@ -205,7 +236,10 @@ export type OrderDetail = {
   buyer: OrderBuyer | null;
   address: OrderAddress | null;
   payment: OrderPaymentRecord | null;
+  /** Every bill this order was given, oldest first — empty unless there is more than one (PAY-RETRY). */
+  paymentAttempts: OrderPaymentAttempt[];
   refund: OrderRefundRecord | null;
+  affiliate: OrderAffiliateRecord | null;
   sender: OrderSender | null;
   financial: OrderFinancialBreakdown;
 };
@@ -256,6 +290,7 @@ export async function getOrderDetail(
         total: schema.orders.totalIdr,
         status: schema.orders.status,
         financialStatus: schema.orders.financialStatus,
+        placedAt: schema.orders.placedAt,
         city: schema.orders.city,
         province: schema.orders.province,
         courier: schema.orders.courier,
@@ -265,6 +300,11 @@ export async function getOrderDetail(
         kaPickupNumber: schema.orders.kaPickupNumber,
         kaPaymentStatus: schema.orders.kaPaymentStatus,
         kaPaymentUrl: schema.orders.kaPaymentUrl,
+        // SHIP-MENGANTAR: the second provider's booking identity + wallet-paid flag.
+        shippingProvider: schema.orders.shippingProvider,
+        mgOrderId: schema.orders.mgOrderId,
+        mgOrderCode: schema.orders.mgOrderCode,
+        mgIsPaid: schema.orders.mgIsPaid,
         problemAt: schema.orders.problemAt,
         problemNote: schema.orders.problemNote,
         // Address SNAPSHOT (migration 0042) — the address this parcel was BOUGHT with.
@@ -417,7 +457,8 @@ export async function getOrderDetail(
       }
     }
 
-    const [p] = await db
+    // Every attempt, "the order's payment" first (PAY-RETRY: an order can carry several bills now).
+    const payRows = await db
       .select()
       .from(schema.payments)
       .where(eq(schema.payments.orderId, o.id))
@@ -429,8 +470,14 @@ export async function getOrderDetail(
       // above it claimed it matched the list. It did not: drizzle's `desc()` emits a BARE `desc`, and
       // bare DESC in Postgres is NULLS FIRST, so this page ranked UNPAID payments first while the list
       // ranked them last. Measured: list `cod`, detail `va`, same order.
-      .orderBy(latestPaymentFirst())
-      .limit(1);
+      .orderBy(latestPaymentFirst());
+    const p = payRows[0];
+    // PAY-RETRY: `menunggu` is the ROW; whether the bill can still be paid is `instructionState`, the
+    // same reading the shopper's retry, the Seller's re-bill and the cron use. Server-side `now` — a
+    // data-layer read, not a render path.
+    const now = new Date();
+    const expired = (r: typeof p) =>
+      r.method !== "cod" && r.status === "menunggu" && instructionState(r, o.placedAt, now) === "expired";
 
     const payment: OrderPaymentRecord | null = p
       ? {
@@ -443,8 +490,24 @@ export async function getOrderDetail(
           total: p.total && p.total > 0 ? p.total : p.amountIdr,
           virtualAccount: p.virtualAccount ?? null,
           channelCode: p.channelCode ?? null,
+          expired: expired(p),
+          expiresAtLabel: p.expiresAt ? FMT.format(p.expiresAt) : null,
         }
       : null;
+    // Read-only history, shown only when there is more than one bill (a retry happened).
+    const paymentAttempts: OrderPaymentAttempt[] =
+      payRows.length > 1
+        ? [...payRows]
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+            .map((r) => ({
+              reffId: r.reffId ?? null,
+              channelCode: r.channelCode ?? null,
+              status: r.status,
+              expired: expired(r),
+              createdAtLabel: FMT.format(r.createdAt),
+              total: r.total && r.total > 0 ? r.total : r.amountIdr,
+            }))
+        : [];
 
     // Task 8.31 — under RLS (`refunds` has a tenant policy), so a merchant sees only their own.
     const [rf] = await db
@@ -455,6 +518,39 @@ export async function getOrderDetail(
       .limit(1);
     const refund: OrderRefundRecord | null = rf
       ? { status: rf.status, amount: rf.amount, note: rf.note ?? null, paidAtLabel: rf.paidAt ? FMT.format(rf.paidAt) : null }
+      : null;
+
+    // Affiliate commission — explicit store_id on both tables (the WHERE is the rule, RLS is the net).
+    const ac = schema.affiliateCommissions;
+    const [aff] = await db
+      .select({
+        code: schema.affiliates.code,
+        name: schema.affiliates.name,
+        source: ac.source,
+        baseIdr: ac.baseIdr,
+        commissionIdr: ac.commissionIdr,
+        rateNote: ac.rateNote,
+        status: ac.status,
+        eligibleAt: ac.eligibleAt,
+        paidAt: ac.paidAt,
+        isReady: sql<boolean>`${ac.status} = 'pending' and ${ac.eligibleAt} is not null and ${ac.eligibleAt} <= now()`,
+      })
+      .from(ac)
+      .innerJoin(schema.affiliates, and(eq(schema.affiliates.id, ac.affiliateId), eq(schema.affiliates.storeId, storeId)))
+      .where(and(eq(ac.orderId, o.id), eq(ac.storeId, storeId)))
+      .limit(1);
+    const affiliate: OrderAffiliateRecord | null = aff
+      ? {
+          code: aff.code,
+          name: aff.name,
+          source: aff.source,
+          baseIdr: Number(aff.baseIdr),
+          commissionIdr: Number(aff.commissionIdr),
+          rateNote: aff.rateNote,
+          state: commissionState({ status: aff.status, isReady: aff.isReady, hasEligibleAt: !!aff.eligibleAt }),
+          eligibleAtLabel: aff.eligibleAt ? FMT.format(aff.eligibleAt) : null,
+          paidAtLabel: aff.paidAt ? FMT.format(aff.paidAt) : null,
+        }
       : null;
 
     const [financial] = await db
@@ -564,8 +660,12 @@ export async function getOrderDetail(
     // which the docs do not define for a COD package.
     const shipmentPayment: ShipmentPaymentState = shipmentPaymentState({
       isCod: payment?.method === "cod",
-      kaPaymentStatus: o.kaPaymentStatus,
-      kaPaymentUrl: o.kaPaymentUrl,
+      // A Mengantar booking is paid from the STORE'S OWN Mengantar wallet: `mg_is_paid=false` is the same
+      // "booked, no waybill until settled" state as KiriminAja's `unpaid`; `null` after a booking = a
+      // "Bayar ongkir" whose outcome is still being confirmed (in flight, not payable again).
+      kaPaymentStatus:
+        o.shippingProvider === "mengantar" ? (!o.mgOrderId ? null : o.mgIsPaid === null ? "pending" : o.mgIsPaid ? "paid" : "unpaid") : o.kaPaymentStatus,
+      kaPaymentUrl: o.shippingProvider === "mengantar" ? null : o.kaPaymentUrl,
     });
 
     return {
@@ -578,12 +678,15 @@ export async function getOrderDetail(
         weightGrams: pkg.billableGrams,
         awb: o.awb ?? null,
         sortingCode: o.sortingCode ?? null,
-        kaOrderId: o.kaOrderId ?? null,
+        // The booking reference the screen shows and keys "booked" on — either provider's.
+        kaOrderId: o.kaOrderId ?? o.mgOrderCode ?? o.mgOrderId ?? null,
         pickupNumber: o.kaPickupNumber ?? null,
         // The COD flag comes from `payments.method` — the same expression lib/cod.ts and the
         // Pesanan tabs partition on — never from the vendor's payment fields.
         payment: shipmentPayment,
         paymentLabel: shipmentPaymentLabel(shipmentPayment),
+        // The seller can pay it themselves from their Mengantar wallet ("Bayar ongkir").
+        mengantarPayable: o.shippingProvider === "mengantar" && !!o.mgOrderId && o.mgIsPaid === false,
         city: o.city ?? null,
         province: o.province ?? null,
         problemAt: o.problemAt ?? null,
@@ -595,7 +698,9 @@ export async function getOrderDetail(
       buyer,
       address,
       payment,
+      paymentAttempts,
       refund,
+      affiliate,
       sender,
       financial: financialBreakdown,
     };

@@ -12,9 +12,9 @@ Satu paket bernama **TokoΦ** dengan semua fitur terbuka. Tidak ada batas jumlah
 | | Harga |
 |---|---|
 | Uji coba | Gratis 3 hari sejak mendaftar |
-| Bulan pertama | Rp50.000 |
-| Bulanan berikutnya | Rp275.000 per bulan |
-| Tahunan | Rp2.700.000 per tahun (setara Rp225.000 per bulan) |
+| Bulanan | Rp178.500 per bulan, sejak tagihan pertama |
+| Tahunan | Rp1.713.600 per tahun (setara Rp142.800 per bulan, hemat 20%) |
+| Dengan kode referral | Kode yang membawa potongan memotong tagihan langganan **pertama** Anda, sekali. Tagihan berikutnya harga normal. |
 
 - Kalau Anda langsung membayar tahunan setelah uji coba, pembayaran pertama itu berlaku **13 bulan**.
 - Harga di atas adalah DPP (sebelum pajak). Rincian pajak, bila ada, tercantum di faktur.

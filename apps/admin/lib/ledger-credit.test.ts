@@ -225,6 +225,32 @@ suite(
       });
     });
 
+    // Mengantar Partner Business API (owner O3): the store's OWN Mengantar wallet paid the courier, so
+    // on a Mengantar-stamped order the buyer-paid shipping is the SELLER's money — in the ledger credit
+    // AND in the view, by the same expression. A KiriminAja order beside it keeps shipping as platform money.
+    it("O3: a Mengantar order credits goods + PPN + the buyer-paid shipping; KiriminAja does not; the view agrees", async () => {
+      await inTxn(async (tx) => {
+        const storeId = await mkStore(tx);
+        const mg = await mkOrder(tx, storeId, "baru");
+        const ka = await mkOrder(tx, storeId, "baru");
+        await tx.execute(sql`update orders set tax_idr = 11000, shipping_provider = 'mengantar' where id = ${mg}`);
+        await tx.execute(sql`update orders set tax_idr = 11000, shipping_provider = 'kiriminaja' where id = ${ka}`);
+        for (const id of [mg, ka]) {
+          await tx.execute(sql`insert into order_financials (store_id, order_id, goods_proceeds_idr, included_sales_tax_idr, shipping_charged_idr, order_payable_idr) values (${storeId}, ${id}, 100000, 0, 20000, 131000)`);
+          const pay = await mkPayment(tx, { orderId: id, storeId, amount: 131_000, status: "berhasil" });
+          await creditSaleForPayment(tx, pay);
+        }
+        expect(Number((await ledgerOf(tx, mg))[0].amount)).toBe(131_000);
+        expect(Number((await ledgerOf(tx, ka))[0].amount)).toBe(111_000);
+        const v = await rows(tx, sql`select order_id, seller_entitlement_idr::bigint as ent, shipping_pass_through_idr::bigint as pass from order_seller_entitlements where order_id in (${mg}, ${ka})`);
+        const by = Object.fromEntries(v.map((r) => [String(r.order_id), r] as const));
+        expect(Number(by[mg].ent)).toBe(131_000);
+        expect(Number(by[mg].pass)).toBe(20_000);
+        expect(Number(by[ka].ent)).toBe(111_000);
+        expect(Number(by[ka].pass)).toBe(0);
+      });
+    });
+
     // Inclusive-mode: the sticker price already contains the PPN, so goods_proceeds carries it and
     // the add-back must be ZERO — `tax_idr − included` cancels. Adding the liability again here
     // would pay the seller the same tax twice.
@@ -308,7 +334,7 @@ suite(
         const one = sql`insert into ledger_entries (store_id, order_id, payment_id, kind, amount_idr) values (${storeId}, ${orderId}, ${payId}, 'sale', 100000)`;
         await tx.execute(one);
         // A second sale for the SAME payment must be refused by ledger_one_sale_per_payment, not by app code.
-        await expect(tx.execute(one)).rejects.toThrow(/unique|duplicate/i);
+        await expect(tx.execute(one)).rejects.toMatchObject({ cause: { code: "23505" } });
       });
     });
   },

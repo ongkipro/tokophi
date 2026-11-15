@@ -23,8 +23,8 @@ export function Multicolumn({ heading, eyebrow, columns, items }: MulticolumnCon
     <section className="p-6">
       {heading && (
         <div className="mb-6 text-center">
-          {eyebrow && <p className="text-xs font-medium tracking-wide text-brand-600 uppercase">{eyebrow}</p>}
-          <h2 className="mt-1 text-xl font-semibold text-ink">{heading}</h2>
+          {eyebrow && <p className="text-sm text-muted-foreground">{eyebrow}</p>}
+          <h2 className="mt-1 font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]">{heading}</h2>
         </div>
       )}
 
@@ -38,7 +38,7 @@ export function Multicolumn({ heading, eyebrow, columns, items }: MulticolumnCon
             const Icon = Object.hasOwn(ICONS, row.icon) ? ICONS[row.icon as keyof typeof ICONS] : null;
             return (
               <li key={i} className="flex flex-col items-center text-center">
-                <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-zinc-100 text-brand-700">
                   {Icon ? (
                     <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
                   ) : (

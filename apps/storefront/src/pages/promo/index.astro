@@ -12,6 +12,7 @@ import Layout from "../../layouts/Layout.astro";
 // owns the page's `?sort=`/`?page=` URL state + a count/sort toolbar — using it twice would make the two
 // sections fight over one sort param and render two redundant toolbars.
 import ProductCard from "../../components/ProductCard.astro";
+import { Tag, Truck, Zap } from "@lucide/astro";
 import { IDR } from "@tokophi/lib/format";
 import { activeVouchers, storeFreeShip, promoHub, mediaUrl, imageSrcSet, type VoucherPromo } from "../../data/catalog";
 
@@ -57,55 +58,63 @@ const TITLE = "Promo";
   robots="index,follow"
 >
   {/* HERO — merchant banner image if set (overlaid), else the brand gradient */}
-  <section class="relative overflow-hidden bg-gradient-to-br from-brand-600 to-brand-700 text-white">
-    {hubBanner && (
-      <>
-        <img
-          src={hubBanner}
-          srcset={imageSrcSet(hubBanner)}
-          sizes={imageSrcSet(hubBanner) ? BANNER_SIZES : undefined}
-          alt=""
-          class="absolute inset-0 h-full w-full object-cover"
-        />
-        <div class="absolute inset-0 bg-gradient-to-r from-black/70 via-black/45 to-black/20"></div>
-      </>
-    )}
-    <div class="relative mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
-      <p class="text-sm font-semibold uppercase tracking-wide text-brand-100/90">Promo Spesial</p>
-      <h1 class="mt-1 text-3xl font-bold sm:text-4xl">{hubTitle}</h1>
-      <p class="mt-2 max-w-xl text-brand-50/90">{hubSubtitle}</p>
-    </div>
-  </section>
+  {/* REDESIGN C (owner 2026-11-05): no dark gradient slab with a low-contrast "PROMO SPESIAL" kicker.
+      A merchant who uploaded a promo banner gets it as a short photo band; everyone else gets the same
+      quiet title header as every other listing. */}
+  {hubBanner ? (
+    <section class="relative isolate overflow-hidden bg-ink text-white">
+      <img
+        src={hubBanner}
+        srcset={imageSrcSet(hubBanner)}
+        sizes={imageSrcSet(hubBanner) ? BANNER_SIZES : undefined}
+        alt=""
+        class="absolute inset-0 -z-10 h-full w-full object-cover"
+      />
+      <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/80 via-ink/40 to-ink/10"></div>
+      <div class="mx-auto flex min-h-[200px] max-w-7xl flex-col justify-end px-4 py-6 sm:min-h-[260px] sm:px-6 sm:py-8">
+        <h1 class="font-display text-[1.625rem] font-semibold leading-tight tracking-[-0.01em] sm:text-4xl">{hubTitle}</h1>
+        <p class="mt-1.5 max-w-xl text-[0.9375rem] text-white/90">{hubSubtitle}</p>
+      </div>
+    </section>
+  ) : (
+    <section>
+      <div class="mx-auto max-w-7xl px-4 pb-2 pt-5 sm:px-6 sm:pt-8">
+        <h1 class="font-display text-[1.625rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-4xl">{hubTitle}</h1>
+        <p class="mt-1.5 max-w-xl text-[0.9375rem] text-muted">{hubSubtitle}</p>
+      </div>
+    </section>
+  )}
 
-  <div class="mx-auto max-w-7xl space-y-12 px-4 py-10 sm:px-6">
+  <div class="mx-auto max-w-7xl space-y-12 px-4 pb-10 pt-6 sm:px-6">
 
     {/* FREE SHIPPING */}
     {freeShip.enabled && (
-      <div class="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-brand-800">
-        <span class="text-xl">🚚</span>
-        <p class="text-sm font-medium">
-          {freeShip.minIdr > 0
-            ? <span>Gratis ongkir untuk belanja min. <strong>{IDR(freeShip.minIdr)}</strong> — otomatis di checkout.</span>
-            : <span><strong>Gratis ongkir</strong> untuk semua pesanan — otomatis di checkout.</span>}
-        </p>
+      <div class="flex items-start gap-3 rounded-lg bg-mist px-4 py-3.5">
+        <Truck class="mt-0.5 size-5 shrink-0 text-ink" stroke-width={1.75} aria-hidden="true" />
+        <div class="text-sm">
+          <p class="font-medium text-ink">
+            {freeShip.minIdr > 0 ? <Fragment>Gratis ongkir untuk belanja mulai {IDR(freeShip.minIdr)}</Fragment> : "Gratis ongkir untuk semua pesanan"}
+          </p>
+          <p class="mt-0.5 text-muted">Potongan ongkir otomatis berlaku saat checkout.</p>
+        </div>
       </div>
     )}
 
     {/* VOUCHERS */}
     {vouchers.length > 0 && (
       <section>
-        <h2 class="text-xl font-bold text-ink">Kode Voucher</h2>
-        <p class="mt-1 text-sm text-muted">Ketik kodenya di halaman checkout untuk memakainya.</p>
+        <h2 class="font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[1.75rem]">Kode voucher</h2>
+        <p class="mt-1.5 text-[0.9375rem] text-muted">Ketik kodenya di halaman checkout untuk memakainya.</p>
         <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {vouchers.map((v) => (
-            <div class="flex items-center justify-between gap-3 rounded-xl border border-dashed border-brand-400 bg-white p-4">
+            <div class="flex items-center justify-between gap-3 rounded-lg border border-line bg-white p-4">
               <div class="min-w-0">
-                <p class="font-mono text-lg font-bold tracking-wide text-brand-700">{v.code}</p>
+                <p class="text-base font-semibold tracking-wide text-ink">{v.code}</p>
                 <p class="mt-0.5 text-xs text-muted">{voucherLabel(v)}</p>
               </div>
               <button
                 type="button"
-                class="voucher-copy shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700"
+                class="voucher-copy inline-flex min-h-10 shrink-0 items-center rounded-lg border border-ink px-3.5 text-sm font-medium text-ink transition-colors hover:bg-ink hover:text-white"
                 data-code={v.code}
               >Salin</button>
             </div>
@@ -118,20 +127,21 @@ const TITLE = "Promo";
     {flashProducts.length > 0 && (
       <section>
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 class="flex items-center gap-2 text-xl font-bold text-ink">
-            <span>⚡ Flash Sale</span>
+          <h2 class="flex items-center gap-2 font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[1.75rem]">
+            <Zap class="size-5 fill-current" stroke-width={0} aria-hidden="true" />
+            Flash sale
           </h2>
           {flashEndsAt && (
             <div class="flex items-center gap-2 text-sm text-ink">
               <span class="text-muted">Berakhir dalam</span>
               <span
-                class="flash-countdown rounded-lg bg-ink px-2.5 py-1 font-mono font-semibold tabular-nums text-cream"
+                class="flash-countdown rounded-md bg-ink px-2.5 py-1 font-semibold tabular-nums text-white"
                 data-ends={flashEndsAt}
               >—</span>
             </div>
           )}
         </div>
-        <div class="mt-4 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-y-14 sm:grid-cols-3 lg:grid-cols-4">
+        <div class="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-y-12 lg:grid-cols-4">
           {flashProducts.map((p) => <ProductCard product={p} />)}
         </div>
       </section>
@@ -140,8 +150,8 @@ const TITLE = "Promo";
     {/* STANDING MARKDOWNS */}
     {markdownProducts.length > 0 && (
       <section>
-        <h2 class="text-xl font-bold text-ink">Sedang Diskon</h2>
-        <div class="mt-4 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-y-14 sm:grid-cols-3 lg:grid-cols-4">
+        <h2 class="font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[1.75rem]">Sedang diskon</h2>
+        <div class="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-y-12 lg:grid-cols-4">
           {markdownProducts.map((p) => <ProductCard product={p} />)}
         </div>
       </section>
@@ -149,11 +159,11 @@ const TITLE = "Promo";
 
     {/* EMPTY */}
     {!hasAnything && (
-      <div class="rounded-xl border border-dashed border-muted/40 py-16 text-center">
-        <p class="text-2xl">🏷️</p>
-        <p class="mt-2 font-semibold text-ink">Belum ada promo aktif</p>
+      <div class="rounded-lg bg-mist py-16 text-center">
+        <Tag class="mx-auto size-7 text-muted" stroke-width={1.5} aria-hidden="true" />
+        <p class="mt-3 font-semibold text-ink">Belum ada promo aktif</p>
         <p class="mt-1 text-sm text-muted">Pantau terus halaman ini — promo baru bisa muncul kapan saja.</p>
-        <a href="/" class="mt-4 inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">Lihat semua produk</a>
+        <a href="/" class="mt-5 inline-flex min-h-11 items-center rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white hover:bg-brand-700">Lihat semua produk</a>
       </div>
     )}
   </div>
@@ -166,7 +176,7 @@ const TITLE = "Promo";
       const code = btn.getAttribute("data-code") || "";
       try { await navigator.clipboard.writeText(code); } catch { /* clipboard blocked — no-op */ }
       const prev = btn.textContent;
-      btn.textContent = "Tersalin ✓";
+      btn.textContent = "Tersalin";
       setTimeout(() => { btn.textContent = prev; }, 1400);
     });
   });

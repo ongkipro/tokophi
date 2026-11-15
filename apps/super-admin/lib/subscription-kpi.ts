@@ -59,8 +59,9 @@ export function subscriptionKpiBucket(row: KpiRow, now: Date = new Date()): KpiV
   if (b.status === "trial") return { bucket: "trial", mrr: 0, trialEndingSoon: b.daysLeft <= 1 };
   if (b.status === "active") {
     if (periodBackedBy(row) === "paid") {
-      // The first paid month is the promo; every later one is the regular price.
-      return { bucket: "paid", mrr: row.firstInvoicePaid ? BILLING.MONTHLY_IDR : BILLING.FIRST_MONTH_IDR, trialEndingSoon: false };
+      // ADR 0020: one recurring price. The first-month promo is gone, and a signup-code discount is a
+      // ONE-OFF on the first invoice, not monthly recurring revenue — so MRR is the list price.
+      return { bucket: "paid", mrr: BILLING.MONTHLY_IDR, trialEndingSoon: false };
     }
     return { bucket: "comped", ...none };
   }

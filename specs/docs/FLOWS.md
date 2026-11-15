@@ -146,6 +146,27 @@ sequenceDiagram
 `payments.total` (which adds the gateway's admin fee — the gateway's money, never the merchant's). This is what keeps
 Dashboard revenue, the Pesanan list and the Saldo ledger the same number.
 
+### 2.1 "Bayar ulang" — a new instruction for the same order (PAY-RETRY, 2026-11-13)
+
+Spec + case table: `specs/docs/tasks/2026-11-13-pay-retry.md`.
+
+1. **Checkout** (`/api/public/order`) mints a one-order secret for a prepaid order, stores its sha256 on
+   `orders.pay_token_hash`, returns it once (`payToken`); the checkout keeps it in `lastOrder`. The
+   provider's `payment_info.expired` (zoneless WIB) is parsed server-side and persisted on
+   `payments.expires_at`. A REFUSED first bill is marked `gagal`; a THROWN one stays `menunggu` (outcome unknown).
+2. **`/checkout/sukses`** — when the countdown ends, or the first bill never started, it shows
+   **Buat tagihan baru** (same device; another device → the Seller re-bills from the order screen).
+3. **`POST /api/public/pay/retry`** — under the ORDER's row lock: `retryDecision` (`lib/pay-retry.ts`)
+   allows a new bill only if every instruction is `failed` or provably `expired`, the order is `baru` +
+   `pending`, not COD, ≥15 min before the 24 h cancellation, < 5 attempts. Dead `menunggu` rows → `gagal`;
+   a new row is claimed `in_progress` with reference `<order number>-n` and the SAME amount/fee/total/channel;
+   the vendor call runs after commit. A still-live bill is returned instead (`reused`).
+4. **Callback** — unchanged matching (trx_id, then reff_id; each attempt has its own reference). New: on
+   PAID, the order's other `menunggu` rows become `gagal`, and a collected payment the ledger did not
+   credit gets a `refunds` row (`refundUncreditedPayment`: double payment, or PAID on a closed order).
+   The held Purchase is released once whichever payment lands (`event_id = purchase:{number}`, unique).
+5. **Cron `order-expiry`** — still cancels at 24 h, but waits while an instruction is live or being minted.
+
 ---
 
 ## 3. Order lifecycle — and what each transition does to inventory and to the ledger
@@ -323,9 +344,41 @@ sequenceDiagram
 Tracking: the storefront has **no** `/api/track`-style shipment lookup; `kaTrack()` exists in `packages/lib` and is
 reachable from the merchant admin only.
 
+### 5.1 Mengantar path (ADR 0018 + ADR 0019, live since 2026-11-12 for the demo store)
+
+The diagram above is the KiriminAja path. Since migration `0116` a second provider exists; since `0117`
+(ADR 0019) it is chosen PER STORE (`stores.shipping_provider`, set by Super Admin or a signup code; default
+KiriminAja), under the platform master switch `shipping_provider_config.active_provider`. Which one serves an
+order is decided per order and stamped:
+
+```mermaid
+flowchart TD
+    Q["POST /api/public/ongkir — quoteShipping()<br/>(apps/admin/lib/shipping-quote.ts)"] --> C{"switch = mengantar<br/>∧ not COD<br/>∧ store set to Mengantar<br/>∧ store account connected<br/>for MENGANTAR_ENV?"}
+    C -- yes --> M["Mengantar estimate with THE STORE'S seller key<br/>origin = sender kecamatan → mengantar_areas bridge<br/>answer carries codRequote: true"]
+    C -- no --> K["KiriminAja (the path above)"]
+    M --> O["POST /api/public/order re-quotes;<br/>orders.shipping_provider = 'mengantar', mg_env, mg_seller_id"]
+    K --> O2["orders.shipping_provider = 'kiriminaja'"]
+    O --> B["Seller: Atur pengiriman → bookMengantar()<br/>needs a SUCCESSFUL payment (prepaid only), re-prices,<br/>POST /order with idempotencyKey; seller wallet pays<br/>(no ledger debit — the buyer's ongkir is passed through)"]
+    B --> T["cron/tracking polls with the order's own account;<br/>AWB arrives later (cnote_no); short wallet → pay-unpaid"]
+```
+
+- Picking COD on a connected store re-quotes the same destination on the default provider (`codRequote`), so the
+  rates on screen always match the payment method; Mengantar never carries COD (O4/O6).
+- Cancel goes through the provider that booked it (Mengantar cancels by its own `_id`; KiriminAja by AWB only).
+- **Who is on Mengantar (ADR 0019):** a store is born on KiriminAja. Super Admin moves it (store page →
+  "Penyedia pengiriman", owner rank, reason, audited), or a self-serve signup enters a Mengantar signup code
+  (`/daftar?kode=`, made at Super Admin → Kode Daftar). Only then is its Mengantar account queued — registered
+  after approval and with the owner's consent (shown on `/daftar` only for a Mengantar code, or the
+  "Hubungkan Mengantar" click). Moving a store back to KiriminAja leaves its account and its orders' stamps.
+- Rules and traps: `specs/docs/rules/shipping-cod.md` → Mengantar; secrets: `specs/docs/SECURITY.md`.
+
 ---
 
 ## 6. Auth, session, and how RLS actually enforces tenancy
+
+> **Buyers are NOT in this section's model.** The TokoΦ Account (ADR 0016) has its own origin, cookie and
+> key — see §9. Nothing below applies to a buyer, and no buyer token is ever accepted here.
+
 
 Three separate identities. They do not overlap.
 
@@ -563,3 +616,38 @@ CRON  api/cron/tracking-events, every 60 s
   fail an order. Which is exactly why the cron's back-fill sweep has to exist.
 - **Ops:** sidecar `cron-tracking-events` (`sleep 60`) in `docker-compose.coolify.yml`. Needs
   `CRON_SECRET` (fail-closed in production) **and** `INTEGRATION_TOKEN_KEY`. See `DEPLOY.md`.
+
+## 9. Buyer account — save an order to the Akun TokoΦ (ADR 0016, BUYER-ACCOUNT-P1)
+
+Optional, AFTER the order exists; merged dark (needs `ACCOUNT_CLAIM_SECRET` on admin + account,
+`ACCOUNT_APP_URL` on the storefront, and a deployed `apps/account`).
+
+```text
+STOREFRONT checkout.astro ── POST /api/public/order (guest, unchanged — no buyer field, no buyer row)
+   │  success answer only: claimToken = b64url(order_id.issued_at) . HMAC-SHA256(ACCOUNT_CLAIM_SECRET)   [30 d]
+   │  → sessionStorage.lastOrderClaim {number, token}   (this tab only; NOT the localStorage `lastOrder`)
+   ▼
+/checkout/sukses ── "Simpan ke Akun TokoΦ" (only when token.number = this order AND ACCOUNT_APP_URL set)
+   │  link: https://account.tokophi.com/klaim?t=<token>        (account pages: no-referrer, no-store, noindex)
+   ▼
+ACCOUNT /klaim ── not signed in → /masuk?next=/klaim?t=… → Google (state cookie) → session row + tphi_account
+   │  previewClaim: verify HMAC + age; read order + store; already claimed by someone else ⇒ the SAME "invalid"
+   │  consent box (names the store; says the store sees "saved", never the account) → POST (checkOrigin)
+   ▼
+claimOrder (ONE txn): lock buyer_accounts row FOR UPDATE (must be active)
+   → insert buyer_order_claims (order_id UNIQUE; store_id FROM THE ORDER ROW) on conflict do nothing
+   → loser reads the winner back: not me ⇒ refused
+   → upsert buyer_store_links (buyer, store) active, consent_version, customer_id = the order's customer
+   ▼
+/orders/<number> — buyer projection: claim(buyer=me) ⋈ link(buyer=me, same store, ACTIVE) ⋈ orders ⋈ stores
+
+SELLER (tokophi_app, RLS): Pelanggan → Akun Pembeli / "Terdaftar" badge / "Tersimpan di Akun TokoΦ"
+   = claims ⋈ ACTIVE links of THIS store only; buyer_accounts/buyer_sessions → 0 rows (RLS, no policy)
+```
+
+- **Unlink** (`/stores/<slug>` → Putus): link `revoked`; the store's orders leave the hub and the Seller
+  sees a guest again. **Close** (`/account` → Tutup akun): sessions revoked + device strings blanked,
+  claims deleted, links revoked, `google_sub` → `closed:<id>`, email/name cleared. Store rows untouched.
+- **Return window / complaint period** (Seller → Pengaturan → Layanan Pembeli): shown on an order only once
+  it is `dikirim`/`selesai`, and only when declared; the complaint button opens the store's own WhatsApp.
+

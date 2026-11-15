@@ -3,11 +3,11 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { NAV_GROUPS, type NavItem, type NavChild, type NavBadgeKey } from "@/lib/nav";
+import { navGroupsFor, type NavItem, type NavChild, type NavBadgeKey } from "@/lib/nav";
 import { num } from "@tokophi/lib/format";
 import { cn } from "@tokophi/ui/lib/utils";
 import { Badge } from "@tokophi/ui/badge";
-import { useStoreHref } from "@/components/admin/store-context";
+import { useBuyerAccountsEnabled, useStoreHref, useStoreSlug } from "@/components/admin/store-context";
 
 
 /**
@@ -82,7 +82,10 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
   const active = isSectionActive(pathname, item.href) || !!activeChild;
   const [open, setOpen] = React.useState<boolean | null>(null);
   const expanded = item.children ? (open ?? active) : false;
-  const badgeCount = item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0;
+  // A collapsed parent carries its children's counts (Promo ← Affiliate): the work is otherwise hidden
+  // behind a chevron. Once open the child shows its own badge, so the parent drops the duplicate.
+  const childCount = item.children?.reduce((n, c) => n + (c.badgeKey ? (counts?.[c.badgeKey] ?? 0) : 0), 0) ?? 0;
+  const badgeCount = (item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0) + (expanded ? 0 : childCount);
 
   const rowLink = (
     <Link
@@ -131,11 +134,16 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
                 href={storeHref(c.href)}
                 onClick={onNavigate}
                 className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm transition-colors",
+                  "flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
                   cActive ? "font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {c.label}
+                {c.badgeKey && counts?.[c.badgeKey] ? (
+                  <Badge variant={cActive ? "default" : "secondary"} className="h-5 px-1.5 text-[11px] tabular-nums">
+                    {num(counts[c.badgeKey] ?? 0)}
+                  </Badge>
+                ) : null}
               </Link>
             );
           })}
@@ -150,9 +158,10 @@ function Item({ item, onNavigate, counts }: { item: NavItem; onNavigate?: () => 
 export type NavCounts = Partial<Record<NavBadgeKey, number>>;
 
 export function NavLinks({ onNavigate, counts }: { onNavigate?: () => void; counts?: NavCounts }) {
+  const groups = navGroupsFor(useStoreSlug(), { buyerAccounts: useBuyerAccountsEnabled() });
   return (
     <nav className="flex flex-col gap-4 px-3">
-      {NAV_GROUPS.map((group, gi) => (
+      {groups.map((group, gi) => (
         <div key={gi} className="flex flex-col gap-1">
           {group.label && (
             <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</p>

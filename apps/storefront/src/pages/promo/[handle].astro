@@ -90,7 +90,7 @@ const heroSrcSet = gallery.length ? imageSrcSet(gallery[0]) : undefined;
           {packages[0].compareAt > 0 && (
             <>
               <span class="text-base text-stone-400 line-through">{IDR(packages[0].compareAt)}</span>
-              <span class="rounded-md bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">
+              <span class="rounded-sm bg-mist px-2 py-0.5 text-xs font-semibold text-ink">
                 Hemat {Math.round(((packages[0].compareAt - packages[0].price) / packages[0].compareAt) * 100)}%
               </span>
             </>
@@ -144,7 +144,7 @@ const heroSrcSet = gallery.length ? imageSrcSet(gallery[0]) : undefined;
 
     {/* ── Solusi (AI: solution) ────────────────────────────────────────────────────────────── */}
     {content.solutionTitle && content.solutionBody && (
-      <section class="mt-4 rounded-2xl border border-brand-200 bg-brand-50/50 p-5 shadow-sm">
+      <section class="mt-4 rounded-2xl border border-line bg-mist/50 p-5 shadow-sm">
         <h2 class="mb-2 text-lg font-bold text-brand-800">{content.solutionTitle}</h2>
         <p class="text-sm leading-relaxed text-stone-700">{content.solutionBody}</p>
       </section>

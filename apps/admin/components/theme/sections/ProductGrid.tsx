@@ -13,36 +13,21 @@ export function ProductGrid({ heading, mode, limit, columns, imageRatio = "3:4" 
   return (
     <section className="p-6">
       <div className="mb-4 flex items-center gap-2">
-        <h2 className="text-xl font-semibold text-ink">{heading}</h2>
-        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-ink/60">
+        <h2 className="font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-ink sm:text-[1.75rem]">{heading}</h2>
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-ink/60">
           {MODE_LABEL[mode]}
         </span>
       </div>
       <div className={`grid gap-4 ${cols}`}>
         {tiles.map((_, i) => (
-          // FRAMELESS / FLAT — mirrors ProductCard.astro (owner 2026-07-23): no card box, no ring, no
-          // shadow. The image is the one surface (thin `rounded-md`); type sits flush beneath (`mt-3`).
+          // Mirrors ProductCard.astro after redesign C (DESIGN.md C5): image (4px radius) → name on two
+          // lines → price. No category kicker and no stars — the card no longer carries either.
           <div key={i}>
-            <div className={`${aspect} overflow-hidden rounded-md bg-brand-50`} />
+            <div className={`${aspect} overflow-hidden rounded-sm bg-zinc-100`} />
             <div className="mt-3 space-y-1.5">
-              {/* uppercase category kicker */}
-              <div className="h-2 w-1/3 rounded bg-line" />
-              {/* title — two lines (line-clamp-2 min-h on the real card) */}
               <div className="h-3 w-3/4 rounded bg-line" />
               <div className="h-3 w-1/2 rounded bg-line" />
-              {/* rating — five amber stars + value/count, marketplace style (mirrors Stars.astro) */}
-              <div className="flex items-center gap-1 pt-0.5">
-                <div className="flex gap-0.5">
-                  {[0, 1, 2, 3, 4].map((s) => (
-                    <svg key={s} viewBox="0 0 20 20" className="size-3.5 shrink-0 fill-amber-400" aria-hidden="true">
-                      <path d="M10 1.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L10 14.77l-5.2 2.73.99-5.79L1.58 7.62l5.82-.85L10 1.5Z" />
-                    </svg>
-                  ))}
-                </div>
-                <div className="h-2 w-8 rounded bg-line" />
-              </div>
-              {/* price — bolder ink figure */}
-              <div className="h-3.5 w-2/5 rounded bg-brand-200" />
+              <div className="h-3.5 w-2/5 rounded bg-ink/20" />
             </div>
           </div>
         ))}

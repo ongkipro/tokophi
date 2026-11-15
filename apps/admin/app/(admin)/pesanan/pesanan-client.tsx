@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Download, MoreHorizontal, PackageCheck, Eye, XCircle, CheckCircle2, Info, AlertTriangle } from "lucide-react";
+import { Download, MoreHorizontal, PackageCheck, Eye, XCircle, CheckCircle2, Info, AlertTriangle, Handshake } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { OrderStatusBadge } from "@/components/admin/order-status";
@@ -15,6 +15,7 @@ import { OrderProductCell } from "@/components/admin/pesanan/order-product-cell"
 import { setOrderStatus } from "@/lib/actions/orders";
 import { orderStatusRefusalMessage } from "@/lib/order-status-refusal";
 import { IDR, num, timeAgo } from "@tokophi/lib/format";
+import { COMMISSION_STATE } from "@/lib/commission-state";
 import { cn } from "@tokophi/ui/lib/utils";
 import { exportCsv } from "@/lib/csv";
 import {
@@ -71,7 +72,7 @@ export function PesananClient({
   const { rows, counts, total, page, pageCount, pageSize, couriers, methods } = list;
 
   // Every control writes the URL; the server re-runs the query. Nothing is filtered in the browser.
-  function go(next: Record<string, string | number | undefined>) {
+  function hrefFor(next: Record<string, string | number | undefined>) {
     const sp = new URLSearchParams(params.toString());
     for (const [k, v] of Object.entries(next)) {
       if (v === undefined || v === "" || v === 0) sp.delete(k);
@@ -79,8 +80,22 @@ export function PesananClient({
     }
     if (!("page" in next)) sp.delete("page"); // any filter change resets to page 1
     const qs = sp.toString();
-    startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+    return qs ? `${pathname}?${qs}` : pathname;
   }
+  function go(next: Record<string, string | number | undefined>) {
+    const href = hrefFor(next);
+    startTransition(() => router.push(href, { scroll: false }));
+  }
+  // Pagination controls carry a real href (focusable, Enter activates it — an href-less <a> is neither);
+  // a plain left click stays a client-side push, a modified click opens the page natively.
+  const pageLink = (target: number) => ({
+    href: hrefFor({ page: target }),
+    onClick: (e: React.MouseEvent) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      go({ page: target });
+    },
+  });
 
   // Report what the state machine DID. This row was rendered from a snapshot; the tracking poller or
   // the expiry cron can move the order to a terminal state in between, and the refusal is silent by
@@ -229,6 +244,7 @@ export function PesananClient({
                         <span className="text-sm text-muted-foreground">Belum diatur</span>
                       )}
                       <ProblemBadge o={o} />
+                      <AffiliateBadge o={o} />
                     </TableCell>
 
                     <TableCell className="py-3">
@@ -317,6 +333,7 @@ export function PesananClient({
                         <span className="text-muted-foreground">Belum diatur</span>
                       )}
                       <ProblemBadge o={o} />
+                      <AffiliateBadge o={o} />
                     </DataRow>
                   </DataCard>
                 ))
@@ -341,7 +358,7 @@ export function PesananClient({
                   text="Sebelumnya"
                   aria-disabled={page === 1}
                   className={page === 1 ? "pointer-events-none opacity-50" : undefined}
-                  onClick={() => go({ page: page - 1 })}
+                  {...(page === 1 ? {} : pageLink(page - 1))}
                 />
               </PaginationItem>
               {Array.from({ length: pageCount }, (_, i) => i + 1)
@@ -349,7 +366,7 @@ export function PesananClient({
                 .map((p, idx, arr) => (
                   <PaginationItem key={p}>
                     {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-muted-foreground">…</span>}
-                    <PaginationLink isActive={p === page} onClick={() => go({ page: p })}>
+                    <PaginationLink isActive={p === page} {...pageLink(p)}>
                       {p}
                     </PaginationLink>
                   </PaginationItem>
@@ -359,7 +376,7 @@ export function PesananClient({
                   text="Berikutnya"
                   aria-disabled={page === pageCount}
                   className={page === pageCount ? "pointer-events-none opacity-50" : undefined}
-                  onClick={() => go({ page: page + 1 })}
+                  {...(page === pageCount ? {} : pageLink(page + 1))}
                 />
               </PaginationItem>
             </PaginationContent>
@@ -403,6 +420,23 @@ function ProblemBadge({ o }: { o: OrderListRow }) {
       title={o.problemNote ?? "Kurir melaporkan kendala pengiriman."}
     >
       <AlertTriangle className="size-3" /> Kendala
+    </Badge>
+  );
+}
+
+// Who brought this order, and what it costs the seller. The commission is the SELLER's own to pay
+// (v1: outside TokoΦ) — it is not taken from the order or the balance, so this is a note, not a deduction.
+function AffiliateBadge({ o }: { o: OrderListRow }) {
+  const a = o.affiliate;
+  if (!a) return null;
+  const st = COMMISSION_STATE[a.state];
+  return (
+    <Badge
+      variant="secondary"
+      className={`mt-1 border-0 font-medium ${st.className}`}
+      title={`Affiliate ${a.name} (${a.code}) — komisi ${IDR(a.commissionIdr)}, ${st.label.toLowerCase()}. Dibayar seller langsung; tidak memotong saldo.`}
+    >
+      <Handshake className="size-3" /> {a.code} · {IDR(a.commissionIdr)}
     </Badge>
   );
 }

@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { db, schema } from "@tokophi/db";
+import { runOrderCreated } from "@/lib/plugins/registry";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { alCreateOrder, autolarisConfigured } from "@tokophi/lib/autolaris";
-import QRCode from "qrcode";
 import { calculateOrderFinance } from "@tokophi/lib/order-finance";
 import {
   PAYMENT_FEES,
@@ -35,6 +35,7 @@ import { quoteShipping, findRate } from "@/lib/shipping-quote";
 import { computeTax } from "@tokophi/lib/tax";
 import { IDR } from "@tokophi/lib/format";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { claimSecret, issueClaimToken } from "@tokophi/lib/claim-token";
 import { applyDiscount } from "@/lib/promo";
 import { activeFlashPrices } from "@/lib/flash";
 import {
@@ -43,6 +44,10 @@ import {
 } from "@/lib/tracking-events";
 import { adChannel } from "@/lib/ad-channel";
 import { defaultInventoryLevelId } from "@/lib/inventory-location";
+import { attachAffiliateCommission } from "@/lib/affiliate-attribution";
+import type { Db } from "@/lib/ledger-credit";
+import { hashPayToken, mintPayToken } from "@/lib/pay-retry";
+import { qrImageDataUrl } from "@/lib/pay-instruction";
 
 // Public (no-auth) storefront checkout → creates a REAL order (customer + order + line items),
 // then an AutoLaris payment linked to it (unless COD). Runs as owner + explicit store_id (the
@@ -220,6 +225,10 @@ async function handle(req: Request) {
     destId?: number; // KiriminAja district id the ongkir quote was issued for
     channelCode?: string;
     discountCode?: string; // PROMO P0 — a voucher; validated + priced by lib/promo (never trusted from the body)
+    // Store affiliate programme (0125, ADR 0022): the code the shopper TYPED, and the `?ref=` the
+    // storefront captured. Selectors only — resolved against this store's ACTIVE affiliates, never trusted.
+    affiliateCode?: string;
+    refCode?: string;
     // ADR 0012 — the ad platforms' own cookies, read on the storefront. OPAQUE: never authorization,
     // never priced against, never stored beyond the conversion row; only forwarded to the merchant's
     // own pixel provider as match keys. Length-bounded in clientContextFromRequest.
@@ -415,6 +424,7 @@ async function handle(req: Request) {
     price: number;
     qty: number;
     handle: string;
+    productId: string;
   }[] = [];
   // Flash sale (PROMO P3): productId → promo price for sales live RIGHT NOW. Applied below per line,
   // ONLY when it undercuts the variant's base price — the storefront advertised it, so the order must
@@ -550,6 +560,7 @@ async function handle(req: Request) {
       price: unitPrice,
       qty,
       handle: i.handle!,
+      productId: prod.id, // per-product affiliate rate (F-A9)
     });
   }
   // ── REFUSE A CART WHOSE PRICE MOVED ──────────────────────────────────────────────────────────
@@ -660,6 +671,11 @@ async function handle(req: Request) {
     storeId: store.id,
     storeCity: store.city,
     destinationId: destId,
+    // The kelurahan NAME the shopper picked (a claim, re-matched exactly inside `destId`). Only the
+    // Mengantar branch reads it — its area ids are kelurahan-grain; KiriminAja prices per district.
+    kelurahan: addr.kelurahan ?? null,
+    // COD always quotes (and so books) through the default provider (owner O4/O6), never Mengantar.
+    cod: isCod,
     items: resolved.map((r) => ({
       variantId: r.variantId,
       handle: r.handle,
@@ -782,6 +798,19 @@ async function handle(req: Request) {
   // any row is written. The province is the one DERIVED from the district id (above), and `total` is
   // the one WE priced — both were client claims once, and both were the hole.
   if (isCod) {
+    // COD never travels Mengantar (owner O4): the quote above was made with `cod: true`, which always
+    // routes to the default provider. This names the rule at the boundary as well, so a future change
+    // to the quote dispatch cannot quietly open it.
+    if (quote.provider === "mengantar") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "COD tidak tersedia untuk layanan dan tujuan ini.",
+          code: "cod_not_allowed",
+        },
+        { status: 403, headers: CORS },
+      );
+    }
     // `rate.cod` is the EFFECTIVE flag for THIS destination — KiriminAja's live answer for this
     // actual route (shipping-quote.ts) × the platform's `codAllowed` × the store's switch. It was
     // computed here and then never read: the gate below consults `policy.reason()`, which is built
@@ -831,6 +860,11 @@ async function handle(req: Request) {
   const payMethod =
     channelCode === "QRIS" ? "qris" : channelCode === "DANA" ? "dana" : "va";
   const alConfigured = autolarisConfigured();
+  // PAY-RETRY — the shopper's one-order secret for "Bayar ulang" (lib/pay-retry.ts). Prepaid only: a
+  // COD order has no instruction to renew. Minted here, stored as a hash ON the order row inside the
+  // write txn, and handed back to the browser once in this response — never derivable from the order
+  // number, which is printed on labels and quoted in chats.
+  const payToken = isCod ? null : mintPayToken();
   let customerId: string;
   let order: { id: string; number: string };
   try {
@@ -1020,6 +1054,11 @@ async function handle(req: Request) {
           // pair or nothing for exactly that reason.
           shipKelurahanName: kel?.name ?? null,
           shipKelurahanId: kel?.kaKelurahanId ?? null,
+          // SHIP-MENGANTAR: WHO priced this order — taken from the quote re-made above, never from the
+          // request and never from the switch as it reads later. Booking, tracking, cancel and label
+          // follow this stamp. The Mengantar destination area is the one that quote was built for.
+          shippingProvider: quote.provider,
+          shipMengantarAreaId: quote.provider === "mengantar" ? quote.destinationAreaId : null,
 
           // 🔴 THE IDEMPOTENCY CLAIM (Task 4.8). This column carries a PARTIAL UNIQUE INDEX on
           // (store_id, checkout_session_id) — `orders_one_per_checkout_session`, migration 0097 —
@@ -1033,6 +1072,7 @@ async function handle(req: Request) {
           // all, and every such order must be free to coexist. The index is partial for exactly
           // that reason — NULLs do not collide, empty strings would.
           checkoutSessionId: checkoutSessionId || null,
+          payTokenHash: payToken ? hashPayToken(payToken) : null,
         })
         .returning({ id: schema.orders.id, number: schema.orders.number });
 
@@ -1144,6 +1184,27 @@ async function handle(req: Request) {
         if (!bumped.length) throw new VoucherExhausted(appliedDiscountCode);
       }
 
+      // Affiliate commission (F-A4/F-A6), frozen in THIS transaction so it exists iff the order does.
+      // A bad or unknown code returns null and the order proceeds — a code must never cost the sale. It
+      // runs in a SAVEPOINT for the same reason: an unexpected database error here rolls back only the
+      // commission (logged), never the order the shopper just placed.
+      try {
+        await tx.transaction((sp) =>
+          attachAffiliateCommission(sp as unknown as Db, {
+            storeId: store.id,
+            orderId: ord.id,
+            buyerPhone: phone,
+            typedCode: body.affiliateCode,
+            refCode: body.refCode,
+            lines: resolved.map((r) => ({ productId: r.productId, totalIdr: r.price * r.qty })),
+            subtotalIdr: subtotal,
+            goodsProceedsIdr: finance.goodsProceedsIdr,
+          }),
+        );
+      } catch (err) {
+        console.error("[order] affiliate commission not recorded for", ord.number, err);
+      }
+
       return { customerId: cid, order: ord };
     }));
   } catch (err) {
@@ -1245,6 +1306,22 @@ async function handle(req: Request) {
     }
   }
 
+  // ── First-party plugins (ADR 0021, KEL-001) ──────────────────────────────────────────────────
+  // Scheduled HERE, after `db.transaction(…)` has returned: `after()` runs its callback even when the
+  // response fails, so registering it any earlier would push an order that rolled back. The callback
+  // runs after the shopper's response is sent, never throws, and with no plugin active costs one
+  // indexed read. This is the ONLY plugin line in this route — eligibility (e.g. "prepaid only once
+  // paid") is decided inside the plugin, and the cron catches whatever this leg skips.
+  // `lib/plugins/order-hook-position.test.ts` pins the position.
+  // The try/catch is load-bearing: the order is ALREADY COMMITTED here, so a throw (e.g. `after`
+  // outside a request scope) must not turn it into a 500 the shopper retries into a 409. Nothing is
+  // lost — the plugin cron picks up any order this leg did not send.
+  try {
+    after(() => runOrderCreated(store.id, order.id));
+  } catch (err) {
+    console.error("[order] plugin hook not scheduled", err);
+  }
+
   // NOTE: the instant (same-day GoSend/Grab) dispatch that used to run here was REMOVED. A web order
   // is now always shipped by the seller from Pesanan → Buat pengiriman (regular expedition couriers).
   // Orders booked as instant BEFORE the removal keep their courier/awb text and render unchanged.
@@ -1285,12 +1362,26 @@ async function handle(req: Request) {
     console.error("[order] tracking enqueue failed", err);
   }
 
+  // TokoΦ Account claim token (ADR 0016, BUYER-ACCOUNT-P1): one extra field on the two SUCCESS answers
+  // only — never on the 409 duplicate (reachable by replaying a session id) nor on a 502/503 partial
+  // failure. Bound by HMAC to THIS order id; grants a claim ATTEMPT only (the buyer must still sign in
+  // and consent; one claimant per order is a DB unique). Absent when ACCOUNT_CLAIM_SECRET is unset —
+  // the feature is off and the response is byte-identical to before. It must never fail a written order.
+  let claimToken: string | undefined;
+  try {
+    const secret = claimSecret();
+    if (secret) claimToken = issueClaimToken(order.id, secret);
+  } catch (err) {
+    console.error("[order] claim token not issued for", order.number, err);
+  }
+
   // COD → the payment row was already written inside the order txn (collected on delivery, no gateway).
   if (isCod) {
     return NextResponse.json(
       {
         ok: true,
         orderNumber: order.number,
+        claimToken,
         cod: true,
         subtotal,
         lines,
@@ -1322,6 +1413,7 @@ async function handle(req: Request) {
           "Pesanan sudah tercatat, tetapi pembayaran belum dapat dibuat. Jangan kirim ulang pesanan ini.",
         code: "payment_start_failed",
         payError: "Pembayaran belum dikonfigurasi.",
+        payToken,
         subtotal,
         lines,
         shipping: shippingCost,
@@ -1354,6 +1446,9 @@ async function handle(req: Request) {
   // fee (0,7 % of the whole amount incl. ongkir for QRIS), so the shopper saw one number and was
   // billed another — measured on production, `PHI-768771328ISC`: shown Rp1.323, billed Rp1.372.
   let pay: Awaited<ReturnType<typeof alCreateOrder>>;
+  // A THROW is an UNKNOWN outcome (the vendor may have created the bill before the socket died); an
+  // answer with `rc != 00` is a REFUSAL (nothing was created). PAY-RETRY treats them differently.
+  let payThrew = false;
   try {
     pay = await alCreateOrder({
       reffId: order.number,
@@ -1372,6 +1467,7 @@ async function handle(req: Request) {
     });
   } catch (err) {
     console.error("[order] alCreateOrder threw for", order.number, err);
+    payThrew = true;
     pay = { ok: false, error: PAY_START_FAILED };
   }
   if (!pay.ok) {
@@ -1383,6 +1479,20 @@ async function handle(req: Request) {
       "—",
       pay.error,
     );
+    // PAY-RETRY: a REFUSED bill is not a live one. Left `menunggu` it read as a pending instruction
+    // nobody could pay — blocking the Seller's re-bill (`createOrderPayment` refused while any row was
+    // `menunggu`) and now the shopper's retry. A THROWN call stays `menunggu` on purpose: the bill may
+    // exist, and `instructionState` presumes an unknown one payable (no second bill on top of it).
+    if (!payThrew) {
+      try {
+        await db
+          .update(schema.payments)
+          .set({ status: "gagal", requestError: (pay.error ?? "").slice(0, 500) || null, requestUpdatedAt: new Date() })
+          .where(and(eq(schema.payments.orderId, order.id), eq(schema.payments.status, "menunggu")));
+      } catch (err) {
+        console.error("[order] could not mark the refused bill gagal for", order.number, err);
+      }
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -1392,6 +1502,7 @@ async function handle(req: Request) {
           "Pesanan sudah tercatat, tetapi pembayaran belum dapat dibuat. Jangan kirim ulang pesanan ini.",
         code: "payment_start_failed",
         payError: PAY_START_FAILED,
+        payToken,
         subtotal,
         lines,
         shipping: shippingCost,
@@ -1417,6 +1528,11 @@ async function handle(req: Request) {
   if (feeMismatch) {
     console.warn("[order] provider grand_total differs from buyerPayable", order.number, "ours", finance.buyerPayableIdr, "theirs", providerTotal);
   }
+  // PAY-RETRY: the provider's expiry is PERSISTED now (it used to reach the browser once and be lost),
+  // because "may this order get a new instruction?" is a server question. Unparseable → NULL, which
+  // readers bound conservatively — and logged, so a vendor format change is visible, not silent.
+  const expiresAt = pay.expiresAt ? new Date(pay.expiresAt) : null;
+  if (!expiresAt) console.warn("[order] provider returned no parseable expiry for", order.number);
   await db
     .update(schema.payments)
     .set({
@@ -1425,24 +1541,10 @@ async function handle(req: Request) {
       qr: pay.qr,
       url: pay.url,
       paymentCode: pay.paymentCode,
+      expiresAt,
     })
     .where(eq(schema.payments.orderId, order.id));
-  let qrImage: string | null = null;
-  if (pay.qr) {
-    try {
-      qrImage = await QRCode.toDataURL(pay.qr, {
-        margin: 4,
-        width: 320,
-        errorCorrectionLevel: "M",
-      });
-    } catch (error) {
-      console.error(
-        "[order] QRIS image generation failed for",
-        order.number,
-        error,
-      );
-    }
-  }
+  const qrImage = await qrImageDataUrl(pay.qr, order.number);
   // `payChannel` is set by the gate above for every non-COD order, and the COD path returned long
   // before here — so the `??` is unreachable. It exists because this line runs AFTER the payment was
   // created, and it must not be the thing that throws. It used to be
@@ -1458,6 +1560,7 @@ async function handle(req: Request) {
     {
       ok: true,
       orderNumber: order.number,
+      claimToken,
       // The ongkir + total the SERVER decided, echoed back so a stale quote in the browser cannot leave
       // the shopper believing a number the order does not contain.
       subtotal,
@@ -1475,6 +1578,7 @@ async function handle(req: Request) {
       buyerPayable: finance.buyerPayableIdr,
       feeMismatch,
       tracking,
+      payToken,
       payment: {
         channel: {
           code: channel.code,
@@ -1489,7 +1593,7 @@ async function handle(req: Request) {
         amount: total,
         admin: finance.gatewayFeeIdr,
         total: finance.buyerPayableIdr,
-        expiresAt: pay.expiresAt,
+        expiresAt: expiresAt?.toISOString() ?? null,
       },
     },
     { headers: CORS },

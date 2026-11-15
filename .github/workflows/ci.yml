@@ -214,6 +214,18 @@ jobs:
       - run: npx tsc --noEmit
         working-directory: apps/super-admin
 
+      # Seller + Super Admin lint. Re-measured 2026-11-02: 0 errors (14 + 3 warnings), so the
+      # "currently red" note this replaced was stale. Warnings do not fail the step.
+      - run: npm run lint
+
+      # 2026-11 review item 3: nothing in CI looked at known-vulnerable dependencies; on 2026-11-02
+      # `npm audit --omit=dev` reported 3 critical / 19 high. ADVISORY for now (continue-on-error) so
+      # the baseline can be burned down without a red gate nobody reads — flip it to blocking once the
+      # high+critical count is 0 or each leftover has a written "not reachable because…".
+      - name: npm audit (advisory)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
   # ── Task 5.12 / NF-14: every deployable surface BUILDS, not just typechecks ──────────────────
   #
   # Until 2026-09-08 this workflow built exactly ONE of the four surfaces — the storefront, as a
@@ -239,6 +251,13 @@ jobs:
   #     `npm run check -w @tokophi/docs`  (routes ⊂ page-map, astro build, SEO, internal links —
   #      the Dockerfile runs the same script, so a red docs page is caught here and not as a
   #      failed Coolify image build of the whole compose stack after merge)
+  #   apps/account/Dockerfile (BUYER-ACCOUNT-DEPLOY, ADR 0016)
+  #     `npm run build -w @tokophi/account`  (Astro SSR, Node adapter; the Dockerfile builds with no
+  #      DATABASE_URL at all and the dummy one below is never connected to, like the Next builds).
+  #      Its `astro check` runs in the `test` job through `npm test` → `check:account`.
+  #   apps/affiliate/Dockerfile (AFFILIATE-P2, ADR 0022)
+  #     `npm run build -w @tokophi/affiliate`  (same shape as account: Astro SSR, Node adapter, no
+  #      DATABASE_URL needed at build). Its `astro check` runs through `npm test` → `check:affiliate`.
   #
   # ⚠️ THE DUMMY DATABASE_URL IS NOT OPTIONAL FOR THE TWO NEXT BUILDS. Route collection imports
   # `@tokophi/db`, whose `client.ts` throws AT MODULE LOAD when `planPools()` cannot resolve a
@@ -265,7 +284,7 @@ jobs:
       # Every surface's verdict is evidence; a red admin must not hide a red landing.
       fail-fast: false
       matrix:
-        app: [admin, super-admin, landing, docs]
+        app: [admin, super-admin, landing, docs, account, affiliate]
 
     env:
       NEXT_TELEMETRY_DISABLED: "1"
@@ -304,7 +323,7 @@ jobs:
       # so today it saves the TypeScript pass and little else; it is cheap and becomes worth more
       # if Turbopack's persistent build cache is ever switched on. Do not expect it to hide a slow
       # build.
-      - if: matrix.app != 'landing' && matrix.app != 'docs'
+      - if: matrix.app != 'landing' && matrix.app != 'docs' && matrix.app != 'account' && matrix.app != 'affiliate'
         uses: actions/cache@v4
         with:
           path: apps/${{ matrix.app }}/.next/cache
@@ -315,9 +334,6 @@ jobs:
       - run: npm run ${{ matrix.app == 'docs' && 'check' || 'build' }} -w @tokophi/${{ matrix.app }}
 
 # NOT here yet, deliberately:
-#   · `npm run lint -w @tokophi/admin` — currently red (itemised in specs/docs/BACKLOG.md). Adding it
-#     now would make CI red on day one, which is how a check stops being read. Fix the lint errors,
-#     then add the step.
 #   · `verify-ledger` (N61) — and this one is a DECISION, not a to-do.
 #     ① It answers a question about PRODUCTION DATA: children of `orders` whose parent row is gone,
 #       and what they are worth in a merchant's withdrawable balance. Production carried 48 such rows

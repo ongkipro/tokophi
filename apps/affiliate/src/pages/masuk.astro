@@ -1,0 +1,56 @@
+---
+// Sign in: email + password (ADR 0022). Plain form POST to itself — works with JS off. No password reset
+// by email exists (there is no mail provider): the page says who to ask instead.
+import Layout from "../layouts/Layout.astro";
+import PasswordField from "../components/PasswordField.astro";
+import ForgotPassword from "../components/ForgotPassword.astro";
+import { db } from "@tokophi/db";
+import { signInWithPassword } from "../lib/signin";
+import { safeNext } from "../lib/nav";
+import { AFFILIATE_COOKIE, affiliateCookieOptions, clientIp } from "../lib/session";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+if (Astro.locals.account) return Astro.redirect(next);
+let error = "";
+let email = "";
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  email = String(f.get("email") ?? "").slice(0, 254);
+  const r = await signInWithPassword(db, {
+    ip: clientIp(Astro.request, Astro.clientAddress),
+    email,
+    password: String(f.get("password") ?? ""),
+    userAgent: Astro.request.headers.get("user-agent"),
+  });
+  if (r.ok) {
+    Astro.cookies.set(AFFILIATE_COOKIE, r.token, affiliateCookieOptions());
+    return Astro.redirect(safeNext(String(f.get("next") ?? "")), 303);
+  }
+  error = r.error;
+}
+const signupHref = next === "/" ? "/daftar" : `/daftar?next=${encodeURIComponent(next)}`;
+---
+<Layout title="Masuk">
+  <div class="narrow stack">
+    <header class="page-head">
+      <h1>Masuk ke Affiliate TokoΦ</h1>
+      <p class="lead">Lihat komisi dan bagikan link dari semua toko yang Anda promosikan. Akun ini terpisah dari akun belanja TokoΦ.</p>
+    </header>
+    <section class="card">
+      <form method="post" novalidate>
+        {error && <p class="alert" role="alert" id="form-err">{error}</p>}
+        <input type="hidden" name="next" value={next} />
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required value={email} aria-describedby={error ? "form-err" : undefined} />
+        </div>
+        <div class="field">
+          <PasswordField id="password" name="password" label="Kata sandi" autocomplete="current-password" autofocus={!!error} describedBy={error ? "form-err" : undefined} />
+          <ForgotPassword />
+        </div>
+        <button class="button primary block" type="submit">Masuk</button>
+      </form>
+    </section>
+    <p class="auth-foot">Belum punya akun? <a href={signupHref}>Daftar jadi affiliate</a></p>
+  </div>
+</Layout>

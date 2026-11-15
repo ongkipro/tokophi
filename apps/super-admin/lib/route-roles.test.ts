@@ -41,6 +41,10 @@ const EXPECTED: Record<string, Record<PlatformRole, boolean>> = {
   "/analitik": { support: false, admin: true, owner: true },
   "/pengaturan": { support: false, admin: true, owner: true },
   "/log-sistem": { support: false, admin: true, owner: true },
+  "/pengiriman": { support: false, admin: true, owner: true },
+  // ADR 0019 — floor = SHIPPING_PROVIDER_MIN_RANK (owner today). Lowering that one constant to "admin"
+  // must flip this row as well, deliberately: the change of mind is recorded here.
+  "/kode-daftar": { support: false, admin: false, owner: true },
 };
 
 describe("route floors — the policy", () => {

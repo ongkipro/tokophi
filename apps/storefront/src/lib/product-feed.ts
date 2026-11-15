@@ -140,13 +140,52 @@ export type FeedItemInput = {
  * REQUIRED by all three, so emitting the item anyway just buys the merchant a disapproval they cannot
  * act on from inside the feed. The Katalog Iklan card counts what is actually publishable.
  */
+// ── ONE DERIVATION FOR THE FEED AND THE PDP (owner 2026-11-05) ────────────────────────────────────
+// The PDP "Spesifikasi" tab and the Google/Meta/TikTok feed used to compute their facts separately,
+// so the shopper could read something the catalogue did not say. Both now read these helpers.
+/** `g:brand` — the merchant's vendor, else the store name (Google requires a brand). */
+export const feedBrand = (p: Pick<Product, "vendor">, storeName: string) => clamp(p.vendor?.trim() || storeName, 70);
+/** Which variant option is colour and which is size, whatever order the merchant created them in. */
+export function colourSizeIndexes(p: Pick<Product, "options">) {
+  const opts = p.options ?? [];
+  return {
+    colorIdx: opts.findIndex((o) => /warna|color|colour/i.test(o.name)),
+    sizeIdx: opts.findIndex((o) => /ukuran|size/i.test(o.name)),
+  };
+}
+const GENDER_LABEL: Record<string, string> = { female: "Wanita", male: "Pria", unisex: "Unisex" };
+const AGE_LABEL: Record<string, string> = { adult: "Dewasa", kids: "Anak", toddler: "Balita", infant: "Bayi", newborn: "Bayi baru lahir" };
+/**
+ * The facts the PDP's "Spesifikasi" table shows — the same values the feed sends, in Indonesian.
+ * Rows with no value are omitted (a blank row is noise, and an invented one would contradict the feed).
+ */
+export function catalogSpecs(p: Product, storeName: string): { label: string; value: string }[] {
+  const { colorIdx, sizeIdx } = colourSizeIndexes(p);
+  const opts = p.options ?? [];
+  const gender = feedGender(p.gender);
+  const age = feedAgeGroup(p.ageGroup);
+  const rows: [string, string | null | undefined][] = [
+    ["Merek", feedBrand(p, storeName)],
+    ["Kategori", p.category],
+    ["Jenis", p.productType],
+    ["Warna", colorIdx >= 0 ? opts[colorIdx].values.join(", ") : null],
+    ["Ukuran", sizeIdx >= 0 ? opts[sizeIdx].values.join(", ") : null],
+    ["Bahan", p.material],
+    ["Untuk", gender ? GENDER_LABEL[gender] : null],
+    ["Usia", age ? AGE_LABEL[age] : null],
+    ["Berat", p.weightGrams && p.weightGrams > 0 ? (p.weightGrams >= 1000 ? `${String(Math.round(p.weightGrams / 100) / 10).replace(".", ",")} kg` : `${p.weightGrams} g`) : null],
+    ["Kondisi", "Baru"], // the feed sends `condition=new` for every item
+  ];
+  return rows.filter((r): r is [string, string] => !!r[1]?.trim()).map(([label, value]) => ({ label, value }));
+}
+
 export function feedItems({ product: p, origin, storeName, scheme, profile }: FeedItemInput): string[] {
   const image = p.image ? abs(p.image, origin) : "";
   if (!image) return [];
 
   const link = `${origin}/produk/${p.handle}`;
   // The merchant's own brand when they set one; the shop name is the fallback, not the definition.
-  const brand = clamp(p.vendor?.trim() || storeName, 70);
+  const brand = feedBrand(p, storeName);
   // Enum-guarded: a stray "women" in the row is normalised, anything unknown is omitted (not rejected).
   const gender = feedGender(p.gender) ?? "";
   // ⚠️ NOT `|| "adult"`. `age_group` is factual to all three platforms, and blank is the DEFAULT state
@@ -162,9 +201,7 @@ export function feedItems({ product: p, origin, storeName, scheme, profile }: Fe
   })();
 
   // Which option is colour vs size, so g:color/g:size map correctly regardless of option order.
-  const opts = p.options ?? [];
-  const colorIdx = opts.findIndex((o) => /warna|color|colour/i.test(o.name));
-  const sizeIdx = opts.findIndex((o) => /ukuran|size/i.test(o.name));
+  const { colorIdx, sizeIdx } = colourSizeIndexes(p);
   const pick = (v: { option1: string | null; option2: string | null; option3: string | null }, idx: number) =>
     idx === 0 ? v.option1 : idx === 1 ? v.option2 : idx === 2 ? v.option3 : null;
 

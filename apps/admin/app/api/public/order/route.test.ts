@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import postgres, { type Sql } from "postgres";
 import {
   afterAll,
@@ -10,13 +10,18 @@ import {
   vi,
 } from "vitest";
 import type * as ShippingQuote from "@/lib/shipping-quote";
+import { verifyClaimToken } from "@tokophi/lib/claim-token";
+import { SHIPPING_QUOTE_UNAVAILABLE } from "@/lib/public-guard";
 
 const h = vi.hoisted(() => {
   const state = {
     beforeQuote: null as null | ((storeId: string) => Promise<void>),
+    // SHIP-MENGANTAR: a per-store quote override, so a fixture can be priced "by Mengantar".
+    quotes: new Map<string, unknown>(),
   };
   const quoteShipping = vi.fn(async (input: { storeId: string }) => {
     await state.beforeQuote?.(input.storeId);
+    if (state.quotes.has(input.storeId)) return state.quotes.get(input.storeId);
     return {
       ok: true as const,
       rates: [
@@ -34,6 +39,8 @@ const h = vi.hoisted(() => {
       billableGrams: 1_000,
       weightFallback: [],
       codEnabled: true,
+      provider: "kiriminaja" as const,
+      destinationAreaId: null,
       origin: 1,
       originFrom: "pickup" as const,
       originName: "Gudang Test",
@@ -58,6 +65,24 @@ vi.mock("@/lib/data/areas", () => ({
 vi.mock("@/lib/cod", () => ({
   getCodPolicy: vi.fn(async () => ({ reason: () => null })),
 }));
+// The prepaid path ends at the payment gateway. These suites never reach it: "not configured" makes
+// the route answer 503 `orderCreated` AFTER the order row is written, which is exactly the row the
+// Mengantar stamp test reads. No network, no AutoLaris key.
+// PAY-RETRY adds two cases that DO reach a (stubbed) gateway — `gateway.mode` switches it per test and
+// is reset to "off" after each, so every other case keeps the never-called contract above.
+const gateway = vi.hoisted(() => ({ mode: "off" as "off" | "refuse" | "throw" }));
+vi.mock("@tokophi/lib/autolaris", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    autolarisConfigured: () => gateway.mode !== "off",
+    alCreateOrder: vi.fn(async () => {
+      if (gateway.mode === "refuse") return { ok: false, error: "rc=07 kata-kata vendor" };
+      if (gateway.mode === "throw") throw new TypeError("fetch failed");
+      throw new Error("AutoLaris must not be called from this suite");
+    }),
+  };
+});
 vi.mock("@/lib/shipping-quote", async (importOriginal) => {
   const actual = await importOriginal<typeof ShippingQuote>();
   return { ...actual, quoteShipping: h.quoteShipping };
@@ -69,6 +94,11 @@ const runId = randomUUID().slice(0, 8);
 const handle = `availability-${runId}`;
 const discountCode = `ORDER-${runId}`;
 const sessionId = `checkout-${runId}`;
+const AFF_CODE = `MITRA${runId.slice(0, 4).toUpperCase()}`;
+const SELF_CODE = `SELF${runId.slice(0, 4).toUpperCase()}`;
+/** The canonical form of the request's "0812 3456 7890" — what the route must hand to attribution. */
+const BUYER_PHONE = "6281234567890";
+const mgChannel = `MGT${runId}`;
 
 let client: Sql;
 let POST: (request: Request) => Promise<Response>;
@@ -237,17 +267,30 @@ async function mutationState(storeId: string) {
   };
 }
 
-function orderRequest(key: string) {
+function orderRequest(
+  key: string,
+  opts: {
+    channelCode?: string;
+    shipping?: { service: string; serviceType: string };
+    ip?: string;
+    sessionId?: string;
+    affiliateCode?: string;
+    refCode?: string;
+  } = {},
+) {
   const fixture = fixtures[key]!;
   return new Request("http://localhost/api/public/order", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-forwarded-for": "203.0.113.42",
+      // Own IP per Mengantar case: the route allows 10 orders/min per IP and this file makes more.
+      "x-forwarded-for": opts.ip ?? "203.0.113.42",
     },
     body: JSON.stringify({
+      ...(opts.affiliateCode === undefined ? {} : { affiliateCode: opts.affiliateCode }),
+      ...(opts.refCode === undefined ? {} : { refCode: opts.refCode }),
       storeSlug: fixture.slug,
-      sessionId,
+      sessionId: opts.sessionId ?? sessionId,
       items: [
         {
           handle,
@@ -269,11 +312,10 @@ function orderRequest(key: string) {
         kodepos: "40123",
       },
       shipping: {
-        service: "spx",
-        serviceType: "1",
+        ...(opts.shipping ?? { service: "spx", serviceType: "1" }),
         destId: 321,
       },
-      channelCode: "cod",
+      channelCode: opts.channelCode ?? "cod",
       discountCode,
     }),
   });
@@ -314,10 +356,33 @@ beforeAll(async () => {
     approvedAt,
     suspendedAt: null,
   });
+  for (const key of ["mgPrepaid", "mgCod", "mgGone", "mgRefused", "kaStamp", "alRefused", "alThrew"]) {
+    await addStore(key, { status: "active", approvedAt, suspendedAt: null });
+  }
+  // A platform channel only THIS run can name, removed in afterAll — the table is platform-wide.
+  await client`
+    insert into platform_payment_channels (channel, label, kind, enabled, active)
+    values (${mgChannel}, 'QRIS (test)', 'qris', true, true)
+  `;
+  // Affiliate wiring (0125, ADR 0022): one store with the programme ON, one with it OFF.
+  for (const [key, enabled] of [["aff", true], ["affoff", false]] as const) {
+    await addStore(key, { status: "active", approvedAt, suspendedAt: null });
+    const storeId = fixtures[key]!.id;
+    await client`
+      insert into store_settings (store_id, affiliate_enabled, affiliate_rate_bps, affiliate_hold_days)
+      values (${storeId}, ${enabled}, 1000, 3)
+    `;
+    await client`
+      insert into affiliates (store_id, code, name, phone, status) values
+        (${storeId}, ${AFF_CODE}, 'Mitra', '6281111111111', 'aktif'),
+        (${storeId}, ${SELF_CODE}, 'Pembeli Sendiri', ${BUYER_PHONE}, 'aktif')
+    `;
+  }
 });
 
 beforeEach(() => {
   h.state.beforeQuote = null;
+  h.state.quotes.clear();
   h.quoteShipping.mockClear();
 });
 
@@ -328,6 +393,14 @@ afterAll(async () => {
     await sql`set local session_replication_role = 'replica'`;
     await sql`
       delete from ledger_entries
+       where store_id in (select id from stores where account_id = ${accountId})
+    `;
+    await sql`
+      delete from affiliate_commissions
+       where store_id in (select id from stores where account_id = ${accountId})
+    `;
+    await sql`
+      delete from affiliates
        where store_id in (select id from stores where account_id = ${accountId})
     `;
     await sql`
@@ -400,6 +473,7 @@ afterAll(async () => {
        where store_id in (select id from stores where account_id = ${accountId})
     `;
     await sql`delete from stores where account_id = ${accountId}`;
+    await sql`delete from platform_payment_channels where channel = ${mgChannel}`;
     await sql`delete from accounts where id = ${accountId}`;
   });
   await client.end();
@@ -540,6 +614,54 @@ suite("POST /api/public/order — public store availability", () => {
     expect(secondBody.orderNumber).toBe(firstBody.orderNumber);
   }, 60_000);
 
+  // BUYER-ACCOUNT-P1 (ADR 0016) — "buying never requires an account". With the account feature switched
+  // ON (claim secret set), a guest order with NO account, NO session and NO buyer field in the body is
+  // still created, exactly as before; the only addition is a claim token bound to THAT order, on the
+  // success answer only. Nothing in the order path writes a buyer row — linking happens later, in
+  // apps/account, only if the shopper chooses to.
+  it("guest checkout with the account feature ON: order created, no account touched, claim token for this order only", async () => {
+    const secret = "t".repeat(40);
+    vi.stubEnv("ACCOUNT_CLAIM_SECRET", secret);
+    try {
+      const key = "claim";
+      await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+      const fixture = fixtures[key]!;
+      const accountsBefore = await client`select count(*)::int n from buyer_accounts`;
+
+      const first = await POST(orderRequest(key, { ip: "203.0.113.77" }));
+      const firstBody = (await first.json()) as { ok?: boolean; orderNumber?: string; claimToken?: string };
+      const [created] = (await mutationState(fixture.id)).orders as { id: string; number: string }[];
+      expect(first.status).toBe(200);
+      expect(firstBody).toMatchObject({ ok: true, orderNumber: created.number });
+      expect(verifyClaimToken(firstBody.claimToken!, secret, Date.now(), created.id)).not.toBeNull();
+
+      const [claims] = await client`select count(*)::int n from buyer_order_claims where store_id = ${fixture.id}`;
+      const [links] = await client`select count(*)::int n from buyer_store_links where store_id = ${fixture.id}`;
+      const [accountsAfter] = await client`select count(*)::int n from buyer_accounts`;
+      expect([claims.n, links.n, accountsAfter.n]).toEqual([0, 0, accountsBefore[0].n]);
+
+      // The duplicate answer (reachable by replaying a session id) never carries a token.
+      const replay = (await (await POST(orderRequest(key, { ip: "203.0.113.77" }))).json()) as Record<string, unknown>;
+      expect(replay.code).toBe("order_already_created");
+      expect(replay).not.toHaveProperty("claimToken");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 60_000);
+
+  it("with the account feature OFF the success answer carries no claim token", async () => {
+    vi.stubEnv("ACCOUNT_CLAIM_SECRET", "");
+    try {
+      const key = "noclaim";
+      await addStore(key, { status: "active", approvedAt: new Date(), suspendedAt: null });
+      const body = (await (await POST(orderRequest(key, { ip: "203.0.113.78" }))).json()) as Record<string, unknown>;
+      expect(body).toMatchObject({ ok: true });
+      expect(body.claimToken).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 60_000);
+
   it("re-checks the store lock inside the transaction before the customer upsert", async () => {
     const fixture = fixtures.race!;
     const before = await mutationState(fixture.id);
@@ -562,5 +684,228 @@ suite("POST /api/public/order — public store availability", () => {
     });
     expect(h.quoteShipping).toHaveBeenCalledTimes(1);
     expect(await mutationState(fixture.id)).toEqual(before);
+  });
+});
+
+// ── SHIP-MENGANTAR: the order follows the quote it RE-MADE, and phase 1 is NON-COD ────────────────
+// `quoteShipping` is stubbed per store with the shape the Mengantar branch produces (provider,
+// destination area, estimate-key service types, `cod: false`). What is under test is the ROUTE: what
+// it stamps, what it refuses, and that a provider's words never reach the shopper.
+const MG_AREA = "5f1d0c0e2b3a4c5d6e7f8a9b";
+const mgQuote = {
+  ok: true as const,
+  rates: [
+    { name: "JNE", code: "jne", type: "JNE", cost: 18_000, etd: "2-3 hari", cod: false, group: "regular" },
+    { name: "Shopee Express (SPX)", code: "spx", type: "spx", cost: 12_000, etd: "", cod: false, group: "regular" },
+  ],
+  grams: 500,
+  billableGrams: 1_000,
+  weightFallback: [],
+  codEnabled: false,
+  provider: "mengantar" as const,
+  destinationAreaId: MG_AREA,
+  origin: 1,
+  originFrom: "pickup" as const,
+  originName: "Gudang Test",
+};
+
+async function stampOf(storeId: string) {
+  return client<{ shipping_provider: string | null; ship_mengantar_area_id: string | null; courier: string | null; service_type: string | null; shipping_idr: string }[]>`
+    select shipping_provider, ship_mengantar_area_id, courier, service_type, shipping_idr::text
+      from orders where store_id = ${storeId} order by id
+  `;
+}
+
+suite("POST /api/public/order — Mengantar quote (SHIP-MENGANTAR phase 1)", () => {
+  it("stamps shipping_provider + ship_mengantar_area_id from the re-made quote, at OUR price", async () => {
+    const f = fixtures.mgPrepaid!;
+    h.state.quotes.set(f.id, mgQuote);
+    const res = await POST(orderRequest("mgPrepaid", { ip: "203.0.113.71", channelCode: mgChannel, shipping: { service: "jne", serviceType: "JNE" } }));
+    const body = await res.json();
+    // Gateway not configured in this suite → 503 AFTER the order is written (see the autolaris mock).
+    expect(body).toMatchObject({ orderCreated: true, shipping: 18_000 });
+    expect(await stampOf(f.id)).toEqual([
+      { shipping_provider: "mengantar", ship_mengantar_area_id: MG_AREA, courier: "jne", service_type: "JNE", shipping_idr: "18000" },
+    ]);
+    // PAY-RETRY: a prepaid order hands its browser the one-order secret, and stores ONLY its hash.
+    expect(body.payToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const [o] = await client<{ pay_token_hash: string | null }[]>`select pay_token_hash from orders where store_id = ${f.id}`;
+    expect(o.pay_token_hash).toBe(createHash("sha256").update(body.payToken, "utf8").digest("hex"));
+    expect(o.pay_token_hash).not.toContain(body.payToken);
+  });
+
+  it("refuses a COD request on a Mengantar quote with 403 and writes nothing", async () => {
+    const f = fixtures.mgCod!;
+    // Even a quote that (wrongly) claims COD for the rate must not open COD under Mengantar.
+    h.state.quotes.set(f.id, { ...mgQuote, codEnabled: true, rates: mgQuote.rates.map((r) => ({ ...r, cod: true })) });
+    const before = await mutationState(f.id);
+    const res = await POST(orderRequest("mgCod", { ip: "203.0.113.72", channelCode: "cod", shipping: { service: "spx", serviceType: "spx" } }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ ok: false, code: "cod_not_allowed" });
+    expect(await mutationState(f.id)).toEqual(before);
+  });
+
+  it("rejects a service missing from the fresh Mengantar quote (no silent re-pick)", async () => {
+    const f = fixtures.mgGone!;
+    h.state.quotes.set(f.id, mgQuote);
+    const before = await mutationState(f.id);
+    const res = await POST(orderRequest("mgGone", { ip: "203.0.113.73", channelCode: mgChannel, shipping: { service: "sicepat", serviceType: "SiCepat" } }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/tidak tersedia lagi/);
+    expect(await mutationState(f.id)).toEqual(before);
+  });
+
+  it("never hands the provider's own words to the shopper", async () => {
+    const f = fixtures.mgRefused!;
+    const providerWords = "Mengantar: origin_id 5f1d tidak ditemukan [internal]";
+    h.state.quotes.set(f.id, { ok: false, error: providerWords, fromProvider: true });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await POST(orderRequest("mgRefused", { ip: "203.0.113.74", channelCode: mgChannel, shipping: { service: "jne", serviceType: "JNE" } }));
+    spy.mockRestore();
+    const text = await res.text();
+    expect(text).not.toContain("origin_id");
+    expect(text).not.toMatch(/mengantar/i);
+    expect(JSON.parse(text).error).toBe(SHIPPING_QUOTE_UNAVAILABLE);
+  });
+
+  it("stamps kiriminaja when the KiriminAja branch priced the order", async () => {
+    const f = fixtures.kaStamp!;
+    const res = await POST(orderRequest("kaStamp", { ip: "203.0.113.75" }));
+    expect(res.status).toBe(200);
+    // COD has no instruction to renew: no secret minted, none stored (PAY-RETRY).
+    expect((await res.json()).payToken ?? null).toBeNull();
+    const [o] = await client<{ pay_token_hash: string | null }[]>`select pay_token_hash from orders where store_id = ${f.id}`;
+    expect(o.pay_token_hash).toBeNull();
+    expect(await stampOf(f.id)).toEqual([
+      expect.objectContaining({ shipping_provider: "kiriminaja", ship_mengantar_area_id: null, courier: "spx", service_type: "1" }),
+    ]);
+  });
+});
+
+// ── PAY-RETRY: a REFUSED first bill is failed; a THROWN one stays pending (its outcome is unknown) ─
+// A refused bill used to stay `menunggu` with no instruction at all: it blocked the Seller's re-bill
+// and would block the shopper's retry, while nothing anywhere could be paid. A thrown call is
+// different — the vendor may have created the bill before the socket died — so it must NOT be
+// declared dead (a second bill on top of a live one is a double charge).
+suite("POST /api/public/order — the first bill's failure modes (PAY-RETRY)", () => {
+  const payRows = (storeId: string) =>
+    client<{ status: string; request_error: string | null }[]>`
+      select status::text, request_error from payments where store_id = ${storeId}`;
+
+  it("gateway REFUSAL → the shell is `gagal` (retryable), the shopper gets a token and our words only", async () => {
+    const f = fixtures.alRefused!;
+    gateway.mode = "refuse";
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(orderRequest("alRefused", { ip: "203.0.113.81", channelCode: mgChannel }));
+      const text = await res.text();
+      expect(res.status).toBe(502);
+      expect(text).not.toContain("kata-kata vendor");
+      expect(JSON.parse(text)).toMatchObject({ orderCreated: true, code: "payment_start_failed" });
+      expect(JSON.parse(text).payToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect([...(await payRows(f.id))]).toEqual([{ status: "gagal", request_error: "rc=07 kata-kata vendor" }]);
+    } finally {
+      spy.mockRestore();
+      gateway.mode = "off";
+    }
+  });
+
+  it("gateway THROW → the shell stays `menunggu` (unknown outcome, no second bill on top)", async () => {
+    const f = fixtures.alThrew!;
+    gateway.mode = "throw";
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await POST(orderRequest("alThrew", { ip: "203.0.113.82", channelCode: mgChannel }));
+      expect(res.status).toBe(502);
+      expect([...(await payRows(f.id))]).toEqual([{ status: "menunggu", request_error: null }]);
+    } finally {
+      spy.mockRestore();
+      gateway.mode = "off";
+    }
+  });
+});
+
+suite("POST /api/public/order — affiliate attribution wiring (0125, ADR 0022)", () => {
+  let n = 0;
+  /** A fresh checkout session + client IP per order, so idempotency and the per-IP limit stay out of the way. */
+  async function place(key: string, o: { affiliateCode?: string; refCode?: string } = {}) {
+    n += 1;
+    const res = await POST(orderRequest(key, { ...o, sessionId: `aff-${runId}-${n}`, ip: `198.51.100.${n}` }));
+    const body = (await res.json()) as { ok?: boolean; orderNumber?: string };
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    const [order] = await client<{ id: string }[]>`
+      select id from orders where store_id = ${fixtures[key]!.id} and number = ${body.orderNumber ?? ""}
+    `;
+    expect(order).toBeDefined();
+    return client<{ code: string; source: string; base_idr: string; commission_idr: string; status: string }[]>`
+      select a.code, c.source, c.base_idr::text, c.commission_idr::text, c.status::text
+        from affiliate_commissions c join affiliates a on a.id = c.affiliate_id and a.store_id = c.store_id
+       where c.order_id = ${order!.id}
+    `;
+  }
+
+  it("a typed code attaches ONE pending commission: 10% of goods after the voucher (Rp100.000 − Rp1.000)", async () => {
+    const rows = await place("aff", { affiliateCode: AFF_CODE.toLowerCase() });
+    expect([...rows]).toEqual([{ code: AFF_CODE, source: "kode", base_idr: "99000", commission_idr: "9900", status: "pending" }]);
+  });
+
+  it("a captured ?ref= alone attributes as `link`", async () => {
+    const rows = await place("aff", { refCode: AFF_CODE });
+    expect(rows.map((r) => [r.code, r.source])).toEqual([[AFF_CODE, "link"]]);
+  });
+
+  it("a typed code beats the captured ?ref=; an unknown typed code falls back to the ?ref=", async () => {
+    expect((await place("aff", { affiliateCode: AFF_CODE, refCode: SELF_CODE })).map((r) => r.code)).toEqual([AFF_CODE]);
+    expect((await place("aff", { affiliateCode: "TIDAKADA", refCode: AFF_CODE })).map((r) => [r.code, r.source])).toEqual([[AFF_CODE, "link"]]);
+  });
+
+  it("a bad code never costs the sale: the order is created, with no commission", async () => {
+    expect([...(await place("aff", { affiliateCode: "TIDAKADA" }))]).toEqual([]);
+    expect([...(await place("aff", { affiliateCode: "x".repeat(500), refCode: "<script>" }))]).toEqual([]);
+  });
+
+  it("self-referral is caught from the RAW checkout phone (the route passes the canonical 62… form)", async () => {
+    expect([...(await place("aff", { affiliateCode: SELF_CODE }))]).toEqual([]);
+  });
+
+  it("programme OFF: a valid code is ignored and the order still goes through", async () => {
+    expect([...(await place("affoff", { affiliateCode: AFF_CODE }))]).toEqual([]);
+  });
+
+  // F-A13: `/lp/<slug>?ref=CODE` → the landing funnel (components/OrderFunnel.astro) posts ITS OWN body
+  // shape — no checkout session, no item name/price, no voucher, COD, plus the captured `refCode`. That
+  // exact shape must attribute like checkout. (The storefront half — that the funnel sends `refCode` at
+  // all — is `apps/storefront/src/lib/order-forms-affiliate-ref.test.ts`.)
+  it("an /lp landing-funnel order carrying the captured ?ref= creates ONE `link` commission", async () => {
+    const fixture = fixtures.aff!;
+    const res = await POST(
+      new Request("http://localhost/api/public/order", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.250" },
+        body: JSON.stringify({
+          storeSlug: fixture.slug,
+          refCode: AFF_CODE,
+          trackingCookies: { fbp: "", fbc: "", ga: "", gcl: "", ttp: "", ttclid: "" },
+          items: [{ handle, variant: "Default", qty: 1 }],
+          customer: { name: "Pembeli Landing", phone: "0813 2222 3333", email: undefined },
+          address: { alamat: "Jl. Merdeka No. 10, RT 01/RW 02", kota: "x", provinsi: "x", kodepos: "40123" },
+          shipping: { label: "SPX", service: "spx", serviceType: "1", destId: 321 },
+          destId: 321,
+          channelCode: "cod",
+        }),
+      }),
+    );
+    const body = (await res.json()) as { ok?: boolean; orderNumber?: string; error?: string };
+    expect(res.status, body.error).toBe(200);
+    const rows = await client<{ code: string; source: string; base_idr: string; commission_idr: string }[]>`
+      select a.code, c.source, c.base_idr::text, c.commission_idr::text
+        from affiliate_commissions c
+        join affiliates a on a.id = c.affiliate_id and a.store_id = c.store_id
+        join orders o on o.id = c.order_id and o.store_id = c.store_id
+       where o.store_id = ${fixture.id} and o.number = ${body.orderNumber ?? ""}
+    `;
+    // No voucher on this path, so the base is the full goods value: 10% of Rp100.000.
+    expect([...rows]).toEqual([{ code: AFF_CODE, source: "link", base_idr: "100000", commission_idr: "10000" }]);
   });
 });

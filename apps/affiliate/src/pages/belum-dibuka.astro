@@ -1,0 +1,18 @@
+---
+// The one page a CLOSED affiliate area answers: the middleware rewrites every path here while
+// `AFFILIATE_APP_URL` is unset (`lib/availability.ts`). 503 + Retry-After: deliberately not open yet —
+// not a missing page, not an error in the app. Once open, this URL has nothing to say, so it goes home.
+import Layout from "../layouts/Layout.astro";
+import { affiliateOpen } from "../lib/availability";
+
+if (affiliateOpen()) return Astro.redirect("/");
+Astro.response.status = 503;
+Astro.response.headers.set("Retry-After", "86400");
+---
+<Layout title="Belum dibuka">
+  <section class="card narrow" id="affiliate-closed">
+    <h1>Affiliate TokoΦ belum dibuka</h1>
+    <p class="lead">Area affiliate sedang disiapkan dan belum bisa dipakai untuk mendaftar atau masuk.</p>
+    <p>Sudah bekerja sama dengan sebuah toko? Komisi Anda tetap dicatat oleh toko tersebut. Hubungi seller-nya untuk informasi komisi.</p>
+  </section>
+</Layout>

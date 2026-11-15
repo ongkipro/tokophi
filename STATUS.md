@@ -1,6 +1,6 @@
 # Status — tokophi
 
-Updated: 2026-09-11
+Updated: 2026-11-06
 Status: Active
 State: VERIFIED
 Review-Risk: R2
@@ -31,56 +31,54 @@ Use `BLOCKED` only as an interruption state. Record the blocker and exact state 
 ## Current state
 
 **The product is LIVE and has been since 2026-07-13** (`tokophi.com` landing · `app.` Seller panel ·
-`rich.` Super Admin · `<slug>.tokophi.id` storefronts). One Vultr box (`volumdev`, 45.77.33.112)
-running Coolify + `docker-compose.coolify.yml`; Postgres 16 with **109 migrations (`0000`–`0108`)**
-and **83 tables** (counted from `packages/db/drizzle/meta/_journal.json` and `schema.ts`,
-2026-09-11 — the count is guarded by `packages/db/src/doc-counts.test.ts`); RLS verified `54/55`
-store-scoped tables (`npm run verify-rls -w @tokophi/db`, 2026-09-11). Shape of the system:
-`ARCHITECTURE.md`.
+`rich.` Super Admin · `<slug>.tokophi.id` storefronts). **Since 2026-11-01 18:53 UTC production runs on
+a dedicated Vultr host** (Singapore, 2 vCPU / 4 GB, Ubuntu 24.04, Coolify 4.5.3) — runbook
+`specs/docs/DEPLOY.md`, bootstrap history `specs/docs/tasks/2026-11-01-dedicated-vps-bootstrap.md`;
+host identifiers are device-local (SSH alias `tokophi-new-ops`). The old box `volumdev` is retired.
+Postgres 16 with **117 migrations (`0000`–`0116`)**, equal on the repo journal and production
+(BUILD-LOG 2026-11-05); the table count is guarded by `packages/db/src/doc-counts.test.ts`.
+⚠️ A merge to `main` deploys nothing on this host — the deploy is triggered by hand (`DEPLOY.md` step 2).
 
-**Release on production: `98f1d5a` (PR #390, Coolify deploy 536, `finished` 2026-09-10 16:46 UTC)** on
-base `fca0a2e` (PR #389, deploy 535). Both deploys were matched by COMMIT in
-`application_deployment_queues`, and the data they carried was read back from the production
-database (migration stamp `1787545291751`; 74 017 courier village ids; VA fee 3000 in the live checkout
-HTML and the running admin bundle) — `RELEASE.md`, BUILD-LOG 2026-09-10.
+**Release on production: `0e4d950a` (PR #451, storefront redesign C)**, deployed by hand 2026-11-05
+12:18 UTC — `RELEASE.md`. Followed by a data-only run the same day (monochrome brand reset, 3 stores,
+backup table `ops_backup.store_theme_20261105`). `main` after it is docs-only.
 
-**Why `VERIFIED`:** every configured probe in `OBSERVABILITY.md` was run off-box on 2026-09-11 —
-landing 200 · app 307 · rich 307 · storefront-demo 200 · `ongkir-search` 200 with "Kota Semarang" ·
-`ongkir-rates` → PASS — 4 rates cod=2 originFrom=pickup sample=jne:REG23 Rp16000.
-All green, so the state machine's condition for VERIFIED is met.
-⚠️ **VERIFIED does not mean production is on the courier's PRODUCTION endpoint.** `KIRIMINAJA_ENV`
-is `sandbox` on both admin and storefront (measured 2026-09-10), so every live ongkir is a sandbox
-figure and no parcel is really booked — that is Task 8.9 (one authorised production booking, owner),
-the substance of issue #5, and it is not a probe failure: the sandbox answers correctly.
+**Why `VERIFIED`:** `ops/tokophi-probe.sh` run off-box 2026-11-06 ~02:45 WIB (2026-11-05 19:45 UTC)
+with `TOKOPHI_SSH_TARGET=tokophi-new-ops` — landing 200 · app/login 200 · rich 307 · toko 200 ·
+`batiknusantara.tokophi.id` 200 · `db_ongkir` search 200 with rows · ssh OK · disk 42 % / 52 GB free ·
+L1 watchdog heartbeat 41 s; exit 0.
+
+**Mengantar (Partner API) is shipped but DORMANT:** `MENGANTAR_ENV` is unset on production and the
+shipping switch stays on KiriminAja. Owner-gated prerequisites: the Partner API production origin, the
+dedicated host's IP on Mengantar's allow-list, and Terms/Privacy URLs for the consent line. The area
+import (`npm run load:mengantar-areas -w @tokophi/db`) has not run on production.
 
 ## Active work
 
-**#392 (payment-advice cron) reached `main` inside #393** — my branching error, see `RELEASE.md`
-"This release"; Coolify deploy 537 carries it. Open: **#391** (ADR 0004 — no provider brand in any
-merchant/shopper string, guarded), CI re-running after the BUILD-LOG merge. Queue: root `TASKS.md` Stage 8; navigation handoff
-`specs/docs/tasks/OPEN.md`. The remaining open items are owner-gated (8.9 first production booking,
-8.1 alert channel, 8.5 branch pruning, 5.8 buyer accounts).
+No code task active (2026-11-06). Open PRs: #421 (AGENTS.md split, docs), #424 (affiliate + buyer
+account), #426 (FK indexes), #428 (auth hardening), #429 (media paging), #430/#431 (stacked on #424).
+⚠️ #424 and #426 both carry a `0116_*` migration while `main` already shipped `0116_mengantar_shipping`
+— each must renumber AND re-stamp before merge (`specs/docs/rules/migrations.md`). Handoff:
+`specs/docs/tasks/OPEN.md`.
 
 ## Blockers
 
-- **None that code can move.** The 2026-09-07 allow-list blocker is **RESOLVED** (owner re-added the
-  IP 2026-09-09; rates verified live the same day and again today).
-- **Owner-gated, not blocking the state machine:** production still on the courier sandbox (Task 8.9);
-  no external uptime monitor / pager (Task 8.1 — the 70-hour outage of 2026-09-04→07 is why it
-  matters; `OBSERVABILITY.md` "The gap"). The offsite backup half is CLOSED: Task 8.4 done 2026-10-10
-  (`offsite-ok` to R2, restore from R2 proven — BUILD-LOG).
+- **None that code can move.** The post-cutover KiriminAja allow-list block was resolved 2026-11-02
+  (owner whitelisted the new IP; `cron-tracking` restarted).
+- **Owner-gated, not blocking the state machine:** Mengantar production prerequisites (above); Task 8.9
+  (KiriminAja production cutover); no external uptime monitor / pager (Task 8.1); GitHub webhook →
+  Coolify blocked by Cloudflare Access (manual deploys); dropping `ops_backup.store_theme_20261105`.
 
 ## Verification evidence
 
-- Release gate on the two merged PRs and the two open ones: lint 0 · `verify:guards` 0 · `test:release`
-  up to **171 files / 1 494 tests** · RLS verified · storefront `verify` 8/8 (BUILD-LOG 2026-09-10/11).
-- Production read-backs after deploy 535/536: BUILD-LOG 2026-09-10 16:40 UTC.
-- Off-box probes 2026-09-11 (this file's "Why" paragraph); `ops/tokophi-probe.sh` is the same set and
-  still runs on **no** machine on a schedule (Task 8.1).
-- Doc authority: `node scripts/verify-doc-authority.mjs` → ok (8 documents, one queue).
+- Deploy of `0e4d950a`: five web containers `(healthy)` on two polls, `migrate`/`seed` exited 0,
+  probe exit 0, live storefront checked at 390 + 1440 px — BUILD-LOG 2026-11-05 12:25 UTC.
+- Off-box probe 2026-11-05 19:45 UTC (this file's "Why" paragraph). `ops/tokophi-probe.sh` still runs
+  on **no** machine on a schedule (Task 8.1).
+- Doc authority: `npm run verify:doc-authority`.
 
 ## Next verified action
 
-Owner merges #391/#392 (CI green) → Coolify deploy → re-run the probes above + confirm the seventh
-cron sidecar reports on Super Admin → Analitik → Sistem → rewrite `RELEASE.md` header with
-`Base: 98f1d5a…`. Then Task 8.9: one real production booking flips `KIRIMINAJA_ENV` off sandbox.
+Wait for the owner's three Mengantar prerequisites → run the area import, set `MENGANTAR_ENV`, flip the
+shipping switch, re-run `ops/tokophi-probe.sh`. Independently: serialise the open PR merges (each needs
+a manual deploy here), renumbering the `0116` clashes first.

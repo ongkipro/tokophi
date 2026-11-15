@@ -7,19 +7,17 @@ export function RichText({ heading, body, ctaLabel, ctaHref, theme, eyebrow }: R
   const dark = theme === "gelap";
   return (
     <section className={dark ? "bg-ink" : "bg-cream"}>
-      <div className="mx-auto max-w-3xl px-6 py-20 text-center">
+      <div className="mx-auto max-w-3xl px-6 py-14 text-center sm:py-20">
         {eyebrow && (
           <p
-            className={`mb-5 text-xs font-semibold uppercase tracking-[0.2em] ${
-              dark ? "text-white/60" : "text-brand-600"
-            }`}
+            className={`mb-2 text-sm ${dark ? "text-white/75" : "text-muted-foreground"}`}
           >
             {eyebrow}
           </p>
         )}
         {heading && (
           <h2
-            className={`font-display text-3xl font-semibold leading-[1.15] text-balance sm:text-4xl md:text-5xl ${
+            className={`font-display text-2xl font-semibold leading-snug tracking-[-0.01em] text-balance sm:text-3xl ${
               dark ? "text-cream" : "text-ink"
             }`}
           >

@@ -25,9 +25,9 @@ e-wallets, payday cycles.
 | | |
 |---|---|
 | ✅ **Self-serve store builder** (ADR 0009) — but **section-based, not free-form**. A curated registry (Hero, Product Grid, …), not arbitrary HTML/CSS/Liquid. | ❌ **No Themes menu.** No Liquid. No theme marketplace. |
-| ✅ **Checkout is locked and uniform** across every store (branding tokens only). | ❌ **No Apps / plugins marketplace.** The feature set is curated in-core. |
-| ✅ **Payments and shipping are platform-managed** — the merchant "terima matang" (ADR 0004). | ❌ **No plan tiers.** One plan, all features. |
-| ✅ **The platform holds the money and pays the merchant out.** That makes us a custodian, and it is the single most consequential thing about this product. | ❌ **Provider brands are never shown** to merchants or shoppers. |
+| ✅ **Checkout is locked and uniform** across every store (branding tokens only). | ❌ **No Apps / plugins marketplace.** The feature set is curated in-core; the only plugins are **first-party**, compiled in and activated per store (ADR 0021 — e.g. Kelola CRM). |
+| ✅ **Payments and shipping are platform-managed** — the merchant "terima matang" (ADR 0004). Since 2026-11 a store may ship through **its own Mengantar seller account**, which TokoΦ registers for it (no key field, owner consent; ADR 0018); KiriminAja stays the fallback and the COD path. | ❌ **No plan tiers.** One plan, all features. |
+| ✅ **The platform holds the money and pays the merchant out.** That makes us a custodian, and it is the single most consequential thing about this product. | ❌ **Provider brands are never shown** to shoppers, nor to merchants — except "Mengantar", the seller's own account (ADR 0004 addendum, ADR 0018). |
 
 ---
 
@@ -231,11 +231,11 @@ never ages its own carts) and the capture rate limiter is in-process. ([`BACKLOG
 
 ## 6. Subscription billing (what merchants pay us)
 
-**One plan, all features.** 3-day trial → **Rp50.000** first month → **Rp275.000/mo** (annual
-Rp2.700.000). Prices are the **DPP (ex-tax)**; the merchant pays base + **PPN 11%**. Invoices store the
+**One plan, all features** (pricing per ADR 0020, 2026-11-13). 3-day trial → **Rp178.500/mo** from the first invoice — no first-month promo (annual
+**Rp1.713.600** = monthly × 12 − 20%, 13 months when paid straight from the trial). A signup/referral code (`/daftar?kode=`, ADR 0019) may carry a discount on the store's FIRST PAID subscription invoice, once (default Rp100.000 → Rp78.500 / Rp1.613.600). Prices are the **DPP (ex-tax)**; PPN 11% is added only when the global toggle is on, on the discounted DPP. Invoices store the
 PPN-inclusive total; the faktur itemises DPP + PPN.
 
-**Store lifecycle:** `trial → first_month → regular → vip`. **VIP = `stores.comped`** — free, always
+**Store lifecycle:** `trial → first_invoice → regular → vip` (`first_invoice` = trial over, never paid; formerly `first_month`). **VIP = `stores.comped`** — free, always
 active, never billed, never suspended.
 
 A past-due store goes **read-only** after its grace period (`requireCapability` throws
@@ -275,7 +275,7 @@ Grounded; see [`STATUS.md`](docs/STATUS.md) for the item-by-item 🟢/🟡/🔴 
 | **Admin** — 20+ modules | 🟢 All read the DB; all editors write it. Dashboard is an **action queue**, not vanity metrics. Pesanan is a **seller centre** (Shopee-style tabs, server-side search/filter/paging, counts that partition exactly) |
 | **Money** — Saldo, ledger, payouts | 🟢 Real, end-to-end. Balance derived, book append-only, payout approval in super-admin |
 | **COD** | 🟢 Enforced **and switched on** end-to-end (SPX only), exercised in a real browser. ⚠️ Its central premise is unverified (§4), and the return rate it optimises for is unmeasurable (§5) |
-| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking, and the checkout now offers **exactly the services the seller ticked** (`store_shipping_methods`; until `35b88a4` it read the courier-level list and offered services the seller had switched off). ⚠️ The sandbox never issues a courier AWB (its tracking answers `MOCK-<ref>`, refused since 2026-09-14) |
+| **Shipping** | 🟢 Live ongkir + live roster sync + shipment booking, and the checkout now offers **exactly the services the seller ticked** (`store_shipping_methods`; until `35b88a4` it read the courier-level list and offered services the seller had switched off). ⚠️ The sandbox never issues a courier AWB (its tracking answers `MOCK-<ref>`, refused since 2026-09-14). 🟡 **Mengantar** (ADR 0018) live since 2026-11-12 for the demo store only (owner-attached account, non-COD); other stores wait for Mengantar's production Partner origin (O2) and keep KiriminAja |
 | **Storefront** | 🟢 SSR multi-tenant, Store Builder, real funnel events. 🟢 `/blog` reads the DB; WhatsApp is per-store (email still shared) |
 | **Super-admin** | 🟢 Rebuilt on real numbers (`571ed17`). The merchant float is shown as a **liability** |
 | **Analytics** | 🟡 Honest maths, demo rows. The funnel is a `GROUP BY` over `analytics_events`; those rows are still overwhelmingly seeded |

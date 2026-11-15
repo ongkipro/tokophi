@@ -145,6 +145,15 @@ services:
       AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
       AUTOLARIS_CALLBACK_SECRET: ${AUTOLARIS_CALLBACK_SECRET:-}
+      # SHIP-MENGANTAR — the provider switch + Mengantar Partner env. Empty = today's behaviour (the quote
+      # reads an unset MENGANTAR_ENV as sandbox and keeps the default provider). A var set in Coolify
+      # reaches this container ONLY through this block — test/compose-provider-env.test.ts.
+      MENGANTAR_ENV: ${MENGANTAR_ENV:-}
+      MENGANTAR_PARTNER_ID: ${MENGANTAR_PARTNER_ID:-}
+      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
+      SHIPPING_PROVIDER: ${SHIPPING_PROVIDER:-}
+      # scheduledPickup (default, empty) | dropOff — read by the Mengantar booking only.
+      MENGANTAR_PICKUP_MODE: ${MENGANTAR_PICKUP_MODE:-}
       CRON_SECRET: ${CRON_SECRET:-}
       # Cloudflare for SaaS — creates and polls merchant Custom Hostnames after our TXT proof passes.
       CF_SAAS_ZONE_ID: ${CF_SAAS_ZONE_ID:-}
@@ -181,6 +190,13 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      # Akun TokoΦ (ADR 0016) — THE switch (`buyerAccountEnabled()`): set (≥ 32 chars) ⇒ /api/public/order
+      # issues claim tokens and the Seller screens Pelanggan → Akun Pembeli / Pengaturan → Layanan Pembeli
+      # appear. MUST equal the `account` service's value. Empty = OFF, the honest default.
+      ACCOUNT_CLAIM_SECRET: ${ACCOUNT_CLAIM_SECRET:-}
+      # Affiliate TokoΦ (ADR 0022) — origin of apps/affiliate; the Affiliate screen's "Undang ke akun
+      # affiliate" links point there. MUST equal the `affiliate` service's value. Empty = button hidden.
+      AFFILIATE_APP_URL: ${AFFILIATE_APP_URL:-}
       # T-9 / UX-1 — same holder id the storefront reads (see the storefront service's note). The
       # admin uses it for ONE thing: prefilling an empty /tema canvas from the holder's template of
       # the same type, so a new merchant starts from the platform default instead of a blank page.
@@ -239,8 +255,16 @@ services:
       ADMIN_URL: ${ADMIN_URL:-}
       KIRIMINAJA_ENV: ${KIRIMINAJA_ENV:-sandbox}
       KIRIMINAJA_API_KEY: ${KIRIMINAJA_API_KEY:-}
+      KIRIMINAJA_ORDER_PREFIX: ${KIRIMINAJA_ORDER_PREFIX:-}
       AUTOLARIS_BASE: ${AUTOLARIS_BASE:-https://api-h2h.autolaris.com}
       AUTOLARIS_API_KEY: ${AUTOLARIS_API_KEY:-}
+      # SHIP-MENGANTAR — the provider switch + Mengantar Partner env. Empty = today's behaviour (the Kurir
+      # switch reads an unset MENGANTAR_ENV as sandbox and keeps the default provider). A var set in Coolify
+      # reaches this container ONLY through this block — test/compose-provider-env.test.ts.
+      MENGANTAR_ENV: ${MENGANTAR_ENV:-}
+      MENGANTAR_PARTNER_ID: ${MENGANTAR_PARTNER_ID:-}
+      MENGANTAR_PARTNER_SECRET: ${MENGANTAR_PARTNER_SECRET:-}
+      SHIPPING_PROVIDER: ${SHIPPING_PROVIDER:-}
     expose:
       - "3001"
     healthcheck:
@@ -279,8 +303,20 @@ services:
       # superuser: the Host-resolved catalog read needs `bypassrls`, not the right to create tables.
       DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
       DATABASE_RUNTIME_ROLE: owner
+      # The storefront VERIFIES the abandoned-cart recovery link (`?r=`, @tokophi/lib/recovery) and
+      # signs the chat visitor token (src/lib/chat.ts) with this key, and `authSecret()` throws in
+      # production when it is unset. It was missing until 2026-10-29: every WhatsApp recovery link
+      # opened an empty checkout with nothing logged. Same value as admin (which mints those links).
+      # Pinned by test/compose-auth-secret.test.ts.
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       PUBLIC_ONGKIR_API: ${PUBLIC_ONGKIR_API:-}
       PUBLIC_ORDER_API: ${PUBLIC_ORDER_API:-}
+      # Akun TokoΦ (ADR 0016) — "Simpan ke Akun TokoΦ" on /checkout/sukses links to `<this>/klaim`
+      # (src/lib/account-link.ts; https only). Empty = the offer is not rendered.
+      ACCOUNT_APP_URL: ${ACCOUNT_APP_URL:-}
+      # Affiliate TokoΦ (ADR 0022) — `/affiliate` links to `<this>/gabung?toko=<slug>` (src/lib/affiliate-link.ts;
+      # https only). Empty = the page says applications are not open yet. MUST equal the `affiliate` service's.
+      AFFILIATE_APP_URL: ${AFFILIATE_APP_URL:-}
       # Host-header multi-tenant (ADR 0009): `<slug>.tokophi.com` → that store. RESERVED labels
       # (www/app/rich/admin/api/cname/toko/…) never resolve as a slug. STORE_SLUG stays the
       # fallback for hosts that name no store (bare IP, toko.tokophi.com, localhost).
@@ -399,6 +435,112 @@ services:
       start_period: 5s
       start_interval: 2s
 
+  # Akun TokoΦ — the buyer account (apps/account, ADR 0016, BUYER-ACCOUNT-DEPLOY) on account.tokophi.com.
+  # Astro SSR, ONE origin for every shop's buyers (not tenant-resolved). DORMANT BY DEFAULT: with no
+  # Google client (GOOGLE_CLIENT_ID/SECRET empty) a production build has no sign-in method, so EVERY page
+  # answers "Akun TokoΦ belum dibuka" (503) and reads no row; /klaim says "belum tersedia" until
+  # ACCOUNT_CLAIM_SECRET is set (same value as admin). Turning it on = Coolify env only — DEPLOY.md.
+  # The Host router outranks the store wildcard (`tokophi-stores`, priority=1), which would otherwise 301
+  # account.tokophi.com to account.tokophi.id; "account" is in RESERVED_SLUGS for the same reason as
+  # "panduan". DNS = the existing proxied wildcard; TLS = the Cloudflare Origin CA default cert.
+  account:
+    build:
+      context: .
+      dockerfile: apps/account/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      # Same as the storefront: postgres only, NO `migrate` gate (ADR 0017 §2.4).
+      postgres: { condition: service_healthy }
+    environment:
+      # `owner`, the storefront's reasoning: ZERO `withTenant()` call sites — buyer data is keyed by the
+      # account, across stores, and every query filters on the signed-in buyer explicitly. Under the
+      # restricted role with no tenant GUC every store-scoped read returns zero rows.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
+      DATABASE_RUNTIME_ROLE: owner
+      NODE_ENV: production
+      # Signs the buyer session (HMAC-derived key, never the raw secret — src/lib/session.ts).
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
+      # Empty = /klaim answers "belum tersedia". MUST equal the admin service's value.
+      ACCOUNT_CLAIM_SECRET: ${ACCOUNT_CLAIM_SECRET:-}
+      # The SAME Google client as Seller sign-in, its own redirect URI (registered on that client).
+      # ⚠️ Setting GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET (e.g. for Seller Google sign-in) OPENS account
+      # sign-in too, because the redirect URI has a default — see DEPLOY.md "Akun TokoΦ".
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ACCOUNT_GOOGLE_REDIRECT_URI: ${ACCOUNT_GOOGLE_REDIRECT_URI:-}
+      # Merchant upload thumbnails (`/api/uploads/…`) are served by the Seller origin; empty = neutral icon.
+      ADMIN_URL: ${ADMIN_URL:-}
+      # "Kembali ke toko" links: `<slug>.<this>` (empty = tokophi.id, the code default).
+      STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
+    expose:
+      - "4329"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tokophi-account.rule=Host(`account.tokophi.com`)
+      - traefik.http.routers.tokophi-account.entryPoints=https
+      - traefik.http.routers.tokophi-account.tls=true
+      - traefik.http.routers.tokophi-account.priority=100
+      - traefik.http.routers.tokophi-account.service=tokophi-account
+      - traefik.http.services.tokophi-account.loadbalancer.server.port=4329
+    healthcheck:
+      # /healthz answers while the account is closed too (else Traefik has no server for the host) and
+      # proves the Postgres connection; 127.0.0.1, not localhost (busybox wget tries ::1 first).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4329/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+      # See the admin service's start_interval note — same 503-window fix.
+      start_interval: 2s
+
+  # Affiliate TokoΦ — the store affiliate programme's OWN accounts (apps/affiliate, ADR 0022, AFFILIATE-P2)
+  # on affiliate.tokophi.com. Astro SSR, ONE origin for every store's affiliates (not tenant-resolved),
+  # email + password sign-in, separate from the buyer account. DORMANT BY DEFAULT: with AFFILIATE_APP_URL
+  # empty EVERY page answers "Affiliate TokoΦ belum dibuka" (503) and reads no row. The SAME variable on
+  # admin (invite links) and storefront (`/affiliate` join link) turns those halves on. Turning it on =
+  # Coolify env only — DEPLOY.md "Affiliate". The Host router outranks the store wildcard (priority=1),
+  # which would otherwise 301 affiliate.tokophi.com to affiliate.tokophi.id; "affiliate" is in
+  # RESERVED_SLUGS for the same reason as "account". DNS = the proxied wildcard; TLS = the Origin CA cert.
+  affiliate:
+    build:
+      context: .
+      dockerfile: apps/affiliate/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      # Same as the storefront/account: postgres only, NO `migrate` gate (ADR 0017 §2.4).
+      postgres: { condition: service_healthy }
+    environment:
+      # `owner`, the account app's reasoning: ZERO `withTenant()` call sites — affiliate data is keyed by
+      # the affiliate account across stores, and every query filters on the signed-in account explicitly.
+      DATABASE_URL: ${PLATFORM_DATABASE_URL:?PLATFORM_DATABASE_URL must be set to the tokophi_platform role — the app surfaces no longer connect as the bootstrap superuser}
+      DATABASE_RUNTIME_ROLE: owner
+      NODE_ENV: production
+      # THE switch: this app's own public origin (https://affiliate.tokophi.com). Empty = closed (503).
+      # Set the SAME value on admin and storefront.
+      AFFILIATE_APP_URL: ${AFFILIATE_APP_URL:-}
+      # Share links: `<slug>.<this>/?ref=CODE` (empty = tokophi.id, the code default).
+      STOREFRONT_BASE_DOMAIN: ${STOREFRONT_BASE_DOMAIN:-}
+    expose:
+      - "4330"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tokophi-affiliate.rule=Host(`affiliate.tokophi.com`)
+      - traefik.http.routers.tokophi-affiliate.entryPoints=https
+      - traefik.http.routers.tokophi-affiliate.tls=true
+      - traefik.http.routers.tokophi-affiliate.priority=100
+      - traefik.http.routers.tokophi-affiliate.service=tokophi-affiliate
+      - traefik.http.services.tokophi-affiliate.loadbalancer.server.port=4330
+    healthcheck:
+      # /healthz answers while the area is closed too (else Traefik has no server for the host) and proves
+      # the Postgres connection; 127.0.0.1, not localhost (busybox wget tries ::1 first).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4330/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+      # See the admin service's start_interval note — same 503-window fix.
+      start_interval: 2s
+
   # daily billing job — hits the admin cron endpoint (syncs statuses + auto-invoices past-due).
   #
   # Response body to STDOUT (the SAME lesson `cron-tracking` and `cron-tracking-events` already record
@@ -498,6 +640,26 @@ services:
       # 60 seconds — the interval reasoned about above, read by BOTH `sleep` and `?every=`.
       CRON_INTERVAL_SEC: 60
     command: ["sh", "-c", "while true; do wget -qO- --header \"x-cron-secret: $$CRON_SECRET\" \"http://admin:3000/api/cron/tracking-events?every=$$CRON_INTERVAL_SEC\" || echo 'cron tracking-events failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # First-party plugins (ADR 0021, KEL-001) — retries + leads for every store's ACTIVE plugin (today:
+  # Kelola CRM). Idle until a merchant connects one: with no `store_plugins` row the tick is one
+  # indexed read and `{"stores":0}`. 900 s = a paid prepaid order reaches Kelola within ~15 min of
+  # payment (spec §4.4 ceiling); each row is claimed right before its own POST, so an overlapping tick
+  # cannot double-send. Same header-only CRON_SECRET + `?every=` contract as every loop above.
+  cron-plugins:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      admin: { condition: service_healthy }
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      CRON_INTERVAL_SEC: 900
+    command: ["sh", "-c", "while true; do echo \"[cron-plugins] $$(date -Iseconds)\"; wget -qO- --header \"x-cron-secret: $$CRON_SECRET\" \"http://admin:3000/api/cron/plugins?every=$$CRON_INTERVAL_SEC\" || echo 'cron plugins failed'; echo; sleep $$CRON_INTERVAL_SEC; done"]
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s

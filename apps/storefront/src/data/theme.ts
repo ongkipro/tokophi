@@ -4,7 +4,7 @@ import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import type { StoredTemplateData } from "@tokophi/sections";
 import { needsPlatformFallback, platformDefaultThemeStoreId, withPlatformFallback } from "./theme-source";
-import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
+import { brandShades } from "@tokophi/lib/colors";
 
 /**
  * Full brand shade scale derived from the store's chosen hex (or the platform default) —
@@ -12,7 +12,7 @@ import { generateBrandShades, DEFAULT_BRAND_COLOR } from "@tokophi/lib/colors";
  * utility already in the storefront's markup picks up the merchant's colour.
  */
 export const brandShadesFor = (brandColor: string | null | undefined): Record<string, string> =>
-  generateBrandShades(brandColor ?? DEFAULT_BRAND_COLOR);
+  brandShades(brandColor);
 
 /**
  * Every template the store has built, in ONE query (they're small, and the catalog is memoized

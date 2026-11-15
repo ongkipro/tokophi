@@ -12,10 +12,11 @@ const pct = (rate: number) => `${(rate * 100).toLocaleString("id-ID", { maximumF
 
 export const PRICE = {
   trialDays: BILLING.TRIAL_DAYS,
-  firstMonth: IDR(BILLING.FIRST_MONTH_IDR),
   monthly: IDR(BILLING.MONTHLY_IDR),
   annual: IDR(BILLING.ANNUAL_IDR),
   annualPerMonth: IDR(BILLING.ANNUAL_MONTHLY_IDR),
+  // ADR 0020: annual = monthly × 12 − this percentage.
+  annualDiscountPct: `${BILLING.ANNUAL_DISCOUNT_PCT}%`,
   // Saving of a year paid annually against twelve regular months.
   annualSaving: IDR(BILLING.MONTHLY_IDR * 12 - BILLING.ANNUAL_IDR),
   graceDays: BILLING.GRACE_DAYS,

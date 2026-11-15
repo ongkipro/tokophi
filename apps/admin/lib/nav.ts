@@ -1,11 +1,11 @@
 import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, FolderOpen, type LucideIcon } from "lucide-react";
 
-export type NavChild = { label: string; href: string };
+export type NavChild = { label: string; href: string; badgeKey?: NavBadgeKey };
 
 /** Counts the nav can show. A key, never a literal: `badge: "7"` used to live here — a hardcoded
  *  string that had counted nothing, was wrong for every store, and would have stayed wrong forever.
  *  The value is fetched server-side and passed into <NavLinks counts=… />. */
-export type NavBadgeKey = "perluDikirim";
+export type NavBadgeKey = "perluDikirim" | "affiliateMenunggu";
 export type NavItem = { label: string; href: string; icon: LucideIcon; badgeKey?: NavBadgeKey; children?: NavChild[] };
 export type NavGroup = { label?: string; items: NavItem[] };
 
@@ -83,6 +83,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Keranjang Ditinggal", href: "/pelanggan/keranjang" },
           { label: "Segmen", href: "/pelanggan/segmen" },
           { label: "Ulasan", href: "/pelanggan/ulasan" },
+          // TokoΦ Account (ADR 0016): which customers saved this store's orders to their account.
+          { label: "Akun Pembeli", href: "/pelanggan/akun" },
         ],
       },
       // Obrolan = shopper ⇄ merchant chat (specs/docs/CHAT_SPEC.md). It sits with Pesanan/Pelanggan
@@ -109,6 +111,8 @@ export const NAV_GROUPS: NavGroup[] = [
           { label: "Voucher", href: "/diskon" },
           { label: "Flash Sale", href: "/flash-sale" },
           { label: "Landing Page", href: "/promo" },
+          // Store affiliate programme (ADR 0022). The badge counts applicants waiting for a yes/no.
+          { label: "Affiliate", href: "/affiliate", badgeKey: "affiliateMenunggu" },
         ],
       },
       { label: "Analitik", href: "/analitik", icon: BarChart3 },
@@ -133,3 +137,43 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/**
+ * CRM (Follow-up WA, Pipeline, Template) is shown ONLY on these stores until it runs on WhatsApp
+ * Business (WABA). Owner ruling 2026-11-03: hide it from every merchant except the demo store.
+ * Keyed by slug because that is what the layout already holds for every chrome surface.
+ * To open CRM to everyone later, delete this gate and its two callers (`navGroupsFor`, `crm/layout.tsx`).
+ */
+export const CRM_STORE_SLUGS: ReadonlySet<string> = new Set(["batiknusantara"]);
+
+export function crmEnabled(slug: string | null | undefined): boolean {
+  return !!slug && CRM_STORE_SLUGS.has(slug);
+}
+
+/**
+ * TokoΦ Account (ADR 0016) Seller surfaces — dormant until the platform switches the feature ON
+ * (`buyerAccountEnabled()` in `@tokophi/lib/claim-token`, read on the server by the admin layout and
+ * handed down as a boolean). The pages refuse on their own too (`/pelanggan/akun` → 404, the
+ * Pengaturan section falls back to Profil, the save actions refuse): hiding a row is not a gate.
+ */
+export const BUYER_ACCOUNT_NAV_HREFS: ReadonlySet<string> = new Set(["/pelanggan/akun"]);
+export const BUYER_ACCOUNT_SETTINGS_SECTIONS: ReadonlySet<string> = new Set(["pembeli"]);
+
+/** Whether a Pengaturan section may be shown/opened. */
+export const settingsSectionVisible = (id: string, buyerAccounts: boolean): boolean =>
+  buyerAccounts || !BUYER_ACCOUNT_SETTINGS_SECTIONS.has(id);
+
+/** `NAV_GROUPS` as one store sees it — the sidebar, the phone drawer and the Ctrl/Cmd+K palette all read this. */
+export function navGroupsFor(slug: string | null | undefined, opts: { buyerAccounts?: boolean } = {}): NavGroup[] {
+  const crm = crmEnabled(slug);
+  const buyer = opts.buyerAccounts === true;
+  if (crm && buyer) return NAV_GROUPS;
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items
+      .filter((item) => crm || item.href !== "/crm")
+      .map((item) =>
+        buyer || !item.children ? item : { ...item, children: item.children.filter((c) => !BUYER_ACCOUNT_NAV_HREFS.has(c.href)) },
+      ),
+  }));
+}

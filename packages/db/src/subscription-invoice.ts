@@ -1,9 +1,50 @@
 import { randomBytes } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
-import { quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { codeDiscountFor, quote, subscriptionCharge, type Cycle } from "@tokophi/lib/billing";
 import { alCreateOrder } from "@tokophi/lib/autolaris";
 import { payCallbackUrl } from "@tokophi/lib/pay-callback";
+import { uniqueViolationConstraint } from "@tokophi/lib/pg-errors";
 import { db, schema } from "./client";
+
+/** 0119 — at most one LIVE (menunggu) invoice carrying a code discount per store. */
+export const LIVE_CODE_DISCOUNT_INDEX = "invoices_one_live_code_discount";
+
+export type OwedCodeDiscount = { code: string | null; discountIdr: number };
+
+/**
+ * ADR 0020 — the signup-code discount THIS store is owed on its next subscription invoice, resolved by the
+ * ONE rule (`codeDiscountFor`) from the store's own facts: `stores.signup_code` → the code's
+ * `discount_first_invoice_idr`, `first_invoice_paid`, `comped`, and whether ANY subscription invoice of the
+ * store is `dibayar` (a manual "Lunas" flip does not set `first_invoice_paid`, ruling 2026-08-20, and must
+ * still consume the discount; comp invoices are gifts, not payments). The code's `active` flag is NOT read:
+ * a discount granted at signup survives the code being deactivated later.
+ *
+ * Owner pool on purpose: `signup_codes` has RLS with no policy (0117), so the merchant role reads nothing
+ * there. The store filter is explicit — `stores` has no store_id and RLS does not police it.
+ */
+export async function owedCodeDiscount(storeId: string): Promise<OwedCodeDiscount> {
+  const [r] = await db
+    .select({
+      code: schema.stores.signupCode,
+      codeDiscountIdr: schema.signupCodes.discountFirstInvoiceIdr,
+      firstInvoicePaid: schema.stores.firstInvoicePaid,
+      comped: schema.stores.comped,
+      // Qualified BY NAME inside the correlated subquery (correlated-subquery-scoping.test.ts).
+      hasPaidSubscription: sql<boolean>`exists (select 1 from invoices i where i.store_id = "stores"."id" and i.status = 'dibayar' and coalesce(i.kind, 'subscription') <> 'comp')`,
+    })
+    .from(schema.stores)
+    .leftJoin(schema.signupCodes, eq(schema.signupCodes.code, schema.stores.signupCode))
+    .where(eq(schema.stores.id, storeId))
+    .limit(1);
+  if (!r) return { code: null, discountIdr: 0 };
+  const discountIdr = codeDiscountFor({
+    codeDiscountIdr: r.codeDiscountIdr === null ? 0 : Number(r.codeDiscountIdr),
+    firstInvoicePaid: r.firstInvoicePaid,
+    hasPaidSubscription: r.hasPaidSubscription === true || String(r.hasPaidSubscription) === "true",
+    comped: r.comped,
+  });
+  return { code: discountIdr > 0 ? r.code : null, discountIdr };
+}
 
 /**
  * THE ONE subscription-invoice creator (Task 8.24, finance audit 2026-09-16 F1).
@@ -21,6 +62,9 @@ import { db, schema } from "./client";
  * owner's e-mail as the payer, and BOTH numbers stored on the row (`amount_idr` = billed,
  * `tax_idr` = the PPN actually added). A pending invoice is REUSED, never duplicated — the rule the
  * merchant flow already had.
+ *
+ * ADR 0020 (2026-11): the signup-code first-invoice discount is decided here too, from the store's own
+ * `signup_code` (`owedCodeDiscount`), and stored on the row (`code_discount_idr`, `discount_code`).
  *
  * Lives in `@tokophi/db` because both apps (admin, super-admin) need it and neither may import the
  * other; `@tokophi/db` already depends on `@tokophi/lib`. It is exported ONLY as the subpath
@@ -46,6 +90,9 @@ export type SubscriptionInvoiceDetail = {
   cycle: Cycle;
   amountIdr: number;
   taxIdr: number;
+  /** ADR 0020 — the signup-code discount (DPP) inside `amountIdr`; 0 = none. */
+  codeDiscountIdr: number;
+  discountCode: string | null;
   channel: string;
   virtualAccount: string | null;
   qr: string | null;
@@ -68,6 +115,8 @@ async function pendingInvoice(storeId: string): Promise<SubscriptionInvoiceDetai
       cycle: schema.invoices.cycle,
       amountIdr: schema.invoices.amountIdr,
       taxIdr: schema.invoices.taxIdr,
+      codeDiscountIdr: schema.invoices.codeDiscountIdr,
+      discountCode: schema.invoices.discountCode,
       channel: schema.invoices.channel,
       virtualAccount: schema.invoices.virtualAccount,
       qr: schema.invoices.qr,
@@ -78,11 +127,15 @@ async function pendingInvoice(storeId: string): Promise<SubscriptionInvoiceDetai
     .orderBy(desc(schema.invoices.issuedAt))
     .limit(1);
   if (!inv) return null;
+  // A pending invoice is returned EXACTLY as issued — an invoice raised at the old price (or the old
+  // Rp50rb promo) before ADR 0020 keeps that amount; nothing re-prices a stored invoice (owner decision 7).
   return {
     number: inv.number,
     cycle: inv.cycle === "annual" ? "annual" : "monthly",
     amountIdr: Number(inv.amountIdr),
     taxIdr: Number(inv.taxIdr ?? 0),
+    codeDiscountIdr: Number(inv.codeDiscountIdr ?? 0),
+    discountCode: inv.discountCode ?? null,
     channel: inv.channel ?? "",
     virtualAccount: inv.virtualAccount ?? null,
     qr: inv.qr ?? null,
@@ -125,7 +178,17 @@ export async function createSubscriptionInvoice(input: SubscriptionInvoiceInput)
     .from(schema.platformFinance)
     .where(eq(schema.platformFinance.id, 1))
     .limit(1);
-  const q = quote(input.cycle, store.firstInvoicePaid);
+  // ADR 0020 — the price is decided HERE, on the server, from the store's own facts; nothing the caller
+  // (merchant, cron, operator) says can move it. The code discount comes off the DPP and PPN (when on)
+  // is computed on the discounted DPP; both numbers and the discount are stored on the row.
+  const owed = await owedCodeDiscount(store.id);
+  const q = quote(input.cycle, store.firstInvoicePaid, owed.discountIdr);
+  if (q.amount <= 0) {
+    // A code worth the whole price would mint a Rp0 bill the provider refuses; the Super Admin form
+    // caps a code below the monthly price, so this is a misconfiguration, never a free month.
+    console.error(`[subscription-invoice] code discount ${owed.discountIdr} >= ${q.listAmount} for store ${store.id} — refused`);
+    return { ok: false, error: "Tagihan tidak bisa dibuat — hubungi TokoΦ." };
+  }
   const charge = subscriptionCharge(q.amount, fin?.on ?? false);
 
   const reffId = `SUB-${store.slug.slice(0, 12)}-${Date.now().toString().slice(-8)}`;
@@ -138,7 +201,7 @@ export async function createSubscriptionInvoice(input: SubscriptionInvoiceInput)
     customerPhone: PLACEHOLDER_PHONE,
     customerEmail: owner?.email ?? FALLBACK_PAYER_EMAIL,
     callbackUrl: payCallbackUrl(reffId),
-    items: [{ name: `Langganan TokoΦ (${q.cycle === "annual" ? "tahunan" : "bulanan"}${input.actor === "platform" ? ", manual" : ""})`, qty: 1, unitPrice: charge.total }],
+    items: [{ name: `Langganan TokoΦ (${q.cycle === "annual" ? "tahunan" : "bulanan"}${q.codeDiscountIdr > 0 ? `, potongan kode ${owed.code}` : ""}${input.actor === "platform" ? ", manual" : ""})`, qty: 1, unitPrice: charge.total }],
   });
   if (!r.ok) return { ok: false, error: r.error ?? "Gagal membuat tagihan." };
 
@@ -148,23 +211,38 @@ export async function createSubscriptionInvoice(input: SubscriptionInvoiceInput)
   // timestamp digits keep the human-readable, time-ordered shape; a 3-symbol random tail (32⁷ per
   // ms) makes a collision a non-event.
   const number = "SUB-" + Date.now().toString().slice(-9) + randomBytes(2).toString("hex").slice(0, 3).toUpperCase();
-  await db.insert(schema.invoices).values({
-    number,
-    accountId: store.accountId,
-    storeId: store.id,
-    kind: "subscription",
-    amountIdr: charge.total,
-    taxIdr: charge.taxIdr,
-    cycle: q.cycle,
-    periodMonths: q.months,
-    reffId,
-    trxId: r.trxId,
-    channel: channelCode,
-    virtualAccount: r.virtualAccount ?? null,
-    qr: r.qr ?? null,
-    paymentUrl: r.url ?? null,
-    status: "menunggu",
-  });
+  const discountCode = q.codeDiscountIdr > 0 ? owed.code : null;
+  try {
+    await db.insert(schema.invoices).values({
+      number,
+      accountId: store.accountId,
+      storeId: store.id,
+      kind: "subscription",
+      amountIdr: charge.total,
+      taxIdr: charge.taxIdr,
+      codeDiscountIdr: q.codeDiscountIdr,
+      discountCode,
+      cycle: q.cycle,
+      periodMonths: q.months,
+      reffId,
+      trxId: r.trxId,
+      channel: channelCode,
+      virtualAccount: r.virtualAccount ?? null,
+      qr: r.qr ?? null,
+      paymentUrl: r.url ?? null,
+      status: "menunggu",
+    });
+  } catch (e) {
+    // Two creators raced past the pending-reuse read above (merchant click + cron, two tabs) and both
+    // carried the discount: 0119's partial unique index lets ONE live discounted invoice exist. The
+    // loser answers with the winner's invoice, exactly as if it had arrived a moment later. Its
+    // provider order is left unmatched — no invoice row points at it, so a payment to it is ignored
+    // by pay/callback like any other unknown reference.
+    if (uniqueViolationConstraint(e) !== LIVE_CODE_DISCOUNT_INDEX) throw e;
+    const winner = await pendingInvoice(store.id);
+    if (winner) return { ok: true, detail: winner, reused: true };
+    throw e;
+  }
   return {
     ok: true,
     reused: false,
@@ -173,6 +251,8 @@ export async function createSubscriptionInvoice(input: SubscriptionInvoiceInput)
       cycle: q.cycle,
       amountIdr: charge.total,
       taxIdr: charge.taxIdr,
+      codeDiscountIdr: q.codeDiscountIdr,
+      discountCode,
       channel: channelCode,
       virtualAccount: r.virtualAccount ?? null,
       qr: r.qr ?? null,

@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@tokophi/db";
 import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/auth";
-import { OAUTH_STATE_COOKIE, exchangeCode, googleConfig } from "@/lib/google";
+import { OAUTH_SIGNUP_CODE_COOKIE, OAUTH_STATE_COOKIE, exchangeCode, googleConfig } from "@/lib/google";
 import { sessionCookieOptions } from "@tokophi/lib/session-cookie";
-import { ProvisionConflictError, ProvisionInputError, provisionStore, signupOpen } from "@/lib/provision";
+import { ProvisionConflictError, ProvisionInputError, SignupCodeError, provisionStore, signupOpen } from "@/lib/provision";
 
 // Google OAuth callback: state check → code exchange → id_token verify (JWKS) → find-or-create the
 // user → sign the SAME jose session JWT as lib/auth.ts.
@@ -83,6 +83,9 @@ export async function GET(req: NextRequest) {
     // here as a throw. `profile.name` is a Google display name — nobody typed it as a shop name, so a
     // one-character one is an ordinary event, not an attack. Landing on /daftar with a reason (and
     // the form right there) is the answer; a 500 was not.
+    // ADR 0019 — the signup code from /daftar (set by the start route as `<CODE>.<0|1>`). Validated by
+    // `provisionStore` exactly like the form path; the consent flag counts only for a Mengantar code.
+    const [signupCode = "", consent = "0"] = (req.cookies.get(OAUTH_SIGNUP_CODE_COOKIE)?.value ?? "").split(".");
     let r: Awaited<ReturnType<typeof provisionStore>>;
     try {
       r = await provisionStore({
@@ -92,8 +95,12 @@ export async function GET(req: NextRequest) {
         authProvider: "google",
         googleSub: userId ? null : profile.sub,
         userId: userId ?? undefined,
+        signupCode,
+        mengantarConsent: consent === "1",
       });
     } catch (e) {
+      // Before the generic input error: SignupCodeError IS a ProvisionInputError.
+      if (e instanceof SignupCodeError) return redirectTo("/daftar?error=kode");
       if (e instanceof ProvisionInputError) return redirectTo("/daftar?error=nama_google");
       if (e instanceof ProvisionConflictError) return redirectTo("/daftar?error=bentrok");
       throw e;
@@ -108,5 +115,6 @@ export async function GET(req: NextRequest) {
   const res = redirectTo(slug ? `/store/${slug}` : "/");
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_MAX_AGE));
   res.cookies.delete(OAUTH_STATE_COOKIE);
+  res.cookies.delete(OAUTH_SIGNUP_CODE_COOKIE);
   return res;
 }

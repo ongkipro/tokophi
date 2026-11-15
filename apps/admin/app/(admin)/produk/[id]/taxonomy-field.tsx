@@ -17,6 +17,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 const leafOf = (path: string) => path.split(" > ").at(-1) || path;
 
+/** Marks a value the editor filled from the Google catalogue, until the merchant confirms or changes it. */
+export function AutoTag() {
+  return <span className="ml-1 rounded-sm bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">otomatis</span>;
+}
+
 export function GoogleCategoryField({
   value,
   path,
@@ -24,6 +29,7 @@ export function GoogleCategoryField({
   category,
   description,
   onChange,
+  auto = false,
 }: {
   value: number | null;
   path: string;
@@ -33,6 +39,8 @@ export function GoogleCategoryField({
       suggestion and the server's must never disagree about the same listing. */
   description?: string;
   onChange: (id: number | null, path: string) => void;
+  /** The editor filled this from the title (owner 2026-11-05) — tag it until the merchant confirms. */
+  auto?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
@@ -73,6 +81,7 @@ export function GoogleCategoryField({
     <div className="grid gap-1.5">
       <Label>
         Kategori Google <span className="font-normal text-muted-foreground">(opsional)</span>
+        {auto && <span className="ml-1 rounded-sm bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">otomatis</span>}
       </Label>
 
       {value ? (

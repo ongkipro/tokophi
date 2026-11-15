@@ -27,6 +27,8 @@ import { SegmentBadge, StatusBadge, HealthBadge, InvoiceBadge, ActivityIcon, ini
 import type { StoreInvoiceRow, StoreUserRow, StoreBalance, StoreMovement, StorePayout, StoreMoneySignals } from "@/lib/data";
 import type { PActivity } from "@/lib/types";
 import { SaldoSection } from "./saldo-section";
+import { ShippingProviderCard } from "./shipping-provider-card";
+import type { StoreShipping } from "@/lib/shipping-data";
 import {
   impersonateStore, suspendStore, liftSuspension, compStore, extendTrial, setStoreComped,
   resetOwnerPassword, resetStoreUserPassword, setStoreUserRole, removeStoreUser, addStoreUser,
@@ -43,7 +45,7 @@ function CheckIcon({ status }: { status: CheckStatus }) {
   return <Icon className={cn("size-4 shrink-0", checkToneClass[status])} />;
 }
 
-export function StoreDetail({ store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals }: {
+export function StoreDetail({ store, health, billing, invoices, users, activity, comp, balance, movements, payouts, signals, shipping }: {
   store: Store; health: StoreHealth | null; billing: BillingState | null;
   invoices: StoreInvoiceRow[]; users: StoreUserRow[]; activity: PActivity[];
   comp: { comped: boolean; reason: string | null };
@@ -51,6 +53,8 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
   movements: { rows: StoreMovement[]; total: number; page: number; pages: number };
   payouts: StorePayout[];
   signals: StoreMoneySignals;
+  /** ADR 0019 — the store's shipping provider (null only if the store vanished mid-request). */
+  shipping: StoreShipping | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -436,7 +440,7 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-2xl font-bold tracking-tight tabular-nums">{comp.comped ? "Gratis" : IDR(billing?.nextAmount ?? BILLING.MONTHLY_IDR)}</span>
-                  {!comp.comped && <span className="text-sm text-muted-foreground">/bln{billing?.isPromo ? " (promo)" : ""}</span>}
+                  {!comp.comped && <span className="text-sm text-muted-foreground">/bln{billing && billing.codeDiscountIdr > 0 ? ` (tagihan pertama, potongan kode −${IDR(billing.codeDiscountIdr)})` : ""}</span>}
                 </div>
                 {billing && !comp.comped && (
                   <div className="mt-3 space-y-1.5 border-t pt-3 text-xs text-muted-foreground">
@@ -450,6 +454,8 @@ export function StoreDetail({ store, health, billing, invoices, users, activity,
               </div>
             </CardContent>
           </Card>
+
+          {shipping && <ShippingProviderCard storeId={store.id} storeName={store.name} shipping={shipping} />}
 
           {/* full control */}
           <Card>

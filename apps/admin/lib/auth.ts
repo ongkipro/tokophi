@@ -1,11 +1,10 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import { scryptSync, timingSafeEqual } from "node:crypto";
 import { db, schema } from "@tokophi/db";
 import { and, eq } from "drizzle-orm";
 import { authSecretBytes } from "@tokophi/lib/secret";
-import { hashPassword } from "@tokophi/lib/password";
+import { hashPassword, verifyPassword } from "@tokophi/lib/password";
 import { sessionOutlivesPassword } from "@tokophi/lib/session-revocation";
 
 // Lazy (throws in prod if AUTH_SECRET is unset, never at build) — see @tokophi/lib/secret.
@@ -44,19 +43,10 @@ export type Session = {
 // (here, `actions/security.ts`, `packages/db/src/seed.ts`, `@tokophi/lib/password`, and the deleted
 // `super-admin/lib/temp-password.ts`) — the same shape that let the MINT drift to 24 bits in one copy
 // while the other said 32. Nothing here drifts yet; the point is that a copy is where it would.
-// `verifyPassword` below is the reader of this format, so the writer stays one function.
+// `verifyPassword` is the reader of this format; since ADR 0022 (the affiliate app is a third password
+// sign-in) it lives beside the writer in `@tokophi/lib/password` and is re-exported here too.
 // The specifier stays `@/lib/auth` for every caller — this is a re-export, not a call-site change.
-export { hashPassword };
-
-// scrypt "salt:hash" — the verifier for what `hashPassword` writes (16-byte hex salt, 64-byte key).
-export function verifyPassword(pw: string, stored: string | null): boolean {
-  if (!stored) return false;
-  const [salt, hash] = stored.split(":");
-  if (!salt || !hash) return false;
-  const expected = Buffer.from(hash, "hex");
-  const actual = scryptSync(pw, salt, 64);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
-}
+export { hashPassword, verifyPassword };
 
 /**
  * The account + its DEFAULT membership, by the ONE selection contract (Task 5.9 / F-T10):

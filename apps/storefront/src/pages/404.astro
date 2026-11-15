@@ -76,7 +76,7 @@ const picks = catalog?.bestsellers?.().slice(0, 4) ?? [];
       </a>
       <a
         href="/"
-        class="inline-block rounded-full border border-line bg-white px-7 py-3 text-sm font-semibold text-ink transition-colors hover:border-brand-400 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        class="inline-flex min-h-12 items-center rounded-lg border border-ink px-7 text-[0.9375rem] font-semibold text-ink transition-colors hover:border-ink hover:bg-ink hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
       >
         Kembali ke Beranda
       </a>
@@ -100,7 +100,6 @@ const picks = catalog?.bestsellers?.().slice(0, 4) ?? [];
               section under it and the cards inside are h3. Without the prop ProductCard defaults to
               h3 anyway, which is right here. */}
           <SectionHeading
-            eyebrow="Mungkin ini yang kamu cari"
             title="Produk paling dicari"
             align="center"
           />

@@ -13,13 +13,13 @@ const dark = theme === "gelap";
 ---
 
 <section class:list={dark ? "bg-ink" : "bg-cream"}>
-  <div class="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 sm:py-28">
+  <div class="mx-auto max-w-3xl px-4 py-14 text-center sm:px-6 sm:py-20">
     {
       eyebrow && (
         <p
           class:list={[
-            "mb-5 text-xs font-semibold uppercase tracking-[0.2em]",
-            dark ? "text-white/60" : "text-brand-600",
+            "mb-2 text-sm",
+            dark ? "text-white/75" : "text-muted",
           ]}
         >
           {eyebrow}
@@ -30,7 +30,7 @@ const dark = theme === "gelap";
       heading && (
         <h2
           class:list={[
-            "font-display text-3xl font-semibold leading-[1.15] text-balance sm:text-4xl md:text-5xl",
+            "font-display text-2xl font-semibold leading-snug tracking-[-0.01em] text-balance sm:text-3xl",
             dark ? "text-cream" : "text-ink",
           ]}
         >
@@ -42,7 +42,7 @@ const dark = theme === "gelap";
       body && (
         <p
           class:list={[
-            "mx-auto mt-6 max-w-xl text-base leading-relaxed sm:text-lg",
+            "mx-auto mt-4 max-w-xl text-base leading-relaxed sm:text-lg",
             dark ? "text-white/70" : "text-muted",
           ]}
         >

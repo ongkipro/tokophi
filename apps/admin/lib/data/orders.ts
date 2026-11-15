@@ -5,6 +5,7 @@ import { likeContains } from "@tokophi/lib/like";
 import { desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Order } from "@/lib/types/domain";
 import { latestPaymentFirst } from "@/lib/data/order-payment";
+import { commissionState } from "@/lib/commission-state";
 
 // ⚠️ THE REAL CLOCK for "x menit lalu" (both call sites below). This was `TODAY = 2026-07-02`, the
 // seed's frame, so an order placed today rendered a NEGATIVE age and the list's freshest row read as
@@ -239,6 +240,14 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
         (o.problem_at is not null)                              as "problem",
         o.problem_note                                          as "problemNote",
         o.placed_at                                             as "placedAt",
+        -- Affiliate commission frozen on this order (0116: at most one row per order). Same "ready" test as
+        -- lib/data/affiliates.ts; the label is derived in lib/commission-state.ts, never here.
+        af.code                                                 as "affCode",
+        af.name                                                 as "affName",
+        ac.commission_idr::bigint                               as "affCommission",
+        ac.status::text                                         as "affStatus",
+        (ac.status = 'pending' and ac.eligible_at is not null and ac.eligible_at <= now()) as "affReady",
+        (ac.eligible_at is not null)                            as "affHasEligible",
         -- One definition of "the order's payment" — latestPaymentFirst() in lib/data/order-payment.ts,
         -- shared with lib/data/order-detail.ts (the DETAIL page). It is one exported ordering now
         -- because two hand-written copies of it did NOT agree: this one said "nulls last", the detail
@@ -253,6 +262,8 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
       join order_seller_entitlements e on e.order_id = o.id
       left join order_financials f on f.order_id = o.id
       left join customers c on c.id = o.customer_id
+      left join affiliate_commissions ac on ac.order_id = o.id and ac.store_id = o.store_id
+      left join affiliates af on af.id = ac.affiliate_id and af.store_id = o.store_id
       ${rowWhere}
       order by o.placed_at desc
       limit ${pageSize} offset ${offset}
@@ -263,6 +274,8 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
       status: Order["status"]; paid: boolean; courier: string | null;
       awb: string | null; problem: boolean; problemNote: string | null;
       placedAt: Date; paymentMethod: string | null;
+      affCode: string | null; affName: string | null; affCommission: string | number | null;
+      affStatus: "pending" | "dibayar" | "batal" | null; affReady: boolean | null; affHasEligible: boolean | null;
     }[];
 
     // 3) their line items (product-led row: photo + name + variant + qty)
@@ -340,6 +353,15 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
           awb: r.awb,
           problem: Boolean(r.problem),
           problemNote: r.problemNote,
+          affiliate:
+            r.affCode && r.affStatus
+              ? {
+                  code: r.affCode,
+                  name: r.affName ?? r.affCode,
+                  commissionIdr: Number(r.affCommission ?? 0),
+                  state: commissionState({ status: r.affStatus, isReady: !!r.affReady, hasEligibleAt: !!r.affHasEligible }),
+                }
+              : null,
           minutesAgo: Math.round((Date.now() - new Date(r.placedAt).getTime()) / 60_000),
           lines: lines.slice(0, 2).map((l) => ({
             title: l.title,

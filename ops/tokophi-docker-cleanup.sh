@@ -23,6 +23,14 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# Never prune while Coolify is deploying (its `coolify-helper` container is up): a freshly built image
+# is UNUSED until compose starts its container, so the pressure-mode `image prune -af` could delete the
+# very images the deploy is about to run, and pruning cache mid-build slows or breaks the build.
+if docker ps --format '{{.Image}}' 2>/dev/null | grep -q 'coolify-helper'; then
+  printf '%s\n' "=== $(date -u +%FT%TZ) skipped: Coolify deploy in progress ===" >> "$LOG"
+  exit 0
+fi
+
 disk_used_pct() {
   df -P / | awk 'NR==2 { gsub("%", "", $5); print $5 }'
 }

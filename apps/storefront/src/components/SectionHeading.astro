@@ -34,7 +34,8 @@
 // muted on purpose so it recedes behind the product name, and it is a different role entirely.
 
 interface Props {
-  /** Small brand-coloured kicker above the title ("Favorit", "Rekomendasi", "Ulasan Pembeli"). */
+  /** A merchant-written line above the title (Store Builder sections only). Platform pages pass none:
+   *  redesign C dropped the kicker-over-every-heading pattern; a merchant's own words still render. */
   eyebrow?: string;
   title: string;
   /** One line of supporting copy under the title. */
@@ -55,10 +56,10 @@ const Title = `h${level}` as "h2" | "h3";
 ---
 
 <div class:list={[align === "center" && "mx-auto max-w-2xl text-center", className]}>
-  {eyebrow && <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p>}
-  <Title class:list={["font-display text-2xl font-semibold text-balance text-ink sm:text-3xl", eyebrow && "mt-2"]}>
+  {eyebrow && <p class="text-sm text-muted">{eyebrow}</p>}
+  <Title class:list={["font-display text-[1.375rem] font-semibold leading-tight tracking-[-0.01em] text-balance text-ink sm:text-[1.75rem]", eyebrow && "mt-1"]}>
     {title}
   </Title>
-  {dek && <p class:list={["mt-3 text-muted", align === "left" && "max-w-xl"]}>{dek}</p>}
+  {dek && <p class:list={["mt-1.5 text-[0.9375rem] text-muted", align === "left" && "max-w-xl"]}>{dek}</p>}
   <slot />
 </div>

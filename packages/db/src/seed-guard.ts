@@ -73,6 +73,22 @@ export const IRREPLACEABLE: Loss[] = [
   { table: "platform_admins", what: "platform operator logins — replaced by ONE freshly seeded account" },
   { table: "shipping_aggregator", column: "api_key", what: "the courier aggregator API key — re-seeded NULL" },
   { table: "platform_payment_gateways", column: "credentials", what: "the payment gateway credentials — re-seeded NULL" },
+  // 0117 / ADR 0019: operator-made signup codes. The seed writes none, and `stores.signup_code` points at them.
+  { table: "signup_codes", what: "signup codes made in Super Admin — the seed writes none" },
+  // 0121–0122 / ADR 0016: TokoΦ Account. `buyer_sessions` deliberately not listed — a sign-in re-creates it.
+  { table: "buyer_accounts", what: "Akun TokoΦ identities — a Google `sub` binding is not re-derivable; the buyer must sign up again" },
+  {
+    table: "buyer_order_claims",
+    what: "orders buyers saved to their account (`order_id` is UNIQUE — once a claim is gone, the claim link that made it is usually gone too)",
+  },
+  { table: "buyer_store_links", what: "each buyer's recorded consent per store" },
+  // 0125 / ADR 0022: the store affiliate programme. `affiliate_sessions` not listed — a sign-in re-creates it.
+  {
+    table: "affiliate_commissions",
+    what: "AFFILIATE COMMISSIONS — money a merchant owes an affiliate. Paid OUTSIDE TokoΦ, so the ledger holds no second copy and nothing can reconstruct it",
+  },
+  { table: "affiliates", what: "affiliate programme members — their codes, bank details and the merchant's approvals" },
+  { table: "affiliate_accounts", what: "affiliate sign-ins (affiliate.tokophi.com) — the affiliate must sign up again and be re-invited to every store" },
 ];
 
 /** One `Loss` that this database actually holds rows for. */

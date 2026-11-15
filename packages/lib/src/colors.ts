@@ -65,7 +65,35 @@ export function generateBrandShades(brandHex: string): BrandShades {
   return out;
 }
 
-// Fallback used when a store hasn't picked a brand colour yet — matches the original
-// hand-picked rose palette in apps/storefront/src/styles/global.css so existing stores
-// (e.g. the Batik Nusantara demo) look identical until they change it.
-export const DEFAULT_BRAND_COLOR = "#a85572";
+// Fallback used when a store hasn't picked a brand colour yet. Since 2026-11-05 (owner: "minimalist
+// modern, hitam putih abu") the platform default is NEUTRAL — near-black, the zinc-900 below — not
+// the old rose. It is the colour the Tema picker opens on and the hue `generateNeutrals` tints text
+// with when no brand is set.
+export const DEFAULT_BRAND_COLOR = "#18181b";
+
+// ⚠️ A brand-less store cannot simply run DEFAULT_BRAND_COLOR through `generateBrandShades`: the
+// steps above fix LIGHTNESS per shade (600 = 40%), so a black brand comes out as a mid-grey button.
+// The neutral scale is written out instead — 600 IS near-black, the primary button the owner asked
+// for — and `generateTenantThemeVariables` emits it whenever `brand_color` is null. Mirrored in
+// apps/storefront/src/styles/global.css as the no-override default.
+export const NEUTRAL_BRAND_SHADES: BrandShades = {
+  50: "#f4f4f5",
+  100: "#ececee",
+  200: "#e4e4e7",
+  400: "#a1a1aa",
+  500: "#52525b",
+  600: "#18181b",
+  700: "#09090b",
+};
+
+/** Is this the platform default (i.e. "no brand colour")? Case-insensitive; null/empty count too. */
+export const isDefaultBrandColor = (hex: string | null | undefined) => !hex || hex.trim().toLowerCase() === DEFAULT_BRAND_COLOR;
+
+/**
+ * THE one way to turn a stored brand colour into shades. The default colour is NOT a brand: run through
+ * `generateBrandShades` it comes out as a mid-grey primary (600 = #60606c), so the Store Builder showed
+ * grey buttons for a store whose live site is near-black — and saving the untouched picker made the
+ * live store grey too (review 2026-11-05). Default or empty → the neutral scale, everywhere.
+ */
+export const brandShades = (hex: string | null | undefined): BrandShades =>
+  isDefaultBrandColor(hex) ? NEUTRAL_BRAND_SHADES : generateBrandShades(hex!.trim());

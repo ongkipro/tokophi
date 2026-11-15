@@ -27,7 +27,7 @@
 set -uo pipefail
 
 # ---------------------------------------------------------------------------- config (all via env)
-SSH_TARGET="${TOKOPHI_SSH_TARGET:-root@45.77.33.112}"
+SSH_TARGET="${TOKOPHI_SSH_TARGET:-tokophi-new-ops}"   # owner-workstation alias for the dedicated host (since 2026-11-01)
 SSH_KEY="${TOKOPHI_SSH_KEY:-$HOME/.ssh/tokophi_dev}"
 STATE_DIR="${TOKOPHI_PROBE_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/tokophi-probe}"
 CURL_TIMEOUT="${TOKOPHI_PROBE_TIMEOUT:-15}"
@@ -249,7 +249,7 @@ else
       record disk fail "could not read df output from the box"
     fi
 
-    if [ -n "${hb_age:-}" ] && [ "$hb_age" -gt 0 ] && [ "$hb_age" -le "$HEARTBEAT_MAX_AGE_S" ]; then
+    if [ -n "${hb_age:-}" ] && [ "$hb_age" -ge 0 ] && [ "$hb_age" -le "$HEARTBEAT_MAX_AGE_S" ]; then  # -ge: a heartbeat written THIS second is 0 s old and healthy
       record watchdog ok "L1 heartbeat ${hb_age}s old"
     else
       record watchdog fail "L1 heartbeat is ${hb_age:-?}s old (max ${HEARTBEAT_MAX_AGE_S}s) — /etc/cron.d/tokophi-watchdog may be gone; self-healing is OFF"
