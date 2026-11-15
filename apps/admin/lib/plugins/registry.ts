@@ -3,7 +3,7 @@
  *
  * A plugin is product code under `lib/plugins/<id>/`, compiled in and written by us — never uploaded,
  * never customer code (PRD: still no marketplace). A store "installs" one by activating it at
- * Pengaturan → Plugin, which writes its `store_plugins` row. Until then the core never calls it for
+ * Toko Online → Plugin (`/plugin`), which writes its `store_plugins` row. Until then the core never calls it for
  * that store: no hook, no rows, no menu entry (dormant = zero effect, AdsBookCMS ADR-027 §2).
  *
  * The core calls plugins through TWO hooks only, each failure isolated and logged, never thrown back:
@@ -54,7 +54,7 @@ export function findPlugin(id: string) {
 
 type Row = { plugin: string; enabled: boolean; activated_at: Date | null; disabled_at: Date | null };
 
-/** What Pengaturan → Plugin lists: every compiled-in plugin and this store's state. */
+/** What `/plugin` lists: every compiled-in plugin and this store's state. */
 export async function listPlugins(q: Q, storeId: string) {
   const rows = (await q.execute(sql`
     select plugin, enabled, activated_at, disabled_at from store_plugins where store_id = ${storeId}`)) as unknown as Row[];

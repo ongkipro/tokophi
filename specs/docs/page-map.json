@@ -23,8 +23,10 @@
           "clientGates": [],
           "dynamic": true,
           "ownerDb": false,
-          "tests": [],
-          "whatItIs": "'Affiliate' (Promo → Affiliate, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`."
+          "tests": [
+            "apps/admin/lib/nav-crm.test.ts"
+          ],
+          "whatItIs": "'Affiliate' (Pelanggan → Affiliate since 2026-11-16, ADR 0022) — the store's affiliate programme: applicants to approve/reject, add/deactivate affiliates, invite to an affiliate account, commission list with 'Tandai dibayar' (paid OUTSIDE TokoΦ), default rate + hold days, per-product rates. Contact/bank masked without `affiliates:write`."
         },
         {
           "url": "/akun/keamanan",
@@ -399,6 +401,7 @@
           "dynamic": true,
           "ownerDb": false,
           "tests": [
+            "apps/admin/lib/nav-crm.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ],
           "whatItIs": "'Diskon' (vouchers) — list; status shown from `nonaktif` + dates, never dates alone."
@@ -775,6 +778,7 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/buyer-account-gate.test.ts",
+            "apps/admin/lib/nav-crm.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ],
           "whatItIs": "'Pelanggan' — customers list; guests (`registered_at IS NULL`) are the normal case."
@@ -945,6 +949,23 @@
             "test/pagination-keyboard.test.ts"
           ],
           "whatItIs": "'Pesanan' — orders list with status tabs; URL params validated before any enum cast."
+        },
+        {
+          "url": "/plugin",
+          "kind": "page",
+          "methods": [],
+          "file": "apps/admin/app/(admin)/plugin/page.tsx",
+          "clients": [],
+          "data": [],
+          "actions": [],
+          "gate": [],
+          "clientGates": [],
+          "dynamic": false,
+          "ownerDb": false,
+          "tests": [
+            "apps/admin/lib/nav-crm.test.ts"
+          ],
+          "whatItIs": "'Plugin' (Toko Online → Plugin, under Tema; ADR 0021 §5, PLUG-NAV) — every compiled-in first-party plugin with this store's state; Aktifkan / Nonaktifkan / Hapus koneksi and Kelola CRM's credential + send history. Switches are owner-only (`plugins:manage`) in the actions. `/pengaturan?section=plugin` redirects here."
         },
         {
           "url": "/produk/[id]",
@@ -1301,6 +1322,7 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/admin-h1-floor.test.ts",
+            "apps/admin/lib/nav-crm.test.ts",
             "apps/admin/lib/uuid-guard.test.ts"
           ],
           "whatItIs": "'Tema' (Store Builder) — homepage/category/product templates list."

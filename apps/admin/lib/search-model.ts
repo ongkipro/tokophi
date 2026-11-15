@@ -92,6 +92,7 @@ const PAGE_ALIASES: Record<string, string> = {
   "/analitik": "laporan statistik grafik",
   "/pemasaran": "iklan marketing pixel",
   "/tema": "desain tampilan template",
+  "/plugin": "integrasi kelola crm aktifkan sambungkan",
   "/halaman": "page konten",
   "/blog": "artikel tulisan",
   "/files": "gambar media upload",

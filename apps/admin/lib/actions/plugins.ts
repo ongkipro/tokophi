@@ -14,7 +14,7 @@ import {
   setKelolaPushLeads,
 } from "@/lib/plugins/kelola/sync";
 
-// Pengaturan → Plugin (ADR 0021, KEL-001). Activating a plugin and pasting its credential is
+// Toko Online → Plugin (`/plugin`, ADR 0021, KEL-001). Activating a plugin and pasting its credential is
 // `plugins:manage` — OWNER ONLY (rbac-policy.ts): Kelola receives every order's shopper name, WhatsApp
 // and address. "Kirim ulang" on one order is `orders:write`, the capability that runs the order.
 // Every answer is `{ ok, message }` — Next masks a thrown Error in production, and a seller must be
@@ -51,7 +51,7 @@ export async function setPluginActive(id: string, on: boolean): Promise<Result> 
   const p = findPlugin(id);
   if (!p) return { ok: false, message: "Plugin tidak dikenal." };
   await withTenant(storeId, (db) => (on ? activatePlugin(db, storeId, id) : deactivatePlugin(db, storeId, id)));
-  revalidatePath("/pengaturan");
+  revalidatePath("/plugin");
   return {
     ok: true,
     message: on
@@ -65,21 +65,21 @@ export async function removePluginData(id: string): Promise<Result> {
   const p = findPlugin(id);
   if (!p) return { ok: false, message: "Plugin tidak dikenal." };
   await withTenant(storeId, (db) => uninstallPlugin(db, storeId, id));
-  revalidatePath("/pengaturan");
+  revalidatePath("/plugin");
   return { ok: true, message: `Koneksi ${p.name} di toko ini dihapus.` };
 }
 
 export async function saveKelola(input: { url: string; secret: string }): Promise<Result> {
   const { storeId } = await requireCapability("plugins:manage");
   const r = await saveKelolaConnection(perStatement(storeId), storeId, input);
-  revalidatePath("/pengaturan");
+  revalidatePath("/plugin");
   return r.ok ? { ok: true, message: r.message } : { ok: false, message: r.error };
 }
 
 export async function setKelolaLeads(on: boolean): Promise<Result> {
   const { storeId } = await requireCapability("plugins:manage");
   await withTenant(storeId, (db) => setKelolaPushLeads(db, storeId, on));
-  revalidatePath("/pengaturan");
+  revalidatePath("/plugin");
   return { ok: true, message: on ? "Keranjang ditinggal akan dikirim ke Kelola." : "Keranjang ditinggal tidak dikirim lagi." };
 }
 
@@ -117,7 +117,7 @@ export async function resendKelolaOrder(orderNumber: string): Promise<Result> {
   const orderId = await orderIdByNumber(storeId, orderNumber);
   if (!orderId) return { ok: false, message: "Pesanan tidak ditemukan." };
   const store = await withTenant(storeId, (db) => loadKelolaStore(db, storeId));
-  if (!store) return { ok: false, message: "Plugin Kelola nonaktif, belum terhubung, atau kredensialnya ditolak — periksa Pengaturan → Plugin." };
+  if (!store) return { ok: false, message: "Plugin Kelola nonaktif, belum terhubung, atau kredensialnya ditolak — periksa menu Plugin." };
   const out = await pushKelolaOrder(store, storeId, orderId, { force: true });
   revalidatePath(`/pesanan/${orderNumber}`);
   if (out === "synced") return { ok: true, message: "Pesanan terkirim ke Kelola." };
