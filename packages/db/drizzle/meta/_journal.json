@@ -883,6 +883,13 @@
       "when": 1787600004000,
       "tag": "0125_affiliate_programme",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1787600005000,
+      "tag": "0126_fk_lookup_indexes",
+      "breakpoints": true
     }
   ]
 }
