@@ -5430,3 +5430,15 @@ Executor: Main Session (Claude Code); owner order via supervisor ("review, commi
 - **Removed:** 12 worktrees (`tokophi-424`, `-account-local`, `-accounts`, `-autolaris-auto-confirm`, `-backup`, `-buyer-account`, `-consolidate`, `-dev`, `-doc-suite`, `-integrate-20261029`, `-landing`, `-ux3-verify`); 21 local branches already merged into `main` (`git branch -d`); 39 superseded local branches after the bundles (60 deleted in total). Remote branches untouched.
 - **Kept (local branches, listed in `OPEN.md`):** `feat/seller-release-h2` (Task 8.39 H+2 release — not on `main`), `feat/autolaris-auto-confirm` (AL-AUTOCONFIRM), `fix/backup-correctness-2026-10` (R-22), `fix/landing-review-r8`. `tokophi-kelola` (panel 2) left alone — a live Claude session has it as its working directory.
 - **Result:** `git worktree list` = main checkout + `tokophi-kelola`; 6 local branches.
+
+### [2026-11-15 08:45 UTC] — OPS · R-21 + R-22 backup correctness (branch `fix/backup-r21-r22`, port of the kept `fix/backup-correctness-2026-10`)
+
+- **Executor:** Main Session. Owner: "ya backup dulu". Review items R-21/R-22 (`specs/docs/tasks/2026-10-29-overall-review.md`).
+- **Change (`docker-compose.coolify.yml` only):** `backup` writes a PAIR per round — `pg_dumpall --globals-only --no-role-passwords` → `tokophi-<ts>.globals.sql` + `pg_dump -Fc` → `tokophi-<ts>.dump`, both via `.part` + rename, both pruned at 14 days. `backup-offsite` uploads/prunes both names and prunes R2 ONLY while the newest local dump is < 8 h old, else logs `offsite-prune-SKIPPED …` and does not write its health stamp (R-21).
+- **Verification:**
+  - Production `backup` container has `pg_dumpall (PostgreSQL) 16.16`; production roles `tokophi` (super), `tokophi_app` (login), `tokophi_platform` (login, bypassrls).
+  - Empty-cluster drill (local production copy, branch's exact commands, fresh `postgres:16-alpine`): dump alone → `pg_restore --exit-on-error` fails `role "tokophi_app" does not exist`; globals then dump → exit 0 in 6,6 s, 117 migrations, 87 tables with identical row counts in every table, 58 RLS tables, 56 policies, 352 grants per app role, 115 FKs, 159 indexes = source. Passwords set → `tokophi_app` sees 1 store with `app.store_id`, 0 orders without; `tokophi_platform` sees 226. Globals file holds no password (0 matches). Drill container + dump deleted.
+  - R-21 guard simulated in `rclone/rclone:1.68`: no dump → SKIP, newest 9 h → SKIP, 7 h → PRUNE, fresh → PRUNE.
+  - `docker compose -f docker-compose.coolify.yml config -q` valid; `npx vitest run` 221 files passed / 48 skipped.
+- **Docs:** `SLA-DRP.md` §3 (the pair), §7 (fresh-cluster restore steps, the one expected error), §8 (drill ✓); review R-21/R-22 `[x]`; `TASKS.md`; `OPEN.md` (kept-branch line removed).
+- **After deploy, still to observe:** the first `.globals.sql` beside a new dump (≤ 6 h — the service dumps when the newest is older than 6 h) and an `offsite-ok` line listing it in R2.

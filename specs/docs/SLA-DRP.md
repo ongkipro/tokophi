@@ -88,6 +88,14 @@ unchanged — it was the owner, not a monitor, who noticed (Task 8.1).
 `.part` and renames on success; prunes by **age** (`-mtime +14`); and its healthcheck goes UNHEALTHY
 after **8 h** without a fresh dump.
 
+**A recovery point is a PAIR since R-22 (2026-11-15):** `tokophi-<ts>.dump` + `tokophi-<ts>.globals.sql`
+(`pg_dumpall --globals-only --no-role-passwords`: the three roles and their attributes, no password
+hashes), written and renamed together — one without the other is a failed round. The data dump alone
+cannot be restored onto a fresh cluster: measured 2026-11-15, `pg_restore --exit-on-error` stops at
+`role "tokophi_app" does not exist`. `backup-offsite` uploads and prunes both names, and (R-21) prunes R2
+only while the newest local dump is under 8 h old — otherwise it logs `offsite-prune-SKIPPED` and leaves
+its own health stamp unwritten, so a silent `pg_dump` failure can no longer age every offsite copy away.
+
 The dumps are real and readable — `pg_restore --list` on the newest returns **625 TOC entries / 621
 objects**, 1,2 MB. That was never the problem. The retention was, and the box below is why.
 
@@ -218,6 +226,18 @@ docker cp <backup-container>:/backups ./rescue-dumps
 ```
 🔴 Step 1 is the one that gets skipped, and it is the one that destroys the evidence.
 
+**Fresh cluster (new host, total loss) — restore the PAIR, roles first** (R-22; drilled 2026-11-15, §8):
+```bash
+# cluster started with POSTGRES_USER=tokophi (that also creates the empty `tokophi` database)
+psql -U tokophi -d postgres -f tokophi-<ts>.globals.sql   # ONE expected error: role "tokophi" already exists
+pg_restore -U tokophi -d tokophi --exit-on-error tokophi-<ts>.dump
+# the globals carry NO passwords: set the app roles' passwords to the ones inside Coolify's
+# APP_DATABASE_URL / PLATFORM_DATABASE_URL (or mint new ones and update those two variables)
+psql -U tokophi -d postgres -c "alter role tokophi_app password '…'" -c "alter role tokophi_platform password '…'"
+```
+Then reconcile (migrations, table row counts, RLS tables, grants) and run `verify-ledger` before the
+first app deploy — the compose stack runs `migrate` + `seed` on deploy.
+
 **Verify after any recovery:** `verify-ledger` against production — it is the check that once found
 Rp810.000 of withdrawable money with no order behind it. Run it where the credential already lives:
 `docker exec -w /app/packages/db <admin-container> /app/node_modules/.bin/tsx src/verify-ledger.ts`.
@@ -236,6 +256,14 @@ An untested recovery path is a **Proposal**, not a capability. None of these has
       against the 2026-10-11 production copy (live production could not be read): every table equal
       or larger in the dump (+1 order/payment/customer, +4 invoices, last order 2026-10-23). The SAME
       dump was then restored for real at the 2026-11-01 cutover (17 stores, 227 orders, 116 migrations).
+- [x] **Restore the backup PAIR onto an EMPTY cluster** (R-22) — done 2026-11-15 on the workstation
+      (local production copy → `pg_dumpall --globals-only --no-role-passwords` + `pg_dump -Fc`, the
+      branch's exact commands → a fresh `postgres:16-alpine`). Dump alone: `pg_restore --exit-on-error`
+      fails, `role "tokophi_app" does not exist`. Globals first, then the dump: exit 0 in 6,6 s; 117
+      migrations, 87 tables with **identical row counts in every table**, 58 RLS tables, 56 policies,
+      352 grants each to `tokophi_app` / `tokophi_platform`, 115 FKs, 159 indexes — all equal to the
+      source. After setting passwords: `tokophi_app` logs in and sees 1 store with `app.store_id` set
+      and 0 orders without it; `tokophi_platform` sees all 226 orders.
 - [ ] **Kill a container and time L1.** The heartbeat is fresh; the *restart* has never been observed
       end to end by anyone who wrote it down.
 - [ ] **Rebuild from nothing** on a throwaway VPS — the only way to turn the "total loss" row in §4
