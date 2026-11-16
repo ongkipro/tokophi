@@ -9,8 +9,15 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { UploadCloud, Copy, Trash2, ImageIcon } from "lucide-react";
 import { uploadMedia, deleteMedia, type MediaItem } from "@/lib/actions/media";
 import { useCan } from "@/components/admin/permissions";
+import { ConfirmDelete } from "@/components/admin/confirm-delete";
 
 const MAX = 2 * 1024 * 1024;
+// The grid shows THUMBNAILS, never the originals. A cell is at most ~230 CSS px, but an original is
+// up to 2000 px / several hundred KB (measured 2026-11-16: petanihandal averages 136 KB, so one page
+// of 24 was ~3.2 MB of image for a grid of tiles). `/api/uploads/[name]` already serves allow-listed,
+// disk-cached `?w=` renditions (SVG comes back as itself), so asking for 400 is the whole fix.
+// "Salin URL" still copies `m.url`, the original — that is what a merchant pastes elsewhere.
+const thumb = (url: string) => (url.startsWith("/api/uploads/") ? `${url}?w=400` : url);
 const kb = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
 
 export function FilesClient({ media, total, page, pageSize }: { media: MediaItem[]; total: number; page: number; pageSize: number }) {
@@ -18,6 +25,7 @@ export function FilesClient({ media, total, page, pageSize }: { media: MediaItem
   const canWrite = useCan("media:write");
   const [pending, start] = React.useTransition();
   const [drag, setDrag] = React.useState(false);
+  const [toDelete, setToDelete] = React.useState<MediaItem | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const upload = (files: FileList | null) => {
@@ -36,11 +44,14 @@ export function FilesClient({ media, total, page, pageSize }: { media: MediaItem
       });
     }
   };
+  // Reached only through ConfirmDelete: the file is removed from disk, so anything still pointing at
+  // its URL loses the picture. On touch screens the button is always visible now — one mis-tap must not do it.
   const del = (m: MediaItem) =>
     start(async () => {
       const r = await deleteMedia(m.id);
       if (r.ok) toast.success("File dihapus.");
       else toast.error(r.error ?? "Gagal menghapus file.");
+      setToDelete(null);
       router.refresh(); // either way: on a refusal this is what clears the row that is already gone
     });
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -56,6 +67,14 @@ export function FilesClient({ media, total, page, pageSize }: { media: MediaItem
 
   return (
     <div className="space-y-4">
+      <ConfirmDelete
+        open={toDelete !== null}
+        onOpenChange={(o) => { if (!o && !pending) setToDelete(null); }}
+        title="Hapus file ini?"
+        description={`${toDelete?.filename ?? "File"} dihapus permanen. Produk, halaman, atau banner yang masih memakai gambar ini akan kehilangan gambarnya.`}
+        onConfirm={() => toDelete && del(toDelete)}
+        pending={pending}
+      />
       {canWrite && (
         <div
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -93,10 +112,12 @@ export function FilesClient({ media, total, page, pageSize }: { media: MediaItem
           {media.map((m) => (
             <Card key={m.id} className="group gap-0 overflow-hidden p-0">
               <div className="relative aspect-square bg-muted">
-                <Image src={m.url} alt={m.filename} fill sizes="200px" className="object-contain" unoptimized />
-                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                <Image src={thumb(m.url)} alt={m.filename} fill sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw" className="object-contain" unoptimized />
+                {/* Hover reveals the actions on a mouse; a keyboard user gets them on focus (they were focusable but
+                    invisible), and a touch screen — where hover never fires — shows them always, corner-docked. */}
+                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:bg-transparent [@media(hover:none)]:items-end [@media(hover:none)]:justify-end [@media(hover:none)]:p-1.5 [@media(hover:none)]:opacity-100">
                   <Button size="icon-sm" variant="secondary" aria-label="Salin URL" onClick={() => copy(m.url)}><Copy className="size-4" /></Button>
-                  {canWrite && <Button size="icon-sm" variant="secondary" className="text-destructive" aria-label="Hapus" disabled={pending} onClick={() => del(m)}><Trash2 className="size-4" /></Button>}
+                  {canWrite && <Button size="icon-sm" variant="secondary" className="text-destructive" aria-label="Hapus" disabled={pending} onClick={() => setToDelete(m)}><Trash2 className="size-4" /></Button>}
                 </div>
               </div>
               <div className="p-2">

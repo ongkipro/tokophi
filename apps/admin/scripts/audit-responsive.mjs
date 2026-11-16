@@ -35,7 +35,7 @@ const WIDTHS = [320, 360, 390, 414, 600, 768, 820, 1024, 1280, 1440, 1920];
 const STORE_ROUTES = [
   "", "/pesanan", "/produk", "/produk/kategori", "/produk/inventori", "/produk/pembelian",
   "/pelanggan", "/pelanggan/segmen", "/pelanggan/ulasan", "/crm", "/diskon", "/analitik",
-  "/pemasaran", "/halaman", "/blog", "/navigasi", "/tema", "/saldo", "/obrolan", "/bantuan",
+  "/pemasaran", "/halaman", "/blog", "/navigasi", "/tema", "/saldo", "/bantuan",
   "/pengaturan",
 ];
 const FLAT_ROUTES = ["/akun/profil", "/akun/keamanan", "/akun/langganan"];

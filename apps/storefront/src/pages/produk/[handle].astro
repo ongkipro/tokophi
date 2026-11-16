@@ -1,4 +1,5 @@
 ---
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import Layout from "../../layouts/Layout.astro";
 import ProductCard from "../../components/ProductCard.astro";
 import SectionHeading from "../../components/SectionHeading.astro";
@@ -883,6 +884,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
       >
         <div class="flex items-center gap-2">
           <p id="sticky-price" class="min-w-0 flex-1 whitespace-nowrap text-[0.9375rem] font-semibold text-ink tabular-nums">{IDR(product.price)}</p>
+          {CHAT_ENABLED && (
           <button
             type="button"
             data-chat-open
@@ -894,6 +896,7 @@ const HEAD = [productLd, breadcrumbLd(CRUMBS, ORIGIN)].map(ldScript).join("");
             <MessageCircle class="size-5" stroke-width={1.8} aria-hidden="true" />
             <span data-chat-dot class="absolute right-1.5 top-1.5 hidden size-2.5 rounded-full bg-brand-600 ring-2 ring-cream"><span class="sr-only">Ada balasan baru</span></span>
           </button>
+          )}
           <button
             type="button"
             data-proxy="add-to-cart"

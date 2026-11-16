@@ -1,5 +1,6 @@
 ---
 import { Mail, MessageCircle } from "@lucide/astro";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import PageHeader from "../components/PageHeader.astro";
 import { breadcrumbLd, ldScript, type Crumb } from "../lib/breadcrumb";
 import Layout from "../layouts/Layout.astro";
@@ -101,13 +102,17 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
           Two channels DO work, and both are already wired: the chat widget (Chat.astro →
           /api/chat/send → support_* tables, which the merchant reads in the admin) and WhatsApp. So
           this block points at those instead of pretending to be a third one. */}
+      {/* While CHAT_ENABLED is off this block is WhatsApp-only, and absent when the store set no number:
+          a "Kirim Pesan" heading over zero channels is the fake form this block replaced. */}
+      {(CHAT_ENABLED || waHref) && (
       <div>
         <h2 class="font-display text-2xl font-semibold text-ink">Kirim Pesan</h2>
         <p class="mt-1 text-sm text-muted">
-          Balasan tercepat lewat obrolan atau WhatsApp — pesanmu langsung masuk ke tim {store.name}.
+          Balasan tercepat lewat {CHAT_ENABLED ? "obrolan atau WhatsApp" : "WhatsApp"} — pesanmu langsung masuk ke tim {store.name}.
         </p>
 
         <div class="mt-6 flex flex-col gap-3">
+          {CHAT_ENABLED && (
           <button
             type="button"
             data-chat-open
@@ -116,6 +121,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
             <MessageCircle class="h-4 w-4" stroke-width={1.75} aria-hidden="true" />
             Mulai obrolan
           </button>
+          )}
 
           {waHref && (
             <a
@@ -133,6 +139,7 @@ const HEAD = ldScript(breadcrumbLd(CRUMBS, Astro.locals.origin));
           Kami membaca setiap pesan. Sertakan nomor pesanan bila menanyakan pesanan yang sedang berjalan.
         </p>
       </div>
+      )}
     </div>
   </section>
 </Layout>

@@ -13,6 +13,7 @@ import {
   Receipt,
   TriangleAlert,
   Clock,
+  DatabaseBackup,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
@@ -36,7 +37,10 @@ import {
   getConversion,
   getFinanceStats,
   getPendingApprovals,
+  getOpenTicketCount,
 } from "@/lib/data";
+import { getBackupHealth } from "@/lib/backup-health";
+import type { BackupState } from "@/lib/backup-verdict";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +69,7 @@ export default async function PlatformDashboard() {
   const gate = await platformRouteGate("/");
   if (!gate.ok) redirect(gate.landing);
 
-  const [platform, stores, subStats, statusDistribution, invoices, activity, revenue, float, risk, conv, fin, pending] =
+  const [platform, stores, subStats, statusDistribution, invoices, activity, revenue, float, risk, conv, fin, pending, openTickets, backup] =
     await Promise.all([
       getPlatform(),
       getStores(),
@@ -79,6 +83,8 @@ export default async function PlatformDashboard() {
       getConversion(),
       getFinanceStats(),
       getPendingApprovals(),
+      getOpenTicketCount(),
+      getBackupHealth(),
     ]);
 
   // KPIs. Every one of these is a number with a query behind it — there are no deltas, because
@@ -102,6 +108,30 @@ export default async function PlatformDashboard() {
   const totalStatus = statusDistribution.reduce((a, s) => a + s.count, 0) || 1;
   const recentInvoices = invoices.slice(0, 6);
   const worklist = risk.slice(0, 6);
+
+  // THE OPERATOR'S QUEUE, one row of counts (2026-11-16). Each of these lived on its own screen —
+  // payouts on /pencairan, tickets only as a sidebar badge, backups nowhere at all — so "is anything
+  // waiting on us?" took five clicks. Zero renders calm ("beres"), never as an alarm.
+  const ago = (m: number | null) => (m === null ? "belum pernah" : m < 60 ? `${m} mnt lalu` : m < 48 * 60 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`);
+  const backupWord: Record<BackupState, string> = { ok: "OK", stale: "Bermasalah", unknown: "—" };
+  const QUEUE: { key: string; label: string; value: string; sub: string; href?: string; alert: boolean; tone?: "danger" }[] = [
+    { key: "signup", label: "Pendaftaran", value: num(pending.length), sub: pending.length ? "menunggu persetujuan" : "beres", href: "/toko", alert: pending.length > 0 },
+    { key: "payout", label: "Pencairan", value: num(float.payoutPendingCount), sub: float.payoutPendingCount ? `${IDR(float.payoutObligation, { compact: true })} wajib ditransfer` : "beres", href: "/pencairan", alert: float.payoutPendingCount > 0 },
+    { key: "refund", label: "Refund pembeli", value: num(float.refundPendingCount), sub: float.refundPendingCount ? `${IDR(float.refundObligation, { compact: true })} belum kembali` : "beres", href: "/pencairan", alert: float.refundPendingCount > 0 },
+    { key: "ticket", label: "Tiket terbuka", value: num(openTickets), sub: openTickets ? "menunggu balasan" : "beres", href: "/tiket", alert: openTickets > 0 },
+    {
+      key: "backup",
+      label: "Backup database",
+      // Worst of the two sides decides the headline; the sub-line names both.
+      value: backupWord[backup.needsAction ? "stale" : backup.local === "unknown" || backup.offsite === "unknown" ? "unknown" : "ok"],
+      sub:
+        backup.local === "unknown" && backup.offsite === "unknown"
+          ? "volume backup tidak terpasang di sini"
+          : `lokal ${backup.local === "unknown" ? "—" : ago(backup.localAgeMin)} · offsite ${backup.offsite === "unknown" ? "—" : ago(backup.offsiteAgeMin)}`,
+      alert: backup.needsAction,
+      tone: "danger",
+    },
+  ];
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -157,6 +187,28 @@ export default async function PlatformDashboard() {
           </Link>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {QUEUE.map((q) => {
+              const box = `flex h-full flex-col gap-0.5 rounded-xl border px-3 py-2.5 ${
+                q.alert ? (q.tone === "danger" ? "border-destructive/40 bg-destructive/5" : "border-amber-500/40 bg-amber-500/5") : "border-border"
+              }`;
+              const body = (
+                <>
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    {q.key === "backup" && <DatabaseBackup className="size-3.5" aria-hidden="true" />}
+                    {q.label}
+                  </span>
+                  <span className={`text-lg font-bold tabular-nums ${q.alert ? (q.tone === "danger" ? "text-destructive" : "text-amber-700 dark:text-amber-400") : ""}`}>{q.value}</span>
+                  <span className="text-[11px] leading-snug text-muted-foreground">{q.sub}</span>
+                </>
+              );
+              return q.href ? (
+                <Link key={q.key} href={q.href} className={`${box} transition-colors hover:bg-muted/60`}>{body}</Link>
+              ) : (
+                <div key={q.key} className={box} title={backup.newestDumpBytes ? `Dump terbaru ${(backup.newestDumpBytes / 1048576).toFixed(1)} MB · ${num(backup.dumpCount)} dump tersimpan lokal` : undefined}>{body}</div>
+              );
+            })}
+          </div>
           {/* ── THE SIGNUP QUEUE, ABOVE THE CHURN LIST ────────────────────────────────────────────
               First because it is the only block here with a promise attached: the merchant's own
               dashboard tells them "biasanya dalam 1×24 jam", and nothing else notifies anybody —

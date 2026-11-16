@@ -3,7 +3,7 @@ import { useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Menu, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck, Wallet } from "lucide-react";
+import { Menu, Bell, Sun, Moon, ChevronDown, Check, ExternalLink, LogOut, User, CreditCard, ShieldCheck, Wallet, Store } from "lucide-react";
 import type { SearchItem } from "@/lib/data/search";
 import type { TopbarData } from "@/lib/data/topbar";
 import { IDR } from "@tokophi/lib/format";
@@ -50,15 +50,22 @@ function useIsDark() {
   );
 }
 
-function ThemeToggle() {
+function useThemeToggle() {
   const dark = useIsDark();
   const toggle = () => {
     const next = !dark;
     document.documentElement.classList.toggle("dark", next);
     try { localStorage.setItem("theme", next ? "dark" : "light"); } catch {}
   };
+  return { dark, toggle };
+}
+
+// sm+ only. On a phone the bar carries Menu · store · search · Saldo · bell · avatar, and a theme
+// switch is the one control nobody needs twice a day — it moves into the avatar menu below `sm`.
+function ThemeToggle() {
+  const { dark, toggle } = useThemeToggle();
   return (
-    <Button variant="ghost" size="icon" onClick={toggle} aria-label="Ganti tema" className={HIT}>
+    <Button variant="ghost" size="icon" onClick={toggle} aria-label="Ganti tema" className={`${HIT} hidden sm:inline-flex`}>
       {dark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
     </Button>
   );
@@ -90,6 +97,8 @@ function SaldoChip({ balance }: { balance: TopbarData["balance"] }) {
       render={<Link href="/saldo" />}
       className={`${HIT} flex shrink-0 gap-1.5 px-2 font-medium tabular-nums sm:gap-2`}
       aria-label={`Saldo tersedia ${IDR(balance.available)} — buka rincian saldo`}
+      // Both numbers on hover, never one total (see above): "Dalam proses" is not withdrawable yet.
+      title={`Tersedia ${IDR(balance.available)} · Dalam proses ${IDR(balance.pending)}`}
     >
       <Wallet className="size-[18px] text-muted-foreground" />
       {/* Below 360px the AMOUNT gives way, never the access: a real balance ("Rp214 jt", seeded
@@ -160,6 +169,21 @@ export function Topbar({
   const email = user?.email ?? "";
   const roleLabel = user?.role ? ROLE_LABEL[user.role as Role] ?? user.role : null;
   const avatarInitials = initials(name);
+  const theme = useThemeToggle();
+  // The bell lists what needs the seller's hand. Order and affiliate rows reuse the SIDEBAR's counts
+  // (`navCounts`, one query each in the layout) so the bell, the badge and the tab they open always
+  // show the same number; stock rows come from `getTopbarData`.
+  const perluDikirim = navCounts?.perluDikirim ?? 0;
+  const affiliateMenunggu = navCounts?.affiliateMenunggu ?? 0;
+  const items: TopbarData["notifs"] = [
+    ...(perluDikirim > 0
+      ? [{ id: "orders-ship", title: `${perluDikirim} pesanan perlu dikirim`, sub: "Sudah dibayar atau COD — siap diproses", href: "/pesanan?tab=perlu_dikirim" }]
+      : []),
+    ...(affiliateMenunggu > 0
+      ? [{ id: "affiliate-wait", title: `${affiliateMenunggu} pendaftar affiliate menunggu`, sub: "Terima atau tolak", href: "/affiliate" }]
+      : []),
+    ...notifs,
+  ];
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
       {/* mobile menu — CONTROLLED so a nav tap closes the drawer. It was uncontrolled, so tapping a
@@ -230,6 +254,23 @@ export function Topbar({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* The seller's most frequent side-trip — "how does my shop look now?" — was two clicks deep in
+          the switcher menu. sm+ gets a direct button (icon until lg, labelled from lg); phones keep the
+          menu row, the bar has no 40 px left at 360. */}
+      {storefrontHost && (
+        <Button
+          variant="ghost"
+          nativeButton={false}
+          render={<a href={`https://${storefrontHost}`} target="_blank" rel="noopener noreferrer" />}
+          className={`${HIT} hidden shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground sm:inline-flex`}
+          aria-label="Lihat toko (tab baru)"
+          title={storefrontHost}
+        >
+          <Store className="size-[18px]" />
+          <span className="hidden text-sm lg:inline">Lihat toko</span>
+        </Button>
+      )}
+
       {/* site-wide ⌘K command palette — pages + pesanan/produk/pelanggan; works on mobile too. */}
       <CommandPalette index={searchIndex} />
 
@@ -248,12 +289,15 @@ export function Topbar({
                 // circle with no text, and the label said "Notifikasi" either way, so nothing about
                 // "there is something new" reached a screen reader or anyone who cannot see the
                 // colour. `obrolan-client.tsx` already does it right; this is the same fix.
-                aria-label={notifs.length > 0 ? `Notifikasi — ${notifs.length} baru` : "Notifikasi"}
+                aria-label={items.length > 0 ? `Notifikasi — ${items.length} perlu ditindak` : "Notifikasi"}
               >
                 <Bell className="size-[18px]" />
-                {/* dot only when there is actually something to see */}
-                {notifs.length > 0 && (
-                  <span className="absolute right-2 top-2 size-2 rounded-full bg-primary ring-2 ring-background" />
+                {/* A count, not a bare dot: "3" says how much is waiting, a dot only that something is.
+                    aria-hidden — the label above already says it in words. */}
+                {items.length > 0 && (
+                  <span aria-hidden="true" className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums leading-none text-primary-foreground ring-2 ring-background">
+                    {items.length > 9 ? "9+" : items.length}
+                  </span>
                 )}
               </Button>
             }
@@ -261,12 +305,12 @@ export function Topbar({
           <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuLabel>Notifikasi</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {notifs.length === 0 ? (
+            {items.length === 0 ? (
               <p className="px-2 py-4 text-center text-sm text-muted-foreground">
                 Tidak ada yang perlu ditindak.
               </p>
             ) : (
-              notifs.map((n) => (
+              items.map((n) => (
                 <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5" render={<Link href={n.href} />}>
                   <span className="text-sm font-medium">{n.title}</span>
                   <span className="text-xs text-muted-foreground">{n.sub}</span>
@@ -297,6 +341,10 @@ export function Topbar({
             <DropdownMenuItem className="gap-2" render={<Link href="/akun/profil" />}><User className="size-4" /> Profil</DropdownMenuItem>
             <DropdownMenuItem className="gap-2" render={<Link href="/akun/keamanan" />}><ShieldCheck className="size-4" /> Keamanan</DropdownMenuItem>
             <DropdownMenuItem className="gap-2" render={<Link href="/akun/langganan" />}><CreditCard className="size-4" /> Langganan</DropdownMenuItem>
+            {/* Phones only — sm+ has the icon in the bar (ThemeToggle). */}
+            <DropdownMenuItem className="gap-2 sm:hidden" onClick={theme.toggle}>
+              {theme.dark ? <Sun className="size-4" /> : <Moon className="size-4" />} {theme.dark ? "Tema terang" : "Tema gelap"}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 text-destructive" onClick={() => signOut()}><LogOut className="size-4" /> Keluar</DropdownMenuItem>
           </DropdownMenuContent>

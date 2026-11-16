@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, LogOut, KeyRound, Menu, Sun, Moon } from "lucide-react";
+import { ShieldCheck, LogOut, KeyRound, Menu, Sun, Moon, Search } from "lucide-react";
 import { BrandWordmark } from "@tokophi/ui/brand-wordmark";
 import { toast } from "sonner";
 import { cn } from "@tokophi/ui/lib/utils";
@@ -130,7 +130,9 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
   const nav = navFor(admin.role);
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/") || pathname.startsWith(href);
+    // Segment match only: a bare `startsWith(href)` also lit `/toko` for any path that merely BEGINS
+    // with those letters.
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   const current = NAV.find((n) => isActive(n.href));
   const title = current?.label ?? "Platform";
@@ -170,7 +172,10 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
   return (
     <div className="flex min-h-screen w-full">
       {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">
+      {/* STICKY + viewport-tall (owner 2026-11-16: "sidebar menu biar tidak ikut ke scroll"). It was a
+          plain flex child of a `min-h-screen` row, so it grew to the PAGE height (2,575 px on the
+          dashboard) and scrolled away with it. Now it is pinned and only its own nav list scrolls. */}
+      <aside className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col self-start border-r bg-card md:flex">
         <div className="flex h-14 items-center gap-2.5 border-b px-4">
           {/* Ubin + ikon `Store` dibuang — lihat `@tokophi/ui/brand-wordmark`. Φ-nya sudah tanda
               merknya; ikon generik di sebelahnya cuma memperebutkan perhatian dengan nama produk. */}
@@ -225,6 +230,16 @@ export function PlatformShell({ admin, openTickets, children }: { admin: Admin; 
           </div>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            {/* Jump to a store from any screen — the operator's most common lookup ("toko X kenapa?").
+                A plain GET form: /toko reads `?q=` into its own filter, so this needs no client state,
+                works without JS, and the result is a shareable URL. Hidden for ranks that cannot open
+                /toko (same `navFor` list as the sidebar). */}
+            {nav.some((n) => n.href === "/toko") && (
+              <form action="/toko" method="get" role="search" className="relative hidden md:block">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input name="q" type="search" placeholder="Cari toko, owner, email…" aria-label="Cari toko" className="h-8 w-56 pl-8 lg:w-72" />
+              </form>
+            )}
             <ThemeToggle />
             {/* The operator's RANK — information, where a decorative "Platform" badge used to be. It is
                 what decides which of these screens refuse (`route-roles.ts`), so it earns a glance. */}

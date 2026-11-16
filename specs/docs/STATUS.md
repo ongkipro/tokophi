@@ -1,5 +1,11 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **2026-11-16 03:40 UTC — `feat/seller-streamline` (PR → `main`, manual Coolify deploy; landing recorded in BUILD-LOG):** Obrolan hidden on every surface
+> (`CHAT_ENABLED=false`, `/api/chat/*` 404), Files serves thumbnails (page 1 2,535 → 263 KB), Seller topbar bell = sidebar
+> count, Super Admin sidebar pinned + backup status on the dashboard, backup sidecars verify dumps (`pg_restore --list`) and
+> copy `--immutable`, Seller Dashboard Antrian Kerja = the Pesanan tab counts (25, not 15). **No migration** (still 127 · head `0126`). `npm run test:db` on an ai-testdb clone: **271 files green**
+> after the two expected fixes. 🔴 R2 offsite still down until the owner's new token (DEPLOY.md § Offsite backup).
+
 > **2026-11-14 10:30 UTC — AFFILIATE-V11 on `feat/affiliate-v11` (PR open, NOT merged, NOT deployed):** `/lp` + `/promo`
 > orders attribute `?ref=` (F-A13), Seller commission CSV (F-A11) + affiliate edit, Super Admin → Affiliate (reset
 > password / disable — interim AFFILIATE-PW-RESET), storefront `/affiliate` shows rate + hold days. **No migration**

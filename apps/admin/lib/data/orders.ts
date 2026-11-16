@@ -386,6 +386,34 @@ export async function getOrderList(params: OrderListParams = {}): Promise<OrderL
 }
 
 /**
+ * The Dashboard's "Antrian Kerja" order figures — the SAME predicates as the Pesanan tabs
+ * (`TAB_WHERE`), counted over the whole table.
+ *
+ * Before 2026-11-16 the dashboard filtered the 50 most recent rows it had fetched for "Pesanan
+ * Terbaru": "Perlu dikirim" was `status = 'diproses'` (15) while the sidebar badge, the bell and the
+ * tab it links to said 25, "Pesanan baru" counted `baru` including UNPAID ones, and both capped out
+ * silently at 50. `value` is what "Uang tertahan" names: rupiah in orders the seller can ship now.
+ */
+export type DashboardOrderCounts = { perluDikirim: number; perluDikirimValue: number; belumBayar: number };
+
+export async function getDashboardOrderCounts(): Promise<DashboardOrderCounts> {
+  return withCurrentTenant(async (db) => {
+    const [row] = (await db.execute(sql`
+      select
+        count(*) filter (where ${TAB_WHERE.perlu_dikirim})::int                          as "perluDikirim",
+        coalesce(sum(o.total_idr) filter (where ${TAB_WHERE.perlu_dikirim}), 0)::bigint as "perluDikirimValue",
+        count(*) filter (where ${TAB_WHERE.belum_bayar})::int                            as "belumBayar"
+      from orders o
+    `)) as unknown as { perluDikirim: number; perluDikirimValue: number | string; belumBayar: number }[];
+    return {
+      perluDikirim: row?.perluDikirim ?? 0,
+      perluDikirimValue: Number(row?.perluDikirimValue ?? 0),
+      belumBayar: row?.belumBayar ?? 0,
+    };
+  });
+}
+
+/**
  * The sidebar's Pesanan badge: orders the seller must ACT on right now.
  *
  * Deliberately the SAME predicate as the `perlu_dikirim` tab (`TAB_WHERE` above) — paid, not yet

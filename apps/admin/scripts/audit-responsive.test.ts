@@ -41,6 +41,6 @@ describe("responsive audit credentials", () => {
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
-    expect(result.stdout).toContain("OK — 264 route×width combinations");
+    expect(result.stdout).toContain("OK — 253 route×width combinations");
   });
 });

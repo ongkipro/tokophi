@@ -35,6 +35,14 @@ describe("platform shell", () => {
     expect(codeOnly("<Sheet><SheetTrigger /></Sheet>")).toMatch(uncontrolled); // self-check
   });
 
+  // 2026-11-16 (owner: "sidebar menu biar tidak ikut ke scroll"): the aside grew to the PAGE height
+  // (2,575 px on the dashboard, measured) and scrolled away. Pinned + viewport-tall; its own list scrolls.
+  it("pins the sidebar to the viewport instead of letting it scroll with the page", () => {
+    const pinned = /aside\s+className\s*=\s*"(?=[^"]*\bsticky\b)(?=[^"]*\btop-0\b)(?=[^"]*\bh-(?:svh|dvh|screen)\b)[^"]*"/;
+    expect(SHELL_TEXT).toMatch(pinned);
+    expect(textWithoutComments('<aside className="hidden w-60 shrink-0 flex-col border-r bg-card md:flex">')).not.toMatch(pinned); // self-check: the old shell fails
+  });
+
   it("renders a theme toggle and shows the operator's rank, not a decorative badge", () => {
     expect(SHELL).toMatch(/function\s+ThemeToggle/);
     expect(SHELL).toMatch(/<\s*ThemeToggle\s*\/\s*>/);
