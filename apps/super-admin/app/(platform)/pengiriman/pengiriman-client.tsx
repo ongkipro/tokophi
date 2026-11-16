@@ -13,9 +13,12 @@ import { Label } from "@tokophi/ui/label";
 import { Textarea } from "@tokophi/ui/textarea";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@tokophi/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@tokophi/ui/dialog";
+import { cn } from "@tokophi/ui/lib/utils";
+import { CircleCheck, CircleAlert } from "lucide-react";
 
 import type { StoreAccountRow, StrandedOrderRow, UnknownBookingRow } from "@/lib/mengantar-ops";
 import { reconcileMengantarBooking, retryStoreMengantar, rotateStoreMengantar } from "@/lib/actions";
+import { accountView, summarize, type MgBucket, type MgReadinessStep, type MgTone } from "@/lib/mengantar-overview";
 
 const RECONCILE_REASON_MIN = 10;
 const when = (d: Date | null) => (d ? new Date(d).toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short" }) : "—");
@@ -31,7 +34,69 @@ const STATE_LABEL: Record<string, string> = {
   rotating: "Ganti kunci",
 };
 
-export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { accounts: StoreAccountRow[]; unknown: UnknownBookingRow[]; stranded: StrandedOrderRow[]; isOwner: boolean }) {
+// Glyph + word + colour, never colour alone.
+const TONE: Record<MgTone, string> = {
+  ok: "border-transparent bg-emerald-500/12 text-emerald-700 dark:text-emerald-400",
+  wait: "border-transparent bg-amber-500/12 text-amber-700 dark:text-amber-400",
+  problem: "border-transparent bg-destructive/10 text-destructive",
+  muted: "border-transparent bg-muted text-muted-foreground",
+};
+
+type Filter = "semua" | "tindakan" | "terhubung" | "riwayat";
+const FILTERS: { id: Filter; label: string; match: (b: MgBucket) => boolean }[] = [
+  { id: "semua", label: "Semua", match: () => true },
+  { id: "tindakan", label: "Perlu tindakan", match: (b) => b === "waiting" || b === "problem" },
+  { id: "terhubung", label: "Terhubung", match: (b) => b === "connected" },
+  { id: "riwayat", label: "Riwayat", match: (b) => b === "history" },
+];
+
+function Readiness({ steps, env }: { steps: MgReadinessStep[]; env: string }) {
+  // Steps 1–4 gate registration; the switch decides whether connected stores quote Mengantar.
+  const canRegister = steps.filter((s) => s.key !== "switch").every((s) => s.ok);
+  return (
+    <Card data-mg-readiness={canRegister ? "ready" : "blocked"}>
+      <CardHeader>
+        <CardTitle>Kesiapan multi-seller ({env})</CardTitle>
+        <p className={cn("text-sm", canRegister ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+          {canRegister
+            ? "Siap: TokoΦ bisa membuatkan akun Mengantar untuk toko yang dipindah ke Mengantar."
+            : "Belum siap: akun Mengantar untuk toko baru belum bisa dibuat. Toko yang sudah terhubung tetap berjalan."}
+        </p>
+      </CardHeader>
+      <CardContent>
+        <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {steps.map((s, i) => (
+            <li key={s.key} data-mg-step={s.key} data-ok={s.ok} className="flex gap-2.5 rounded-lg border p-3">
+              {s.ok ? (
+                <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              )}
+              <div className="min-w-0">
+                <div className="text-sm font-medium">
+                  <span className="sr-only">{s.ok ? "Selesai: " : "Belum: "}</span>
+                  {i + 1}. {s.label}
+                </div>
+                <div className="text-xs text-muted-foreground">{s.detail}</div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number; tone?: MgTone }) {
+  return (
+    <div className="rounded-xl border bg-card p-3">
+      <div className={cn("text-2xl leading-none font-bold tabular-nums", value > 0 && tone === "problem" && "text-destructive", value > 0 && tone === "wait" && "text-amber-700 dark:text-amber-400")}>{value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+export function PengirimanClient({ accounts, unknown, stranded, steps, env, isOwner }: { accounts: StoreAccountRow[]; unknown: UnknownBookingRow[]; stranded: StrandedOrderRow[]; steps: MgReadinessStep[]; env: string; isOwner: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [rotating, setRotating] = useState<StoreAccountRow | null>(null);
@@ -39,6 +104,11 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
   const [mode, setMode] = useState<"adopt" | "release">("adopt");
   const [reference, setReference] = useState("");
   const [reason, setReason] = useState("");
+  const [filter, setFilter] = useState<Filter>("semua");
+  const sum = summarize(accounts);
+  const views = accounts.map((r) => ({ r, v: accountView(r) }));
+  const match = FILTERS.find((f) => f.id === filter)!.match;
+  const shown = views.filter(({ v }) => match(v.bucket));
 
   function run(fn: () => Promise<{ ok: boolean; message: string }>, done?: () => void) {
     startTransition(async () => {
@@ -52,12 +122,37 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
 
   return (
     <div className="space-y-5">
+      <Readiness steps={steps} env={env} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" data-mg-summary>
+        <Stat label="Toko di Mengantar" value={sum.onMengantar} />
+        <Stat label="Terhubung" value={sum.connected} />
+        <Stat label="Menunggu" value={sum.waiting} tone="wait" />
+        <Stat label="Bermasalah" value={sum.problem} tone="problem" />
+        <Stat label="Booking belum diketahui" value={unknown.length} tone="problem" />
+        <Stat label="Pesanan tertahan" value={stranded.length} tone="problem" />
+      </div>
+
       <Card>
-        <CardHeader>
+        <CardHeader className="gap-3">
           <CardTitle>Akun Mengantar toko</CardTitle>
+          {accounts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Saring akun">
+              {FILTERS.map((f) => {
+                const n = views.filter(({ v }) => f.match(v.bucket)).length;
+                return (
+                  <Button key={f.id} size="sm" variant={filter === f.id ? "default" : "outline"} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+                    {f.label} <span className="tabular-nums opacity-70">{n}</span>
+                  </Button>
+                );
+              })}
+            </div>
+          )}
         </CardHeader>
         {accounts.length === 0 ? (
           <CardContent className="py-8 text-center text-sm text-muted-foreground">Belum ada toko yang memakai Mengantar. Pindahkan toko di halaman tokonya, atau buat kode daftar Mengantar.</CardContent>
+        ) : shown.length === 0 ? (
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">Tidak ada akun di saringan ini.</CardContent>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -67,13 +162,13 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
                   <TableHead>Penyedia toko</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Seller · partner</TableHead>
-                  <TableHead>Catatan</TableHead>
+                  <TableHead>Yang perlu dilakukan</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.map((r) => (
-                  <TableRow key={`${r.storeId}:${r.env}`} data-mg-account={r.state}>
+                {shown.map(({ r, v }) => (
+                  <TableRow key={`${r.storeId}:${r.env}`} data-mg-account={r.state} data-mg-bucket={v.bucket}>
                     <TableCell>
                       <Link href={`/toko/${r.storeId}`} className="font-medium hover:underline">
                         {r.storeName}
@@ -85,7 +180,7 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
                       <Badge variant={r.provider === "mengantar" ? "default" : "outline"}>{r.provider === "mengantar" ? "Mengantar" : "KiriminAja"}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{STATE_LABEL[r.state] ?? r.state}</Badge>
+                      <Badge variant="secondary" className={cn("whitespace-nowrap", TONE[v.tone])}>{v.label}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">
                       {r.sellerId ?? "—"}
@@ -93,20 +188,17 @@ export function PengirimanClient({ accounts, unknown, stranded, isOwner }: { acc
                         {r.partnerId ?? "—"} · kunci {r.keyHint ? `…${r.keyHint}` : "—"}
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-xs text-xs text-muted-foreground">{r.lastError ?? ""}</TableCell>
+                    <TableCell className="min-w-56 max-w-sm text-xs whitespace-normal text-muted-foreground">{v.hint ?? ""}</TableCell>
                     <TableCell className="text-right">
-                      {r.state === "connected" ? (
-                        isOwner && (
-                          <Button size="sm" variant="outline" disabled={pending} onClick={() => setRotating(r)}>
-                            Perbarui kunci
-                          </Button>
-                        )
-                      ) : (
-                        r.provider === "mengantar" && (
-                          <Button size="sm" variant="outline" disabled={pending || r.state === "registering" || r.state === "rotating"} onClick={() => run(() => retryStoreMengantar(r.storeId))}>
-                            {r.state === "none" ? "Daftarkan" : "Daftarkan ulang"}
-                          </Button>
-                        )
+                      {v.action === "rotate" && isOwner && (
+                        <Button size="sm" variant="outline" disabled={pending} onClick={() => setRotating(r)}>
+                          Perbarui kunci
+                        </Button>
+                      )}
+                      {v.action === "register" && (
+                        <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => retryStoreMengantar(r.storeId))}>
+                          {r.state === "none" ? "Daftarkan" : "Daftarkan ulang"}
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>

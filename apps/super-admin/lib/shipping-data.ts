@@ -17,13 +17,25 @@ export type StoreShipping = {
   /** store_mengantar_accounts.state in the active env (`none` = no row). */
   accountState: string;
   accountEnv: ProviderEnv;
+  /** Why a non-connected account waits (`awaiting_consent`, …) — read by `accountView`. */
+  accountErrorCode: string | null;
+  accountError: string | null;
+  /** NULL on a connected row = the owner-attached account (O11). */
+  accountPartnerId: string | null;
 };
 
 /** The store page's "Penyedia pengiriman" card. */
 export async function getStoreShipping(storeId: string): Promise<StoreShipping | null> {
   const cfg = await getProviderConfig();
   const [row] = await db
-    .select({ provider: schema.stores.shippingProvider, signupCode: schema.stores.signupCode, accountState: schema.storeMengantarAccounts.state })
+    .select({
+      provider: schema.stores.shippingProvider,
+      signupCode: schema.stores.signupCode,
+      accountState: schema.storeMengantarAccounts.state,
+      accountErrorCode: schema.storeMengantarAccounts.lastErrorCode,
+      accountError: schema.storeMengantarAccounts.lastError,
+      accountPartnerId: schema.storeMengantarAccounts.partnerId,
+    })
     .from(schema.stores)
     .leftJoin(
       schema.storeMengantarAccounts,
@@ -38,6 +50,9 @@ export async function getStoreShipping(storeId: string): Promise<StoreShipping |
     platformSwitch: cfg.shipping,
     accountState: row.accountState ?? "none",
     accountEnv: cfg.mengantar.env,
+    accountErrorCode: row.accountErrorCode ?? null,
+    accountError: row.accountError ?? null,
+    accountPartnerId: row.accountPartnerId ?? null,
   };
 }
 

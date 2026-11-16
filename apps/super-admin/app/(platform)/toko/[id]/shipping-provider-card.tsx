@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Truck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@tokophi/ui/card";
@@ -11,6 +12,7 @@ import { Label } from "@tokophi/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@tokophi/ui/dialog";
 import { setStoreShippingProvider } from "@/lib/actions";
 import type { StoreShipping } from "@/lib/shipping-data";
+import { accountView } from "@/lib/mengantar-overview";
 
 // ADR 0019 — which provider quotes THIS store's non-COD checkouts. Super Admin decides (owner 2026-11-13);
 // the seller never does. The action (`setStoreShippingProvider`) is the boundary — owner rank, reason
@@ -18,16 +20,6 @@ import type { StoreShipping } from "@/lib/shipping-data";
 // operator who can open this page, the way every other control here is: the gate answers in words.
 
 const LABEL = { kiriminaja: "KiriminAja", mengantar: "Mengantar" } as const;
-const ACCOUNT: Record<string, string> = {
-  none: "belum ada",
-  pending: "diantrekan",
-  registering: "sedang didaftarkan",
-  connected: "terhubung",
-  email_taken: "email sudah dipakai di Mengantar",
-  failed: "perlu dilengkapi",
-  blocked: "diblokir",
-  rotating: "memperbarui kunci",
-};
 
 export function ShippingProviderCard({ storeId, storeName, shipping }: { storeId: string; storeName: string; shipping: StoreShipping }) {
   const router = useRouter();
@@ -35,6 +27,14 @@ export function ShippingProviderCard({ storeId, storeName, shipping }: { storeId
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const target = shipping.provider === "mengantar" ? "kiriminaja" : "mengantar";
+  // Same words as /pengiriman (`accountView`), so the two screens never name one account differently.
+  const account = accountView({
+    provider: shipping.provider,
+    state: shipping.accountState,
+    lastErrorCode: shipping.accountErrorCode,
+    lastError: shipping.accountError,
+    partnerId: shipping.accountPartnerId,
+  });
 
   // What the dispatch will actually do for this store right now — the same rule as `quoteShipping`.
   const effective =
@@ -72,9 +72,14 @@ export function ShippingProviderCard({ storeId, storeName, shipping }: { storeId
           <Badge variant="outline" className="font-semibold">{LABEL[shipping.provider]}</Badge>
         </div>
         {shipping.provider === "mengantar" && (
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground">Akun Mengantar ({shipping.accountEnv})</span>
-            <span className="text-right">{ACCOUNT[shipping.accountState] ?? shipping.accountState}</span>
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Akun Mengantar ({shipping.accountEnv})</span>
+              <Link href="/pengiriman" className="text-right font-medium underline-offset-2 hover:underline" data-mg-account-label>
+                {account.label}
+              </Link>
+            </div>
+            {account.hint && <p className="text-xs text-muted-foreground">{account.hint}</p>}
           </div>
         )}
         {shipping.signupCode && (

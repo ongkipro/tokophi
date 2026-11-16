@@ -2,8 +2,7 @@
 
 **Status:** accepted (owner, 2026-11-13) · **Date:** 2026-11-13 · **Task:** `SHIP-PROVIDER-PER-STORE`
 **Amends:** ADR 0018 — the dispatch rule (D11) and automatic registration (D14) · **Supersedes:** none
-**Number is provisional until merge** (the paused `feat/kelola-plugin` drafted a local 0019) — re-scan
-`specs/decisions/` before merging and renumber if taken.
+**Number confirmed** — merged as `11cd0b60` (migration `0117`); `feat/kelola-plugin` took ADR 0021, so 0019 is this record's.
 
 ## 1. Context
 
@@ -115,6 +114,6 @@ nothing, not even a loading state. KiriminAja sellers see nothing new.
 
 ## 6. More information
 
-- Owner-confirmable before merge: the rank (owner vs admin) — one line, above.
+- Rank shipped as **owner** (merged 2026-11-13); lowering it to `admin` is still that one line, above.
 - Production data note: the migration's backfill flips only the demo store; nothing else changes provider.
 - ADR 0018 keeps everything not named here (partner model, sealed keys, wallet, owner-attached account).

@@ -2111,7 +2111,9 @@
           "clients": [
             "pengiriman-client.tsx"
           ],
-          "data": [],
+          "data": [
+            "data"
+          ],
           "actions": [
             "actions"
           ],
@@ -4737,6 +4739,14 @@
           "listStrandedMengantar",
           "listUnknownMengantar",
           "reconcileUnknownBookingWith"
+        ]
+      },
+      {
+        "module": "mengantar-overview.ts",
+        "exports": [
+          "accountView",
+          "readinessSteps",
+          "summarize"
         ]
       },
       {
