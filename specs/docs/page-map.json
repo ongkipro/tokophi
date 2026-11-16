@@ -942,6 +942,7 @@
           "ownerDb": false,
           "tests": [
             "apps/admin/lib/actions/orders.test.ts",
+            "apps/admin/lib/data/action-queue.test.ts",
             "apps/admin/lib/search-model.test.ts",
             "apps/admin/lib/seller-entity-links.test.ts",
             "apps/admin/lib/uuid-guard.test.ts",
@@ -4009,6 +4010,7 @@
       {
         "module": "orders.ts",
         "exports": [
+          "getDashboardOrderCounts",
           "getOrder",
           "getOrderList",
           "getOrders",
@@ -4613,6 +4615,19 @@
           "listAffiliateAccounts",
           "resetAffiliatePassword",
           "setAffiliateDisabled"
+        ]
+      },
+      {
+        "module": "backup-health.ts",
+        "exports": [
+          "getBackupHealth"
+        ]
+      },
+      {
+        "module": "backup-verdict.ts",
+        "exports": [
+          "BACKUP_STALE_MINUTES",
+          "backupVerdict"
         ]
       },
       {

@@ -2,11 +2,13 @@
 // merchant's messages as read. Same identity rules as the rest of /api/chat/* (spec §6): the
 // conversation is resolved from the signed cookie + the Host-resolved store, never from the body.
 import type { APIRoute } from "astro";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import { db, schema } from "@tokophi/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { LIMITS, clientIp, json, rateLimit, readVisitorToken } from "../../../lib/chat";
 
 export const POST: APIRoute = async (ctx) => {
+  if (!CHAT_ENABLED) return new Response("Not Found", { status: 404 }); // hidden — @tokophi/lib/features
   const store = ctx.locals.store;
   if (!store) return json({ error: "unknown store" }, 404);
 

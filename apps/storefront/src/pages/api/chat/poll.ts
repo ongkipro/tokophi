@@ -7,6 +7,7 @@
 // No cookie → no visitor → an empty delta (200, not 401): a shopper who has never typed has no
 // thread, and that is not an error.
 import type { APIRoute } from "astro";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import { db, schema } from "@tokophi/db";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
@@ -17,6 +18,7 @@ import {
 const EMPTY: ChatDelta = { conversationId: null, status: null, messages: [], cursor: null, unread: 0 };
 
 export const GET: APIRoute = async (ctx) => {
+  if (!CHAT_ENABLED) return new Response("Not Found", { status: 404 }); // hidden — @tokophi/lib/features
   const store = ctx.locals.store;
   if (!store) return json({ error: "unknown store" }, 404);
 

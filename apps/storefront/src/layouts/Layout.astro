@@ -8,6 +8,7 @@ import Analytics from "../components/Analytics.astro";
 import MarketingPixels from "../components/MarketingPixels.astro";
 import ImageFallback from "../components/ImageFallback.astro";
 import Chat from "../components/Chat.astro";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import ThemeTokens from "../components/ThemeTokens.astro";
 import { mediaUrl, ADMIN_BASE } from "../data/catalog";
 
@@ -169,6 +170,6 @@ const ogImage = (() => {
     {/* One palette per page — the header trigger, ⌘K and `/` all open this instance. */}
     <SearchPalette />
     {/* Obrolan — shopper ⇄ merchant chat. Mounted once here so the bubble is on every page. */}
-    <Chat />
+    {CHAT_ENABLED && <Chat />}
   </body>
 </html>

@@ -6,6 +6,7 @@ import type { FunnelDay, DeviceDay } from "@/lib/data/funnel";
 import type { ChannelDay, HourPoint, ProductSaleDay } from "@/lib/data/analytics";
 import type { CourierReturns, ReturnsByCourier } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
+import type { DashboardOrderCounts } from "@/lib/data/orders";
 
 export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "month" | "lastmonth";
 
@@ -272,6 +273,8 @@ export type QueueItem = {
   /** Shown when count === 0. */
   done: string;
   tone: QueueTone;
+  /** Waiting on someone else (the buyer): shown, but not counted as the seller's work. */
+  waiting?: boolean;
 };
 
 /**
@@ -282,12 +285,11 @@ export type QueueItem = {
  * "belum dibalas" count would be fiction. Moderation is the real, gated action today.
  */
 export function getActionQueue(
-  orders: Order[],
+  orderCounts: DashboardOrderCounts,
   products: Product[],
   reviews: Review[],
   tickets: TicketRow[],
 ): QueueItem[] {
-  const count = (s: Order["status"]) => orders.filter((o) => o.status === s).length;
   const active = products.filter((p) => p.status === "active");
   const out = active.filter((p) => p.stock === 0).length;
   const low = active.filter((p) => p.stock > 0 && p.stock < LOW_STOCK).length;
@@ -295,23 +297,28 @@ export function getActionQueue(
   const openTickets = tickets.filter((t) => t.status === "open").length;
 
   return [
+    // Both order rows are the Pesanan tabs they open (`getDashboardOrderCounts`, same predicates),
+    // so the tile, the sidebar badge, the bell and the list can never show different numbers.
     {
       key: "dikirim",
       label: "Perlu dikirim",
-      count: count("diproses"),
-      href: "/pesanan",
-      hint: "pesanan siap diproses",
+      count: orderCounts.perluDikirim,
+      href: "/pesanan?tab=perlu_dikirim",
+      hint: "sudah dibayar atau COD",
       done: "Tidak ada yang menunggu dikirim",
       tone: "urgent",
     },
     {
+      // The BUYER's move, not the seller's: shown for follow-up, never added to the "perlu
+      // ditindaklanjuti" total (`waiting`).
       key: "baru",
-      label: "Pesanan baru",
-      count: count("baru"),
-      href: "/pesanan",
-      hint: "belum dikonfirmasi",
-      done: "Semua pesanan sudah dikonfirmasi",
-      tone: "urgent",
+      label: "Belum bayar",
+      count: orderCounts.belumBayar,
+      href: "/pesanan?tab=belum_bayar",
+      hint: "menunggu pembayaran pembeli",
+      done: "Semua sudah dibayar",
+      tone: "info",
+      waiting: true,
     },
     {
       key: "stok",
@@ -345,10 +352,12 @@ export function getActionQueue(
 
 export type StuckMoney = { orders: number; value: number };
 
-/** "Uang tertahan": the rupiah sitting in orders the seller has not shipped yet (baru + diproses). */
-export function getStuckMoney(orders: Order[]): StuckMoney {
-  const open = orders.filter((o) => o.status === "baru" || o.status === "diproses");
-  return { orders: open.length, value: open.reduce((a, o) => a + o.total, 0) };
+/**
+ * "Uang tertahan": the rupiah in orders the seller can ship NOW (paid or COD, not yet shipped) —
+ * the `perlu_dikirim` tab. Unpaid orders are excluded: shipping does not release money nobody paid.
+ */
+export function getStuckMoney(c: DashboardOrderCounts): StuckMoney {
+  return { orders: c.perluDikirim, value: c.perluDikirimValue };
 }
 
 export type MoneyTile = { key: RangeKey; label: string; value: number; delta: number | null; compareLabel: string; spark: number[]; /** What the figure sums — it is `total − tax` over placed orders, not collected money (Task 8.28). */ note: string };

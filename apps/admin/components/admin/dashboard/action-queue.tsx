@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, Truck, ShoppingBag, PackageX, Star, LifeBuoy, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, Truck, ShoppingBag, PackageX, Star, LifeBuoy, Wallet, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tokophi/ui/card";
 import { cn } from "@tokophi/ui/lib/utils";
 import { IDR, num } from "@tokophi/lib/format";
@@ -7,7 +7,7 @@ import type { QueueItem, QueueTone, StuckMoney } from "@/lib/data/dashboard";
 
 const ICON: Record<string, LucideIcon> = {
   dikirim: Truck,
-  baru: ShoppingBag,
+  baru: Wallet,
   stok: PackageX,
   ulasan: Star,
   tiket: LifeBuoy,
@@ -64,7 +64,8 @@ function Tile({ item }: { item: QueueItem }) {
 }
 
 export function ActionQueue({ items, stuck }: { items: QueueItem[]; stuck: StuckMoney }) {
-  const total = items.reduce((a, i) => a + i.count, 0);
+  // `waiting` rows (Belum bayar) are the buyer's move — visible, but not the seller's to-do count.
+  const total = items.reduce((a, i) => a + (i.waiting ? 0 : i.count), 0);
   return (
     <Card>
       <CardHeader>
@@ -88,7 +89,7 @@ export function ActionQueue({ items, stuck }: { items: QueueItem[]; stuck: Stuck
 
         {stuck.orders > 0 && (
           <Link
-            href="/pesanan"
+            href="/pesanan?tab=perlu_dikirim"
             className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm tabular-nums transition-colors hover:bg-amber-500/[0.12]"
           >
             <span className="font-semibold text-amber-700 dark:text-amber-400">

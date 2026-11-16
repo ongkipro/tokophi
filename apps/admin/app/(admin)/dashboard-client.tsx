@@ -25,6 +25,7 @@ import type { FunnelDay } from "@/lib/data/funnel";
 import type { MengantarNotice } from "@/lib/mengantar-readiness";
 import type { ReturnsByCourier } from "@/lib/data/returns";
 import type { TicketRow } from "@/lib/data/support";
+import type { DashboardOrderCounts } from "@/lib/data/orders";
 import type { DayPoint, Product, Order, Activity, Review } from "@/lib/types/domain";
 import { IDR, num, pct, share } from "@tokophi/lib/format";
 import { exportCsv } from "@/lib/csv";
@@ -34,6 +35,7 @@ export function DashboardClient({
   hours,
   products,
   orders,
+  orderCounts,
   reviews,
   tickets,
   returns,
@@ -49,6 +51,7 @@ export function DashboardClient({
   hours: HourPoint[];
   products: Product[];
   orders: Order[];
+  orderCounts: DashboardOrderCounts;
   reviews: Review[];
   tickets: TicketRow[];
   returns: ReturnsByCourier;
@@ -65,10 +68,10 @@ export function DashboardClient({
   const s = getSummary(days, range);
   const { points } = getSeries(days, range, hours);
 
-  // What has to be done RIGHT NOW + where the money is stuck. Counts only — every one of them is a
-  // filter over rows the server already fetched, so each traces back to an existing query.
-  const queue = getActionQueue(orders, products, reviews, tickets);
-  const stuck = getStuckMoney(orders);
+  // What has to be done RIGHT NOW + where the money is stuck. The order figures are counted on the
+  // server over the whole table (`getDashboardOrderCounts`) — `orders` is only the 50 newest rows.
+  const queue = getActionQueue(orderCounts, products, reviews, tickets);
+  const stuck = getStuckMoney(orderCounts);
   const moneyTiles = getMoneyTiles(days);
   const returnSummary = getReturnSummary(returns);
 

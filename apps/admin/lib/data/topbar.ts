@@ -47,10 +47,6 @@ export async function getTopbarData(): Promise<TopbarData> {
     `)) as unknown as { available: string | number; pending: string | number; returned: string | number }[];
 
     // ── notifications ─────────────────────────────────────────────────────────
-    const newOrders = (await db.execute(sql`
-      select count(*)::int as "n" from orders where status = 'baru'
-    `)) as unknown as { n: number }[];
-
     const lowStock = (await db.execute(sql`
       select p.title as "title", sum(il.available)::int as "stock"
       from inventory_levels il
@@ -63,16 +59,11 @@ export async function getTopbarData(): Promise<TopbarData> {
       limit 3
     `)) as unknown as { title: string; stock: number }[];
 
+    // No order count here any more (2026-11-16). It was `status = 'baru'`, which includes prepaid
+    // orders still waiting on the BUYER, so the bell said "12 pesanan baru" while the sidebar badge
+    // said 7 and the link opened "Semua". The topbar now builds that row from `navCounts.perluDikirim`
+    // — the sidebar's own number (`getPerluDikirimCount`) — so the two cannot disagree.
     const notifs: TopbarNotif[] = [];
-    const n = Number(newOrders[0]?.n ?? 0);
-    if (n > 0) {
-      notifs.push({
-        id: "orders-new",
-        title: `${n} pesanan baru menunggu`,
-        sub: "Perlu diproses",
-        href: "/pesanan",
-      });
-    }
     for (const r of lowStock) {
       notifs.push({
         id: `stock-${r.title}`,

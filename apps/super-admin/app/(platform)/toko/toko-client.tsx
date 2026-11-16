@@ -94,13 +94,16 @@ const HEALTH_OPTIONS: { key: HealthFilter; label: string }[] = [
 export function TokoClient({
   stores,
   healthById,
+  initialQuery = "",
 }: {
   stores: Store[];
   healthById: Record<string, HealthVerdict>;
+  /** `?q=` — the header's store search lands here (page keys this component on it). */
+  initialQuery?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [segment, setSegment] = useState<SegmentTab>("semua");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("semua");

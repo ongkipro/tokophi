@@ -7,6 +7,7 @@
 // a client is NEVER trusted. The visitor comes from the signed `tokophi_chat` cookie, minted HERE on
 // the first message — not on page load, so a bot that never types leaves no row.
 import type { APIRoute } from "astro";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import { db, schema } from "@tokophi/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { normalizePhone } from "@tokophi/lib/validate";
@@ -17,6 +18,7 @@ import {
 } from "../../../lib/chat";
 
 export const POST: APIRoute = async (ctx) => {
+  if (!CHAT_ENABLED) return new Response("Not Found", { status: 404 }); // hidden — @tokophi/lib/features
   const store = ctx.locals.store;
   if (!store) return json({ error: "unknown store" }, 404);
 

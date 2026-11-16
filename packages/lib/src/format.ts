@@ -17,8 +17,10 @@ export const NO_FIGURE = "—";
 export const IDR = (n: number, opts: { compact?: boolean } = {}) => {
   if (!Number.isFinite(n)) return NO_FIGURE;
   if (opts.compact) {
-    if (n >= 1_000_000_000) return `Rp${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")} M`;
-    if (n >= 1_000_000) return `Rp${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} jt`;
+    // id-ID decimal COMMA, like `pct`: "Rp209.4 jt" reads as a thousands separator in Indonesian.
+    const one = (x: number) => x.toFixed(1).replace(/\.0$/, "").replace(".", ",");
+    if (n >= 1_000_000_000) return `Rp${one(n / 1_000_000_000)} M`;
+    if (n >= 1_000_000) return `Rp${one(n / 1_000_000)} jt`;
     if (n >= 1_000) return `Rp${(n / 1_000).toFixed(0)} rb`;
   }
   return new Intl.NumberFormat("id-ID", {

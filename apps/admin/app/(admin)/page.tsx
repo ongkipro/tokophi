@@ -1,7 +1,7 @@
 import { getDailyStats, getHourlyStats, getChannelSalesDaily, getProductSalesDaily } from "@/lib/data/analytics";
 import { getFunnelDaily } from "@/lib/data/funnel";
 import { getProducts } from "@/lib/data/products";
-import { getOrders } from "@/lib/data/orders";
+import { getOrders, getDashboardOrderCounts } from "@/lib/data/orders";
 import { getReviews } from "@/lib/data/reviews";
 import { getMyTickets } from "@/lib/data/support";
 import { getReturnsByCourier } from "@/lib/data/returns";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 // their existing uses; `returns` feeds the retur rate (orders.status = 'retur', migration 0039).
 export default async function DashboardPage() {
   const session = await getSession();
-  const [days, hours, products, orders, reviews, tickets, returns, storeName, activities, channels, productSales, funnel, mengantarNotice] =
+  const [days, hours, products, orders, reviews, tickets, returns, storeName, activities, channels, productSales, funnel, mengantarNotice, orderCounts] =
     await Promise.all([
       getDailyStats(),
       getHourlyStats(), // real intraday buckets for the "Hari ini"/"Kemarin" ranges
@@ -34,6 +34,7 @@ export default async function DashboardPage() {
       getFunnelDaily(),
       // A banner must never take the dashboard down with it: any failure reads as "no banner".
       getMengantarDashboardNotice().catch(() => null),
+      getDashboardOrderCounts(), // Antrian Kerja + Uang tertahan — the Pesanan tab predicates, whole table
     ]);
   // No "pengunjung online" ticker: nothing tracks concurrent sessions. Pengunjung/Konversi are
   // COUNTED from analytics_events (funnel rows) and fall back to "—" for a store with no events.
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
       hours={hours}
       products={products}
       orders={orders}
+      orderCounts={orderCounts}
       reviews={reviews}
       tickets={tickets}
       returns={returns}

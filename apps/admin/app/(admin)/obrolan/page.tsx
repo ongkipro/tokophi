@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import { PageHeader } from "@/components/admin/page-header";
 import { canReadChat, getThread, getThreads } from "@/lib/data/chat";
 import { ObrolanClient } from "./obrolan-client";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 // `chat:read` is guarded HERE, on the route, not just on the sidebar item: hiding a nav row is not
 // access control (spec §6).
 export default async function ObrolanPage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
+  if (!CHAT_ENABLED) notFound(); // hidden, not deleted — @tokophi/lib/features
   if (!(await canReadChat())) redirect("/");
 
   const { id } = await searchParams;

@@ -1,6 +1,7 @@
 ---
 import { ShoppingBag, ShoppingCart, ArrowRight, Search, ChevronRight, MessageCircle } from "@lucide/astro";
 import { IDR, num } from "@tokophi/lib/format";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 import { imageSrcSet, inStock, mediaUrl, storeCodPolicy, storeFreeShip } from "../data/catalog";
 import { getMainNav, type NavItem } from "../data/nav";
 
@@ -316,6 +317,8 @@ const TRUST: string[] = [
       >
       <Search class="size-5" stroke-width={1.8} aria-hidden="true" />
       </a>
+      {/* Chat button: hidden while CHAT_ENABLED is off (owner 2026-11-16) — no Chat.astro panel to open. */}
+      {CHAT_ENABLED && (
       <button
       type="button"
       data-chat-open
@@ -327,6 +330,7 @@ const TRUST: string[] = [
       <MessageCircle class="size-5" stroke-width={1.8} aria-hidden="true" />
       <span data-chat-dot class="absolute right-2 top-2 hidden size-2.5 rounded-full bg-brand-600 ring-2 ring-cream"><span class="sr-only">Ada balasan baru</span></span>
       </button>
+      )}
       <a
       href="/keranjang"
       class="relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-mist hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 motion-reduce:transition-none"

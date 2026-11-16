@@ -63,3 +63,12 @@ describe("pct is a delta, share is a part of a whole", () => {
     expect(share(-0)).not.toContain("−");
   });
 });
+
+describe("IDR compact speaks id-ID", () => {
+  it("uses a decimal comma, drops a trailing ,0", () => {
+    expect(IDR(209_400_000, { compact: true })).toBe("Rp209,4 jt");
+    expect(IDR(2_000_000, { compact: true })).toBe("Rp2 jt");
+    expect(IDR(1_250_000_000, { compact: true })).toBe("Rp1,3 M");
+    expect(IDR(15_000, { compact: true })).toBe("Rp15 rb");
+  });
+});

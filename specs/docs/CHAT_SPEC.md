@@ -2,6 +2,12 @@
 
 > Spec for BACKLOG **P1.6 #4** — "Ticketing UI/UX → customer⇄seller chat + merchant chat dashboard".
 > Decision-first. Companions: [`CONCEPT.md`](CONCEPT.md) (vision), [`SCHEMA.md`](SCHEMA.md) (tables), [`ARCHITECTURE.md`](ARCHITECTURE.md) (surfaces), [`DEPLOY.md`](DEPLOY.md) (the box we actually run on), ADR 0004/0008/0009.
+> 🙈 **HIDDEN since 2026-11-16 (owner: "obrolan hide aja dulu … belum dipakai").** The feature IS built (widget,
+> `/api/chat/*`, Seller `/obrolan`); one switch, `CHAT_ENABLED` in `packages/lib/src/features.ts`, now hides every entry
+> point — storefront bubble, Header / PDP sticky-bar / `/kontak` buttons, the Seller sidebar row — makes `/obrolan` a 404
+> and the three chat API routes answer 404. Tables and code untouched; turning it back on is that one line + deploy.
+> While off, the shopper's channel is WhatsApp (`store.whatsapp`). The status line below predates the build.
+>
 > Status: **SPEC — not implemented.** No product code exists for any of this yet. Written 2026-07-13.
 > Scope note: everything below is grounded in the current tree (support tables = migration `0030`; storefront = Astro SSR, **no shopper auth at all**; public write path = `apps/admin/app/api/public/order`).
 

@@ -7,7 +7,7 @@ import { TokoClient } from "./toko-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function TokoPage() {
+export default async function TokoPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
   // SEC-9: the rank floor for this route group, BEFORE a single privileged read.
   // `platformGate(min)` inside each action stays the mutation boundary; this is additive.
   const gate = await platformRouteGate("/toko");
@@ -16,5 +16,8 @@ export default async function TokoPage() {
   const [stores, healthMap] = await Promise.all([getStores(), getHealthMap()]);
   const healthById: Record<string, HealthVerdict> = {};
   for (const s of stores) healthById[s.id] = healthMap.get(s.id)?.verdict ?? "sehat";
-  return <TokoClient stores={stores} healthById={healthById} />;
+  const sp = await searchParams;
+  // A filter string only — matched client-side against rows already read; it never reaches SQL.
+  const q = (Array.isArray(sp.q) ? sp.q[0] : sp.q)?.slice(0, 100) ?? "";
+  return <TokoClient key={q} stores={stores} healthById={healthById} initialQuery={q} />;
 }

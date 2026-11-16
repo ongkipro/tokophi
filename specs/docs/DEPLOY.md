@@ -1123,6 +1123,30 @@ resource → Environment Variables** turn it on; no code change, no redeploy of 
    `healthy` here means a real upload+prune round finished within 8 h — the state file is written
    only after one, so a live loop with a dead credential cannot read as healthy.
 
+### Hardening that comes with the new token (2026-11-16 — do these while minting it)
+
+5. **Bucket lock on `postgres/` — so a compromised box cannot wipe the offsite copy.** The sidecar's
+   key can delete (it prunes past `R2_RETENTION_DAYS`), so today anyone with root on the VPS can erase
+   every offsite dump with the same credential. Cloudflare dashboard → R2 → the bucket → **Settings →
+   Bucket lock rules → Add rule**: prefix **`postgres/`**, retention **by age, 29 days**. Objects under
+   that prefix then refuse delete AND overwrite (HTTP 409) until they are 29 days old; changing the rule
+   needs an Admin-level R2 token, which never lives on the box. CLI equivalent: `npx wrangler r2 bucket
+   lock add <bucket> …` (`wrangler r2 bucket lock list <bucket>` to read it back).
+   - **29, not 30**: one day under the sidecar's `R2_RETENTION_DAYS` (default 30), so its own prune of
+     30-day-old dumps is never refused. Raise both together, lock always one day lower.
+   - **Prefix only, never the whole bucket**: Coolify's volume backup of `tokophi-uploads` lives in the
+     same bucket under `data/coolify/backups/…` and prunes itself; a bucket-wide lock makes those prunes
+     fail.
+   - The sidecar already never rewrites a name (`rclone copy --immutable`), so the lock changes nothing
+     for a healthy round — it only removes the ability to destroy.
+6. **Optional dead-man's switch.** Create a check at healthchecks.io (or any push monitor that alerts
+   when pings STOP), period **1 h**, grace **2 h**, and set its URL as **`BACKUP_HEARTBEAT_URL`** in
+   Coolify. `backup-offsite` GETs it after every `offsite-ok` and GETs `<url>/fail` on a failed/skipped
+   round; the URL is never logged. This is the only alarm that also fires when the whole VPS is dead.
+7. **Look at it.** Super Admin → Dashboard → *Perlu tindakan* shows **Backup database** (newest local
+   dump age + last offsite success), read from the two volumes mounted read-only into `super-admin`.
+   `—` means the mount is missing (not deployed yet), never "fine".
+
 ### Restore FROM R2 (the half that makes it a backup)
 
 Uploading is not a backup until this has been done at least once. Run it against a THROWAWAY

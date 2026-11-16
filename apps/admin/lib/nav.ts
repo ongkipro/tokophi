@@ -1,4 +1,5 @@
 import { LayoutDashboard, ShoppingBag, Wallet, Package, Users, TicketPercent, BarChart3, Megaphone, Settings, FileText, Newspaper, ListTree, MessageSquare, MessagesSquare, LifeBuoy, Palette, Plug, FolderOpen, type LucideIcon } from "lucide-react";
+import { CHAT_ENABLED } from "@tokophi/lib/features";
 
 export type NavChild = { label: string; href: string; badgeKey?: NavBadgeKey };
 
@@ -94,8 +95,8 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       // Obrolan = shopper ⇄ merchant chat (specs/docs/CHAT_SPEC.md). It sits with Pesanan/Pelanggan
       // because that is the axis it belongs to — Bantuan (merchant ⇄ platform) deliberately stays
-      // at the bottom, a different axis entirely.
-      { label: "Obrolan", href: "/obrolan", icon: MessageSquare },
+      // at the bottom, a different axis entirely. HIDDEN while `CHAT_ENABLED` is off (owner 2026-11-16).
+      ...(CHAT_ENABLED ? [{ label: "Obrolan", href: "/obrolan", icon: MessageSquare }] : []),
       {
         label: "CRM", href: "/crm", icon: MessagesSquare,
         children: [

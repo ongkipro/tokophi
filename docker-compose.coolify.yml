@@ -238,6 +238,14 @@ services:
       # and no worse than the guaranteed full blackout the gate itself used to cause. First-ever
       # bootstrap still converges: the app serves 500s (unhealthy, out of Traefik's pool) until
       # migrate lands, then heals on the next health tick.
+    volumes:
+      # READ-ONLY, METADATA ONLY (2026-11-16): the dashboard's "Backup database" tile stats the newest
+      # dump and reads the offsite sidecar's `last-ok` stamp (apps/super-admin/lib/backup-health.ts),
+      # because the 2026-11-15 R2 outage was visible only to whoever ran `docker ps`. `:ro` — this
+      # container must never be able to delete or alter a recovery point. It already holds the owner
+      # DB connection, so read access to the dumps grants it nothing new.
+      - tokophi-backups:/backups:ro
+      - tokophi-offsite-state:/offsite-state:ro
     environment:
       # Task 4.12 / SEC-18 — `owner`, and that is the honest label, not a downgrade. This surface has
       # ZERO `withTenant()` call sites (measured 2026-08-22): the control plane is cross-tenant by
@@ -749,6 +757,12 @@ services:
   #     `PLATFORM_DATABASE_URL` in Coolify, the owner's is `POSTGRES_PASSWORD`. Restore order:
   #     SLA-DRP §7. The globals file is NOT `*.dump` on purpose: the "newest dump" cadence check and
   #     the healthcheck below keep keying on the data dump alone.
+  #  5. A DUMP MUST READ BACK BEFORE IT COUNTS (2026-11-16). `pg_restore --list` parses the archive's
+  #     table of contents; a truncated or corrupt `.part` fails it and the round is FAILED instead of
+  #     becoming "the newest dump" that suppresses the next attempt and satisfies the healthcheck.
+  #     Cheap (the TOC is at the head of a -Fc archive) and it is the check the 2026-10-10 restore
+  #     drill ran by hand. It proves the file is an archive, not that every row restores — the
+  #     periodic restore drill (SLA-DRP §8) still owns that.
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -771,6 +785,7 @@ services:
             g=/backups/tokophi-$$ts.globals.sql
             if pg_dumpall -h postgres -U tokophi --globals-only --no-role-passwords -f "$$g.part" \
               && pg_dump -h postgres -U tokophi -d tokophi -Fc -f "$$f.part" \
+              && pg_restore --list "$$f.part" >/dev/null \
               && mv "$$g.part" "$$g" && mv "$$f.part" "$$f"; then
               echo backup-ok
             else
@@ -842,6 +857,12 @@ services:
       RCLONE_CONFIG_R2_ACL: private
       R2_BUCKET: ${R2_BUCKET:-}
       R2_RETENTION_DAYS: ${R2_RETENTION_DAYS:-30}
+      # OPTIONAL DEAD-MAN'S SWITCH (2026-11-16). A push-check URL (healthchecks.io style: GET the URL on
+      # success, GET the URL + "/fail" on failure). Pinged after every `offsite-ok` round; the external
+      # service alerts when pings STOP — which also catches the whole VPS being dead, the one failure no
+      # on-box healthcheck can report. Empty = no ping (today's behaviour). The URL is a credential of
+      # sorts (anyone holding it can fake "ok"), so it is set in Coolify and never echoed to the log.
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
     volumes:
       # READ-ONLY: this container must never be able to delete a local dump. The retention it applies
       # is remote-only, through rclone.
@@ -850,6 +871,11 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        # Never prints the URL: `-q` plus both streams discarded; only the outcome word is logged.
+        heartbeat() {
+          [ -n "$$BACKUP_HEARTBEAT_URL" ] || return 0
+          wget -q -T 15 -O /dev/null "$$BACKUP_HEARTBEAT_URL$$1" >/dev/null 2>&1 || echo "heartbeat-FAILED$$1"
+        }
         while true; do
           # Built here, not in `environment:` above — see the note there.
           if [ -n "$$R2_ACCOUNT_ID" ]; then
@@ -858,12 +884,16 @@ services:
           if [ -z "$$R2_BUCKET" ] || [ -z "$$RCLONE_CONFIG_R2_ACCESS_KEY_ID" ] || [ -z "$$R2_ACCOUNT_ID" ]; then
             echo "offsite-UNCONFIGURED: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET in Coolify"
             rm -f /state/last-ok
+            heartbeat /fail
           else
             # `copy`, never `sync`: sync mirrors deletions, so a local prune (14 days) would erase the
             # offsite copies this service exists to keep. Remote retention is applied separately below.
             # The `--include` list is the backup SET: the data dump AND its roles file (R-22). Leave
             # either out and the offsite copy cannot rebuild a fresh cluster (SLA-DRP §7).
-            if rclone copy /backups "r2:$$R2_BUCKET/postgres" --include '*.dump' --include '*.globals.sql' --s3-no-check-bucket --stats-one-line --stats 0 2>&1; then
+            # `--immutable`: a name already offsite is never rewritten. Dump names are timestamped, so a
+            # differing remote copy can only mean tampering or corruption — fail loudly, never overwrite.
+            # (It is also what an R2 bucket-lock rule on `postgres/` would enforce server-side; DEPLOY.md.)
+            if rclone copy /backups "r2:$$R2_BUCKET/postgres" --immutable --include '*.dump' --include '*.globals.sql' --s3-no-check-bucket --stats-one-line --stats 0 2>&1; then
               # 🔴 PRUNE ONLY WHILE FRESH DUMPS ARE STILL ARRIVING (R-21, 2026-10-29). `copy` succeeds
               # with nothing new to send, so if pg_dump fails silently the age-based delete below
               # would keep eating the oldest remote copy every hour until, R2_RETENTION_DAYS later,
@@ -881,6 +911,7 @@ services:
                 # "the loop is alive" and not "the credential works".
                 date -u +%s > /state/last-ok
                 echo "offsite-ok $$(date -u +%FT%TZ) bucket=$$R2_BUCKET retention=$${R2_RETENTION_DAYS}d"
+                heartbeat ""
               else
                 # DECISION: a skipped prune does NOT refresh /state/last-ok. The upload worked, but
                 # nothing fresh went offsite, so this service turns UNHEALTHY alongside `backup` —
@@ -891,9 +922,11 @@ services:
                 else
                   echo "offsite-prune-SKIPPED $$(date -u +%FT%TZ) no local dump at all — remote retention frozen; check the backup service"
                 fi
+                heartbeat /fail
               fi
             else
               echo "offsite-FAILED $$(date -u +%FT%TZ)"
+              heartbeat /fail
             fi
           fi
           sleep 3600
