@@ -497,6 +497,8 @@ export type ProviderStatus = {
     slots: Record<ProviderEnv, { partnerId: string | null; secretMasked: string; source: "db" | "env" | "none"; originKnown: boolean }>;
     ready: boolean;
     why: string | null;
+    /** `MENGANTAR_ENV` is set explicitly on the server (unset reads as sandbox and blocks the switch). */
+    envNamed: boolean;
   };
   /** Which provider quotes NEW checkouts, and which side decided it. */
   shipping: { active: ShippingProvider; source: "db" | "env" | "default" };
@@ -545,7 +547,7 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
     encryptionAvailable: encryptionAvailable(),
     kiriminaja: { activeEnv: active.env, envSource: active.envSource, sandbox: slot("sandbox"), production: slot("production") },
     autolaris: { present: !!alCfg.key, source: alCfg.keySource, masked: maskKey(alCfg.key), testedAt: alCfg.keySource === "db" ? (al?.testedAt?.toISOString() ?? null) : null },
-    mengantar: { env: mgReady.cfg.env, slots: { sandbox: mgSlot("sandbox"), production: mgSlot("production") }, ready: mgReady.ready, why: mgReady.why },
+    mengantar: { env: mgReady.cfg.env, slots: { sandbox: mgSlot("sandbox"), production: mgSlot("production") }, ready: mgReady.ready, why: mgReady.why, envNamed: mgReady.cfg.envSource === "env" },
     shipping: { active: shippingActive, source: shippingSource },
   };
 }

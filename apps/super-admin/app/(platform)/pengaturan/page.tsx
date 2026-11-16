@@ -5,7 +5,7 @@ import { PengaturanClient } from "./pengaturan-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function PengaturanPage() {
+export default async function PengaturanPage({ searchParams }: { searchParams: Promise<{ section?: string }> }) {
   // SEC-9: the rank floor for this route group, BEFORE a single privileged read.
   // `platformGate(min)` inside each action stays the mutation boundary; this is additive.
   const gate = await platformRouteGate("/pengaturan");
@@ -27,6 +27,8 @@ export default async function PengaturanPage() {
   // button that can only ever refuse. It comes from the route gate above, which re-read
   // `platform_admins` on this request (never from the cookie's claims) — one lookup, not two.
   const me = gate.admin;
+  // `?section=` opens one tab (e.g. /pengiriman → "Kredensial & saklar"); anything else falls back in the client.
+  const { section } = await searchParams;
   return (
     <PengaturanClient
       gateways={gateways}
@@ -39,6 +41,7 @@ export default async function PengaturanPage() {
       kaBalance={kaBalance}
       providers={providers}
       me={{ adminId: me?.adminId ?? "", role: me?.role ?? "" }}
+      initialSection={section}
     />
   );
 }

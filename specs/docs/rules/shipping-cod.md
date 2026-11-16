@@ -107,6 +107,12 @@
   (`kiriminaja` default | `mengantar`) is set ONLY by Super Admin (store page → "Penyedia pengiriman",
   `setStoreShippingProvider`) or by a signup code (`signup_codes`, `/daftar?kode=`). The seller never
   chooses. A store is born on KiriminAja ("kalo Mengantar harus double register").
+- **Operator view = `/pengiriman` (2026-11-16).** "Kesiapan multi-seller" lists the five platform facts
+  (`MENGANTAR_ENV` named, Partner origin for the active env = O2, Partner credential, `INTEGRATION_TOKEN_KEY`,
+  the switch); every account row's label, next step and the ONE button drawn come from
+  `apps/super-admin/lib/mengantar-overview.ts` `accountView()` — shared with the store page card, so the two
+  screens never name one account differently. No "Perbarui kunci" on an owner-attached row (O11) or a KiriminAja
+  store's history row; no "Daftarkan ulang" while a row waits on the owner's consent or store approval.
 - **The platform switch is the master kill-switch above it.** `shipping_provider_config.active_provider`
   (`kiriminaja` | `mengantar`, id = 1): `kiriminaja` = Mengantar OFF for every store; `mengantar` = each store
   follows its own column. Precedence row > env `SHIPPING_PROVIDER` > `kiriminaja`, an unrecognised value is

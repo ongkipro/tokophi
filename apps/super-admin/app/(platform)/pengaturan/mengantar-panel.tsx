@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowLeftRight, KeyRound, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@tokophi/ui/button";
@@ -88,7 +89,10 @@ export function MengantarKeys({ status, canEdit, encryptionAvailable }: { status
       <p className="text-xs text-muted-foreground">
         Mengantar Partner Business API — kredensial <b>Partner</b> per lingkungan. Dengan kredensial ini TokoΦ membuatkan akun Mengantar untuk
         setiap toko (email pemilik toko); ongkir dan booking memakai kunci akun toko itu sendiri, dibayar dari saldo Mengantar toko. Lingkungan
-        aktif: <b>{status.env}</b> (env MENGANTAR_ENV). Tersimpan terenkripsi, menang atas env container.
+        aktif: <b>{status.env}</b> (env MENGANTAR_ENV). Tersimpan terenkripsi, menang atas env container.{" "}
+        <Link href="/pengiriman" className="font-medium text-primary underline-offset-2 hover:underline">
+          Lihat kesiapan &amp; akun Mengantar tiap toko →
+        </Link>
       </p>
       {(["sandbox", "production"] as const).map((env) => {
         const slot = status.slots[env];

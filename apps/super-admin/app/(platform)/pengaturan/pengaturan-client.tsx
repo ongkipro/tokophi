@@ -93,6 +93,7 @@ export function PengaturanClient({
   kaBalance,
   providers,
   me,
+  initialSection,
 }: {
   gateways: Toggle[];
   couriers: CourierRow[];
@@ -105,9 +106,10 @@ export function PengaturanClient({
   /** Task 8.33 — masked provider keys, their test stamps, and the live env. Never a key value. */
   providers: ProviderStatus;
   me: { adminId: string; role: string };
+  initialSection?: string;
 }) {
   const router = useRouter();
-  const [section, setSection] = useState<SectionId>("pembayaran");
+  const [section, setSection] = useState<SectionId>(SECTIONS.some((s) => s.id === initialSection) ? (initialSection as SectionId) : "pembayaran");
   const [pending, startTransition] = useTransition();
   const [gateways, setGateways] = useState(initGateways);
   const [couriers, setCouriers] = useState(initCouriers);
