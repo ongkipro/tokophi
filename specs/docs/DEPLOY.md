@@ -316,6 +316,20 @@ Sisa 81 detik itu bukan lagi milik rantai seed. Menekannya lebih jauh berarti sw
 (container baru sehat dulu, baru yang lama dimatikan) — itu orkestrasi Coolify, bukan berkas compose
 ini, dan belum dikerjakan. Sebelum ada yang mencobanya: **ukur dulu**, dengan cara di tabel atas.
 
+## 🔴 Every host 302-loops or 503s at once — check the Cloudflare SSL mode first (2026-11-22 incident)
+
+**Signature:** `curl -sI https://tokophi.com/` → `302` with `location: https://tokophi.com/` (itself), same on
+`app.`/`rich.`/`toko.`; `www.tokophi.com` and `<slug>.tokophi.id` → `503` Coolify "Site not available".
+The origin is FINE — Cloudflare is talking **HTTP** to it (SSL mode `flexible`), Traefik redirects HTTP → HTTPS,
+Cloudflare follows with HTTP again. Not a container, not the VPS: do not redeploy.
+
+- Required modes: **`tokophi.com` strict · `tokophi.id` strict · `tokophi.cc` full** (Cloudflare dashboard →
+  SSL/TLS → Overview, or `PATCH /zones/<id>/settings/ssl {"value":"strict"}`). Read it with
+  `GET /zones/<id>/settings/ssl` — `modified_on` tells you when it moved.
+- 2026-11-22 08:02–08:17 UTC something set `flexible` on ~45 zones of the account in one sweep; TokoΦ was down
+  until 2026-11-25 09:08 UTC because no external probe runs (`ops/tokophi-probe.sh` would have gone red on the
+  first pass — the 302 is not an accepted code).
+
 ## 🔴 Origin unreachable / every host 522 — the diagnosis ladder (used 2026-09-07)
 
 Cloudflare **522** on `tokophi.com`, `app.`, `rich.`, `toko.` AND `<slug>.tokophi.id` at once means the

@@ -1,5 +1,10 @@
 # TokoΦ — STATUS: what is real, what is seeded, what is still fake
 
+> **2026-11-25 09:08 UTC — INCIDENT closed: every public host was down since 2026-11-22 08:17 UTC** (302 loop / 503) because the
+> Cloudflare SSL mode of `tokophi.com`, `tokophi.id`, `tokophi.cc` had been flipped to `flexible` in an account-wide sweep. Restored
+> (com/id `strict`, cc `full`); apex, `app.`, `rich.`, `toko.`, `panduan.`, `batiknusantara.tokophi.id`, redirects and `op:"search"`
+> verified; `ops/tokophi-probe.sh` all surfaces + DB OK. App, DB and migrations untouched. Runbook: `DEPLOY.md` → "Every host 302-loops".
+
 > **2026-11-16 03:40 UTC — `feat/seller-streamline` — PR #488 merged, DEPLOYED `f8923bc0` 05:51 UTC (BUILD-LOG 05:55):** Obrolan hidden on every surface
 > (`CHAT_ENABLED=false`, `/api/chat/*` 404), Files serves thumbnails (page 1 2,535 → 263 KB), Seller topbar bell = sidebar
 > count, Super Admin sidebar pinned + backup status on the dashboard, backup sidecars verify dumps (`pg_restore --list`) and
