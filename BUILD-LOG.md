@@ -8,6 +8,18 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-25 09:15 UTC] — INCIDENT · Cloudflare SSL mode flipped to Flexible → all TokoΦ hosts down ~3 days (fixed)
+Executor: Main Session. Owner: "cek kenapa tokophi.com tidak bisa di buka", then "lanjut perbaiki dan sempurnakan".
+- **Symptom (measured 09:00 UTC):** `tokophi.com`, `app.`, `rich.`, `toko.` → `302` with `location` = the same URL (loop); `www.tokophi.com` + `batiknusantara.tokophi.id` → `503` Coolify "Site not available". DNS correct (all proxied → dedicated host). Origin not reachable from this workstation (firewall allows owner /32 only; Vultr API refused the current IP) — not needed: Traefik was answering.
+- **Root cause:** zone SSL mode `flexible` on `tokophi.com`, `tokophi.id`, `tokophi.cc`, `modified_on` 2026-11-22 08:17:20 UTC. Required: strict / strict / full (`DEPLOY.md`, bootstrap doc 2026-11-01). The same sweep (08:02–08:17 UTC) set `flexible` on ~45 zones of the account. Origin was never touched.
+- **Fix:** `PATCH /zones/<id>/settings/ssl` → `tokophi.com` strict, `tokophi.id` strict, `tokophi.cc` full (all `success: true`). Other zones of the account deliberately NOT changed (some are meant to be Flexible).
+- **Verification:** `tokophi.com` 200 · `www.` 301 → apex · `app./login` 200 · `rich./login` 200 · `toko.` 200 · `panduan.` 200 · `batiknusantara.tokophi.id` 200 · `batiknusantara.tokophi.com` 301 → `.id` · `tokophi.id` 301 → `tokophi.com` · `app.tokophi.id` 301 → `app.tokophi.com` · `http://tokophi.com` 301 → https · `account.` 503 "Belum dibuka" (dormant by design) · `affiliate.` 302 → `/masuk` · product image via `app.tokophi.com/api/uploads/` 200 webp. `bash ops/tokophi-probe.sh`: 5/5 surfaces OK + `db_ongkir` OK; only `ssh` FAIL (this IP is outside the host firewall's owner /32).
+- **Same sweep also set `ipv6=off`** on all three zones (08:17 UTC) — restored to `on` 2026-11-25 ~09:30 UTC; the rest of the account (63 SSL / 73 IPv6 settings on other zones) was restored in the same pass, recorded outside this repo.
+- **Also checked on the 3 zones:** no worker routes, no page rules, DNS unchanged since 2026-11-01, Always Use HTTPS on.
+- **Why nobody noticed for 3 days:** `ops/tokophi-probe.sh` would have failed on the first pass (302 is not accepted) but runs on no schedule anywhere; alert channel still undecided (BACKLOG P1.8).
+- **Open (owner):** Cloudflare Audit Log for 2026-11-22 08:02–08:17 UTC (who flipped it); rotate account-wide tokens if not you; schedule the probe off-box.
+- **Files:** `BUILD-LOG.md`, `specs/docs/{STATUS.md,TASKS.md,DEPLOY.md}`. No code, no migration, no deploy.
+
 ### [2026-11-14 10:55 UTC] — RELEASE · affiliate area OPENED + demo store programme on + AFFILIATE-V11 (#479) deployed
 Executor: Main Session. Owner: "lanjut kau jalankan dan sempurnakan", "ya nyalakan di toko demo", support contact = owner's e-mail (except demo).
 - **Opened:** Coolify env `AFFILIATE_APP_URL=https://affiliate.tokophi.com` (PATCH `/applications/{uuid}/envs`, not a secret) + deploy `mx5pcidphqyc04powt3sjw7c` → finished, 6/6 healthy. `affiliate.tokophi.com/masuk` + `/daftar` 200, `/` 302 → masuk; `toko.tokophi.com/affiliate` links to `/gabung?toko=batiknusantara`.
