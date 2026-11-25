@@ -1,0 +1,46 @@
+# L2 external probe on a schedule — BACKLOG P1.8, INCIDENT 2026-11-22.
+#
+# WHY IT EXISTS. On 2026-11-22 a Cloudflare account sweep set the tokophi zones to SSL "flexible" and every
+# public host 302-looped for THREE DAYS. `ops/tokophi-probe.sh` would have gone red on its first pass; it was
+# scheduled nowhere. This runs it off-box every 10 minutes.
+#
+# THE ALERT CHANNEL is GitHub's own: a failed SCHEDULED run emails the account that last changed this cron
+# (Settings → Notifications → Actions). No secret, no bot token. When the owner picks Telegram/SMTP, wire it
+# in `notify()` of the probe — this workflow does not need to change.
+#
+# HTTP + DB only (TOKOPHI_PROBE_SKIP_SSH=1): the host firewall admits SSH from the owner /32 alone, so disk
+# and the L1 heartbeat stay with the owner-workstation run. A failing pass is retried once after 60 s so one
+# dropped packet does not email anybody; two in a row fails the job.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  pull_request:
+    paths: [".github/workflows/uptime.yml", "ops/tokophi-probe.sh"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe production (HTTP surfaces + Postgres via ongkir search)
+        env:
+          TOKOPHI_PROBE_SKIP_SSH: "1"
+          TOKOPHI_PROBE_FAIL_THRESHOLD: "1"
+          TOKOPHI_PROBE_STATE: ${{ runner.temp }}/probe-state
+        run: |
+          bash ops/tokophi-probe.sh && exit 0
+          echo "::warning::first pass failed — retrying once in 60 s"
+          sleep 60
+          rm -rf "$TOKOPHI_PROBE_STATE"
+          bash ops/tokophi-probe.sh

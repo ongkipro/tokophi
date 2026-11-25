@@ -75,7 +75,7 @@
 
 ### 🔴 Still open on this host
 
-- **No alert channel** (L2/L3) — the probe is pulled by a human; nothing pages when it goes red.
+- **L2 is scheduled since 2026-11-25:** `.github/workflows/uptime.yml` runs `ops/tokophi-probe.sh` (HTTP + DB, `TOKOPHI_PROBE_SKIP_SSH=1`) every 10 min on GitHub Actions; a red scheduled run emails the owner through GitHub notifications. Disk + L1 heartbeat still need the owner-workstation run (SSH is owner-/32 only). L3 (deploy-failure alarm) and a Telegram/SMTP channel are still open.
 - Downtime per deploy not yet re-measured here (step 5 above).
 - `cron-tracking` is running again: KiriminAja whitelisted this host's IP (owner, 2026-11-02); verified
   `ok:true scanned:3 errors:0 problems:0` and zero `not allowed` lines in the last 6 h.

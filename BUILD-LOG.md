@@ -8,6 +8,14 @@
 
 ## Log History & Execution Entries
 
+### [2026-11-25 10:40 UTC] — OPS · L2 uptime probe scheduled (BACKLOG P1.8) after the 2026-11-22 incident
+Executor: Main Session. Owner: "lanjut dan sempurnakan yang belum, pastikan tokophi live dulu".
+- **Live re-check first:** apex/`www`/`app./login`/`rich./login`/`toko.`/`toko./checkout`/`panduan.`/`batiknusantara.tokophi.id`/`affiliate./masuk` 200/301; Playwright on `toko.tokophi.com` 0 console errors; `op:"rates"` for the demo store to Banyumanik returned JNE Rp11.000 + SPX Rp15.000 (live KiriminAja).
+- **Added `.github/workflows/uptime.yml`:** `*/10` cron + manual + PR on its own paths; runs `ops/tokophi-probe.sh` with `TOKOPHI_PROBE_SKIP_SSH=1`, threshold 1, one retry after 60 s; `contents: read`. A red scheduled run = GitHub email to the owner. No secret used.
+- **Proof:** CI-shaped local run → exit 0 (5 surfaces + `db_ongkir`); mutated COPY with a surface that 302s → `FAIL … → 302 (expected 200)`, exit 1.
+- **Not covered off-box:** disk + L1 heartbeat (SSH limited to owner /32). L3 + Telegram/SMTP still open.
+- **Files:** `.github/workflows/uptime.yml`, `specs/docs/{DEPLOY.md,TASKS.md}`, `BUILD-LOG.md`.
+
 ### [2026-11-25 09:15 UTC] — INCIDENT · Cloudflare SSL mode flipped to Flexible → all TokoΦ hosts down ~3 days (fixed)
 Executor: Main Session. Owner: "cek kenapa tokophi.com tidak bisa di buka", then "lanjut perbaiki dan sempurnakan".
 - **Symptom (measured 09:00 UTC):** `tokophi.com`, `app.`, `rich.`, `toko.` → `302` with `location` = the same URL (loop); `www.tokophi.com` + `batiknusantara.tokophi.id` → `503` Coolify "Site not available". DNS correct (all proxied → dedicated host). Origin not reachable from this workstation (firewall allows owner /32 only; Vultr API refused the current IP) — not needed: Traefik was answering.
