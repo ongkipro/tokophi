@@ -326,6 +326,7 @@ Cloudflare follows with HTTP again. Not a container, not the VPS: do not redeplo
 - Required modes: **`tokophi.com` strict · `tokophi.id` strict · `tokophi.cc` full** (Cloudflare dashboard →
   SSL/TLS → Overview, or `PATCH /zones/<id>/settings/ssl {"value":"strict"}`). Read it with
   `GET /zones/<id>/settings/ssl` — `modified_on` tells you when it moved.
+- The same sweep also set **IPv6 compatibility off** — check `GET /zones/<id>/settings/ipv6` too (should be `on`).
 - 2026-11-22 08:02–08:17 UTC something set `flexible` on ~45 zones of the account in one sweep; TokoΦ was down
   until 2026-11-25 09:08 UTC because no external probe runs (`ops/tokophi-probe.sh` would have gone red on the
   first pass — the 302 is not an accepted code).
